@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Version MonoGame (DesktopGL : OpenGL + SDL2, Windows / Linux / macOS).
+    Aucun « content pipeline » : textures, modèles et sons sont lus directement dans les fichiers du jeu,
+    et l'affichage utilise les effets intégrés de MonoGame (BasicEffect, DualTextureEffect, AlphaTestEffect).
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\FD3.Game\FD3.Game.csproj" />
+    <ProjectReference Include="..\FD3.EzTree\FD3.EzTree.csproj" />
+    <ProjectReference Include="..\FD3.Video\FD3.Video.csproj" />
+  </ItemGroup>
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <RollForward>Major</RollForward>
+    <AssemblyName>FD3</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <TieredPGO>true</TieredPGO>
+  </PropertyGroup>
+  <!-- normal : paquet NuGet ; MonoGameLocal=chemin\MonoGame.Framework.dll : version compilée à la main (essais hors ligne) -->
+  <ItemGroup Condition="'$(MonoGameLocal)' == ''">
+    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.2.1105" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(MonoGameLocal)' != ''">
+    <Reference Include="MonoGame.Framework"><HintPath>$(MonoGameLocal)</HintPath></Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\languages\*.ini" Link="languages\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

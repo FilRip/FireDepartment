@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\FD3.Formats\FD3.Formats.csproj" />
+    <ProjectReference Include="..\FD3.Fire\FD3.Fire.csproj" />
+    <ProjectReference Include="..\FD3.Script\FD3.Script.csproj" />
+    <ProjectReference Include="..\FD3.Game\FD3.Game.csproj" />
+    <ProjectReference Include="..\FD3.Video\FD3.Video.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
