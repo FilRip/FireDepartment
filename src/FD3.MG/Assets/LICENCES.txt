@@ -1,0 +1,8 @@
+Composants tiers utilisés par l'application de bureau FD3
+
+- GLFW 3 (glfw3.dll, libglfw.so.3) : licence zlib/libpng, (c) Marcus Geelnard, Camilla Löwy.
+  Binaires repris du paquet Python « glfw » (pyGLFW, licence MIT, Florian Rhiem).
+- msvcr120.dll : bibliothèque d'exécution Visual C++ 2013, redistribuable Microsoft.
+- EZ-Tree 1.1 (générateur d'arbres, porté en C# dans EzTree.cs ; réglages trees/*.json ;
+  textures trees/*.tga) : licence MIT, (c) Daniel Greenheck.
+  Textures d'écorce : texturecan.com et polyhaven.com (CC0).

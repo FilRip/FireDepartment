@@ -1,0 +1,148 @@
+// FD3 - script de mesure du feu (analyse pour la version C#)
+// Toutes les 5 secondes, enregistre dans des variables de script :
+//   FD3_T_<n>     : temps de jeu de la mesure n
+//   FD3_Pxx_<n>   : intensite du foyer xx a la mesure n
+// Ces variables sont conservees dans les sauvegardes de partie.
+//   P00 = fireveh_body_s34
+//   P01 = fireveh_body_s76
+//   P02 = fireveh_body_s78
+//   P03 = fireveh_wheel_s30
+//   P04 = fireveh_wheel_s31
+//   P05 = fireveh_wheel_s32
+//   P06 = ground_l109
+//   P07 = ground_l11
+//   P08 = ground_l115
+//   P09 = ground_l118
+//   P10 = ground_l122
+//   P11 = ground_l123
+//   P12 = ground_m106
+//   P13 = ground_m107
+//   P14 = ground_m108
+//   P15 = ground_m127
+//   P16 = ground_m18
+//   P17 = ground_m19
+//   P18 = ground_s142
+//   P19 = ground_s143
+//   P20 = ground_s144
+//   P21 = ground_s34
+//   P22 = ground_s35
+//   P23 = ground_s12
+//   P24 = ground_s_elec12
+//   P25 = ground_s_elec13
+//   P26 = groundmulti_l13
+//   P27 = groundmulti_l14
+//   P28 = groundmulti_l15
+//   P29 = groundmulti_m25
+//   P30 = groundmulti_m27
+//   P31 = groundmulti_m38
+//   P32 = groundmulti_s439
+//   P33 = groundmulti_xs141
+//   P34 = groundmulti_xs142
+//   P35 = groundmulti_xs173
+//   P36 = wall_l117
+//   P37 = wall_l119
+//   P38 = wall_l122
+//   P39 = wall_l_smoke118
+// Pour revenir au jeu normal : supprimer ce fichier et Data\Design\Mission\London\Mission_London.mis
+
+void FD3_Start()
+{
+	SCR_RunDelayed("Bank_Start", 0.0);
+	SCR_SetVarF32("FD3_n", 0.0);
+	SCR_RunDelayed("FD3_Mesure", 1.0);
+}
+
+void FD3_Chiffre(s32 c)
+{
+	mcString s;
+	s = SCR_GetVarString("FD3_txt");
+	if (c == 0) s = s + "0";
+	if (c == 1) s = s + "1";
+	if (c == 2) s = s + "2";
+	if (c == 3) s = s + "3";
+	if (c == 4) s = s + "4";
+	if (c == 5) s = s + "5";
+	if (c == 6) s = s + "6";
+	if (c == 7) s = s + "7";
+	if (c == 8) s = s + "8";
+	if (c == 9) s = s + "9";
+	SCR_SetVarString("FD3_txt", s);
+}
+
+// ecrit la partie entiere positive de v dans FD3_txt
+void FD3_Nombre(f32 v)
+{
+	s32 m, c, d, u, i;
+	f32 r;
+	r = v;
+	m = 0;
+	for (i = 0; r >= 1000.0; i += 1) { r = r - 1000.0; m = m + 1; }
+	c = 0;
+	for (i = 0; r >= 100.0; i += 1) { r = r - 100.0; c = c + 1; }
+	d = 0;
+	for (i = 0; r >= 10.0; i += 1) { r = r - 10.0; d = d + 1; }
+	u = 0;
+	for (i = 0; r >= 1.0; i += 1) { r = r - 1.0; u = u + 1; }
+	if (m > 0) FD3_Chiffre(m);
+	if (m > 0) FD3_Chiffre(c);
+	else if (c > 0) FD3_Chiffre(c);
+	if (m > 0) FD3_Chiffre(d);
+	else if (c > 0) FD3_Chiffre(d);
+	else if (d > 0) FD3_Chiffre(d);
+	FD3_Chiffre(u);
+}
+
+void FD3_Point(mcString etiquette, mcString nom)
+{
+	SCR_SetVarF32("FD3_" + etiquette + "_" + SCR_GetVarString("FD3_num"), FIR_HPGetIntensity(ENT_FindByName(nom)));
+}
+
+void FD3_Mesure()
+{
+	SCR_SetVarString("FD3_txt", "");
+	FD3_Nombre(SCR_GetVarF32("FD3_n"));
+	SCR_SetVarString("FD3_num", SCR_GetVarString("FD3_txt"));
+	SCR_SetVarF32("FD3_T_" + SCR_GetVarString("FD3_num"), UTL_GetGameTime());
+	FD3_Point("P00", "fireveh_body_s34");
+	FD3_Point("P01", "fireveh_body_s76");
+	FD3_Point("P02", "fireveh_body_s78");
+	FD3_Point("P03", "fireveh_wheel_s30");
+	FD3_Point("P04", "fireveh_wheel_s31");
+	FD3_Point("P05", "fireveh_wheel_s32");
+	FD3_Point("P06", "ground_l109");
+	FD3_Point("P07", "ground_l11");
+	FD3_Point("P08", "ground_l115");
+	FD3_Point("P09", "ground_l118");
+	FD3_Point("P10", "ground_l122");
+	FD3_Point("P11", "ground_l123");
+	FD3_Point("P12", "ground_m106");
+	FD3_Point("P13", "ground_m107");
+	FD3_Point("P14", "ground_m108");
+	FD3_Point("P15", "ground_m127");
+	FD3_Point("P16", "ground_m18");
+	FD3_Point("P17", "ground_m19");
+	FD3_Point("P18", "ground_s142");
+	FD3_Point("P19", "ground_s143");
+	FD3_Point("P20", "ground_s144");
+	FD3_Point("P21", "ground_s34");
+	FD3_Point("P22", "ground_s35");
+	FD3_Point("P23", "ground_s12");
+	FD3_Point("P24", "ground_s_elec12");
+	FD3_Point("P25", "ground_s_elec13");
+	FD3_Point("P26", "groundmulti_l13");
+	FD3_Point("P27", "groundmulti_l14");
+	FD3_Point("P28", "groundmulti_l15");
+	FD3_Point("P29", "groundmulti_m25");
+	FD3_Point("P30", "groundmulti_m27");
+	FD3_Point("P31", "groundmulti_m38");
+	FD3_Point("P32", "groundmulti_s439");
+	FD3_Point("P33", "groundmulti_xs141");
+	FD3_Point("P34", "groundmulti_xs142");
+	FD3_Point("P35", "groundmulti_xs173");
+	FD3_Point("P36", "wall_l117");
+	FD3_Point("P37", "wall_l119");
+	FD3_Point("P38", "wall_l122");
+	FD3_Point("P39", "wall_l_smoke118");
+	SCR_SetVarF32("FD3_n", SCR_GetVarF32("FD3_n") + 1.0);
+	SCR_RunDelayed("FD3_Mesure", 5.0);
+}

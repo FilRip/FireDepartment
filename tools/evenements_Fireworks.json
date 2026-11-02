@@ -1,0 +1,50 @@
+[
+ {
+  "t": 24.8,
+  "action": "ajouter",
+  "groupe": "explo_fire",
+  "valeur": 100
+ },
+ {
+  "t": 42.8,
+  "action": "multiplier",
+  "groupe": "officefire",
+  "valeur": 2
+ },
+ {
+  "t": 42.8,
+  "action": "multiplier",
+  "groupe": "warefire",
+  "valeur": 2
+ },
+ {
+  "t": 43.8,
+  "action": "ajouter",
+  "groupe": "echelon_1",
+  "valeur": 10
+ },
+ {
+  "t": 58.8,
+  "action": "ajouter",
+  "groupe": "echelon_2",
+  "valeur": 10
+ },
+ {
+  "t": 68.8,
+  "action": "ajouter",
+  "groupe": "echelon_3",
+  "valeur": 30
+ },
+ {
+  "t": 222.8,
+  "action": "multiplier",
+  "groupe": "officefire",
+  "valeur": 0.5
+ },
+ {
+  "t": 222.8,
+  "action": "multiplier",
+  "groupe": "warefire",
+  "valeur": 0.5
+ }
+]

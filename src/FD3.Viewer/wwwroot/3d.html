@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FD3 — Vue 3D</title>
+<style>
+:root { --bg: #0e0f12; --panel: rgba(24,24,28,.92); --line: #2c2c33; --text: #e8e6e3; --muted: #9a978f; --accent: #ff7a2f; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, "Segoe UI", sans-serif; overflow: hidden; }
+canvas { display: block; }
+#hud { position: absolute; top: 12px; left: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; min-width: 260px; }
+#hud h1 { font-size: 15px; margin: 0; } #hud h1 span { color: var(--accent); }
+.row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+button, a.btn { font: inherit; color: var(--text); background: #26262c; border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; text-decoration: none; }
+button.on { background: var(--accent); border-color: var(--accent); color: #1a1006; font-weight: 600; }
+.big { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); font-size: 12px; }
+#load { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); pointer-events: none; }
+label { display: flex; gap: 6px; align-items: center; }
+</style>
+<script type="importmap">{ "imports": { "three": "./lib/three.module.min.js" } }</script>
+</head>
+<body>
+<div id="hud">
+  <h1>Fire Department 3 <span>· vue 3D</span></h1>
+  <div class="row"><span class="big" id="clock">0:00</span><span class="muted" id="info"></span></div>
+  <div class="row" id="speeds">
+    <button data-p="1">⏸</button><button data-s="1">×1</button><button data-s="4">×4</button><button data-s="16">×16</button>
+  </div>
+  <div class="row">
+    <label><input type="checkbox" id="roofs" checked> Toits</label>
+    <label><input type="checkbox" id="objs" checked> Objets</label>
+    <label><input type="checkbox" id="smokeOn" checked> Fumée</label>
+  </div>
+  <div class="muted">Clic gauche : tourner · clic droit : déplacer · molette : zoom<br>Double-clic sur un feu : l'arroser</div>
+  <a class="btn" href="index.html">← Vue de dessus</a>
+</div>
+<div id="load">Chargement du décor…</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from './lib/OrbitControls.js';
+import { DDSLoader } from './lib/DDSLoader.js';
+import { TGALoader } from './lib/TGALoader.js';
+import { Tree } from './lib/ez-tree.es.js';
+
+const $ = id => document.getElementById(id);
+const api = async (p, o) => { const r = await fetch(p, o); if (!r.ok) throw new Error(p + ' : ' + r.status); return r; };
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio); renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9fb4c8);
+scene.fog = new THREE.Fog(0x9fb4c8, 12000, 40000);
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 20, 60000);
+camera.up.set(0, 0, 1);                                   // le jeu a l'axe Z vers le haut
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.49;
+// objets sans éclairage précalculé : lumière du jour
+scene.add(new THREE.HemisphereLight(0xf2f5fa, 0x6a6458, 2.6));
+const sun = new THREE.DirectionalLight(0xfff4e0, 2.2); sun.position.set(-3000, -2000, 6000); scene.add(sun);
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+const st0 = await (await api('/api/state')).json();
+if (!st0.running) { $('load').textContent = 'Chargez d\'abord une mission dans la vue de dessus.'; throw 0; }
+const map = await (await api('/api/map')).json();
+const mission = map.mission;
+
+// ---------- décor
+const dds = new DDSLoader(), texCache = new Map(), matCache = new Map();
+// texture chargée en arrière-plan ; si elle manque, le matériau reste gris
+function texture(name, onReady) {
+  if (!name) return;
+  if (!texCache.has(name)) {
+    const entry = { tex: null, waiting: [] };
+    texCache.set(name, entry);
+    dds.load(`/api/tex?mission=${mission}&name=${encodeURIComponent(name)}`, t => {
+      t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+      entry.tex = t; entry.waiting.forEach(f => f(t)); entry.waiting = [];
+    }, undefined, () => {});
+  }
+  const e = texCache.get(name);
+  if (e.tex) onReady(e.tex); else e.waiting.push(onReady);
+}
+function material(g, lightmap) {
+  const key = (g.material || '?') + '|' + g.diffuse + '|' + (lightmap || '');
+  if (!matCache.has(key)) {
+    let m;
+    if (lightmap) {
+      // décor : couleur × éclairage précalculé du jeu (comme le moteur d'origine), sans lumière dynamique
+      m = new THREE.MeshBasicMaterial({ color: 0x8a8a90, side: THREE.DoubleSide, alphaTest: g.alpha ? 0.4 : 0, lightMapIntensity: Math.PI * LM_GAIN });
+      texture(lightmap, t => { const lm = t.clone(); lm.channel = 1; lm.wrapS = lm.wrapT = THREE.ClampToEdgeWrapping; lm.colorSpace = THREE.SRGBColorSpace; lm.needsUpdate = true; m.lightMap = lm; m.needsUpdate = true; });
+    } else m = new THREE.MeshLambertMaterial({ color: 0x8a8a90, side: THREE.DoubleSide, alphaTest: g.alpha ? 0.4 : 0 });
+    texture(g.diffuse, t => { m.map = t; m.color.set(0xffffff); m.needsUpdate = true; });
+    matCache.set(key, m);
+  }
+  return matCache.get(key);
+}
+const LM_GAIN = 2.0;   // les éclairages précalculés du jeu sont stockés à mi-intensité (×2 à l'affichage)
+
+async function loadMesh(name, src) {
+  const buf = await (await api(`/api/mesh?mission=${mission}&name=${encodeURIComponent(name)}${src ? '&src=' + src : ''}`)).arrayBuffer();
+  const jl = new DataView(buf).getUint32(0, true);
+  const info = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, jl)));
+  let o = 4 + jl; o = (o + 3) & ~3;
+  const n = info.VertexCount, take = (k, T = Float32Array) => { const a = new T(buf, o, k); o += k * 4; return a; };
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(take(3 * n), 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(take(3 * n), 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(take(2 * n), 2));
+  if (info.uv1) geo.setAttribute('uv1', new THREE.BufferAttribute(take(2 * n), 2));
+  geo.setIndex(new THREE.BufferAttribute(take(info.indexCount, Uint32Array), 1));
+  const mats = info.groups.map((g, i) => { geo.addGroup(g.start, g.count, i); return material(g, info.uv1 ? info.lightmap : null); });
+  return { geo, mats };
+}
+const nodes = await (await api(`/api/scene?mission=${mission}`)).json();
+const roofs = [];
+let done = 0;
+await Promise.all(nodes.map(async nd => {
+  try {
+    const { geo, mats } = await loadMesh(nd.mesh);
+    const mesh = new THREE.Mesh(geo, mats);
+    mesh.matrixAutoUpdate = false; mesh.matrix.fromArray(nd.m); mesh.name = nd.mesh;
+    if (/ROOF/i.test(nd.mesh)) roofs.push(mesh);
+    scene.add(mesh);
+  } catch (e) { console.warn(nd.mesh, e); }
+  $('load').textContent = `Chargement du décor… ${++done} / ${nodes.length}`;
+}));
+
+// objets posés : un InstancedMesh par pièce de modèle
+const placeables = await (await api('/api/placeables')).json();
+const byModel = new Map();
+for (const p of placeables) { if (!byModel.has(p.model)) byModel.set(p.model, []); byModel.get(p.model).push(p); }
+let mdone = 0;
+const objGroup = new THREE.Group(); scene.add(objGroup);
+await Promise.all([...byModel].map(async ([model, list]) => {
+  try {
+    const parts = await (await api(`/api/model?name=${encodeURIComponent(model)}`)).json();
+    for (const part of parts) {
+      const { geo, mats } = await loadMesh(part.mesh, 'gfx');
+      const im = new THREE.InstancedMesh(geo, mats, list.length); geo.name = model + '/' + part.mesh;
+      const N = new THREE.Matrix4().fromArray(part.m), O = new THREE.Matrix4(), W = new THREE.Matrix4();
+      list.forEach((p, i) => { O.fromArray(p.m); W.multiplyMatrices(O, N); im.setMatrixAt(i, W); });
+      im.computeBoundingSphere(); im.frustumCulled = false;
+      objGroup.add(im);
+    }
+  } catch (e) { console.warn(model, e); }
+  $('load').textContent = `Chargement des objets… ${++mdone} / ${byModel.size}`;
+}));
+
+// arbres : approximation (tronc + touffes de feuillage) avec les textures SpeedTree du jeu
+const tga = new TGALoader(), treeTex = new Map();
+function ttex(name) {
+  if (!name) return null;
+  if (!treeTex.has(name)) { const t = tga.load(`/api/treetex?name=${name}`); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; treeTex.set(name, t); }
+  return treeTex.get(name);
+}
+function rng(seed) { let x = (seed >>> 0) || 1; return () => (x = (x * 1664525 + 1013904223) >>> 0) / 4294967296; }
+const treeGroup = new THREE.Group(); scene.add(treeGroup);
+const trees = await (await api('/api/trees')).json();
+// arbres réalistes générés par EZ-Tree (licence MIT) : quelques variantes par espèce, mises à la hauteur prévue par la carte
+const PRESET = m => /conif|pin/i.test(m) ? 'Pine Medium' : /pleur/i.test(m) ? 'Aspen Medium' : /feuillu0[24]/i.test(m) ? 'Oak Medium' : 'Ash Medium';
+const variants = new Map();
+function treeModel(preset, seed) {
+  const key = preset + '#' + (seed % 3);
+  if (!variants.has(key)) {
+    const t = new Tree(); t.loadPreset(preset); t.options.seed = 1000 + seed % 3; t.generate();
+    t.rotation.x = Math.PI / 2;                       // EZ-Tree pousse vers +Y, le jeu a Z vers le haut
+    const holder = new THREE.Group(); holder.add(t); holder.updateMatrixWorld(true);
+    const bb = new THREE.Box3().setFromObject(holder);
+    variants.set(key, { holder, h: bb.max.z - bb.min.z, z0: bb.min.z });
+  }
+  return variants.get(key);
+}
+for (const t of trees) {
+  let obj;
+  if (/palm/i.test(t.model)) obj = approxTree(t);
+  else {
+    try {
+      const v = treeModel(PRESET(t.model), t.seed);
+      obj = v.holder.clone(true);
+      const k = t.height / v.h; obj.scale.setScalar(k); obj.position.z = -v.z0 * k;
+      const w = new THREE.Group(); w.add(obj); obj = w;
+    } catch (e) { console.warn('EZ-Tree', e); obj = approxTree(t); }
+  }
+  obj.matrixAutoUpdate = false; obj.matrix.fromArray(t.m);
+  treeGroup.add(obj);
+}
+// arbre approché (palmiers, ou si EZ-Tree échoue) avec les textures SpeedTree du jeu
+function approxTree(t) {
+  const H = t.height, R = rng(t.seed), kind = /conif|pin/i.test(t.model) ? 'cone' : /palm/i.test(t.model) ? 'palm' : 'round';
+  const tree = new THREE.Group();
+  const trunkH = kind === 'palm' ? H * 0.85 : kind === 'cone' ? H * 0.35 : H * 0.45;
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(H * 0.018, H * 0.032, trunkH, 7),
+    new THREE.MeshLambertMaterial({ map: ttex(t.bark), color: t.bark ? 0xffffff : 0x5a4632 }));
+  trunk.rotation.x = Math.PI / 2; trunk.position.z = trunkH / 2; tree.add(trunk);
+  const leafMat = new THREE.MeshLambertMaterial({ map: ttex(t.leaves), color: t.leaves ? 0xffffff : 0x3d6b2a, side: THREE.DoubleSide, alphaTest: 0.35 });
+  const n = kind === 'palm' ? 9 : 16;
+  for (let i = 0; i < n; i++) {
+    let w, cx, cy, cz;
+    if (kind === 'cone') { const f = i / n, r = (1 - f) * H * 0.28; const a = R() * 6.28; cx = Math.cos(a) * r * 0.5; cy = Math.sin(a) * r * 0.5; cz = H * (0.2 + 0.75 * f); w = H * (0.45 * (1 - f) + 0.12); }
+    else if (kind === 'palm') { const a = i / n * 6.28; cx = Math.cos(a) * H * 0.12; cy = Math.sin(a) * H * 0.12; cz = H * 0.85; w = H * 0.45; }
+    else { const a = R() * 6.28, r = R() * H * 0.22; cx = Math.cos(a) * r; cy = Math.sin(a) * r; cz = H * (0.5 + R() * 0.4); w = H * (0.35 + R() * 0.2); }
+    const q = new THREE.Mesh(new THREE.PlaneGeometry(w, w), leafMat);
+    q.position.set(cx, cy, cz);
+    q.rotation.set(Math.PI / 2 + (R() - 0.5) * 0.9, R() * 6.28, 0, 'ZXY');
+    if (kind === 'palm') q.rotation.set(Math.PI * 0.15, 0, i / n * 6.28, 'ZXY');
+    tree.add(q);
+  }
+  return tree;
+}
+
+$('load').style.display = 'none';
+$('roofs').onchange = e => roofs.forEach(r => r.visible = e.target.checked);
+
+// cadrage
+const box = new THREE.Box3().setFromObject(scene), c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
+controls.target.copy(c); camera.position.set(c.x - size.x * 0.1, c.y - size.y * 0.75, c.z + size.y * 0.55); controls.update();
+
+// ---------- feu et fumée
+function glowTexture(inner, outer) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64; const g = cv.getContext('2d');
+  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, inner); gr.addColorStop(1, outer);
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(cv);
+}
+const nH = map.hotpoints.length;
+const fireGeo = new THREE.BufferGeometry();
+const fPos = new Float32Array(nH * 3), fCol = new Float32Array(nH * 3), fSize = new Float32Array(nH);
+map.hotpoints.forEach((h, i) => { fPos.set([h.x, h.y, h.z + 60], i * 3); });
+fireGeo.setAttribute('position', new THREE.BufferAttribute(fPos, 3));
+fireGeo.setAttribute('color', new THREE.BufferAttribute(fCol, 3));
+fireGeo.setAttribute('size', new THREE.BufferAttribute(fSize, 1));
+const spriteMat = (tex, blending) => new THREE.ShaderMaterial({
+  uniforms: { map: { value: tex }, scale: { value: innerHeight / 2 } },
+  vertexShader: `attribute float size; attribute vec3 color; varying vec3 vC;
+    void main(){ vC = color; vec4 mv = modelViewMatrix * vec4(position,1.); gl_PointSize = size * 1000. / -mv.z; gl_Position = projectionMatrix * mv; }`,
+  fragmentShader: `uniform sampler2D map; varying vec3 vC; void main(){ vec4 t = texture2D(map, gl_PointCoord); gl_FragColor = vec4(vC * t.rgb, t.a); }`,
+  transparent: true, depthWrite: false, blending });
+const fire = new THREE.Points(fireGeo, spriteMat(glowTexture('rgba(255,200,120,.7)', 'rgba(255,80,10,0)'), THREE.AdditiveBlending));
+scene.add(fire);
+
+// flammes : K particules par foyer qui montent, rétrécissent et passent du jaune au rouge
+const K = 7, flameGeo = new THREE.BufferGeometry();
+const flPos = new Float32Array(nH * K * 3), flPhase = new Float32Array(nH * K), flInt = new Float32Array(nH * K), flOff = new Float32Array(nH * K * 2);
+map.hotpoints.forEach((h, i) => { for (let k = 0; k < K; k++) { const j = i * K + k; flPos.set([h.x, h.y, h.z + 20], j * 3); flPhase[j] = Math.random(); flOff[j * 2] = Math.random() * 2 - 1; flOff[j * 2 + 1] = Math.random() * 2 - 1; } });
+flameGeo.setAttribute('position', new THREE.BufferAttribute(flPos, 3));
+flameGeo.setAttribute('phase', new THREE.BufferAttribute(flPhase, 1));
+flameGeo.setAttribute('inten', new THREE.BufferAttribute(flInt, 1));
+flameGeo.setAttribute('off', new THREE.BufferAttribute(flOff, 2));
+const flameMat = new THREE.ShaderMaterial({
+  uniforms: { time: { value: 0 }, map: { value: glowTexture('rgba(255,255,255,1)', 'rgba(255,255,255,0)') } },
+  vertexShader: `attribute float phase; attribute float inten; attribute vec2 off; uniform float time; varying float vA; varying float vT;
+    void main(){
+      float t = fract(time * 0.9 + phase); vT = t;
+      float h = 120. + 380. * inten;                       // hauteur des flammes selon l'intensité
+      vec3 p = position + vec3(off * (40. + 90. * inten) * (1. - 0.6 * t), t * h);
+      p.xy += vec2(sin(time * 7. + phase * 20.), cos(time * 6. + phase * 13.)) * 12. * t;
+      vec4 mv = modelViewMatrix * vec4(p, 1.);
+      float size = inten > 0. ? (90. + 240. * inten) * (1. - 0.7 * t) : 0.;
+      gl_PointSize = size * 1000. / -mv.z; gl_Position = projectionMatrix * mv; vA = inten > 0. ? 1. : 0.; }`,
+  fragmentShader: `uniform sampler2D map; varying float vA; varying float vT;
+    void main(){ vec4 tx = texture2D(map, gl_PointCoord);
+      vec3 c = mix(vec3(1., .9, .45), vec3(.95, .25, .05), smoothstep(.1, .8, vT));
+      gl_FragColor = vec4(c, tx.a * vA * (1. - vT) * .9); }`,
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+const flames = new THREE.Points(flameGeo, flameMat); flames.frustumCulled = false;
+scene.add(flames);
+
+const nS = map.smoke.length, smokeGeo = new THREE.BufferGeometry();
+const sPos = new Float32Array(nS * 3), sCol = new Float32Array(nS * 3), sSize = new Float32Array(nS);
+map.smoke.forEach((p, i) => sPos.set([p.x, p.y, 250], i * 3));
+smokeGeo.setAttribute('position', new THREE.BufferAttribute(sPos, 3));
+smokeGeo.setAttribute('color', new THREE.BufferAttribute(sCol, 3));
+smokeGeo.setAttribute('size', new THREE.BufferAttribute(sSize, 1));
+const smoke = new THREE.Points(smokeGeo, spriteMat(glowTexture('rgba(150,150,155,.55)', 'rgba(150,150,155,0)'), THREE.NormalBlending));
+scene.add(smoke);
+$('objs').onchange = e => { objGroup.visible = e.target.checked; treeGroup.visible = e.target.checked; };
+$('smokeOn').onchange = e => smoke.visible = e.target.checked;
+
+let state = null;
+async function poll() {
+  try {
+    state = await (await api('/api/state')).json();
+    const t = Math.floor(state.t); $('clock').textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+    $('info').textContent = `${state.lit} foyers en feu`;
+    document.querySelectorAll('#speeds button').forEach(b => b.classList.toggle('on', b.dataset.p ? state.paused : (!state.paused && +b.dataset.s === state.speed)));
+    for (let i = 0; i < nH; i++) {
+      const v = state.hp[i], s = state.st[i], h = map.hotpoints[i];
+      const burning = (s === 3 || s === 4) && v > 0, k = Math.min(1, v / h.max);
+      fSize[i] = burning ? 260 + 500 * k : 0;
+      for (let q = 0; q < K; q++) flInt[i * K + q] = burning ? Math.max(0.08, k) : 0;
+      fCol[i * 3] = 1; fCol[i * 3 + 1] = 0.35 + 0.5 * k; fCol[i * 3 + 2] = 0.1 + 0.2 * k;
+    }
+    fireGeo.attributes.size.needsUpdate = fireGeo.attributes.color.needsUpdate = true;
+    flameGeo.attributes.inten.needsUpdate = true;
+    for (let i = 0; i < nS; i++) {
+      const k = Math.min(1, state.smoke[i] / map.smoke[i].max);
+      sSize[i] = k > 0.01 ? map.smoke[i].r * (0.8 + k) : 0; sCol[i * 3] = sCol[i * 3 + 1] = sCol[i * 3 + 2] = 0.3 + k;
+    }
+    smokeGeo.attributes.size.needsUpdate = smokeGeo.attributes.color.needsUpdate = true;
+  } catch (e) { $('info').textContent = 'serveur arrêté ?'; }
+  setTimeout(poll, 250);
+}
+poll();
+document.querySelectorAll('#speeds button').forEach(b => b.onclick = () =>
+  fetch(b.dataset.p ? '/api/control?pause=true' : `/api/control?pause=false&speedArg=${b.dataset.s}`, { method: 'POST' }));
+
+// double-clic : arroser le feu le plus proche du point visé
+const ray = new THREE.Raycaster();
+renderer.domElement.addEventListener('dblclick', async e => {
+  ray.setFromCamera(new THREE.Vector2(e.clientX / innerWidth * 2 - 1, -e.clientY / innerHeight * 2 + 1), camera);
+  let best = -1, bd = Infinity;
+  for (let i = 0; i < nH; i++) {
+    if (!state || !(state.st[i] === 3 || state.st[i] === 4)) continue;
+    const d = ray.ray.distanceToPoint(new THREE.Vector3(fPos[i * 3], fPos[i * 3 + 1], fPos[i * 3 + 2]));
+    if (d < bd) { bd = d; best = i; }
+  }
+  if (best >= 0 && bd < 400) await fetch(`/api/spray?id=${map.hotpoints[best].id}`, { method: 'POST' });
+});
+
+window.fd3 = { THREE, scene, camera, controls };
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => { flameMat.uniforms.time.value = clock.getElapsedTime(); controls.update(); renderer.render(scene, camera); });
+</script>
+</body>
+</html>
