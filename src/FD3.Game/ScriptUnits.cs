@@ -82,10 +82,10 @@ public sealed partial class UnitManager
     {
         if (initialByScript && _initial is { } ini && !_initialCalled)
         {
-            _deferredCrew = FiremenCount;
+            _deferredCrew = Units.Count(u => !u.IsVehicle) + Units.Sum(v => v.Crew.Count);   // équipe de départ seulement (les renforts sont comptés à part)
             Units.Clear(); _byId.Clear(); _initialDeferred = true;
         }
-        if (reinforcementsByScript) { _toGrant.AddRange(_pending.OrderBy(p => p.eta)); _pending.Clear(); }
+        if (reinforcementsByScript) { _toGrant.AddRange(_pending.OrderBy(p => p.eta)); _pending.Clear(); _allReinforcements = _toGrant.ToList(); }
     }
 
     /// <summary>Pompiers attendus de l'équipe de départ, pas encore appelée par le script (LEV_GetNumFiremen).</summary>
@@ -101,9 +101,26 @@ public sealed partial class UnitManager
     public void GrantReinforcement()
     {
         if (_toGrant.Count == 0) return;
-        var r = _toGrant[0]; _toGrant.RemoveAt(0);
+        var r = _toGrant[0]; _toGrant.RemoveAt(0); _granted.Add(r);
         _pending.Add((_s.Time + r.eta, r.cfg, r.spawn));
         Log.Add($"{_s.Time,6:0} s : renfort accordé ({r.cfg}, dans {r.eta:0} s)");
+    }
+
+    // renforts dans l'ordre de la mission (1, 2, 3…), pour LEV_CallReinforcement(n)
+    private List<(float eta, string cfg, int spawn)>? _allReinforcements;
+    private readonly List<(float eta, string cfg, int spawn)> _granted = new();
+
+    /// <summary>LEV_CallReinforcement(n) : le renfort n de la mission est envoyé (une seule fois).</summary>
+    public void CallReinforcement(int n)
+    {
+        _allReinforcements ??= _toGrant.ToList();
+        if (n < 1 || n > _allReinforcements.Count) { GrantReinforcement(); return; }
+        var r = _allReinforcements[n - 1];
+        int i = _toGrant.IndexOf(r);
+        if (i < 0) return;   // déjà envoyé
+        _toGrant.RemoveAt(i); _granted.Add(r);
+        _pending.Add((_s.Time + r.eta, r.cfg, r.spawn));
+        Log.Add($"{_s.Time,6:0} s : renfort {n} appelé ({r.cfg}, dans {r.eta:0} s)");
     }
 
     /// <summary>ENT_Destroy sur une unité : retirée de la partie (et ses passagers descendent).</summary>

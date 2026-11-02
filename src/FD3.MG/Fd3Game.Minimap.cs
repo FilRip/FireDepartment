@@ -76,19 +76,30 @@ public sealed partial class Fd3Game
             float f = Math.Min(1, h.Intensity / h.Class.IntensityMax);
             _ui.Disc(p.X, p.Y, MathF.Max(1.5f * px, (40 + 60 * f) * k), new SN.Vector4(1f, 0.25f + 0.35f * f, 0.1f, 0.9f));
         }
-        // civils : inconscients en rouge, conscients en vert
+        // civils : inconscients en rouge, conscients en blanc
         foreach (var c in _session.Units.Civilians.Where(c => !c.Hidden && (c.State == CivilianState.Conscious || c.State == CivilianState.Unconscious)))
         {
             var p = MiniPos(c.Position.X, c.Position.Y); float s = 2.5f * px;
             _ui.Rect(p.X - s, p.Y - s, 2 * s, 2 * s, new SN.Vector4(0, 0, 0, 0.8f));
-            _ui.Rect(p.X - s + px, p.Y - s + px, 2 * s - 2 * px, 2 * s - 2 * px, c.State == CivilianState.Unconscious ? new SN.Vector4(1, 0.2f, 0.2f, 1) : new SN.Vector4(0.3f, 1, 0.4f, 1));
+            _ui.Rect(p.X - s + px, p.Y - s + px, 2 * s - 2 * px, 2 * s - 2 * px, c.State == CivilianState.Unconscious ? new SN.Vector4(1, 0.2f, 0.2f, 1) : new SN.Vector4(0.95f, 0.95f, 0.95f, 1));   // conscients en blanc (le vert est aux pompiers au repos)
         }
-        // unités : pompiers en bleu, véhicules plus gros ; celles choisies entourées de blanc
+        // bouches d'incendie : carrés bleus
+        foreach (var sp in _session.Units.Supplies)
+        {
+            var p = MiniPos(sp.Position.X, sp.Position.Y); float s = 2f * px;
+            _ui.Rect(p.X - s - px, p.Y - s - px, 2 * s + 2 * px, 2 * s + 2 * px, new SN.Vector4(0, 0, 0, 0.8f));
+            _ui.Rect(p.X - s, p.Y - s, 2 * s, 2 * s, new SN.Vector4(0.2f, 0.5f, 1f, 1));
+        }
+        // unités : vert au repos, jaune quand elles font quelque chose (gris : inconscient ou détruit) ;
+        // pompiers en carré, véhicules en rectangle (deux carrés côte à côte) ; celles choisies entourées de blanc
         foreach (var u in _session.Units.Active)
         {
-            var p = MiniPos(u.Position.X, u.Position.Y); float s = (u.IsVehicle ? 3.5f : 2f) * px;
-            if (_sel.Contains(u)) _ui.Rect(p.X - s - px, p.Y - s - px, 2 * s + 2 * px, 2 * s + 2 * px, new SN.Vector4(1, 1, 1, 1));
-            _ui.Rect(p.X - s, p.Y - s, 2 * s, 2 * s, u.IsVehicle ? new SN.Vector4(0.9f, 0.15f, 0.15f, 1) : new SN.Vector4(0.25f, 0.55f, 1f, 1));
+            var p = MiniPos(u.Position.X, u.Position.Y); float s = 2.5f * px, hw = u.IsVehicle ? 2 * s : s, hh = s;
+            if (_sel.Contains(u)) _ui.Rect(p.X - hw - px, p.Y - hh - px, 2 * hw + 2 * px, 2 * hh + 2 * px, new SN.Vector4(1, 1, 1, 1));
+            else _ui.Rect(p.X - hw - px, p.Y - hh - px, 2 * hw + 2 * px, 2 * hh + 2 * px, new SN.Vector4(0, 0, 0, 0.8f));
+            var col = u.Unconscious || u.Destroyed ? new SN.Vector4(0.55f, 0.55f, 0.55f, 1)
+                : Busy(u) ? new SN.Vector4(1f, 0.9f, 0.15f, 1) : new SN.Vector4(0.2f, 0.95f, 0.3f, 1);
+            _ui.Rect(p.X - hw, p.Y - hh, 2 * hw, 2 * hh, col);
         }
         // objectifs en cours : repère « i » (LEV_SetObjectivePos), comme sur la mini-carte du jeu
         if (Host is { } host)
@@ -112,6 +123,44 @@ public sealed partial class Fd3Game
         _ui.Begin();
         _ui.Frame(r.x - px, r.y - px, r.w + 2 * px, r.h + 2 * px, new SN.Vector4(0.55f, 0.55f, 0.6f, 0.9f), px);
         _ui.End();
+    }
+
+    /// <summary>L'unité fait-elle quelque chose (déplacement, arrosage, porte, civil, objet, réanimation, recharge…) ?</summary>
+    private static bool Busy(Unit u) => u.Moving || u.Target != null || u.Opening != null || u.GoTo != null || u.GoToVehicle != null
+        || u.UseTarget != null || u.ReviveTarget != null || u.Carrying != null || u.Boarding || u.HealTimer > 0 || u.InjuredTimer > 0;
+
+    // ---- bouton « i » au-dessus de la mini-carte (WID_MAP_BUT_AREA.png) : affiche ou cache le panneau des objectifs ----
+    private bool _showObjectives = true;
+    private const int IconW = 54, IconH = 26;   // partie utile de l'icône (le bas de la bande est vide)
+
+    private (float x, float y, float s) ObjButton()
+    {
+        var r = MiniRect(); float s = 32 * _scale;
+        return (r.x, r.y - s - 8 * _scale, s);
+    }
+
+    private void RenderObjButton()
+    {
+        if (!MiniVisible || Host is not { } h || h.Objectives.Count == 0) return;
+        var (x, y, s) = ObjButton();
+        _ui.Begin();
+        // 6e icône de la bande WID_MAP_BUT_AREA.png (6 boutons côte à côte) : le « i » sur fond bleu, x 145 à 198, y 0 à 25
+        if (OverlayTexture("WID_MAP_BUT_AREA.png") is { } t) _ui.Image(t, x, y, s * IconW / IconH, s, new Rectangle(145, 0, IconW, IconH), _showObjectives ? SN.Vector4.One : new SN.Vector4(0.6f, 0.6f, 0.6f, 1));
+        else
+        {
+            _ui.Rect(x, y, s, s, new SN.Vector4(0.15f, 0.35f, 0.85f, _showObjectives ? 1f : 0.6f));
+            _ui.Text(x + (s - _ui.Measure("i")) / 2, y + (s - _ui.LineHeight) / 2, "i", new SN.Vector4(1, 1, 1, 1));
+        }
+        _ui.End();
+    }
+
+    private bool ObjButtonPress(double winX, double winY)
+    {
+        if (!MiniVisible || Host is not { } h || h.Objectives.Count == 0) return false;
+        var (sx, sy) = Fb(winX, winY); var (x, y, s) = ObjButton();
+        if (sx < x || sy < y || sx > x + s * IconW / IconH || sy > y + s) return false;
+        _showObjectives = !_showObjectives;
+        return true;
     }
 
     // point du sol vu à une position de l'écran (pixels de l'image) ; vers l'horizon, un point lointain dans la même direction

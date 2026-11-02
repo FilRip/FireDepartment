@@ -511,6 +511,90 @@ public static class Program
                 if (sel.Count > 0) { var c = sel[0].Position; Console.WriteLine(ses.Units.AsciiMap((int)c.X - 900, (int)c.Y - 900, (int)c.X + 900, (int)c.Y + 900)); }
                 return 0;
             }
+            case "toutesmissions":
+            {
+                // toutesmissions <Data> [minutes] : chaque mission jouée sans affichage ; erreurs et fonctions inconnues de ses scripts
+                float minutes = args.Length > 2 ? float.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : 10;
+                var total = new Dictionary<string, (int n, SortedSet<string> where)>(StringComparer.OrdinalIgnoreCase);
+                foreach (var dir in Directory.GetDirectories(Path.Combine(args[1], "Script", "Mission")).OrderBy(d => d))
+                {
+                    var mission = Path.GetFileName(dir);
+                    try
+                    {
+                        var ses = new Session(files, mission, "EASY");
+                        var sw = System.Diagnostics.Stopwatch.StartNew();
+                        int steps = (int)(minutes * 60 / Session.Dt);
+                        string? crash = null;
+                        for (int i = 0; i < steps; i++)
+                        {
+                            try { ses.Step(); } catch (Exception e) { crash = e.GetType().Name + " : " + e.Message; break; }
+                            if (ses.Host?.Cinematic == true && i % 50 == 0) ses.Host.EndCinematic();
+                            if (ses.Host?.Outcome != null) break;
+                        }
+                        var sc = ses.Scripts!;
+                        var h = ses.Host!;
+                        Console.WriteLine($"== {mission} : {ses.Time / 60:0.0} min simulées en {sw.Elapsed.TotalSeconds:0} s · unités {ses.Units.Units.Count} · objectifs {h.Objectives.Count} ({string.Join(" ", h.Objectives.Select(o => o.Status))}) · issue {(h.Outcome == null ? "en cours" : h.Outcome == true ? "victoire" : "défaite")}");
+                        if (crash != null) Console.WriteLine("   PLANTAGE : " + crash);
+                        if (h.Outcome == false) { Console.WriteLine($"   défaite : {h.DebriefText}"); foreach (var l in h.FireLog.TakeLast(6)) Console.WriteLine("   journal : " + l); }
+                        foreach (var l in sc.Log.Distinct().Take(8)) Console.WriteLine("   script : " + l);
+                        if (sc.UnknownCalls.Count > 0) Console.WriteLine("   inconnues : " + string.Join(", ", sc.UnknownCalls.OrderByDescending(k => k.Value).Select(k => $"{k.Key}×{k.Value}")));
+                        foreach (var (k, v) in sc.UnknownCalls)
+                        {
+                            if (!total.TryGetValue(k, out var t)) t = (0, new SortedSet<string>());
+                            t.where.Add(mission); total[k] = (t.n + v, t.where);
+                        }
+                    }
+                    catch (Exception e) { Console.WriteLine($"== {mission} : impossible de charger ({e.GetType().Name} : {e.Message})"); }
+                }
+                Console.WriteLine("== Total des fonctions inconnues appelées :");
+                foreach (var (k, t) in total.OrderByDescending(x => x.Value.n)) Console.WriteLine($"   {k,-32} {t.n,6}  {string.Join(", ", t.where)}");
+                return 0;
+            }
+            case "depart":
+            {
+                // depart <Data> <Mission> : équipes de départ et renforts prévus
+                var ses = new Session(files, args[2], "EASY");
+                Console.WriteLine($"unités {ses.Units.Units.Count} · pompiers comptés {ses.Units.FiremenCount} · attendus {ses.Units.DeferredFiremen}");
+                foreach (var l in ses.Units.Log.Take(20)) Console.WriteLine("  " + l);
+                for (int i = 0; i < 600; i++) ses.Step();
+                Console.WriteLine($"après 60 s : unités {ses.Units.Units.Count} · pompiers {ses.Units.FiremenCount}");
+                foreach (var l in ses.Units.Log.Skip(0).Take(30)) Console.WriteLine("  " + l);
+                return 0;
+            }
+            case "animtags":
+            {
+                // animtags <Data> <classe relative à Design> : étiquettes d'animation [ANIM_PLAYER]
+                foreach (var (k, v) in CharacterRig.AnimTags(ClassFile.Load(files, args[2]))) Console.WriteLine($"{k,-20} {v}");
+                return 0;
+            }
+            case "duree":
+            {
+                // duree <Data> <anim>… : durée des animations (Gfx\Anim\<anim>.anim)
+                foreach (var n in args.Skip(2)) { var d = files.TryRead("Gfx\\Anim\\" + n + ".anim"); Console.WriteLine($"{n} : {(d != null ? AnimClip.Parse(d).Duration.ToString("0.00") + " s" : "introuvable")}"); }
+                return 0;
+            }
+            case "porter":
+            {
+                // porter <Data> <Mission> : un pompier va chercher un civil inconscient, le porte et le dépose à l'ambulance
+                var ses = new Session(files, args[2], "EASY");
+                void Run(float sec) { for (int i = 0; i < (int)(sec / Session.Dt); i++) ses.Step(); }
+                Run(40);
+                var man = ses.Units.Units.FirstOrDefault(u => !u.IsVehicle && !u.CanHeal && !u.Hidden && !u.OnBoard);
+                var me = man == null ? default : new System.Numerics.Vector2(man.Position.X, man.Position.Y);
+                var civ = ses.Units.Civilians.Where(c => c.State == CivilianState.Unconscious && !c.Hidden && ses.Units.CanReach(me, new(c.Position.X, c.Position.Y)))
+                    .OrderBy(c => System.Numerics.Vector2.Distance(me, new(c.Position.X, c.Position.Y))).FirstOrDefault();
+                if (man == null || civ == null) { Console.WriteLine("pas de pompier ou de civil inconscient atteignable"); return 1; }
+                ses.Units.FetchCivilian(man, civ);
+                string last = "";
+                for (int t = 0; t < 240 && civ.State != CivilianState.Rescued; t++)
+                {
+                    Run(1);
+                    var line = $"{man.Status} · {man.Carry}";
+                    if (line != last) { Console.WriteLine($"{ses.Time,6:0} s ({man.Position.X:0},{man.Position.Y:0}) {line}"); last = line; }
+                }
+                Console.WriteLine($"civil : {civ.State}");
+                return civ.State == CivilianState.Rescued ? 0 : 2;
+            }
             case "ranimer":
             {
                 // ranimer <Data> <Mission> : un pompier inconscient est-il ranimé par un collègue (pompier ou médecin) ?

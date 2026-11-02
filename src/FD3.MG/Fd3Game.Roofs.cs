@@ -9,7 +9,7 @@ namespace FD3.MG;
 // (London : « Bank_fasad », « Bank_fasad_ROOF », « Bank_ROOM… », « roof_bank_glass » forment la banque).
 public sealed partial class Fd3Game
 {
-    private sealed class Building { public SN.Vector2 Min, Max; public readonly List<string> Nodes = new(); public bool Open; }
+    private sealed class Building { public SN.Vector2 Min, Max; public float MinZ = float.MaxValue; public readonly List<string> Nodes = new(); public bool Open; }
     private readonly List<Building> _buildings = new();
     private readonly Dictionary<string, int> _nodeBuilding = new(StringComparer.OrdinalIgnoreCase);
     private int _curBuilding = -1;
@@ -21,6 +21,7 @@ public sealed partial class Fd3Game
     {
         _buildings.Clear(); _nodeBuilding.Clear();
         var boxes = new List<(string name, SN.Vector2 min, SN.Vector2 max)>();
+        var zmin = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         foreach (var n in scenery)
         {
             if (System.Text.RegularExpressions.Regex.IsMatch(n.Mesh, @"^(FGD_|GROUND|Tile_ground)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) continue;
@@ -32,6 +33,7 @@ public sealed partial class Fd3Game
                 {
                     var v = SN.Vector3.Transform(new SN.Vector3(m.Positions[3 * i], m.Positions[3 * i + 1], m.Positions[3 * i + 2]), n.World);
                     mn = SN.Vector2.Min(mn, new(v.X, v.Y)); mx = SN.Vector2.Max(mx, new(v.X, v.Y));
+                    zmin[n.Mesh] = MathF.Min(zmin.TryGetValue(n.Mesh, out var z0) ? z0 : float.MaxValue, v.Z);
                 }
                 if (mn.X < mx.X) boxes.Add((n.Mesh, mn, mx));
             }
@@ -56,6 +58,7 @@ public sealed partial class Fd3Game
             if (!ids.TryGetValue(r, out var id)) { ids[r] = id = _buildings.Count; _buildings.Add(new Building { Min = new(float.MaxValue), Max = new(float.MinValue) }); }
             var b = _buildings[id];
             b.Min = SN.Vector2.Min(b.Min, boxes[i].min); b.Max = SN.Vector2.Max(b.Max, boxes[i].max); b.Nodes.Add(boxes[i].name);
+            if (zmin.TryGetValue(boxes[i].name, out var bz)) b.MinZ = MathF.Min(b.MinZ, bz);
             _nodeBuilding[boxes[i].name] = id;
         }
         foreach (var b in _buildings.Where(b => b.Nodes.Count > 1))
@@ -80,6 +83,10 @@ public sealed partial class Fd3Game
         _roofCheck = 0.25f;
         var men = _session.Units.Active.Where(u => !u.IsVehicle).Select(u => new SN.Vector2(u.Position.X, u.Position.Y)).ToList();
         if (men.Count == 0) return;
+        // toit nommé seul (place au-dessus d'un souterrain, Maidan) : il part quand un pompier passe dessous
+        var men3 = _session.Units.Active.Where(u => !u.IsVehicle).Select(u => u.Position).ToList();
+        foreach (var b in _buildings.Where(b => !b.Open && b.Nodes.Count == 1 && b.Nodes[0].EndsWith("_ROOF", StringComparison.OrdinalIgnoreCase)))
+            if (men3.Any(p => Inside(new(p.X, p.Y), b.Min, b.Max, 0) && p.Z < b.MinZ - 120)) { b.Open = true; Log($"Toit retiré : {b.Nodes[0]}"); }
         var doors = _session.Units.Openings.Where(o => o.OnGround && o.State != OpeningState.Closed)
             .Select(o => new SN.Vector2(o.Center.X, o.Center.Y)).ToList();
         for (int i = 0; i < _buildings.Count; i++)

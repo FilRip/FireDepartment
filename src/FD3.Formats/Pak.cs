@@ -148,6 +148,7 @@ public sealed class GameFiles
         rel = Pak.Normalize(rel);
         var loose = System.IO.Path.Combine(DataDir, rel.Replace('\\', System.IO.Path.DirectorySeparatorChar));
         if (File.Exists(loose)) return File.ReadAllBytes(loose);
+        if (LooseIgnoreCase(rel) is { } lp) return File.ReadAllBytes(lp);
         foreach (var (prefix, pak) in _paks)
             if (rel.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             {
@@ -157,12 +158,37 @@ public sealed class GameFiles
         return null;
     }
 
+    // fichier à part dans Data, sans tenir compte des majuscules (Linux, macOS : « FireStation » / « Firestation »)
+    private string? LooseIgnoreCase(string rel)
+    {
+        if (System.IO.Path.DirectorySeparatorChar == '\\') return null;   // Windows : déjà insensible à la casse
+        var cur = DataDir;
+        foreach (var part in rel.Split('\\', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!Directory.Exists(cur)) return null;
+            var next = Directory.EnumerateFileSystemEntries(cur).FirstOrDefault(e => System.IO.Path.GetFileName(e).Equals(part, StringComparison.OrdinalIgnoreCase));
+            if (next == null) return null;
+            cur = next;
+        }
+        return File.Exists(cur) ? cur : null;
+    }
+
     public byte[] Read(string rel) => TryRead(rel) ?? throw new FileNotFoundException(rel);
 
     public IEnumerable<string> List(string prefixRel)
     {
         prefixRel = Pak.Normalize(prefixRel);
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // fichiers posés à part dans Data (ajoutés par un patch du jeu : la mission Vegas, ses classes, ses équipes…)
+        int cut = prefixRel.LastIndexOf('\\');
+        var dirRel = cut >= 0 ? prefixRel[..cut] : "";
+        var dir = System.IO.Path.Combine(DataDir, dirRel.Replace('\\', System.IO.Path.DirectorySeparatorChar));
+        if (dirRel.Length > 0 && Directory.Exists(dir))
+            foreach (var f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
+            {
+                var rel = System.IO.Path.GetRelativePath(DataDir, f).Replace(System.IO.Path.DirectorySeparatorChar, '\\');
+                if (rel.StartsWith(prefixRel, StringComparison.OrdinalIgnoreCase) && seen.Add(rel)) yield return rel;
+            }
         foreach (var (prefix, pak) in _paks)
             foreach (var e in pak.Entries)
             {

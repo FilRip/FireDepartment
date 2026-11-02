@@ -196,7 +196,7 @@ public sealed partial class Fd3Game
         {
             var o = h.Objectives.LastOrDefault(x => x.Text == key);
             if (o == null) continue;
-            if (o.Status == 1) { Log("Nouvel objectif : " + _loc.Get(key)); _audio?.Play("VOCAL_NEW_OBJECTIVE"); }
+            if (o.Status == 1) { _showObjectives = true; Log("Nouvel objectif : " + _loc.Get(key)); _audio?.Play("VOCAL_NEW_OBJECTIVE"); }
             else if (o.Status == 2) { Log("Objectif atteint : " + _loc.Get(key)); _audio?.Play("VOCAL_OBJECTIVE_COMPLETED"); }
             else { Log("Objectif manqué : " + _loc.Get(key)); _audio?.Play("VOCAL_OBJECTIVE_FAILED"); }
         }
@@ -218,7 +218,7 @@ public sealed partial class Fd3Game
     // croix verte quand il est atteint (WID_CHECK_SUCCESS.png) ou rouge quand il est manqué (WID_CHECK_FAIL.png)
     private void RenderObjectives()
     {
-        if (Host is not { } h || h.Objectives.Count == 0 || _loc == null) return;
+        if (Host is not { } h || h.Objectives.Count == 0 || _loc == null || !_showObjectives) return;
         float m = 12 * _scale, pad = 12 * _scale, lh = _ui.LineHeight + 4 * _scale, maxW = MathF.Min(520 * _scale, _fbW * 0.36f);
         float box = _ui.LineHeight * 1.05f, gap = box + 8 * _scale;
         var rows = new List<(string s, SN.Vector4 c, int status, bool first)>();

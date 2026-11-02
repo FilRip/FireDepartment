@@ -16,6 +16,8 @@ public sealed partial class UnitManager
     // réglages (modifiables dans Save\FD3_CSharp_options.json, rubrique « Gameplay », sans apparaître dans le menu)
     /// <summary>Chaleur des feux sur l'endurance des pompiers (× UnitHeatDamage des feux).</summary>
     public static float HeatFactor = 4f;
+    /// <summary>Vitesse globale de la perte d'endurance des pompiers (chaleur et fumée) : 0,25 = 4 fois moins vite qu'au début.</summary>
+    public static float StaminaLoss = 0.25f;
     /// <summary>Dégâts du feu sur la vie des véhicules (× UnitLifeDamage × FireDamageCoef).</summary>
     public static float VehicleFireFactor = 1.5f;
     /// <summary>Fumée épaisse sur l'endurance des pompiers.</summary>
@@ -69,7 +71,7 @@ public sealed partial class UnitManager
             foreach (var sp in _s.Smoke.Points)
                 if (sp.Intensity > 1 && Vector3.DistanceSquared(sp.Position, u.Position) < sp.Class.InfluenceRange * sp.Class.InfluenceRange)
                     smoke += Math.Min(1, sp.Intensity / Math.Max(1, sp.Max));
-            float loss = (heat * u.HeatCoef * HeatFactor + smoke * u.SmokeCoef * SmokeFactor * 10) * dt;
+            float loss = (heat * u.HeatCoef * u.ScriptHeatCoef * HeatFactor + smoke * u.SmokeCoef * SmokeFactor * 10) * dt * StaminaLoss;
             bool healing = !u.Moving && Units.Any(a => a.HealsUnits && !a.Destroyed && !a.OnBoard && Vector3.Distance(a.Position, u.Position) < VehicleReach);
             if (loss > 0) u.Stamina -= loss;
             else if (healing) u.Stamina += AmbulanceHeal * dt;
@@ -99,6 +101,6 @@ public sealed partial class UnitManager
         if (v.Passengers.Count > 0) { var saved = v.Passengers.ToList(); UnloadPassengers(v); if (v.Passengers.Count > 0) foreach (var p in saved) { p.InVehicle = null; } v.Passengers.Clear(); }
         Sounds.Add(("VOCAL_VEHICLE_KILLED", v.Position));
         Log.Add($"{_s.Time,6:0} s : {v.Name} est détruit, hors service jusqu'à la fin de la mission");
-        _s.Scripts?.TryRun("OnVehicleDeath", Value.I(v.Id));
+        if (_s.Scripts?.HasFunction("OnVehicleDeath") == true) _s.Scripts.TryRun("OnVehicleDeath", Value.I(v.Id));
     }
 }

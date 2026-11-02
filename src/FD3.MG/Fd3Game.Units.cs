@@ -50,8 +50,12 @@ public sealed partial class Fd3Game
     }
 
     // étiquette d'animation de la classe ([ANIM_PLAYER]) selon ce que fait le personnage
+    // « @fichier » : animation donnée directement (à deux personnages : CharChar\cc_lift_body…), jouée une seule fois
     private static string UnitTag(Unit u, bool moving) =>
         u.InjuredTimer > 0 || u.Unconscious ? "FAINT"
+        : u.Carry == CarryPhase.Lifting ? "@CharChar\\cc_lift_body"
+        : u.Carry == CarryPhase.Dropping ? "@CharChar\\cc_drop_body"
+        : u.Carry == CarryPhase.Walking ? "CARRYWALK"
         : moving ? "RUN"
         : u.Opening != null && u.OpeningBreak ? (u.Opening.IsWindow ? "BREAKWINDOW" : "BREAKDOOR")
         : u.Target != null ? "ATTACKFIRE"
@@ -59,7 +63,8 @@ public sealed partial class Fd3Game
         : "WAIT1";
 
     private static string CivTag(Civilian c, bool moving) =>
-        c.State is CivilianState.Unconscious or CivilianState.Dead ? "FAINT"
+        c.Carrier is { } cu ? cu.Carry switch { CarryPhase.Lifting => "@CharChar\\cc_lift_body_lifted", CarryPhase.Dropping => "@CharChar\\cc_drop_body_droped", _ => "CARRIEDWALK" }
+        : c.State is CivilianState.Unconscious or CivilianState.Dead ? "FAINT"
         : moving ? "WALK" : c.Leader != null ? "WAIT1" : "WAITSHOCKED";
 
     /// <summary>Dessine un personnage animé ; renvoie false s'il n'a pas de squelette (dessin figé à la place).</summary>
@@ -69,20 +74,23 @@ public sealed partial class Fd3Game
     private bool DrawCharacter(CharAnim a, string tag, SN.Vector3 position, float heading, float dt, bool axe, float rate = 1f)
     {
         if (a.Rig is not { } rig) return false;
-        string? file = a.Tags.TryGetValue(tag, out var f) ? f
+        string? file = tag.StartsWith('@') ? tag[1..]
+            : a.Tags.TryGetValue(tag, out var f) ? f
             : tag == "RUN" && a.Tags.TryGetValue("WALK", out var w) ? w
             : tag == "HEAL" && a.Tags.TryGetValue("ATTACKFIRE", out var h) ? h
             : a.Tags.TryGetValue("WAIT1", out var i) ? i : null;
         var clip = file != null ? Clip(file) : null;
         if (tag != a.Tag) { a.Tag = tag; a.Time = 0; }
         a.Time += dt * rate;
-        float t = clip == null ? 0 : tag == "FAINT" ? MathF.Min(a.Time, clip.Duration) : a.Time % clip.Duration;
+        float t = clip == null ? 0 : tag == "FAINT" || tag.StartsWith('@') ? MathF.Min(a.Time, clip.Duration) : a.Time % clip.Duration;
         a.World = rig.Pose(clip, t, a.World.Length == rig.Names.Length ? a.World : null);
         var place = SN.Matrix4x4.CreateRotationZ(heading + CharYaw) * SN.Matrix4x4.CreateTranslation(position);
         foreach (var part in rig.Parts)
         {
             string leaf = rig.Names[part.Node];
-            if (ToolRx.IsMatch(leaf) && !(axe && leaf.EndsWith("_axe", StringComparison.OrdinalIgnoreCase))) continue;
+            // outils du squelette, cachés sauf pendant leur usage : la hache pour casser, la lance (launchfire) pour arroser
+            bool nozzle = tag.StartsWith("ATTACKFIRE", StringComparison.OrdinalIgnoreCase) && leaf.Contains("launchfire", StringComparison.OrdinalIgnoreCase);
+            if (ToolRx.IsMatch(leaf) && !(axe && leaf.EndsWith("_axe", StringComparison.OrdinalIgnoreCase)) && !nozzle) continue;
             if (part.Skin != null)
             {
                 if (!a.Skinned.TryGetValue(part, out var sk))
@@ -176,6 +184,15 @@ public sealed partial class Fd3Game
             var a = Char(c, c.Model, c.ClassPath);
             bool moving = SN.Vector3.Distance(a.LastPos, c.Position) > 1f; a.LastPos = c.Position;
             a.MovingFor = moving ? 0.3f : MathF.Max(0, a.MovingFor - dt);
+            if (c.Carrier is { } cu)
+            {
+                // porté : à la place du porteur, avec son cap et sa cadence (les animations des deux vont ensemble)
+                var cp = PoseOf(cu, cu.Position, cu.Heading);
+                float ch = _shownHeading.TryGetValue(cu, out var sh) ? sh : cp.h;
+                float cr = cu.Carry == CarryPhase.Walking ? (cu.Moving ? Math.Clamp(cu.Speed * UnitManager.CarrySpeed / WalkAnimSpeed, 0.5f, 1.6f) : 0f) : 1f;
+                if (!DrawCharacter(a, CivTag(c, false), cp.p, ch, dt, false, cr)) still.Add(c);
+                continue;
+            }
             if (!DrawCharacter(a, CivTag(c, a.MovingFor > 0), PoseOf(c, c.Position, c.Heading).p, SmoothHeading(c, PoseOf(c, c.Position, c.Heading).h, dt), dt, false, 280f / WalkAnimSpeed)) still.Add(c);
         }
         var stillUnits = new List<Unit>();
@@ -184,6 +201,7 @@ public sealed partial class Fd3Game
             var a = Char(u, u.Model, "Design\\Unit\\" + u.ClassPath + ".class");
             bool axe = u.Opening != null && u.OpeningBreak && !u.Moving;
             float rate = u.Moving ? Math.Clamp(u.Speed / RunAnimSpeed, 0.6f, 1.6f) : 1f;
+            if (u.Carry == CarryPhase.Walking) rate = u.Moving ? Math.Clamp(u.Speed * UnitManager.CarrySpeed / WalkAnimSpeed, 0.5f, 1.6f) : 0f;   // arrêté avec le corps : figé
             if (!DrawCharacter(a, UnitTag(u, u.Moving), PoseOf(u, u.Position, u.Heading).p, SmoothHeading(u, PoseOf(u, u.Position, u.Heading).h, dt), dt, axe, rate)) stillUnits.Add(u);
         }
         // sans squelette : dessin figé (civils couchés s'ils sont inconscients)
@@ -203,8 +221,12 @@ public sealed partial class Fd3Game
                 if (hv.Visibility.TryGetValue(id, out var vis) && vis)
                     foreach (var (mesh, part) in UnitModel(model)) DrawMesh(mesh, (part * world).X());
         foreach (var u in _session.Units.Active.Where(u => u.IsVehicle || stillUnits.Contains(u)))
+        {
+            _charred = u.Destroyed;
             foreach (var (mesh, part) in UnitModel(u.Model))
                 DrawMesh(mesh, (part * SN.Matrix4x4.CreateRotationZ(PoseOf(u, u.Position, u.Heading).h + (u.IsVehicle ? ModelYaw : CharYaw)) * SN.Matrix4x4.CreateTranslation(PoseOf(u, u.Position, u.Heading).p)).X());
+            _charred = false;
+        }
     }
 
     // sons : voix et bruits signalés par le jeu, puis sons entretenus (lances, haches, pas, moteurs, feux proches)

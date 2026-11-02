@@ -132,5 +132,11 @@ public sealed partial class UnitManager
     public int Victims => Civilians.Count(c => c.State == CivilianState.Dead && !_deadAtStart.Contains(c));
     private HashSet<Civilian>? _deadAtStartSet;
     private HashSet<Civilian> _deadAtStart => _deadAtStartSet ??= Civilians.Where(c => c.State == CivilianState.Dead).ToHashSet();
-    public int FiremenCount => Units.Count(u => !u.IsVehicle) + Units.Sum(v => v.Crew.Count) + DeferredFiremen;
+    /// <summary>
+    /// Pompiers de la mission (LEV_GetNumFiremen) : ceux sur place, ceux des équipes en route et ceux des renforts prévus.
+    /// Des missions (MonteCristo) n'ont que des renforts appelés au départ : sans eux, le compte serait 0 et la limite de
+    /// pompiers perdus aussi (défaite immédiate).
+    /// </summary>
+    public int FiremenCount => Units.Count(u => !u.IsVehicle) + Units.Sum(v => v.Crew.Count) + DeferredFiremen
+        + _pending.Sum(p => CrewSize(p.cfg)) + _toGrant.Sum(p => CrewSize(p.cfg));
 }

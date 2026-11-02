@@ -35,6 +35,10 @@ public sealed class MissionHost : IScriptHost
     public List<string> Messages { get; } = new();
     /// <summary>Visibilité changée par les scripts (ENT_SetVisibility).</summary>
     public Dictionary<uint, bool> Visibility { get; } = new();
+    /// <summary>Points des entités sans vie propre, modifiés par ENT_AddDamage (maisons de Residental…), 100 au départ.</summary>
+    public Dictionary<uint, double> ExtraDamage { get; } = new();
+    /// <summary>Mode de l'interface demandé par PANEL_SetInterfaceMode (« SCORING » : écran des scores).</summary>
+    public string? InterfaceMode { get; private set; }
     /// <summary>LEV_RoofVisibility(maillage, 1/0) : toit d'un bâtiment retiré (1) ou remis (0) par le script.</summary>
     public List<(string mesh, bool hidden)> RoofRequests { get; } = new();
 
@@ -99,6 +103,24 @@ public sealed class MissionHost : IScriptHost
     /// <summary>Entités d'un groupe du script (ENT_GroupCreate), ou l'entité elle-même.</summary>
     private IEnumerable<long> Members(long id) => _groups.TryGetValue(id, out var l) ? l.ToList() : new List<long> { id };
 
+    /// <summary>
+    /// Points de vie d'une entité (ENT_GetDamage) : porte ou fenêtre, objet qui peut exploser, entité abîmée par
+    /// ENT_AddDamage (100 au départ) ; un groupe (du niveau ou du script) : la somme de ses membres
+    /// (TMI : « zcontainers », comparé à 100, 200 ou 300 selon la difficulté).
+    /// </summary>
+    private double DamageOf(long id, int depth)
+    {
+        if (Units?.Openings.FirstOrDefault(d => d.Id == (uint)id) is { } od) return od.State == OpeningState.Broken ? 0.0 : Math.Max(0.001, od.Life);
+        if (Explosions?.LifeOf((uint)id) is { } life) return life;
+        if (ExtraDamage.TryGetValue((uint)id, out var xd)) return xd;
+        if (depth < 4)
+        {
+            if (_groups.TryGetValue(id, out var sg)) return sg.Sum(m => DamageOf(m, depth + 1));
+            if (_byId.TryGetValue((uint)id, out var lg) && lg.Members.Length > 0) return lg.Members.Sum(m => DamageOf(m, depth + 1));
+        }
+        return 100.0;
+    }
+
     private System.Numerics.Vector3? PositionOf(long id)
     {
         if (Units?.ById(id) is { } u) return u.Position;
@@ -157,7 +179,7 @@ public sealed class MissionHost : IScriptHost
                 if (a.Count >= 3 && PositionOf(V(0).AsInt) is { } p) { a[1].Set(Value.F(p.X)); a[2].Set(Value.F(p.Y)); }
                 return Value.Zero;
             case "ENT_GETZ": return Value.F(PositionOf(V(0).AsInt)?.Z ?? 0);
-            case "ENT_GETDAMAGE": return Value.F(Units?.Openings.FirstOrDefault(d => d.Id == (uint)V(0).AsInt) is { } od ? (od.State == OpeningState.Broken ? 0.0 : Math.Max(0.001, od.Life)) : Explosions?.LifeOf((uint)V(0).AsInt) ?? 100.0);
+            case "ENT_GETDAMAGE": return Value.F(DamageOf(V(0).AsInt, 0));
             case "ENT_SETDAMAGE":
                 if (Explosions?.SetLife((uint)V(0).AsInt, (float)V(1).AsNum, _fire, _fire.Time) == true) FireLog.Add($"{GameTime,6:0.0} ENT_SetDamage {NameOf(V(0).AsInt)} {V(1).AsNum}");
                 return Value.Zero;
@@ -194,7 +216,7 @@ public sealed class MissionHost : IScriptHost
             case "FIR_SPGETINTENSITY": case "FIR_SPADDINTENSITY": return Value.F(0); // fumée : pas encore simulée
 
             // ---------- caméra, sous-titres, sons ----------
-            case "CAM_CINEMATIC": Cinematic = V(0).AsInt != 0; if (Cinematic) CinematicFromTrigger(); return Value.Zero;
+            case "CAM_CINEMATIC": Cinematic = V(0).AsInt != 0; if (Cinematic) CinematicFromTrigger(); else Subtitle = null; return Value.Zero;
             case "CAM_MODECINEMATIC": Cinematic = true; CinematicFromTrigger(); return Value.Zero;
             // ENT_Destroy : le script supprime une entité (London : la zone qui lance la cinématique du civil se détruit
             // elle-même, pour ne servir qu'une fois)
@@ -207,7 +229,7 @@ public sealed class MissionHost : IScriptHost
                 else Visibility[(uint)id] = false;
                 return Value.Zero;
             }
-            case "CAM_MODEPLAY": Cinematic = false; return Value.Zero;
+            case "CAM_MODEPLAY": Cinematic = false; Subtitle = null; return Value.Zero;   // fin de cinématique : son dernier sous-titre disparaît
             case "CAM_SETINERTIA": CameraInertia = (float)V(0).AsNum; return Value.Zero;
             case "CAM_GETINERTIA": return Value.F(CameraInertia);
             case "CAM_TELEPORTTOWAYPOINT":
@@ -335,6 +357,64 @@ public sealed class MissionHost : IScriptHost
             }
             case "UTL_GETRANDOM": return Value.F(_rng.NextDouble());
             case "UTL_GETDELTAGAMETIME": return Value.F(0.1);
+
+            // ---------- fonctions ajoutées après l'essai de toutes les missions (FD3.Tools toutesmissions) ----------
+            // ENT_GetVisibility(entité) : 1 visible, 0 cachée (ENT_SetVisibility)
+            case "ENT_GETVISIBILITY":
+            {
+                long id = V(0).AsInt;
+                if (Units?.ById(id) is { } gu) return Value.I(gu.Hidden ? 0 : 1);
+                if (Units?.CivilianById(id) is { } gc) return Value.I(gc.Hidden ? 0 : 1);
+                return Value.I(Visibility.TryGetValue((uint)id, out var vis) && !vis ? 0 : 1);
+            }
+            // ENT_GetUnitState(unité) : 4 = hors de combat (mort / véhicule détruit) ; 0 sinon
+            case "ENT_GETUNITSTATE": return Value.I(Units?.ById(V(0).AsInt) is { Destroyed: true } ? 4 : 0);
+            // ENT_GetStamina(pompier) : endurance en % (100 = pleine forme)
+            case "ENT_GETSTAMINA": return Value.F(Units?.ById(V(0).AsInt) is { } stu && stu.StaminaMax > 0 ? Math.Round(100.0 * stu.Stamina / stu.StaminaMax, 3) : 100.0);
+            // ENT_AddDamage(entité, valeur) : ajoute à ses points (négatif : l'abîme) ; véhicule : sa vie, pompier : son endurance
+            case "ENT_ADDDAMAGE":
+            {
+                long id = V(0).AsInt; float v = (float)V(1).AsNum;
+                if (Units?.ById(id) is { } du)
+                {
+                    if (du.IsVehicle) { if (v < 0) Units.Damage(du, -v); else if (!du.Destroyed) du.Life = Math.Min(du.LifeMax, du.Life + v); }
+                    else du.Stamina = Math.Clamp(du.Stamina + v, 0, du.StaminaMax);
+                    return Value.Zero;
+                }
+                if (Explosions?.LifeOf((uint)id) is { } life) { Explosions.SetLife((uint)id, life + v, _fire, _fire.Time); return Value.Zero; }
+                ExtraDamage[(uint)id] = (ExtraDamage.TryGetValue((uint)id, out var cur) ? cur : 100.0) + v;
+                return Value.Zero;
+            }
+            // ENT_SetFireDamageCoef(entité, coef) : sensibilité au feu (0 : insensible)
+            case "ENT_SETFIREDAMAGECOEF":
+                if (Units?.ById(V(0).AsInt) is { } fu) { if (fu.IsVehicle) fu.FireDamageCoef = (float)V(1).AsNum; else fu.ScriptHeatCoef = (float)V(1).AsNum; }
+                else Explosions?.SetFireCoef((uint)V(0).AsInt, (float)V(1).AsNum);
+                return Value.Zero;
+            // ENT_GetState(porte ou portail) : « Open », « Close » ou « Broken »
+            case "ENT_GETSTATE":
+                if (Units?.Openings.FirstOrDefault(d => d.Id == (uint)V(0).AsInt) is { } st)
+                    return Value.T(st.State switch { OpeningState.Open => "Open", OpeningState.Broken => "Broken", _ => "Close" });
+                return Value.T(SwitchedStates.ContainsKey((uint)V(0).AsInt) ? "Open" : "Close");
+            // LEV_CallReinforcement(n) / LEV_GrantReinforcementSet(n) : envoie le renfort n (1, 2, 3…)
+            case "LEV_CALLREINFORCEMENT": case "LEV_GRANTREINFORCEMENTSET": Units?.CallReinforcement((int)V(0).AsInt); return Value.Zero;
+            // PANEL_SetInterfaceMode(« SCORING ») : écran des scores de fin (affiché par le jeu à la fin de mission)
+            case "PANEL_SETINTERFACEMODE": InterfaceMode = V(0).AsText; return Value.Zero;
+            case "FIR_HPSETGROWTHTIME":
+                // durée de croissance (s) jusqu'à l'intensité maximale
+                foreach (var h in HotPointsOf(V(0).AsInt))
+                    if (V(1).AsNum > 0 && h.Class.GrowthRate > 0) h.GrowthMultiplier = (float)(h.Class.IntensityMax / V(1).AsNum / h.Class.GrowthRate);
+                return Value.Zero;
+            case "SND_PLAYSTATICSOUND": Sounds2D.Add(V(0).AsText); return Value.Zero;
+            case "SND_STOPSTATICSOUND": return Value.Zero;
+            case "ENT_GETORIENTATIONTOENTITY":
+            {
+                var p0 = PositionOf(V(0).AsInt); var p1 = PositionOf(V(1).AsInt);
+                double deg = p0 is { } q0 && p1 is { } q1 ? Math.Atan2(q1.Y - q0.Y, q1.X - q0.X) * 180 / Math.PI : 0;
+                if (a.Count > 2) a[2].Set(Value.F(deg));
+                return Value.F(deg);
+            }
+            // aide aérienne (bombardier d'eau) : pas encore simulée, l'appel est accepté
+            case "LEV_GRANTAIRSUPPORT": FireLog.Add($"{GameTime,6:0.0} LEV_GrantAirSupport (non simulé)"); return Value.Zero;
         }
         return null;
     }
