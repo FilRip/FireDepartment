@@ -50,6 +50,7 @@ public sealed partial class Fd3Game
     /// <summary>Note un ordre du joueur (pas pendant un rechargement).</summary>
     private void Rec(string op, long a = 0, long b = 0, float x = 0, float y = 0, string? s = null)
     {
+        _session.Units.PlayerCommand = !_replaying;   // ordre du joueur : réponse vocale permise (remis à faux après l'ordre, voir Update)
         if (_replaying || _session == null) return;
         _journal.Add(new JournalEntry { Step = _session.Steps, Op = op, A = a, B = b, X = x, Y = y, S = s });
     }

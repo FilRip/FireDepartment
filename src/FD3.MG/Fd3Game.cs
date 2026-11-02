@@ -199,6 +199,7 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
             base.Update(gameTime); return;
         }
         if (IsActive) HandleInput(dt);
+        if (_session != null) _session.Units.PlayerCommand = false;   // les décisions de l'IA qui suivent restent muettes
         if (_menu) { base.Update(gameTime); return; }
         if (!_paused) _visTime += dt;
         Simulate(dt);
@@ -280,8 +281,10 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
                 for (int i = 0; i < 3000 && man.Carry != want; i++) _session.Step();
                 for (int i = 0; i < (int)(extra / Session.Dt); i++) _session.Step();
                 SnapshotPoses();
-                _target = new SN.Vector3(man.Position.X, man.Position.Y, man.Position.Z); _dist = 900; _paused = true;
-                Console.WriteLine($"porteur : {man.Status} · {man.Carry} · civil {civ.State}");
+                _target = new SN.Vector3(man.Position.X, man.Position.Y, man.Position.Z); _dist = 900; _paused = true; _roofCheck = 0; UpdateRoofs(0.3f);
+                Console.WriteLine($"porteur : {man.Status} · {man.Carry} · civil {civ.State} · z {man.Position.Z:0}");
+                foreach (var b in _buildings.Where(b => Inside(new(man.Position.X, man.Position.Y), b.Min, b.Max, 0)))
+                    Console.WriteLine($"  sous : {string.Join(",", b.Nodes.Take(5))} ({b.Nodes.Count}) z min {b.MinZ:0} ouvert {b.Open}");
             }
         }
         if (_frame == 4 && Environment.GetEnvironmentVariable("FD3_ACCES") != null && _session != null)
@@ -660,7 +663,19 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
                 foreach (var part in _assets.ModelParts(grp.Key))
                 {
                     var a = _assets.LoadMesh(mission, part.Mesh, "gfx");
-                    foreach (var p in grp) AddStatic(a, part.World * p.World, false, 1);
+                    foreach (var p in grp)
+                    {
+                        var w = part.World * p.World;
+                        // objet suspendu (verrière, auvent, passerelle…) : un toit à lui seul, qui part quand un pompier est dessous
+                        if (OverheadBox(a, w) is { } ob)
+                        {
+                            _curBuilding = _buildings.Count;
+                            var b = new Building { Min = ob.min, Max = ob.max, MinZ = ob.zmin }; b.Nodes.Add(p.Name); _buildings.Add(b);
+                            AddRoofCut(a, w, allRoof: true);
+                            _curBuilding = -1;
+                        }
+                        else AddStatic(a, w, false, 1);
+                    }
                 }
             }
             catch (Exception e) { Console.WriteLine($"{grp.Key} : {e.Message}"); }

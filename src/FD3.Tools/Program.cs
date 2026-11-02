@@ -595,6 +595,30 @@ public static class Program
                 Console.WriteLine($"civil : {civ.State}");
                 return civ.State == CivilianState.Rescued ? 0 : 2;
             }
+            case "chercherclasse":
+            {
+                // chercherclasse <Data> <motif> : classes de Design dont le texte contient le motif (expression régulière)
+                var rx = new System.Text.RegularExpressions.Regex(args[2], System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                foreach (var f in files.List("Design\\").Where(f => f.EndsWith(".class", StringComparison.OrdinalIgnoreCase)))
+                {
+                    var t = System.Text.Encoding.Latin1.GetString(files.Read(f));
+                    foreach (System.Text.RegularExpressions.Match m in rx.Matches(t)) Console.WriteLine($"{f} : {m.Value.Trim()}");
+                }
+                return 0;
+            }
+            case "zones":
+            {
+                // zones <Data> <Mission> : valeurs des zones A et B de la grille (combien de cases, et une case exemple)
+                var ses = new Session(files, args[2], "EASY", false);
+                var g = ses.Grid!;
+                foreach (var (name, arr) in new[] { ("A", g.ZoneA), ("B", g.ZoneB) })
+                    foreach (var grp in Enumerable.Range(0, arr.Length).GroupBy(i => arr[i]).OrderBy(x => x.Key))
+                    {
+                        int i = grp.First();
+                        Console.WriteLine($"zone {name} {grp.Key,6} (0x{grp.Key:X4}) : {grp.Count(),7} case(s), ex. ({(i % g.Width) * 100 + 50},{(i / g.Width) * 100 + 50})");
+                    }
+                return 0;
+            }
             case "ranimer":
             {
                 // ranimer <Data> <Mission> : un pompier inconscient est-il ranimé par un collègue (pompier ou médecin) ?

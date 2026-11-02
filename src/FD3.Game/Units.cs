@@ -119,6 +119,8 @@ public sealed partial class UnitManager
     public const float FiremanSpeedFactor = 45f, VehicleSpeedFactor = 60f;
     /// <summary>Recul supplémentaire devant le feu (1 m = 100 unités), réglé à l'œil sur le jeu d'origine.</summary>
     public const float ExtraStandoff = 400f;
+    /// <summary>Vrai pendant un ordre donné par le joueur (l'interface le met) : les réponses vocales ne concernent que ceux-là.</summary>
+    public bool PlayerCommand;
     /// <summary>Portée à laquelle un pompier libre repère un feu et va l'éteindre, en multiple de celle de sa lance (options : Gameplay).</summary>
     public static float AutoAttackRange = 3f;
     /// <summary>Feu tout proche : le pompier recule jusqu'à cette part de sa distance d'arrosage habituelle (options : Gameplay).</summary>
@@ -719,7 +721,7 @@ public sealed partial class UnitManager
         {
             u.Path.Clear(); u.Target = null;
             u.Status = "impossible d'y accéder";
-            Sounds.Add(("VOCAL_IMPOSSIBLE_TO_ACCESS", null));
+            if (PlayerCommand) Sounds.Add(("VOCAL_IMPOSSIBLE_TO_ACCESS", null));   // voix seulement pour un ordre du joueur, pas pour l'IA
             return false;
         }
         u.Status = target != null ? $"va éteindre {target.Name}" : u.Path.Count == 0 ? "attend les ordres" : "en route";
