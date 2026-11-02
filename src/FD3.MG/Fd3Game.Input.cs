@@ -55,6 +55,7 @@ public sealed partial class Fd3Game
         bool pressR = inside && m.RightButton == ButtonState.Pressed && _mPrev.RightButton == ButtonState.Released;
         // mini-carte : prend les clics faits sur elle
         if (pressL && SelectionPanelPress(m.X, m.Y)) pressL = false;
+        if (pressL && ObjButtonPress(m.X, m.Y)) pressL = false;   // bouton « i » : panneau des objectifs
         if (pressL && MiniPress(m.X, m.Y, false)) pressL = false;
         if (pressL && ExitIconHit(m.X, m.Y)) pressL = false;   // icône « faire descendre » du véhicule choisi
         if (pressR && MiniPress(m.X, m.Y, true)) pressR = false;
@@ -102,6 +103,8 @@ public sealed partial class Fd3Game
     }
 
     // flèches du clavier : déplacent la vue (en 3D, dans la direction où regarde la caméra)
+    private float _arrowShift = 1.6f;
+
     private void HandleArrows(KeyboardState k, float dt)
     {
         float x = (k.IsKeyDown(Keys.Right) ? 1 : 0) - (k.IsKeyDown(Keys.Left) ? 1 : 0);
@@ -113,6 +116,8 @@ public sealed partial class Fd3Game
         }
         float y = (k.IsKeyDown(Keys.Up) ? 1 : 0) - (k.IsKeyDown(Keys.Down) ? 1 : 0);
         if (x == 0 && y == 0) return;
+        // Maj : défilement un peu plus rapide (options : Gameplay.ArrowShiftSpeed)
+        if (k.IsKeyDown(Keys.LeftShift) || k.IsKeyDown(Keys.RightShift)) dt *= _arrowShift;
         if (_map) { _mapCenter += new SN.Vector2(x, y) * (600 * _scale / _mapScale) * dt; return; }
         var back = new SN.Vector3(MathF.Cos(_yaw), MathF.Sin(_yaw), 0); var right = new SN.Vector3(-back.Y, back.X, 0);
         _target += (right * x - back * y) * (_dist * 0.8f) * dt;
@@ -481,8 +486,18 @@ public sealed partial class Fd3Game
     }
 
     // ce que ferait un clic droit à cet endroit, d'après les unités choisies
+    /// <summary>Menus, pause : le pointeur normal du système (le curseur du jeu revient en partie).</summary>
+    private void MenuCursor()
+    {
+        if (_arrowShown) return;
+        _arrowShown = true; _cur = (Cur)(-1);
+        try { Mouse.SetCursor(MouseCursor.Arrow); } catch { }
+    }
+    private bool _arrowShown;
+
     private void UpdateCursor()
     {
+        _arrowShown = false;
         if (_cursors.Count == 0 || _session == null) return;
         var s = Display.Scale(Window.Handle);
         if (MathF.Abs(s - _cursorScale) > 0.01f) { _scale = s; _ui.Scale = s; LoadCursors(); }
@@ -493,7 +508,7 @@ public sealed partial class Fd3Game
         if (MiniToWorld(x, y) != null) want = Cur.Normal;
         else if (walkers.Count == 0) want = UnitAt(x, y) != null ? Cur.Unit : Cur.Normal;
         else if (CivilianAt(x, y) is { } civ)
-            want = civ.State == CivilianState.Unconscious ? (walkers.Any(u => u.CanHeal) ? Cur.Heal : Cur.Forbidden) : Cur.Rescue;
+            want = civ.State == CivilianState.Unconscious && walkers.Any(u => u.CanHeal) ? Cur.Heal : Cur.Rescue;   // inconscient : le médecin le soigne, un pompier le porte
         else if (VehicleAt(x, y) is { } v)
             want = (ms.X >= 0 && (Keyboard.GetState().IsKeyDown(Keys.LeftControl) || Keyboard.GetState().IsKeyDown(Keys.RightControl))) ? (v.Seats > 0 ? Cur.Enter : Cur.Forbidden)
                 : v.ResupplyPower > 0 && walkers.Any(u => u.Nozzle != null) ? Cur.Water : v.IsAmbulance ? Cur.Enter : Cur.Move;

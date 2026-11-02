@@ -21,6 +21,9 @@ public sealed class Unit
     public float ResupplyPower;                           // véhicule : eau rendue par seconde aux pompiers (0 = aucune)
     public bool IsAmbulance;
     public Civilian? GoTo;                                // civil vers lequel l'unité se dirige
+    public Civilian? Carrying;                            // civil inconscient porté sur le dos
+    public CarryPhase Carry;
+    public float CarryTimer;
     public Unit? GoToVehicle;                             // véhicule vers lequel l'unité se dirige (remplir, déposer des civils)
     public float HealTimer;
     public bool CanBreak, CanUse;                         // hache (portes, fenêtres) ; ouvrir une porte
@@ -55,6 +58,7 @@ public sealed class Unit
     /// à 0, le pompier s'évanouit. Vie (véhicules : [DAMAGE] LifePoints, 500) : à 0, le véhicule est hors service.</summary>
     public float Stamina = 100, StaminaMax = 100, StaminaRegen = 0.5f, HeatCoef = 1, SmokeCoef = 0.7f;
     public float Life = 500, LifeMax = 500, FireDamageCoef = 3;
+    public float ScriptHeatCoef = 1;                      // ENT_SetFireDamageCoef sur un pompier (0 : insensible au feu)
     public bool Destroyed;                                // véhicule détruit : inutilisable jusqu'à la fin de la partie
     public bool HealsUnits;                               // ambulance : soigne les pompiers venus à elle
     public string? Icon;                                  // [UNIT] Icon : image de l'unité (Data\Overlay\Textures)
@@ -68,6 +72,9 @@ public sealed class Unit
 
 public enum CivilianState { Conscious, Unconscious, Rescued, Dead }
 
+/// <summary>Pompier qui porte un civil inconscient : il le soulève, le porte sur son dos, puis le dépose à l'ambulance.</summary>
+public enum CarryPhase { None, Lifting, Walking, Dropping }
+
 /// <summary>Civil à sauver (entité Civilian de la carte ; état de départ lu dans le composant A02A).</summary>
 public sealed class Civilian
 {
@@ -79,6 +86,7 @@ public sealed class Civilian
     public float Heading;
     public CivilianState State;
     public Unit? Leader;                                  // pompier ou médecin qu'il suit
+    public Unit? Carrier;                                 // pompier qui le porte (inconscient)
     public bool Hidden;                                   // caché au départ par le script de mission
     public readonly Queue<Vector2> Path = new();
     /// <summary>Chemin vers son guide (calculé sur la grille), but visé et délai avant de le recalculer.</summary>
@@ -192,6 +200,7 @@ public sealed partial class UnitManager
         foreach (var u in Units) AutoAttack(u);
         foreach (var u in Units) Fight(u, dt);
         foreach (var u in Units) Rescue(u, dt);
+        foreach (var u in Units) CarryVictim(u, dt);   // voir CivilianAI.cs
         foreach (var u in Units) Revive(u, dt);
         foreach (var u in Units) Resupply(u, dt);
         foreach (var v in Units.Where(v => v.IsVehicle)) VehicleResupply(v, dt);
@@ -202,6 +211,15 @@ public sealed partial class UnitManager
     }
 
     /// <summary>Arrivée d'une équipe : les véhicules entrent par locstartN_k et rejoignent locendN_k, l'équipage descend.</summary>
+    /// <summary>Nombre de pompiers (hors véhicules) d'une équipe de la caserne.</summary>
+    private int CrewSize(string cfgName)
+    {
+        var cfg = Class("Design\\Firestation\\" + cfgName + ".cfg");
+        if (cfg == null) return 0;
+        return Enumerable.Range(1, 20).Select(i => cfg.Get("FIRESTATION", $"UNIT{i:00}")?.Trim('"', ' '))
+            .Count(x => !string.IsNullOrEmpty(x) && !x.StartsWith("Firevehicle", StringComparison.OrdinalIgnoreCase));
+    }
+
     private void Dispatch(string cfgName, int spawn)
     {
         var cfg = Class("Design\\Firestation\\" + cfgName + ".cfg");
@@ -722,6 +740,7 @@ public sealed partial class UnitManager
     {
         if (u.Nozzle == null || u.Destroyed) { u.Status = u.Destroyed ? "hors service (détruit)" : "ne peut pas éteindre"; return; }
         if (u.IsVehicle) { VehicleAttack(u, h); return; }
+        if (u.Carrying != null) { u.Status = "porte un civil : ne peut pas arroser"; return; }
         var me = new Vector2(u.Position.X, u.Position.Y); var f = new Vector2(h.Position.X, h.Position.Y);
         float range = MathF.Max(150, u.Nozzle.RangeMax * 0.8f), d = Vector2.Distance(me, f);
         float want = range * 0.9f + ExtraStandoff;
@@ -858,7 +877,7 @@ public sealed partial class UnitManager
     private void Move(Unit u, float dt)
     {
         if (u.IsVehicle) { VehicleMove(u, dt); return; }
-        float step = u.Speed * dt;
+        float step = u.Speed * dt * (u.Carry == CarryPhase.Walking ? CarrySpeed : 1f);   // chargé d'un corps : plus lent
         while (step > 0 && u.Path.Count > 0)
         {
             var p = new Vector2(u.Position.X, u.Position.Y); var t = u.Path.Peek();

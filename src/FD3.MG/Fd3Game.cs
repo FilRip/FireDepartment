@@ -25,7 +25,7 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
 
     private Ui _ui = null!;
     private Font _font = null!;
-    private BasicEffect _lit = null!, _plain = null!, _part = null!, _ghost = null!;
+    private BasicEffect _lit = null!, _plain = null!, _part = null!, _ghost = null!, _burnt = null!;
     private bool _ghostPass; private Vector3 _ghostShift;
     private static readonly DepthStencilState GhostDepth = new() { DepthBufferEnable = true, DepthBufferWriteEnable = false, DepthBufferFunction = CompareFunction.Greater };
     private DualTextureEffect _dual = null!;
@@ -103,6 +103,7 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
         _ui = new Ui(gd) { Scale = _scale };
         UseGameFont(null);   // police du jeu (Data\Fonte\font18.fnt)
         _lit = new BasicEffect(gd) { TextureEnabled = true, LightingEnabled = true, FogEnabled = true };
+        _burnt = new BasicEffect(gd) { LightingEnabled = false, VertexColorEnabled = false, DiffuseColor = new Vector3(0.045f, 0.04f, 0.035f) };   // carcasse calcinée
         _ghost = new BasicEffect(gd) { TextureEnabled = false, LightingEnabled = false, VertexColorEnabled = false, DiffuseColor = new Vector3(0.15f, 1f, 0.25f), Alpha = 0.75f };
         _plain = new BasicEffect(gd) { TextureEnabled = false, LightingEnabled = true, FogEnabled = true, DiffuseColor = new Vector3(0.55f, 0.55f, 0.58f) };
         foreach (var e in new[] { _lit, _plain })
@@ -192,6 +193,7 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
         if (UpdateIntro(dt)) { base.Update(gameTime); return; }
         if (_menu)
         {
+            MenuCursor();
             if (!_inGame && _screen != 3) UpdateMenuVideo(dt); else StopMenuVideo();
             if (IsActive) { var mk = Keyboard.GetState(); var mm = Mouse.GetState(); ScreenInput(mk, mm); _kPrev = mk; _mPrev = mm; }
             base.Update(gameTime); return;
@@ -232,6 +234,56 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
         base.Draw(gameTime);
         if (_frame == 4 && !_menu && Environment.GetEnvironmentVariable("FD3_ECRAN") is { } ec && int.TryParse(ec, out var ecn) && ecn >= 2) { OpenPause(); if (ecn == 2) { _optionsFrom = 3; _screen = 2; } if (ecn == 4) OpenLoadScreen(3); }
         if (_frame == 4 && Environment.GetEnvironmentVariable("FD3_SAUVE_TEST") != null && _session != null) SaveSelfTest();
+        // essai : FD3_PORTER=phase,secondes → un pompier va chercher le civil inconscient le plus proche ; la partie avance
+        // jusqu'à la phase voulue (Lifting, Walking, Dropping) plus quelques secondes, la caméra regarde le porteur
+        // essai : FD3_VEHICULES=0.3,0 → vie (part du maximum) des premiers véhicules arrivés ; la caméra regarde le premier
+        if (_frame == 4 && Environment.GetEnvironmentVariable("FD3_VEHICULES") is { } vies && _session != null)
+        {
+            SkipCinematic();
+            for (int i = 0; i < 600 && !_session.Units.Active.Any(u => u.IsVehicle && !u.Moving); i++) _session.Step();
+            var vs = _session.Units.Active.Where(u => u.IsVehicle).ToList(); var fr = vies.Split(',');
+            for (int i = 0; i < Math.Min(vs.Count, fr.Length); i++) { float f = float.Parse(fr[i], System.Globalization.CultureInfo.InvariantCulture); if (f <= 0) _session.Units.Damage(vs[i], vs[i].Life + 1); else vs[i].Life = vs[i].LifeMax * f; }
+            for (int i = 0; i < vs.Count; i++) Console.WriteLine($"véhicule {vs[i].Name} ({vs[i].Position.X:0},{vs[i].Position.Y:0}) vie {vs[i].Life:0}/{vs[i].LifeMax:0}");
+            SnapshotPoses();
+        }
+        // essai : FD3_LANCE=1 → un pompier arrose le feu le plus proche ; la caméra le regarde de près
+        if (_frame == 4 && Environment.GetEnvironmentVariable("FD3_LANCE") != null && _session != null)
+        {
+            SkipCinematic();
+            var um = _session.Units;
+            for (int i = 0; i < 600 && !um.Active.Any(u => !u.IsVehicle && u.Nozzle != null && !u.Moving); i++) _session.Step();
+            var man = um.Active.FirstOrDefault(u => !u.IsVehicle && u.Nozzle != null);
+            var fire = man == null ? null : _session.Fire.HotPoints.Where(h => h.IsBurning && MathF.Abs(h.Position.Z - man.Position.Z) < 200).OrderBy(h => SN.Vector3.Distance(h.Position, man.Position)).FirstOrDefault();
+            if (man != null && fire != null)
+            {
+                um.Attack(man, fire);
+                for (int i = 0; i < 1200 && !(man.Target != null && !man.Moving); i++) _session.Step();
+                for (int i = 0; i < 20; i++) _session.Step();
+                SnapshotPoses();
+                _target = man.Position + new SN.Vector3(0, 0, 100); _dist = 450; _pitch = 0.45f; _paused = true;
+                Console.WriteLine($"lance : {man.Status}");
+            }
+        }
+        if (_frame == 4 && Environment.GetEnvironmentVariable("FD3_PORTER") is { } porter && _session != null)
+        {
+            var pr = porter.Split(','); var want = Enum.Parse<CarryPhase>(pr[0]); float extra = pr.Length > 1 ? float.Parse(pr[1], System.Globalization.CultureInfo.InvariantCulture) : 0;
+            var um = _session.Units;
+            SkipCinematic();
+            for (int i = 0; i < 600 && !um.Active.Any(u => !u.IsVehicle && !u.CanHeal && !u.Moving); i++) _session.Step();   // équipes arrivées
+            var man = um.Active.FirstOrDefault(u => !u.IsVehicle && !u.CanHeal);
+            var civ = man == null ? null : um.Civilians.Where(c => c.State == CivilianState.Unconscious && !c.Hidden && um.CanReach(new(man.Position.X, man.Position.Y), new(c.Position.X, c.Position.Y)))
+                .OrderBy(c => SN.Vector3.Distance(c.Position, man.Position)).FirstOrDefault();
+            if (man != null && civ != null)
+            {
+                SkipCinematic();
+                um.FetchCivilian(man, civ);
+                for (int i = 0; i < 3000 && man.Carry != want; i++) _session.Step();
+                for (int i = 0; i < (int)(extra / Session.Dt); i++) _session.Step();
+                SnapshotPoses();
+                _target = new SN.Vector3(man.Position.X, man.Position.Y, man.Position.Z); _dist = 900; _paused = true;
+                Console.WriteLine($"porteur : {man.Status} · {man.Carry} · civil {civ.State}");
+            }
+        }
         if (_frame == 4 && Environment.GetEnvironmentVariable("FD3_ACCES") != null && _session != null)
         {
             foreach (var d in _session.Units.Openings.Where(o => !o.IsWindow)) _session.Units.SetOpeningState(d, OpeningState.Open);
@@ -369,7 +421,7 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
         return (zmin, zmax);
     }   // partie haute jetée (sol d'un niveau souterrain : le dessus des parois)
 
-    private void AddRoofCut(SceneAssets.MeshAsset a, SN.Matrix4x4 world, float? fixedCut = null, bool noCut = false)
+    private void AddRoofCut(SceneAssets.MeshAsset a, SN.Matrix4x4 world, float? fixedCut = null, bool noCut = false, bool allRoof = false)
     {
         var m = a.Mesh;
         int mode = ShaderMode(m);
@@ -388,6 +440,7 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
             {
                 var tri = new List<CutV> { V((int)m.Indices[k]), V((int)m.Indices[k + 1]), V((int)m.Indices[k + 2]) };
                 if (noCut) { EmitTri(tri[0], tri[1], tri[2], tex, dirt, lm, gr.Alpha, false, mode, false); continue; }
+                if (allRoof) { EmitTri(tri[0], tri[1], tri[2], tex, dirt, lm, gr.Alpha, true, mode, true); continue; }
                 var c = (tri[0].P + tri[1].P + tri[2].P) / 3;
                 // plafonds (faces horizontales tournées vers le bas) : toujours avec le toit
                 var nz = SN.Vector3.Normalize(tri[0].N + tri[1].N + tri[2].N + new SN.Vector3(0, 0, 1e-6f));
@@ -529,7 +582,13 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
             try
             {
                 var asset = _assets.LoadMesh(mission, n.Mesh, null);
-                if (n.Mesh.Contains("_ROOM", StringComparison.OrdinalIgnoreCase))
+                if (!ground && n.Mesh.EndsWith("_ROOF", StringComparison.OrdinalIgnoreCase) && _curBuilding >= 0)
+                {
+                    // toit nommé (« M_Parn_12_ROOF » de Maidan : la place au-dessus d'une salle souterraine ; « CompClub_ROOF »…) :
+                    // tout entier un toit, que le script retire (LEV_RoofVisibility) ou qui part quand un pompier passe dessous
+                    AddRoofCut(asset, n.World, allRoof: true);
+                }
+                else if (n.Mesh.Contains("_ROOM", StringComparison.OrdinalIgnoreCase))
                 {
                     // pièce (sol, cloisons, plafond) : coupée aux 4/5 de sa hauteur, ses cloisons restent visibles sans toit
                     float zmin = float.MaxValue, zmax = float.MinValue;
@@ -840,7 +899,7 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
         _proj = SN.Matrix4x4.CreatePerspectiveFieldOfView(50f * MathF.PI / 180, (float)_fbW / _fbH, 20f, 80000f);
         _viewProj = _view * _proj;
         var view = _view.X(); var proj = _proj.X();
-        foreach (IEffectMatrices e in new IEffectMatrices[] { _lit, _plain, _dual, _alphaFx, _part, _ghost }) { e.View = view; e.Projection = proj; e.World = Matrix.Identity; }
+        foreach (IEffectMatrices e in new IEffectMatrices[] { _lit, _plain, _dual, _alphaFx, _part, _ghost, _burnt }) { e.View = view; e.Projection = proj; e.World = Matrix.Identity; }
         // luminosité réglable (touches + et −) : multiplie l'éclairage du décor, des objets et des personnages
         foreach (var e in new[] { _lit, _plain })
         {
@@ -911,6 +970,9 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
             else if (alpha && tex != null) { _alphaFx.Texture = tex; _alphaFx.World = world; fx = _alphaFx; }
             else if (tex != null) { _lit.Texture = tex; _lit.World = world; fx = _lit; }
             else { _plain.World = world; fx = _plain; }
+            // véhicule détruit : carcasse calcinée, presque noire (comme un objet entièrement consumé) ; effet sans éclairage,
+            // la teinte sombre s'applique telle quelle
+            if (_charred) { _burnt.TextureEnabled = tex != null; _burnt.Texture = tex; _burnt.World = world; fx = _burnt; }
             foreach (var pass in fx.CurrentTechnique.Passes)
             {
                 pass.Apply();
@@ -918,6 +980,8 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
             }
         }
     }
+
+    private bool _charred;   // DrawMesh : dessin d'une carcasse calcinée
 
     private List<(MeshGpu mesh, SN.Matrix4x4 part)> UnitModel(string model)
     {
@@ -967,7 +1031,7 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
             }
         foreach (var u in _sel)
             P(u.Position + new SN.Vector3(0, 0, 20), u.IsVehicle ? 700 : 220, new SN.Vector4(0.3f, 0.75f, 1f, 0.55f), right, up);
-        foreach (var c in _session.Units.Civilians.Where(c => !c.Hidden && (c.State == CivilianState.Unconscious || c.Leader != null)))
+        foreach (var c in _session.Units.Civilians.Where(c => !c.Hidden && c.Carrier == null && (c.State == CivilianState.Unconscious || c.Leader != null)))
             P(c.Position + new SN.Vector3(0, 0, 230), 120, c.State == CivilianState.Unconscious ? new SN.Vector4(1f, 0.2f, 0.2f, 0.9f) : new SN.Vector4(0.3f, 1f, 0.4f, 0.9f), right, up);
         foreach (var u in _session.Units.Active.Where(u => u.Target != null && !u.Moving))
         {
@@ -998,6 +1062,15 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
         int hpIndex = 0;
         var flames = FlameTexture();
         _fv.Clear();
+        // véhicule à moitié détruit (ou plus) : un petit feu sur la carrosserie, qui grandit avec les dégâts
+        if (flames != null)
+            foreach (var v in _session.Units.Active.Where(v => v.IsVehicle && v.LifeMax > 0 && v.Life > 0 && v.Life <= v.LifeMax * 0.5f))   // détruit : carcasse noire, sans feu
+            {
+                float dmg = 1 - v.Life / (v.LifeMax * 0.5f);   // 0 à mi-vie, 1 détruit
+                var vp = PoseOf(v, v.Position, v.Heading).p;
+                P(vp + new SN.Vector3(0, 0, 260), 300 + 200 * dmg, new SN.Vector4(0.9f, 0.35f, 0.08f, 0.06f), right, up);
+                FlamesAt(vp + new SN.Vector3(0, 0, 230), (1000f, SN.Vector2.Zero), 7919 + v.Id, 0.2f + 0.35f * dmg, time, right);   // posé vers le toit, sinon caché dans la carrosserie
+            }
         foreach (var h in _session.Fire.HotPoints)
         {
             hpIndex++;
@@ -1064,16 +1137,19 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
 
     // plusieurs langues de feu par foyer : debout (toujours verticales), chacune avec son image de départ, sa vitesse,
     // sa taille et sa teinte (rouge, orange, jaune), qui ondulent un peu ; plus le feu est fort, plus elles sont grandes et nombreuses
-    private void Flames(HotPoint h, int seed, float k, float time, SN.Vector3 right)
+    private void Flames(HotPoint h, int seed, float k, float time, SN.Vector3 right) => FlamesAt(h.Position, FireRoom(h), seed, k, time, right);
+
+    /// <summary>Flammes d'un foyer (ou d'un véhicule en feu) posées en <paramref name="pos"/> ; room : place libre autour (murs).</summary>
+    private void FlamesAt(SN.Vector3 pos, (float clear, SN.Vector2 away) room0, int seed, float k, float time, SN.Vector3 right)
     {
         var flat = new SN.Vector3(right.X, right.Y, 0);
         flat = flat.LengthSquared() > 1e-6f ? SN.Vector3.Normalize(flat) : SN.Vector3.UnitX;
         int n = 3 + (int)(5 * k);
         float spread = 40 + 110 * k;
         // foyer près d'un mur : les flammes sont poussées vers l'intérieur de la pièce et ne dépassent pas trop le mur
-        var (clear, away) = FireRoom(h);
+        var (clear, away) = room0;
         float shift = MathF.Min(140, MathF.Max(0, 120 - clear));
-        var centre0 = h.Position + new SN.Vector3(away * shift, 0);
+        var centre0 = pos + new SN.Vector3(away * shift, 0);
         float room = clear + shift;
         spread = MathF.Min(spread, MathF.Max(15, room - 70));
         for (int q = 0; q < n; q++)
@@ -1285,6 +1361,7 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
         }
         _ui.End();
         RenderMinimap();
+        RenderObjButton();
     }
 
     private static string UnitLabel(Unit u) => u.ClassPath.ToLowerInvariant() switch

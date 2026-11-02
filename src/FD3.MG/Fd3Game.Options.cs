@@ -58,6 +58,9 @@ public sealed class GameplaySettings
     public float VehicleFireFactor { get; set; } = 1.5f;   // feu → vie des véhicules
     public float AutoAttackRange { get; set; } = 3f;       // portée où un pompier libre va de lui-même éteindre un feu (× portée de sa lance)
     public float AttackBackOff { get; set; } = 0.5f;       // feu tout proche : recul du pompier (part de sa distance d'arrosage habituelle)
+    public float StaminaLoss { get; set; } = 0.25f;        // vitesse de la perte d'endurance des pompiers (chaleur + fumée), multiplie HeatFactor et SmokeFactor
+    public float CarrySpeed { get; set; } = 0.6f;          // pompier qui porte un civil inconscient : part de sa vitesse normale
+    public float ArrowShiftSpeed { get; set; } = 1.6f;     // flèches + Maj : vitesse du défilement de la vue (× la vitesse normale)
     public float FlameSpeed { get; set; } = 10f;           // animation des flammes : images par seconde
     public float FlameSpeedVariation { get; set; } = 4f;   // écart d'une flamme à l'autre (images par seconde en plus, au hasard)
 }
@@ -166,6 +169,9 @@ public sealed partial class Fd3Game
         UnitManager.HeatFactor = gp.HeatFactor; UnitManager.SmokeFactor = gp.SmokeFactor; UnitManager.AmbulanceHeal = gp.AmbulanceHeal;
         UnitManager.ReviveStamina = Math.Clamp(gp.ReviveStamina, 0.05f, 1f); UnitManager.VehicleFireFactor = gp.VehicleFireFactor;
         UnitManager.AutoAttackRange = Math.Clamp(gp.AutoAttackRange, 1f, 10f); UnitManager.AttackBackOff = Math.Clamp(gp.AttackBackOff, 0.1f, 1f);
+        UnitManager.StaminaLoss = Math.Clamp(gp.StaminaLoss, 0f, 5f);
+        UnitManager.CarrySpeed = Math.Clamp(gp.CarrySpeed, 0.2f, 1f);
+        _arrowShift = Math.Clamp(gp.ArrowShiftSpeed, 1f, 5f);
         _flameFps = Math.Clamp(gp.FlameSpeed, 0.5f, 60f); _flameFpsVar = Math.Clamp(gp.FlameSpeedVariation, 0f, 60f);
         if (_audio != null) _audio.Master = 0.8f * Math.Clamp(_settings.Volume, 0, 100) / 100f;
     }

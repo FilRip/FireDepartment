@@ -51,8 +51,11 @@ public sealed class SceneAssets
         var list = new List<Node>();
         foreach (var sg in _files.List(prefix).Where(p =>
                  {
+                     // décor « London.sg » et sol « FGD_London.sg » ; certaines missions (Institute) : « level_institute.sg »
                      var f = p[(p.LastIndexOf('\\') + 1)..];
-                     return f.Equals(mission + ".sg", StringComparison.OrdinalIgnoreCase) || f.Equals("FGD_" + mission + ".sg", StringComparison.OrdinalIgnoreCase);
+                     foreach (var n in new[] { mission, "level_" + mission })
+                         if (f.Equals(n + ".sg", StringComparison.OrdinalIgnoreCase) || f.Equals("FGD_" + n + ".sg", StringComparison.OrdinalIgnoreCase)) return true;
+                     return false;
                  }))
         {
             var nodes = Rooms.SceneNodes(_files.Read(sg));

@@ -162,6 +162,8 @@ public sealed class ExplosionSystem
     }
 
     /// <summary>Points de vie (scripts : ENT_GetDamage) ; null si l'objet n'est pas un objet explosif.</summary>
+    public void SetFireCoef(uint id, float coef) { if (ById.TryGetValue(id, out var it)) it.FireDamageCoef = coef; }
+
     public float? LifeOf(uint id) => ById.TryGetValue(id, out var it) ? it.Life : null;
 
     /// <summary>Scripts : ENT_SetDamage(id, points de vie) ; 0 fait exploser.</summary>
