@@ -28,6 +28,14 @@ public sealed class Opening
     public List<int> Cells = new(); // cases de la grille fermées quand la porte est fermée
     public Vector3 Center;          // milieu du battant (point visé et point de passage)
     public string? SoundLabel;      // [SOUND] LABEL : bruit de la vitre qui casse
+    public readonly List<(string action, string script)> Actions = new();   // composant A027 : « Open » / « Close » → fonction du script
+    public Vector2 BoxMin, BoxMax;
+    /// <summary>Portail coulissant ouvert : cases qui restent fermées (montants, caisson où rentrent les battants).</summary>
+    public readonly HashSet<int> OpenBlocked = new();
+    /// <summary>Portail coulissant : cases sous le bâti, de part et d'autre du passage (caissons des battants) — toujours fermées.</summary>
+    public readonly HashSet<int> FrameCells = new();
+    public string? OpenAnim, CloseAnim;
+    public Vector2? Lever;          // mécanisme d'ouverture (repère « mechanism_symbol », les rouages) : l'unité s'y arrête   // animations du modèle (portail coulissant) ; sinon la porte pivote de 90°  // emprise du modèle au sol (clic sur tout le portail)
     public bool Passable => IsWindow || State != OpeningState.Closed;
     public bool LetsSmokeOut => State != OpeningState.Closed;
 }
@@ -60,6 +68,19 @@ public sealed partial class UnitManager
             d.Life = c.GetFloat("DAMAGE", "LifePoints", d.MaxLife);
             d.SoundLabel = c.Get("SOUND", "Label")?.Trim('"', ' ');
             d.State = InitialState(o) == 1 ? OpeningState.Open : OpeningState.Closed;
+            // fonctions du script appelées à l'ouverture et à la fermeture (portails de Jail : First_Gates_Open / _Close)
+            if (o.GetComponent(0xA027) is { } ac)
+            {
+                var ab = o.ComponentBytes(ac).ToArray();
+                d.Actions.AddRange(ParseActions(ab));
+                // animations d'ouverture et de fermeture (« SingleItem\si_Jail_gates_01_open ») : les battants coulissent
+                var txt = System.Text.Encoding.Latin1.GetString(ab);
+                foreach (System.Text.RegularExpressions.Match mm in System.Text.RegularExpressions.Regex.Matches(txt, @"SingleItem\\[A-Za-z0-9_]+"))
+                {
+                    if (mm.Value.EndsWith("open", StringComparison.OrdinalIgnoreCase)) d.OpenAnim ??= mm.Value;
+                    else if (mm.Value.EndsWith("close", StringComparison.OrdinalIgnoreCase)) d.CloseAnim ??= mm.Value;
+                }
+            }
             d.Center = d.Position;
             if (model != null)
             {
@@ -68,6 +89,8 @@ public sealed partial class UnitManager
                 {
                     var mid = pts.Aggregate(Vector2.Zero, (a, p) => a + p) / pts.Count;
                     d.Center = Vector3.Transform(new Vector3(mid, 100), o.Matrix);
+                    d.BoxMin = new(float.MaxValue); d.BoxMax = new(float.MinValue);
+                    foreach (var q in pts) { var wq = Vector3.Transform(new Vector3(q, 0), o.Matrix); d.BoxMin = Vector2.Min(d.BoxMin, new(wq.X, wq.Y)); d.BoxMax = Vector2.Max(d.BoxMax, new(wq.X, wq.Y)); }
                     if (_s.Grid is { } g)
                     {
                         // sol le plus haut autour (la case de la porte est un mur, de hauteur 0 même dans un bâtiment
@@ -88,6 +111,47 @@ public sealed partial class UnitManager
                                 var (cx, cy) = g.CellOf(Vector3.Transform(new Vector3(p, 0), o.Matrix));
                                 if (g.Inside(cx, cy) && g.ZoneA[g.Index(cx, cy)] != 0 && !d.Cells.Contains(g.Index(cx, cy))) d.Cells.Add(g.Index(cx, cy));
                             }
+                        // portail animé : une fois ouvert, seuls les battants ont bougé ; le reste du modèle (montants, caisson)
+                        // et les battants à leur place d'arrivée bloquent toujours le passage
+                        if (d.OnGround && !d.IsWindow && d.OpenAnim != null && _files.TryRead("Gfx\\Anim\\" + d.OpenAnim + ".anim") is { } ab2)
+                        {
+                            var clip = AnimClip.Parse(ab2);
+                            // seulement les portails coulissants (battants déplacés de plus de 2 m), pas les portes qui pivotent
+                            bool slides = clip.Tracks.Values.Any(t => t.Pos.Length > 1 && Vector3.Distance(t.Pos[0].v, t.Pos[^1].v) > 200);
+                            Matrix4x4 Opened(string mesh, Matrix4x4 w)
+                            {
+                                if (!clip.Tracks.TryGetValue(mesh[(mesh.LastIndexOf('\\') + 1)..], out var tr)) return w;
+                                var pos = tr.Pos.Length > 0 ? tr.Pos[^1].v : w.Translation;
+                                if (tr.Rot.Length > 0) w = Matrix4x4.CreateFromQuaternion(tr.Rot[^1].v);
+                                w.Translation = pos; return w;
+                            }
+                            if (slides && Footprint(assets, model, 0, 260, Opened) is { Count: > 0 } open)
+                                foreach (var p in open)
+                                {
+                                    var (cx, cy) = g.CellOf(Vector3.Transform(new Vector3(p, 0), o.Matrix));
+                                    if (g.Inside(cx, cy) && g.ZoneA[g.Index(cx, cy)] != 0) d.OpenBlocked.Add(g.Index(cx, cy));
+                                }
+                            // bâti : boîte du modèle (repère de l'objet : les battants coulissent le long de X), hors du passage
+                            var all = slides ? Footprint(assets, model, 0, 1000) : new();
+                            if (slides && all.Count > 0 && Matrix4x4.Invert(o.Matrix, out var inv) && d.Cells.Count > 0)
+                            {
+                                float bx0 = all.Min(q => q.X), bx1 = all.Max(q => q.X), by0 = all.Min(q => q.Y), by1 = all.Max(q => q.Y);
+                                var loc = d.Cells.Where(i => !d.OpenBlocked.Contains(i)).DefaultIfEmpty(d.Cells.First()).Select(i => Vector3.Transform(new Vector3(((i % g.Width) + 0.5f) * Grid.CellSize, ((i / g.Width) + 0.5f) * Grid.CellSize, d.Position.Z), inv)).ToList();
+                                float px0 = loc.Min(q => q.X), px1 = loc.Max(q => q.X);
+                                var (ax, ay) = g.CellOf(new Vector3(d.BoxMin, 0)); var (bx, by) = g.CellOf(new Vector3(d.BoxMax, 0));
+                                for (int cy = ay - 1; cy <= by + 1; cy++)
+                                    for (int cx = ax - 1; cx <= bx + 1; cx++)
+                                    {
+                                        if (!g.Inside(cx, cy)) continue;
+                                        var q = Vector3.Transform(new Vector3((cx + 0.5f) * Grid.CellSize, (cy + 0.5f) * Grid.CellSize, d.Position.Z), inv);
+                                        if (q.X < bx0 - 20 || q.X > bx1 + 20 || q.Y < by0 - 20 || q.Y > by1 + 20) continue;
+                                        if (q.X > px0 - 60 && q.X < px1 + 60) continue;   // le passage lui-même
+                                        int i = g.Index(cx, cy);
+                                        if (g.ZoneA[i] != 0) d.FrameCells.Add(i);
+                                    }
+                            }
+                            Log.Add($"Portail coulissant {d.Name} : {d.Cells.Count} case(s), dont {d.Cells.Count - d.OpenBlocked.Count} libre(s) une fois ouvert, bâti {d.FrameCells.Count}");
+                        }
                     }
                 }
             }
@@ -146,6 +210,19 @@ public sealed partial class UnitManager
         }
     }
 
+    /// <summary>Portes à mécanisme : les rouages (« mechanism_symbol ») posés à moins de 12 m d'une porte qui s'ouvre à la main.</summary>
+    private void AssignLevers(Level level)
+    {
+        var marks = level.Objects.Where(o => o.HasTransform && System.Text.RegularExpressions.Regex.IsMatch(o.ClassPath, @"mechanism_symbol(_blue)?$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            .Select(o => new Vector2(o.Position.X, o.Position.Y)).ToList();
+        foreach (var d in Openings.Where(d => d.Usable && !d.IsWindow && d.OpenAnim != null))   // portails animés seulement
+        {
+            var c = new Vector2(d.Center.X, d.Center.Y);
+            var near = marks.Where(m => Vector2.Distance(m, c) < 1200).OrderBy(m => Vector2.Distance(m, c)).Cast<Vector2?>().FirstOrDefault();
+            if (near != null) d.Lever = near;
+        }
+    }
+
     // composant A027 : bloc d'en-tête puis l'indice de l'état logique courant
     private static int InitialState(LevelObject o)
     {
@@ -161,6 +238,8 @@ public sealed partial class UnitManager
         if (_s.Grid is not { } g) return;
         if (_doorClosed.Length != g.Width * g.Height) _doorClosed = new bool[g.Width * g.Height]; else Array.Clear(_doorClosed);
         foreach (var d in Openings.Where(d => !d.Passable)) foreach (var i in d.Cells) _doorClosed[i] = true;
+        foreach (var d in Openings.Where(d => d.Passable)) foreach (var i in d.OpenBlocked) _doorClosed[i] = true;
+        foreach (var d in Openings) foreach (var i in d.FrameCells) _doorClosed[i] = true;
         _s.Smoke.SetOpenings(Environment.GetEnvironmentVariable("FD3_NOOPEN") != null ? Array.Empty<Vector3>() : Openings.Where(d => d.LetsSmokeOut).Select(d => d.Center));
     }
 
@@ -192,7 +271,8 @@ public sealed partial class UnitManager
         }
         if (d.Center.Z - Ground(new(d.Center.X, d.Center.Y)) > 400)
         { u.Status = $"{d.Name} est à l'étage : hors d'atteinte depuis le sol"; return; }
-        var spot = ApproachPoint(u, d);
+        // portail à mécanisme : l'unité va sous les rouages, pas au milieu du portail
+        var spot = useIt && d.Lever is { } lv ? Walkable(lv) : ApproachPoint(u, d);
         if (!Order(u, spot)) return;
         u.Opening = d; u.OpeningBreak = breakIt; u.ActionTimer = 0;
         u.Status = breakIt ? $"va casser {d.Name}" : d.State == OpeningState.Closed ? $"va ouvrir {d.Name}" : $"va fermer {d.Name}";
@@ -202,6 +282,7 @@ public sealed partial class UnitManager
     private float ReachDist(Vector2 p, Opening d)
     {
         float best = Vector2.Distance(p, new(d.Center.X, d.Center.Y));
+        if (d.Lever is { } lv) best = MathF.Min(best, Vector2.Distance(p, lv));
         if (d.IsObstacle && _s.Grid is { } g)
             foreach (var i in d.Cells)
                 best = MathF.Min(best, Vector2.Distance(p, new((i % g.Width + 0.5f) * Grid.CellSize, (i / g.Width + 0.5f) * Grid.CellSize)));
@@ -304,6 +385,9 @@ public sealed partial class UnitManager
             if (u.ActionTimer < UseSeconds) return;
             d.State = d.State == OpeningState.Closed ? OpeningState.Open : OpeningState.Closed;
             Log.Add($"{_s.Time,6:0} s : {d.Name} {(d.State == OpeningState.Open ? "ouverte" : "fermée")}");
+            var want = d.State == OpeningState.Open ? "open" : "close";
+            foreach (var (action, script) in d.Actions.Where(a => a.action.Equals(want, StringComparison.OrdinalIgnoreCase)).Take(1))
+                _s.Scripts?.TryRun(script, Script.Value.I(u.Id), Script.Value.I(d.Id), Script.Value.T(action));
             u.Opening = null; u.Status = "attend les ordres";
             RefreshDoorCells();
         }

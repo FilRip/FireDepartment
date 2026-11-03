@@ -43,7 +43,7 @@ public sealed partial class UnitManager
         !(u.Destroyed || u.InjuredTimer > 0 || u.Unconscious || u.OnBoard || u.Hidden || u.Moving || u.Target != null || u.Nozzle == null
           || (!u.Nozzle.InfiniteReserve && u.Nozzle.Reserve <= 0) || u.GoTo != null || u.Opening != null
           || (u.GoToVehicle != null && (u.Nozzle.Reserve < u.Nozzle.ReserveMax || Civilians.Any(c => c.Leader == u)))
-          || u.UseTarget != null || u.ReviveTarget != null || u.Boarding || u.Carrying != null);
+          || u.UseTarget != null || u.ReviveTarget != null || u.Boarding || u.Carrying != null || u.Climb != ClimbPhase.None);
 
     /// <summary>
     /// Feu le plus intéressant (le plus proche, et le plus fort) que l'unité voit à moins de <paramref name="range"/>,

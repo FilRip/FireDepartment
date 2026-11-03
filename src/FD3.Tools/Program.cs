@@ -619,6 +619,166 @@ public static class Program
                     }
                 return 0;
             }
+            case "interrupteur":
+            {
+                // interrupteur <Data> <Mission> <objet> <porte> : un pompier utilise l'objet ; état de la porte avant et après
+                var ses = new Session(files, args[2], "EASY");
+                void Run(float sec) { for (int i = 0; i < (int)(sec / Session.Dt); i++) ses.Step(); }
+                Run(40);
+                var obj = ses.Units.Usables.First(o => o.Name.Equals(args[3], StringComparison.OrdinalIgnoreCase));
+                var door = ses.Units.Openings.First(o => o.Name.Equals(args[4], StringComparison.OrdinalIgnoreCase));
+                var man = ses.Units.Units.First(u => !u.IsVehicle && !u.Hidden && !u.OnBoard && ses.Units.CanWorkOn(u, obj));
+                Console.WriteLine($"porte {door.Name} : {door.State}");
+                for (int k = 0; k < 2; k++)
+                {
+                    man.Position = new System.Numerics.Vector3(obj.Position.X + 100, obj.Position.Y, obj.Position.Z);
+                    ses.Units.UseObject(man, obj);
+                    for (int t = 0; t < 30 && man.UseTarget != null; t++) Run(1);
+                    Console.WriteLine($"après utilisation {k + 1} : porte {door.State} · {man.Status}");
+                }
+                return 0;
+            }
+            case "pistes":
+            {
+                // pistes <Data> <anim> : durée et étendue des déplacements de chaque piste (Gfx\Anim\<anim>.anim)
+                var c = AnimClip.Parse(files.Read("Gfx\\Anim\\" + args[2] + ".anim"));
+                Console.WriteLine($"durée {c.Duration:0.00} s, {c.Tracks.Count} pistes");
+                foreach (var (n, t) in c.Tracks.Take(int.TryParse(args.ElementAtOrDefault(3), out var k) ? k : 6))
+                    if (t.Pos.Length > 0)
+                        Console.WriteLine($"  {n} : {t.Pos.Length} clés, de {t.Pos.First().v} à {t.Pos.Last().v} ; min {t.Pos.Select(p => p.v).Aggregate(System.Numerics.Vector3.Min)} max {t.Pos.Select(p => p.v).Aggregate(System.Numerics.Vector3.Max)}");
+                foreach (var (n, t) in c.Tracks.Where(x => x.Value.Rot.Length > 0).Take(4)) Console.WriteLine($"  {n} : rotation de {t.Rot.First().v} à {t.Rot.Last().v}");
+                return 0;
+            }
+            case "carte":
+            {
+                // carte <Data> <Mission> x0 y0 x1 y1 : cases de la grille (# mur, m cloison, x bloqué, D porte fermée, d porte)
+                var ses = new Session(files, args[2], "EASY");
+                Console.WriteLine(ses.Units.AsciiMap(int.Parse(args[3]), int.Parse(args[4]), int.Parse(args[5]), int.Parse(args[6])));
+                return 0;
+            }
+            case "grappin":
+            {
+                // grappin <Data> <Mission> : passages au grappin ; un pompier ordinaire puis le scout essaient de passer le mur
+                var ses = new Session(files, args[2], "EASY");
+                void Run(float sec) { for (int i = 0; i < (int)(sec / Session.Dt); i++) ses.Step(); }
+                foreach (var gp in ses.Units.Grapples) Console.WriteLine($"passage {gp.Id} : haut {gp.Top}, cases {gp.Cells.Count}, côtés {gp.SideA} / {gp.SideB}");
+                var g0 = ses.Units.Grapples.FirstOrDefault();
+                if (g0 == null) { Console.WriteLine("aucun passage"); return 1; }
+                Run(40);
+                var men = ses.Units.Units.Where(u => !u.IsVehicle && !u.Hidden && !u.OnBoard).ToList();
+                Console.WriteLine("unités : " + string.Join(", ", men.Select(u => $"{u.ClassPath}{(u.CanGrapple ? " (grappin)" : "")}")));
+                foreach (var u in new[] { men.FirstOrDefault(m => !m.CanGrapple), men.FirstOrDefault(m => m.CanGrapple) })
+                {
+                    if (u == null) continue;
+                    // posé du côté A, envoyé du côté B
+                    u.Position = new System.Numerics.Vector3(g0.SideA, 0);
+                    var ok = u.CanGrapple ? ses.Units.GrappleOver(u, g0) : ses.Units.Order(u, g0.SideB);
+                    Console.WriteLine($"{u.ClassPath} : ordre {ok} · {u.Status} · chemin {u.Path.Count}");
+                    string last = "";
+                    for (int t = 0; t < 60; t++)
+                    {
+                        Run(0.5f);
+                        var l = $"{u.Status} {u.Climb}";
+                        if (l != last) { Console.WriteLine($"   {t * 0.5f,5:0.0} s ({u.Position.X:0},{u.Position.Y:0},{u.Position.Z:0}) {l}"); last = l; }
+                        if (!u.Moving && u.Climb == FD3.Game.ClimbPhase.None && t > 2) break;
+                    }
+                    Console.WriteLine($"   arrivé à {System.Numerics.Vector2.Distance(new(u.Position.X, u.Position.Y), g0.SideB):0} du côté B");
+                }
+                return 0;
+            }
+            case "portailcases":
+            {
+                // portailcases <Data> <Mission> <porte> : cases du portail (D fermé, o libre une fois ouvert, B bloqué ouvert)
+                var ses = new Session(files, args[2], "EASY", false);
+                var d = ses.Units.Openings.First(o => o.Name.Equals(args[3], StringComparison.OrdinalIgnoreCase));
+                var g = ses.Grid!;
+                var all = d.Cells.Concat(d.OpenBlocked).Concat(d.FrameCells).ToList();
+                int x0 = all.Min(i => i % g.Width) - 2, x1 = all.Max(i => i % g.Width) + 2, y0 = all.Min(i => i / g.Width) - 2, y1 = all.Max(i => i / g.Width) + 2;
+                Console.WriteLine($"{d.Name} : x {x0 * 100}..{x1 * 100}, y {y0 * 100}..{y1 * 100} ; boîte {d.BoxMin} {d.BoxMax}");
+                for (int y = y1; y >= y0; y--)
+                {
+                    var sb = new System.Text.StringBuilder();
+                    for (int x = x0; x <= x1; x++) { int i = g.Index(x, y); sb.Append(d.FrameCells.Contains(i) ? 'F' : d.OpenBlocked.Contains(i) ? (d.Cells.Contains(i) ? 'B' : 'b') : d.Cells.Contains(i) ? 'o' : g.ZoneA[i] == 0 ? '#' : '.'); }
+                    Console.WriteLine(sb);
+                }
+                return 0;
+            }
+            case "traverse":
+            {
+                // traverse <Data> <Mission> <porte> x y : la porte s'ouvre, tous les pompiers vont en (x,y) ; cases interdites traversées
+                var ses = new Session(files, args[2], "EASY");
+                void Run(float sec) { for (int i = 0; i < (int)(sec / Session.Dt); i++) ses.Step(); }
+                Run(40);
+                var door = ses.Units.Openings.First(o => o.Name.Equals(args[3], StringComparison.OrdinalIgnoreCase));
+                if (args.Length > 6)
+                {
+                    // ouverture par le mécanisme, comme en jeu (scout posé à côté)
+                    var sc = ses.Units.Units.First(u => u.CanGrapple);
+                    if (door.Lever is { } lv) sc.Position = new System.Numerics.Vector3(lv, 0);
+                    ses.Units.WorkOnOpening(sc, door);
+                    for (int t = 0; t < 60 && sc.Opening != null; t++) Run(1);
+                    Run(5);
+                    Console.WriteLine($"porte {door.State} · {string.Join(", ", ses.Units.Openings.Where(o => o.State != FD3.Game.OpeningState.Closed).Select(o => o.Name + " " + o.State))}");
+                }
+                else ses.Units.SetOpeningState(door, FD3.Game.OpeningState.Open);
+                var g = ses.Grid!;
+                var dest = new System.Numerics.Vector2(float.Parse(args[4]), float.Parse(args[5]));
+                var men = ses.Units.Units.Where(u => !u.IsVehicle && !u.Hidden && !u.OnBoard && !u.Unconscious).ToList();
+                foreach (var u in men) Console.WriteLine($"{u.ClassPath} ({u.Position.X:0},{u.Position.Y:0}) ordre {ses.Units.Order(u, dest)} " + string.Join(" → ", u.Path.Select(p => $"({p.X:0},{p.Y:0})")));
+                var bad = new Dictionary<string, List<string>>();
+                for (int t = 0; t < 1200; t++)
+                {
+                    ses.Step();
+                    foreach (var u in men)
+                    {
+                        if (u.Climb != FD3.Game.ClimbPhase.None) continue;
+                        var (cx, cy) = g.CellOf(u.Position);
+                        if (!ses.Units.WalkableCell(cx, cy)) { if (!bad.TryGetValue(u.Name, out var l)) bad[u.Name] = l = new(); var s2 = $"({u.Position.X:0},{u.Position.Y:0})"; if (l.Count < 8 && !l.Contains(s2)) l.Add(s2); }
+                    }
+                }
+                foreach (var u in men) Console.WriteLine($"{u.Name} fin ({u.Position.X:0},{u.Position.Y:0}) {u.Status} · hors grille : {(bad.TryGetValue(u.Name, out var l2) ? string.Join(" ", l2) : "-")}");
+                return 0;
+            }
+            case "portail":
+            {
+                // portail <Data> <Mission> <porte> : un pompier va ouvrir la porte ; où il s'arrête (mécanisme)
+                var ses = new Session(files, args[2], "EASY");
+                void Run(float sec) { for (int i = 0; i < (int)(sec / Session.Dt); i++) ses.Step(); }
+                Run(40);
+                var door = ses.Units.Openings.First(o => o.Name.Equals(args[3], StringComparison.OrdinalIgnoreCase));
+                var man = ses.Units.Units.First(u => !u.IsVehicle && !u.Hidden && !u.OnBoard && u.CanUse);
+                Console.WriteLine($"porte {door.Name} {door.State} centre {door.Center} mécanisme {door.Lever}");
+                if (args.Length > 5) man.Position = new System.Numerics.Vector3(float.Parse(args[4]), float.Parse(args[5]), 0);   // départ imposé
+                ses.Units.WorkOnOpening(man, door);
+                for (int t = 0; t < 60 && man.Opening != null; t++) Run(1);
+                Console.WriteLine($"pompier arrêté en ({man.Position.X:0},{man.Position.Y:0}) · porte {door.State} · {man.Status}");
+                return 0;
+            }
+            case "portesanim":
+            {
+                // portesanim <Data> <Mission> : portes avec une animation d'ouverture, et les pièces du modèle qu'elle anime
+                var ses = new Session(files, args[2], "EASY", false);
+                var assets = new FD3.Game.SceneAssets(files);
+                foreach (var d in ses.Units.Openings.Where(d => d.OpenAnim != null || d.CloseAnim != null).Take(12))
+                {
+                    var clip = files.TryRead("Gfx\\Anim\\" + (d.OpenAnim ?? d.CloseAnim) + ".anim") is { } b ? AnimClip.Parse(b) : null;
+                    var parts = d.Model == null ? new List<string>() : assets.ModelParts(d.Model).Select(n => n.Mesh[(n.Mesh.LastIndexOf('\\') + 1)..]).ToList();
+                    Console.WriteLine($"{d.Name} : {d.OpenAnim} / {d.CloseAnim} · pistes {(clip == null ? "?" : string.Join(",", clip.Tracks.Keys))} · pièces {string.Join(",", parts)}");
+                }
+                return 0;
+            }
+            case "chemin":
+            {
+                // chemin <Data> <Mission> x0 y0 x1 y1 [porte_ouverte…] : chemin d'un pompier ordinaire (portes nommées ouvertes)
+                var ses = new Session(files, args[2], "EASY", false);
+                foreach (var n in args.Skip(7)) if (ses.Units.Openings.FirstOrDefault(o => o.Name.Equals(n, StringComparison.OrdinalIgnoreCase)) is { } d) ses.Units.SetOpeningState(d, FD3.Game.OpeningState.Open);
+                var u = ses.Units.SpawnScripted("Data/Design/Unit/Fireman/fireman_sp.class", "essai", new System.Numerics.Vector3(float.Parse(args[3]), float.Parse(args[4]), 0))!;
+                var ok = ses.Units.Order(u, new(float.Parse(args[5]), float.Parse(args[6])));
+                Console.WriteLine($"ordre {ok} : {u.Status} ; " + string.Join(" → ", u.Path.Select(p => $"({p.X:0},{p.Y:0})")));
+                var pts = new List<System.Numerics.Vector2> { new(u.Position.X, u.Position.Y) }; pts.AddRange(u.Path);
+                Console.WriteLine(ses.Units.AsciiMap(Environment.GetEnvironmentVariable("FD3_ZONE") is { } zz ? int.Parse(zz.Split(",")[0]) : 1200, Environment.GetEnvironmentVariable("FD3_ZONE") is { } z2 ? int.Parse(z2.Split(",")[1]) : 10600, Environment.GetEnvironmentVariable("FD3_ZONE") is { } z3 ? int.Parse(z3.Split(",")[2]) : 4200, Environment.GetEnvironmentVariable("FD3_ZONE") is { } z4 ? int.Parse(z4.Split(",")[3]) : 13800, pts));
+                return 0;
+            }
             case "ranimer":
             {
                 // ranimer <Data> <Mission> : un pompier inconscient est-il ranimé par un collègue (pompier ou médecin) ?
@@ -675,7 +835,8 @@ public static class Program
             case "ouvertures":
             {
                 // ouvertures <Data> <Mission> [zmin] : portes et fenêtres (au sol ou non, cases bloquées, cassable)
-                var ses = new Session(files, args[2], "EASY", false);
+                var ses = new Session(files, args[2], "EASY", Environment.GetEnvironmentVariable("FD3_APRES") != null);
+                if (Environment.GetEnvironmentVariable("FD3_APRES") is { } ap) for (int i = 0; i < (int)(float.Parse(ap) / Session.Dt); i++) ses.Step();
                 float zmin = args.Length > 3 ? float.Parse(args[3]) : -1e9f;
                 foreach (var d in ses.Units.Openings.Where(d => d.Position.Z >= zmin))
                     Console.WriteLine($"{d.Name,-28} {(d.IsWindow ? "fenêtre" : "porte"),-8} z {d.Position.Z:0} au sol {d.OnGround} cases {d.Cells.Count} cassable {d.Breakable} vie {d.Life:0} état {d.State} centre ({d.Center.X:0},{d.Center.Y:0})");

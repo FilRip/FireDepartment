@@ -31,6 +31,7 @@ public sealed partial class Fd3Game
         if (Pressed(k, Keys.D4) || Pressed(k, Keys.NumPad4)) { _speed = 64; _paused = false; }
         if (Pressed(k, Keys.Tab)) _map = !_map;
         if (QuickSaveKeys(k)) { _kPrev = k; _mPrev = m; return; }
+        if (Pressed(k, Keys.F1)) LoadMission(_mission, _difficulty switch { "EASY" => "NORMAL", "NORMAL" => "HARD", _ => "EASY" });   // difficulté suivante
         HandleArrows(k, dt);
 
         // molette : zoom
@@ -98,7 +99,7 @@ public sealed partial class Fd3Game
             case 'u':
                 _unitClass = _unitClass.EndsWith("medic") ? "Unit\\Fireman\\fireman_sp" : "Unit\\Fireman\\fireman_medic";
                 Log("Unité qui arrose : " + (_unitClass.EndsWith("medic") ? "médecin" : "pompier")); break;
-            case 'd': LoadMission(_mission, _difficulty switch { "EASY" => "NORMAL", "NORMAL" => "HARD", _ => "EASY" }); break;
+            case 'd': _debugAi = !_debugAi; Log(_debugAi ? "Débogage : portée des pompiers (vert) et propagation des feux (orange)" : "Débogage : non"); break;
         }
     }
 
@@ -243,6 +244,14 @@ public sealed partial class Fd3Game
                 : veh.ResupplyPower > 0 ? "Direction le camion pour remplir l'eau" : "Direction le véhicule");
             return;
         }
+        if (GrappleAt(x, y) is { } gp)
+        {
+            // flèche jaune du grappin : le scout va au pied du mur et passe de l'autre côté
+            var who = _sel.Where(u => u.CanGrapple && !u.Unconscious).OrderBy(u => SN.Vector3.Distance(u.Position, gp.Top)).FirstOrDefault();
+            if (who == null) { Log("Il faut un pompier avec un grappin (scout)"); _audio?.Play("VOCAL_NO_SKILLS_FOR_THIS_ACTION"); return; }
+            DoGrapple(who, gp); Log($"{UnitLabel(who)} : {who.Status}");
+            return;
+        }
         if (UsableAt(x, y) is { } obj)
         {
             // objet utilisable (armoire électrique…) ou à réparer : le technicien d'abord pour une réparation
@@ -372,6 +381,20 @@ public sealed partial class Fd3Game
         return best;
     }
 
+    // flèche du grappin visée : près du repère en haut du mur, ou de sa base
+    private GrapplePoint? GrappleAt(double x, double y)
+    {
+        var (sx, sy) = Fb(x, y); var m = new SN.Vector2(sx, sy);
+        GrapplePoint? best = null; float bd = Tol(34);
+        foreach (var gp in _session.Units.Grapples)
+        {
+            if (Project(gp.Top + new SN.Vector3(0, 0, 60)) is not { } a || Project(gp.Top - new SN.Vector3(0, 0, 120)) is not { } b) continue;
+            var ab = b - a; float t = ab.LengthSquared() > 1e-3f ? Math.Clamp(SN.Vector2.Dot(m - a, ab) / ab.LengthSquared(), 0, 1) : 0;
+            if (SN.Vector2.Distance(m, a + ab * t) is var d && d < bd) { bd = d; best = gp; }
+        }
+        return best;
+    }
+
     private Opening? OpeningAt(double x, double y)
     {
         var (sx, sy) = Fb(x, y); var m = new SN.Vector2(sx, sy);
@@ -382,6 +405,25 @@ public sealed partial class Fd3Game
             var ab = b - a; float t = ab.LengthSquared() > 1e-3f ? Math.Clamp(SN.Vector2.Dot(m - a, ab) / ab.LengthSquared(), 0, 1) : 0;
             if (SN.Vector2.Distance(m, a + ab * t) is var d && d < bd) { bd = d; best = o; }
         }
+        // portail à mécanisme (Jail) : un petit cercle au sol, sous les rouages
+        foreach (var o in _session.Units.Openings.Where(o => o.Lever != null && o.State != OpeningState.Broken))
+        {
+            var lv = o.Lever!.Value; var lp = new SN.Vector3(lv, _session.Units.GroundZ(lv) + 10);
+            if (Project(lp) is not { } c || Project(lp + new SN.Vector3(110, 0, 0)) is not { } e) continue;
+            float rr = MathF.Max(Tol(14), SN.Vector2.Distance(c, e));
+            if (SN.Vector2.Distance(c, m) < rr) return o;
+        }
+        // grand portail sans mécanisme : tout le modèle est cliquable, du sol jusqu'à 3 m
+        if (best == null)
+            foreach (var o in _session.Units.Openings.Where(o => o.Lever == null && o.OnGround && !o.IsWindow && o.State != OpeningState.Broken && o.BoxMax.X - o.BoxMin.X + o.BoxMax.Y - o.BoxMin.Y > 400))
+            {
+                float sx0 = float.MaxValue, sy0 = float.MaxValue, sx1 = float.MinValue, sy1 = float.MinValue;
+                foreach (var cx in new[] { o.BoxMin.X, o.BoxMax.X })
+                    foreach (var cy in new[] { o.BoxMin.Y, o.BoxMax.Y })
+                        foreach (var cz in new[] { o.Center.Z - 100, o.Center.Z + 200 })
+                            if (Project(new SN.Vector3(cx, cy, cz)) is { } q) { sx0 = MathF.Min(sx0, q.X); sy0 = MathF.Min(sy0, q.Y); sx1 = MathF.Max(sx1, q.X); sy1 = MathF.Max(sy1, q.Y); }
+                if (m.X >= sx0 && m.X <= sx1 && m.Y >= sy0 && m.Y <= sy1) { best = o; break; }
+            }
         if (best == null && Ground(x, y) is { } g)
         {
             float gd = 90;
@@ -449,7 +491,7 @@ public sealed partial class Fd3Game
     }
 
     // ---- curseurs du jeu (Gfx\Textures\_cache\MouseCursors.dds, cases de 32 × 32, 8 par ligne) ----
-    private enum Cur { Normal = 0, Unit = 1, Use = 2, Heal = 3, Axe = 4, Move = 5, Target = 8, Rescue = 12, Forbidden = 13, Enter = 14, Water = 15 }
+    private enum Cur { Grapple = 12, Normal = 0, Unit = 1, Use = 2, Heal = 3, Axe = 4, Move = 5, Target = 8, Rescue = 12, Forbidden = 13, Enter = 14, Water = 15 }
     private readonly Dictionary<Cur, MouseCursor> _cursors = new();
     private readonly List<Texture2D> _cursorTex = new();
     private Cur _cur = (Cur)(-1);
@@ -507,6 +549,7 @@ public sealed partial class Fd3Game
         walkers = walkers.Where(u => !u.Unconscious).ToList();
         if (MiniToWorld(x, y) != null) want = Cur.Normal;
         else if (walkers.Count == 0) want = UnitAt(x, y) != null ? Cur.Unit : Cur.Normal;
+        else if (GrappleAt(x, y) != null) want = walkers.Any(u => u.CanGrapple) ? Cur.Grapple : Cur.Forbidden;
         else if (CivilianAt(x, y) is { } civ)
             want = civ.State == CivilianState.Unconscious && walkers.Any(u => u.CanHeal) ? Cur.Heal : Cur.Rescue;   // inconscient : le médecin le soigne, un pompier le porte
         else if (VehicleAt(x, y) is { } v)
