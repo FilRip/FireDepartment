@@ -28,7 +28,9 @@ public sealed partial class UnitManager
         if ((u.Id + _autoTick) % 3 != 0) return;   // une fois sur trois pas : assez réactif
         float reach = MathF.Max(150, u.Nozzle!.RangeMax) + ExtraStandoff;
         // il repère les feux bien au-delà de sa lance (AutoAttackRange, réglage du jeu) et s'en approche pour arroser
-        if (FindVisibleFire(u, reach * MathF.Max(1, AutoAttackRange), float.MaxValue) is not { } best) return;
+        // le plus proche de lui parmi ceux qu'il voit (sauf celui qu'il vient de renoncer à atteindre)
+        uint skip = _autoGiveUp.TryGetValue(u.Id, out var g0) && g0.until > _s.Time ? g0.fire : uint.MaxValue;
+        if (FindVisibleFire(u, reach * MathF.Max(1, AutoAttackRange), float.MaxValue, nearest: true, skip: skip) is not { } best) return;
         u.GoToVehicle = null;
         float d = Vector2.Distance(new(u.Position.X, u.Position.Y), new(best.Position.X, best.Position.Y));
         if (d <= reach) { u.Target = best; u.Status = $"arrose {best.Name}"; return; }
@@ -50,19 +52,19 @@ public sealed partial class UnitManager
     /// dans un angle de ± <paramref name="angle"/> autour de son cap (lance d'un véhicule) ; null s'il n'y en a pas.
     /// L'eau passe par-dessus les véhicules : seuls les murs et les portes fermées cachent le feu.
     /// </summary>
-    private HotPoint? FindVisibleFire(Unit u, float range, float angle)
+    private HotPoint? FindVisibleFire(Unit u, float range, float angle, bool nearest = false, uint skip = uint.MaxValue)
     {
         var me = new Vector2(u.Position.X, u.Position.Y);
         HotPoint? best = null; float bs = float.MaxValue;
         foreach (var h in _s.Fire.HotPoints)
         {
-            if (!h.IsBurning) continue;
+            if (!h.IsBurning || h.Id == skip) continue;
             var f = new Vector2(h.Position.X, h.Position.Y);
             float d = Vector2.Distance(me, f);
             if (d > range || d < u.Nozzle!.RangeMin) continue;
             if (MathF.Abs(h.Position.Z - u.Position.Z) > 350) continue;
             if (angle < MathF.PI && MathF.Abs(MathF.IEEERemainder(MathF.Atan2(f.Y - me.Y, f.X - me.X) - u.Heading, 2 * MathF.PI)) > angle) continue;
-            float score = d - 200 * MathF.Min(1, h.Intensity / MathF.Max(1, h.Class.IntensityMax));
+            float score = nearest ? d : d - 200 * MathF.Min(1, h.Intensity / MathF.Max(1, h.Class.IntensityMax));
             if (score >= bs) continue;
             bool saved = _pathingVehicle; int savedClear = _clearance; _pathingVehicle = true; _clearance = 0;
             bool seen = LineFree(me, f - Vector2.Normalize(f - me + new Vector2(0.01f, 0)) * 120, ignoreFire: true);
