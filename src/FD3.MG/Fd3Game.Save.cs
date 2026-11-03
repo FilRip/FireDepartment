@@ -67,6 +67,7 @@ public sealed partial class Fd3Game
     private void DoDrive(Unit v, SN.Vector2 p) { Rec("drive", v.Id, 0, p.X, p.Y); _session.Units.Drive(v, p); }
     private int DoUnload(Unit v) { Rec("unload", v.Id); return _session.Units.UnloadPassengers(v); }
     private void DoSpray(FD3.Fire.HotPoint h, string cls) { Rec("spray", 0, h.Id, s: cls); _session.Spray(h, cls); }
+    private void DoGrapple(Unit u, GrapplePoint gp) { Rec("grapple", u.Id, gp.Id); _session.Units.GrappleOver(u, gp); }
     private void DoScript(FD3.Script.Interpreter sc, string fn) { Rec("script", s: fn); sc.TryRun(fn); }
 
     private void Replay(JournalEntry e)
@@ -88,6 +89,7 @@ public sealed partial class Fd3Game
             case "spray": if (_session.Fire.HotPoints.FirstOrDefault(h => h.Id == e.B) is { } h11 && e.S != null) _session.Spray(h11, e.S); break;
             case "script": if (e.S != null) _session.Scripts?.TryRun(e.S); break;
             case "skipcine": SkipCinematic(); break;
+            case "grapple": if (U(e.A) is { } a12 && um.Grapples.FirstOrDefault(g => g.Id == e.B) is { } g12) um.GrappleOver(a12, g12); break;
         }
     }
 

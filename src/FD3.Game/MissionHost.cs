@@ -183,7 +183,11 @@ public sealed class MissionHost : IScriptHost
             case "ENT_SETDAMAGE":
                 if (Explosions?.SetLife((uint)V(0).AsInt, (float)V(1).AsNum, _fire, _fire.Time) == true) FireLog.Add($"{GameTime,6:0.0} ENT_SetDamage {NameOf(V(0).AsInt)} {V(1).AsNum}");
                 return Value.Zero;
-            case "ENT_SWITCHSTATE": SwitchedStates[(uint)V(0).AsInt] = true; FireLog.Add($"{GameTime,6:0.0} ENT_SwitchState {NameOf(V(0).AsInt)}"); return Value.Zero;
+            case "ENT_SWITCHSTATE":
+                // porte ou portail (interrupteurs de Jail : SW1_open → ENT_SwitchState(porte)) : ouverte ↔ fermée
+                if (Units?.Openings.FirstOrDefault(d => d.Id == (uint)V(0).AsInt) is { } sd && sd.State != OpeningState.Broken)
+                    Units.SetOpeningState(sd, sd.State == OpeningState.Open ? OpeningState.Closed : OpeningState.Open);
+                SwitchedStates[(uint)V(0).AsInt] = !SwitchedStates.TryGetValue((uint)V(0).AsInt, out var was) || !was; FireLog.Add($"{GameTime,6:0.0} ENT_SwitchState {NameOf(V(0).AsInt)}"); return Value.Zero;
 
             // ---------- feu ----------
             case "FIR_HPENABLE":
@@ -394,7 +398,7 @@ public sealed class MissionHost : IScriptHost
             case "ENT_GETSTATE":
                 if (Units?.Openings.FirstOrDefault(d => d.Id == (uint)V(0).AsInt) is { } st)
                     return Value.T(st.State switch { OpeningState.Open => "Open", OpeningState.Broken => "Broken", _ => "Close" });
-                return Value.T(SwitchedStates.ContainsKey((uint)V(0).AsInt) ? "Open" : "Close");
+                return Value.T(SwitchedStates.TryGetValue((uint)V(0).AsInt, out var sw) && sw ? "Open" : "Close");
             // LEV_CallReinforcement(n) / LEV_GrantReinforcementSet(n) : envoie le renfort n (1, 2, 3…)
             case "LEV_CALLREINFORCEMENT": case "LEV_GRANTREINFORCEMENTSET": Units?.CallReinforcement((int)V(0).AsInt); return Value.Zero;
             // PANEL_SetInterfaceMode(« SCORING ») : écran des scores de fin (affiché par le jeu à la fin de mission)

@@ -61,6 +61,8 @@ public sealed partial class Fd3Game
         _subtitle = h.Subtitle != null ? _loc.Get(h.Subtitle) : null;
 
         bool free = CameraSpec != null;   // essais : caméra imposée
+        // vue du joueur, retenue avant que les ordres de caméra d'une cinématique (souvent plusieurs : saut, puis glissement…) ne la changent
+        if (!_cineOn && !_cineMoving && h.CameraOrders.Count == 0) _playerView = (_target, _yaw, _pitch, _dist);
         double now = _session.Time + (_paused ? 0 : _owed * Session.Dt);
         foreach (var (wp, dur, tp, at) in h.CameraOrders)
         {
@@ -74,7 +76,17 @@ public sealed partial class Fd3Game
 
         bool was = _cineOn;
         _cineOn = h.Cinematic;
-        if (_cineOn && !was) { _sel.Clear(); _speed = 1; _paused = false; }
+        if (_cineOn && !was)
+        {
+            _sel.Clear(); _speed = 1; _paused = false;
+            // cinématique en cours de partie (pas celle d'introduction, au tout début) : on retient la vue du joueur
+            _viewBeforeCine = _session.Time > 3 ? _playerView : null;
+        }
+        if (!_cineOn && was && _viewBeforeCine is { } v)
+        {
+            // fin de la cinématique : la vue revient où elle était
+            (_target, _yaw, _pitch, _dist) = v; _viewBeforeCine = null; _cineMoving = false;
+        }
         if (_cineMoving && !free)
         {
             float t = (float)Math.Clamp((now - _cineT0) / _cineDur, 0, 1);
@@ -89,6 +101,8 @@ public sealed partial class Fd3Game
     }
 
     /// <summary>Le joueur passe la cinématique : la simulation avance (scripts compris) jusqu'à sa fin.</summary>
+    private (SN.Vector3 target, float yaw, float pitch, float dist)? _viewBeforeCine, _playerView;
+
     private void SkipCinematic()
     {
         if (Host is not { } h || !h.Cinematic) return;

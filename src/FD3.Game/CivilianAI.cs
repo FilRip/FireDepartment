@@ -188,9 +188,13 @@ public sealed partial class UnitManager
     public const float FollowDistance = 140f;
 
     /// <summary>Essais : le point est-il atteignable à pied depuis cette position (chemin complet sur la grille) ?</summary>
-    public string AsciiMap(int x0, int y0, int x1, int y1)
+    public string AsciiMap(int x0, int y0, int x1, int y1, IList<Vector2>? path = null)
     {
         if (_s.Grid is not { } g) return "";
+        var mark = new HashSet<int>();
+        if (path != null)
+            for (int k = 0; k + 1 < path.Count; k++)
+                for (float t = 0; t <= 1; t += 0.02f) { var (px, py) = g.CellOf(new Vector3(Vector2.Lerp(path[k], path[k + 1], t), 0)); if (g.Inside(px, py)) mark.Add(g.Index(px, py)); }
         var sb = new System.Text.StringBuilder();
         for (int y = y1 / 100; y >= y0 / 100; y--)
         {
@@ -198,7 +202,7 @@ public sealed partial class UnitManager
             {
                 if (!g.Inside(x, y)) { sb.Append(' '); continue; }
                 int i = g.Index(x, y);
-                sb.Append(g.ZoneA[i] == 0 ? '#' : _blocked.Length > i && _blocked[i] ? (BlockedBy.TryGetValue(i, out var by) && by == "mur" ? 'm' : 'x') : IsClosedDoor(i) ? 'D' : Openings.Any(d => d.Cells.Contains(i)) ? 'd' : '.');
+                sb.Append(mark.Contains(i) ? '*' : IsGrappleCell(i) ? 'g' : g.ZoneA[i] == 0 ? '#' : _blocked.Length > i && _blocked[i] ? (BlockedBy.TryGetValue(i, out var by) && by == "mur" ? 'm' : 'x') : IsClosedDoor(i) ? 'D' : Openings.Any(d => d.Cells.Contains(i)) ? 'd' : '.');
             }
             sb.Append('\n');
         }

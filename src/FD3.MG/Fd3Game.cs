@@ -265,6 +265,23 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
                 Console.WriteLine($"lance : {man.Status}");
             }
         }
+        // essai : FD3_GRAPPIN=phase,secondes → le scout passe le premier mur au grappin ; la caméra le regarde
+        if (_frame == 4 && Environment.GetEnvironmentVariable("FD3_GRAPPIN") is { } grap && _session != null && _session.Units.Grapples.Count > 0)
+        {
+            var pr = grap.Split(','); var want = Enum.Parse<ClimbPhase>(pr[0]); float extra = pr.Length > 1 ? float.Parse(pr[1], System.Globalization.CultureInfo.InvariantCulture) : 0;
+            var um = _session.Units; SkipCinematic();
+            for (int i = 0; i < 600 && !um.Active.Any(u => u.CanGrapple && !u.Moving); i++) _session.Step();
+            var sc = um.Active.FirstOrDefault(u => u.CanGrapple); var gp = um.Grapples[0];
+            if (sc != null)
+            {
+                sc.Position = new SN.Vector3(gp.SideA, 0); um.GrappleOver(sc, gp);
+                for (int i = 0; i < 600 && sc.Climb != want; i++) _session.Step();
+                for (int i = 0; i < (int)(extra / Session.Dt); i++) _session.Step();
+                SnapshotPoses();
+                _target = sc.Position; _dist = 1100; _pitch = 0.5f; _yaw = MathF.Atan2(gp.Axis.Y, gp.Axis.X); _paused = true;
+                Console.WriteLine($"grappin : {sc.Status} {sc.Climb} {sc.Position}");
+            }
+        }
         if (_frame == 4 && Environment.GetEnvironmentVariable("FD3_PORTER") is { } porter && _session != null)
         {
             var pr = porter.Split(','); var want = Enum.Parse<CarryPhase>(pr[0]); float extra = pr.Length > 1 ? float.Parse(pr[1], System.Globalization.CultureInfo.InvariantCulture) : 0;
@@ -650,7 +667,13 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
             if (lo.ClassPath.EndsWith("axe_symbol", StringComparison.OrdinalIgnoreCase)) _axeMarks.Add((lo.Id, p.Model, p.World, near));
             else if (p.Name.Contains("_break", StringComparison.OrdinalIgnoreCase) || p.Model.Contains("break", StringComparison.OrdinalIgnoreCase)) _brokenParts.Add((lo.Id, p.Model, p.World, near));
         }
+        // repères animés : rouages d'un mécanisme (interrupteur) qui tournent sur eux-mêmes, flèches qui avancent et reculent
+        _animMarks.Clear();
+        foreach (var p in allPlaced)
+            if (byName.TryGetValue(p.Name, out var lo) && System.Text.RegularExpressions.Regex.IsMatch(lo.ClassPath, @"(mechanism|mechanism_symbol_blue|elec|elec_symbol_off|repair|buldo|arrow|koshka)_symbol$|mechanism_symbol_blue$|elec_symbol_off$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                _animMarks.Add((lo.Id, p.Model, p.World, System.Text.RegularExpressions.Regex.IsMatch(lo.ClassPath, @"(arrow|koshka)_symbol$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)));
         var shownNames = _scriptShown.Select(x => byName.Values.First(o => o.Id == x.id).Name)
+            .Concat(_animMarks.Select(x => byName.Values.First(o => o.Id == x.id).Name))
             .Concat(_axeMarks.Concat(_brokenParts).Select(x => byName.Values.First(o => o.Id == x.id).Name))
             .Concat(_scriptMoved.Select(x => byName.Values.First(o => o.Id == x.id).Name)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var placed = allPlaced.Where(p => !explosiveNames.Contains(p.Name) && !shownNames.Contains(p.Name)).GroupBy(p => p.Model, StringComparer.OrdinalIgnoreCase).ToList();
@@ -1010,17 +1033,79 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
 
     // portes : fermées telles quelles, ouvertes pivotées d'un quart de tour, cassées retirées ; fenêtres cassées retirées
     private readonly List<(uint id, string model, SN.Matrix4x4 world, Opening obstacle)> _axeMarks = new(), _brokenParts = new();
+    private readonly List<(uint id, string model, SN.Matrix4x4 world, bool arrow)> _animMarks = new();
 
     private void RenderOpenings()
     {
         bool Vis(uint id, bool def) => Host?.Visibility.TryGetValue(id, out var v) == true ? v : def;
         foreach (var (id, model, world, ob) in _axeMarks)
             if (ob.State != OpeningState.Broken && Vis(id, true)) foreach (var (mesh, part) in UnitModel(model)) DrawMesh(mesh, (part * world).X());
+        foreach (var (id, model, world, arrow) in _animMarks)
+        {
+            if (!Vis(id, true)) continue;
+            // rouages : un tour toutes les 3 s autour de leur axe ; flèche : va et vient d'environ 20 cm
+            var t = world.Translation; var w = world; w.Translation = SN.Vector3.Zero;
+            // flèche du grappin (si_Koshka_sign_01) : va et vient de 55 unités vers l'arrière et le haut, en 1,2 s
+            float bob = 0.5f - 0.5f * MathF.Cos(_visTime * MathF.Tau / 1.2f);
+            var anim = arrow ? SN.Matrix4x4.CreateTranslation(0, -55 * bob, 55 * bob) * w * SN.Matrix4x4.CreateTranslation(t)
+                : SN.Matrix4x4.CreateRotationZ(_visTime * 2.1f) * w * SN.Matrix4x4.CreateTranslation(t);
+            foreach (var (mesh, part) in UnitModel(model)) DrawMesh(mesh, (part * anim).X());
+        }
         foreach (var (id, model, world, ob) in _brokenParts)
             if (Vis(id, ob.State == OpeningState.Broken)) foreach (var (mesh, part) in UnitModel(model)) DrawMesh(mesh, (part * world).X());
-        foreach (var o in _session.Units.Openings.Where(o => o.Model != null && o.State != OpeningState.Broken && Vis(o.Id, true)))
+        foreach (var o in _session.Units.Openings.Where(o => o.Model != null && o.State != OpeningState.Broken && Vis(o.Id, true) && (o.OpenAnim != null || o.CloseAnim != null)))
+            DrawAnimatedOpening(o);
+        foreach (var o in _session.Units.Openings.Where(o => o.Model != null && o.State != OpeningState.Broken && Vis(o.Id, true) && o.OpenAnim == null && o.CloseAnim == null))
             foreach (var (mesh, part) in UnitModel(o.Model!))
                 DrawMesh(mesh, (part * (o.State == OpeningState.Open && !o.IsWindow ? SN.Matrix4x4.CreateRotationZ(-MathF.PI / 2) : SN.Matrix4x4.Identity) * o.World).X());
+    }
+
+    // portail coulissant (Jail) : seuls les battants bougent, d'après l'animation d'ouverture ou de fermeture du jeu
+    private readonly Dictionary<uint, (OpeningState state, float since)> _doorAnim = new();
+    private void DrawAnimatedOpening(Opening o)
+    {
+        if (!_doorAnim.TryGetValue(o.Id, out var st) || st.state != o.State)
+            _doorAnim[o.Id] = st = (o.State, st.state == default && !_doorAnim.ContainsKey(o.Id) ? -1000f : _visTime);
+        var clip = Clip((o.State == OpeningState.Open ? o.OpenAnim : o.CloseAnim)!.Replace("SingleItem\\", "SingleItem\\"));
+        float t = clip == null ? 0 : Math.Clamp(_visTime - st.since, 0, clip.Duration);
+        var nodes = _assets.ModelParts(o.Model!); var meshes = UnitModel(o.Model!);
+        static string Leaf(string n) => n[(n.LastIndexOf('\\') + 1)..];
+        // aucune pièce animée par ce clip (portes ordinaires) : la porte pivote de 90° comme avant
+        if (clip == null || !nodes.Any(n => clip.Tracks.ContainsKey(Leaf(n.Mesh))))
+        {
+            foreach (var (mesh, part) in meshes)
+                DrawMesh(mesh, (part * (o.State == OpeningState.Open && !o.IsWindow ? SN.Matrix4x4.CreateRotationZ(-MathF.PI / 2) : SN.Matrix4x4.Identity) * o.World).X());
+            return;
+        }
+        for (int i = 0; i < meshes.Count && i < nodes.Count; i++)
+        {
+            var w = meshes[i].part;
+            if (clip.Tracks.TryGetValue(Leaf(nodes[i].Mesh), out var tr))
+            {
+                var pos = tr.Pos.Length > 0 ? TrackPos(tr, t) : w.Translation;
+                if (tr.Rot.Length > 0) { w = SN.Matrix4x4.CreateFromQuaternion(TrackRot(tr, t)); }
+                w.Translation = pos;
+            }
+            DrawMesh(meshes[i].mesh, (w * o.World).X());
+        }
+    }
+
+    private static SN.Quaternion TrackRot(AnimClip.Track tr, float tick)
+    {
+        var k = tr.Rot;
+        if (tick <= k[0].t) return k[0].v;
+        for (int i = 1; i < k.Length; i++)
+            if (tick <= k[i].t) { float f = (tick - k[i - 1].t) / MathF.Max(1e-3f, k[i].t - k[i - 1].t); return SN.Quaternion.Slerp(k[i - 1].v, k[i].v, f); }
+        return k[^1].v;
+    }
+
+    private static SN.Vector3 TrackPos(AnimClip.Track tr, float tick)   // tick : secondes
+    {
+        var k = tr.Pos;
+        if (tick <= k[0].t) return k[0].v;
+        for (int i = 1; i < k.Length; i++)
+            if (tick <= k[i].t) { float f = (tick - k[i - 1].t) / MathF.Max(1e-3f, k[i].t - k[i - 1].t); return SN.Vector3.Lerp(k[i - 1].v, k[i].v, f); }
+        return k[^1].v;
     }
 
     // feu (lueur + flammes qui montent) et fumée : des disques adoucis toujours tournés vers la caméra
@@ -1044,6 +1129,12 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
                 float k = Math.Min(1, s.Intensity / s.Max);
                 P(s.Position + new SN.Vector3(0, 0, 250), s.Class.InfluenceRange * (0.95f + k), new SN.Vector4(0.36f, 0.36f, 0.38f, 0.5f * k + 0.16f), right, up);
             }
+        // cercle d'action sous les rouages d'un portail (clic droit dessus : ouvrir / fermer)
+        foreach (var o in _session.Units.Openings.Where(o => o.Lever != null && o.State != OpeningState.Broken))
+        {
+            var lv = o.Lever!.Value;
+            P(new SN.Vector3(lv, _session.Units.GroundZ(lv) + 15), 220, new SN.Vector4(1f, 0.85f, 0.2f, 0.45f), right, up);
+        }
         foreach (var u in _sel)
             P(u.Position + new SN.Vector3(0, 0, 20), u.IsVehicle ? 700 : 220, new SN.Vector4(0.3f, 0.75f, 1f, 0.55f), right, up);
         foreach (var c in _session.Units.Civilians.Where(c => !c.Hidden && c.Carrier == null && (c.State == CivilianState.Unconscious || c.Leader != null)))
@@ -1308,7 +1399,7 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
     private void RenderHud()
     {
         if (_cineOn || _cineBars > 0.01f) { RenderCinema(); return; }
-        _ui.Begin(); RenderSupplyLinks((float)_session.Time); _ui.End();
+        _ui.Begin(); RenderSupplyLinks((float)_session.Time); RenderRopes(); RenderDebugCircles(); _ui.End();
         _uiClock += 1f / 60f;
         _ui.Begin(); RenderFireBars(); RenderClickMarks(); _ui.End();
         RenderHudPanels();
@@ -1340,7 +1431,7 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
         {
             lines.Add(("", txt));
             lines.Add(("Espace : pause · 1 2 3 4 : vitesse ×1 ×4 ×16 ×64", muted));
-            lines.Add(("Tab : carte / 3D · T : toits · O : objets · F : fumée · B : ombres · D : difficulté", muted));
+            lines.Add(("Tab : carte / 3D · T : toits · O : objets · F : fumée · B : ombres · F1 : difficulté · D : portées (débogage)", muted));
             lines.Add(("F5 : sauvegarder · F9 : charger la dernière sauvegarde", muted));
             lines.Add(("H : masquer l'aide · Échap : menu des missions", muted));
         }

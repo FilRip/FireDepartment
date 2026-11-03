@@ -7,6 +7,60 @@ namespace FD3.MG;
 // ligne de petites flèches vertes posées sur le sol, de la bouche vers le camion, qui défilent doucement
 public sealed partial class Fd3Game
 {
+    // débogage (touche D) : portée où chaque pompier repère un feu (vert), portée de propagation de chaque feu (orange)
+    private bool _debugAi = Environment.GetEnvironmentVariable("FD3_DEBUG_IA") != null;
+    private void RenderDebugCircles()
+    {
+        if (!_debugAi || _map || _session == null) return;
+        float px = MathF.Max(1, _scale);
+        void Circle(SN.Vector3 c, float r, SN.Vector4 col)
+        {
+            SN.Vector2? prev = null; const int N = 48;
+            for (int i = 0; i <= N; i++)
+            {
+                float a = i * MathF.Tau / N;
+                var q = Project(c + new SN.Vector3(MathF.Cos(a) * r, MathF.Sin(a) * r, 10));
+                if (q is { } cur && prev is { } p0) _ui.Line(p0.X, p0.Y, cur.X, cur.Y, col, 1.5f * px);
+                prev = q;
+            }
+        }
+        // grille de marche autour du point visé : croix rouge = case interdite à un pompier ordinaire
+        if (_session.Grid is { } g)
+        {
+            var (tx, ty) = g.CellOf(_target);
+            for (int cy = ty - 25; cy <= ty + 25; cy++)
+                for (int cx = tx - 25; cx <= tx + 25; cx++)
+                {
+                    if (!g.Inside(cx, cy) || _session.Units.WalkableCell(cx, cy)) continue;
+                    float x = (cx + 0.5f) * FD3.Formats.Grid.CellSize, y = (cy + 0.5f) * FD3.Formats.Grid.CellSize, z = _session.Units.GroundZ(new(x, y)) + 12;
+                    if (Project(new(x - 35, y - 35, z)) is { } a && Project(new(x + 35, y + 35, z)) is { } b) _ui.Line(a.X, a.Y, b.X, b.Y, new SN.Vector4(1f, 0.15f, 0.1f, 0.6f), 1.5f * px);
+                    if (Project(new(x - 35, y + 35, z)) is { } c && Project(new(x + 35, y - 35, z)) is { } d) _ui.Line(c.X, c.Y, d.X, d.Y, new SN.Vector4(1f, 0.15f, 0.1f, 0.6f), 1.5f * px);
+                }
+        }
+        foreach (var h in _session.Fire.HotPoints.Where(h => h.IsBurning))
+            Circle(h.Position, h.Class.LightingRange, new SN.Vector4(1f, 0.55f, 0.1f, 0.7f));
+        foreach (var u in _session.Units.Active.Where(u => !u.IsVehicle && u.Nozzle != null && !u.Unconscious))
+        {
+            float reach = MathF.Max(150, u.Nozzle!.RangeMax) + UnitManager.ExtraStandoff;
+            Circle(u.Position, reach * MathF.Max(1, UnitManager.AutoAttackRange), new SN.Vector4(0.3f, 1f, 0.4f, 0.8f));   // il y va de lui-même
+            Circle(u.Position, reach, new SN.Vector4(0.3f, 1f, 0.4f, 0.35f));                                              // il arrose d'où il est
+        }
+    }
+
+    // corde du grappin : de l'accroche en haut du mur jusqu'aux mains du grimpeur
+    private void RenderRopes()
+    {
+        if (_map || _session == null) return;
+        float px = MathF.Max(1, _scale);
+        foreach (var u in _session.Units.Active.Where(u => u.Climb != ClimbPhase.None && u.Climb != ClimbPhase.Land && !(u.Climb == ClimbPhase.Launch && u.ClimbTimer < 1.2f)))
+        {
+            var hand = PoseOf(u, u.Position, u.Heading).p + new SN.Vector3(0, 0, u.Climb is ClimbPhase.Stand or ClimbPhase.Step or ClimbPhase.Turn or ClimbPhase.Top ? 60 : 140);
+            if (Project(u.ClimbAnchor) is not { } a || Project(hand) is not { } b) continue;
+            _ui.Line(a.X, a.Y, b.X, b.Y, new SN.Vector4(0.1f, 0.08f, 0.05f, 0.85f), 3 * px);
+            _ui.Line(a.X, a.Y, b.X, b.Y, new SN.Vector4(0.82f, 0.72f, 0.5f, 1f), 1.6f * px);
+        }
+    }
+
     private void RenderSupplyLinks(float time)
     {
         if (_map || _session == null) return;

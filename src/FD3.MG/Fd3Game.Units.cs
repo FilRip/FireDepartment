@@ -53,6 +53,15 @@ public sealed partial class Fd3Game
     // « @fichier » : animation donnée directement (à deux personnages : CharChar\cc_lift_body…), jouée une seule fois
     private static string UnitTag(Unit u, bool moving) =>
         u.InjuredTimer > 0 || u.Unconscious ? "FAINT"
+        // grappin : lancer, grimper (en boucle), passer le haut du mur, redescendre (en boucle), toucher le sol
+        : u.Climb == ClimbPhase.Launch ? "@SingleChar\\sc_grappling_hook_launch"
+        : u.Climb == ClimbPhase.Climb ? "~SingleChar\\sc_grappling_hook_climb"
+        : u.Climb == ClimbPhase.Stand ? "@SingleChar\\sc_grappling_hook_get_out_top"
+        : u.Climb == ClimbPhase.Step ? "WALK"
+        : u.Climb == ClimbPhase.Turn ? "WAIT1"
+        : u.Climb == ClimbPhase.Top ? "@SingleChar\\sc_grappling_hook_get_on_top"
+        : u.Climb == ClimbPhase.Descend ? "~SingleChar\\sc_grappling_hook_descend"
+        : u.Climb == ClimbPhase.Land ? "@SingleChar\\sc_grappling_hook_descend_end"
         : u.Carry == CarryPhase.Lifting ? "@CharChar\\cc_lift_body"
         : u.Carry == CarryPhase.Dropping ? "@CharChar\\cc_drop_body"
         : u.Carry == CarryPhase.Walking ? "CARRYWALK"
@@ -74,7 +83,7 @@ public sealed partial class Fd3Game
     private bool DrawCharacter(CharAnim a, string tag, SN.Vector3 position, float heading, float dt, bool axe, float rate = 1f)
     {
         if (a.Rig is not { } rig) return false;
-        string? file = tag.StartsWith('@') ? tag[1..]
+        string? file = tag.StartsWith('@') || tag.StartsWith('~') ? tag[1..]   // @ : jouée une fois ; ~ : en boucle
             : a.Tags.TryGetValue(tag, out var f) ? f
             : tag == "RUN" && a.Tags.TryGetValue("WALK", out var w) ? w
             : tag == "HEAL" && a.Tags.TryGetValue("ATTACKFIRE", out var h) ? h

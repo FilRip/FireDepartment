@@ -27,6 +27,12 @@ public sealed class Unit
     public Unit? GoToVehicle;                             // véhicule vers lequel l'unité se dirige (remplir, déposer des civils)
     public float HealTimer;
     public bool CanBreak, CanUse;                         // hache (portes, fenêtres) ; ouvrir une porte
+    public bool CanGrapple;                               // grappin ([CAPACITIES_ACTIONS] CanGrapplin : le « scout »)
+    public float ClimbSpeed = 133;                        // [MOVING] ClimbGrapplinSpeed (unités par seconde)
+    public ClimbPhase Climb;                              // passage d'un mur au grappin (voir Grapple.cs)
+    public float ClimbTimer;
+    public Vector3 ClimbFrom, ClimbWall, ClimbTo, ClimbAnchor;   // ancre : là où le grappin est accroché (corde)
+    public GrapplePoint? ClimbGrapple;
     public bool CanRepair;                                // technicien : répare les objets CouldBeRepair
     public UsableObject? UseTarget;                       // objet sur lequel agir (armoire électrique…)
     public float BreakPower = 1;
@@ -122,7 +128,7 @@ public sealed partial class UnitManager
     /// <summary>Vrai pendant un ordre donné par le joueur (l'interface le met) : les réponses vocales ne concernent que ceux-là.</summary>
     public bool PlayerCommand;
     /// <summary>Portée à laquelle un pompier libre repère un feu et va l'éteindre, en multiple de celle de sa lance (options : Gameplay).</summary>
-    public static float AutoAttackRange = 3f;
+    public static float AutoAttackRange = 2f;
     /// <summary>Feu tout proche : le pompier recule jusqu'à cette part de sa distance d'arrosage habituelle (options : Gameplay).</summary>
     public static float AttackBackOff = 0.5f;
 
@@ -134,10 +140,12 @@ public sealed partial class UnitManager
         LoadCivilians(s.Level);
         if (Environment.GetEnvironmentVariable("FD3_NOBLOCK") == null) BuildObstacles(s.Level);
         LoadOpenings(s.Level);
+        AssignLevers(s.Level);
         BlockThinWalls();
         LoadSupplies(s.Level);
         LoadTriggers(s.Level);
         LoadUsables(s.Level);
+        LoadGrapples(s.Level);   // voir Grapple.cs
         _saveCivilianScript = mission.Get("COMMAND_CALLBACKS", "CmdSaveCivilian")?.Trim('"', ' ');
         const string F = "FIRESTATION";
         var initial = mission.Get(F, "InitialDispatch")?.Trim('"', ' ');
@@ -364,6 +372,8 @@ public sealed partial class UnitManager
         u.CanBreak = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanBreak");
         u.CanUse = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanUse");
         u.CanRepair = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanRepair");
+        u.CanGrapple = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanGrapplin");
+        u.ClimbSpeed = c.GetFloat("MOVING", "ClimbGrapplinSpeed", c.GetFloat("CAPACITIES_PROPS", "ClimbGrapplinSpeed", 133));
         u.BreakPower = c.GetFloat("CAPACITIES_PROPS", "BreakPower", 1);
         u.IsAmbulance = vehicle && classRel.Contains("ambulance", StringComparison.OrdinalIgnoreCase);
         if (vehicle) u.ResupplyPower = c.GetFloat("CAPACITIES_RESERVE", "ResupplyPower", 0);
@@ -410,7 +420,8 @@ public sealed partial class UnitManager
 
     private bool FreeCell(int cx, int cy) => _s.Grid is not { } g || (g.Inside(cx, cy) && g.ZoneA[g.Index(cx, cy)] != 0 && (_blocked.Length == 0 || !_blocked[g.Index(cx, cy)])
         && (_pathingVehicle || _vehBlocked.Length == 0 || _vehBlocked[g.Index(cx, cy)] == 0 || _vehBlocked[g.Index(cx, cy)] == _selfId)
-        && (_doorClosed.Length == 0 || !_doorClosed[g.Index(cx, cy)]));
+        && (_doorClosed.Length == 0 || !_doorClosed[g.Index(cx, cy)])
+        && (_pathingGrapple || !IsGrappleCell(g.Index(cx, cy))));   // mur à franchir au grappin : seulement avec un grappin
 
     // véhicules garés (camions, ambulance) : obstacles mobiles, recalculés quand un véhicule s'arrête ou repart
     private int[] _vehBlocked = Array.Empty<int>();
@@ -494,6 +505,8 @@ public sealed partial class UnitManager
 
     private bool[] _blocked = Array.Empty<bool>();
     public int BlockedCells => _blocked.Count(b => b);
+    /// <summary>Case où marche un pompier ordinaire (débogage : grille affichée avec la touche D).</summary>
+    public bool WalkableCell(int cx, int cy) => FreeCell(cx, cy);
     public bool IsBlocked(int index) => index < _blocked.Length && _blocked[index];
     public Dictionary<int, string> BlockedBy { get; } = new();
 
@@ -624,7 +637,7 @@ public sealed partial class UnitManager
     private const int CoverMin = 8;   // sur 16 carrés de 25 cm par case
 
     /// <summary>Empreinte au sol d'un modèle (repère du modèle) : points tous les 25 cm sous ses faces à hauteur d'homme.</summary>
-    private static List<Vector2> Footprint(SceneAssets assets, string path, float Low = 30, float High = 170)
+    private static List<Vector2> Footprint(SceneAssets assets, string path, float Low = 30, float High = 170, Func<string, Matrix4x4, Matrix4x4>? pose = null)
     {
         const float Step = 25;
         var set = new HashSet<(int, int)>();
@@ -634,7 +647,8 @@ public sealed partial class UnitManager
             {
                 var m = assets.LoadMesh("", part.Mesh, "gfx").Mesh;
                 var v = new Vector3[m.VertexCount];
-                for (int i = 0; i < v.Length; i++) v[i] = Vector3.Transform(new Vector3(m.Positions[i * 3], m.Positions[i * 3 + 1], m.Positions[i * 3 + 2]), part.World);
+                var pw = pose != null ? pose(part.Mesh, part.World) : part.World;   // pièce déplacée (battant d'un portail ouvert)
+                for (int i = 0; i < v.Length; i++) v[i] = Vector3.Transform(new Vector3(m.Positions[i * 3], m.Positions[i * 3 + 1], m.Positions[i * 3 + 2]), pw);
                 for (int t = 0; t + 2 < m.Indices.Length; t += 3)
                 {
                     var a = v[m.Indices[t]]; var b = v[m.Indices[t + 1]]; var cc = v[m.Indices[t + 2]];
@@ -708,6 +722,7 @@ public sealed partial class UnitManager
         if (u.Unconscious) return false;
         u.Target = target; u.Path.Clear(); u.GoTo = null; u.GoToVehicle = null; u.HealTimer = 0; u.Opening = null;
         _pathingVehicle = u.IsVehicle && !drive;
+        _pathingGrapple = false;   // le scout ne passe au grappin que sur ordre (clic droit sur la flèche) : sinon il prend le portail comme les autres
         _clearance = u.IsVehicle && drive ? 1 : 0; _selfId = u.IsVehicle ? u.Id : 0;
         bool partial = false;
         try
@@ -715,7 +730,7 @@ public sealed partial class UnitManager
             var path = FindPath(new(u.Position.X, u.Position.Y), Walkable(dest), out partial);
             foreach (var p in path) u.Path.Enqueue(p);
         }
-        finally { _pathingVehicle = false; _clearance = 0; _selfId = 0; }
+        finally { _pathingVehicle = false; _clearance = 0; _selfId = 0; _pathingGrapple = false; }
         // point inatteignable : l'unité ne bouge pas et le dit (« VOCAL_IMPOSSIBLE_TO_ACCESS »)
         if (refuseUnreachable && (partial || (u.Path.Count == 0 && Vector2.Distance(new(u.Position.X, u.Position.Y), dest) > 150)))
         {
@@ -791,7 +806,7 @@ public sealed partial class UnitManager
                     // la case de départ peut être bloquée (unité posée dans un coin) ; on la quitte quand même
                     if (!Free(nx, ny) && !(nx == tx && ny == ty)) continue;
                     if (dx != 0 && dy != 0 && (!Free(x + dx, y) || !Free(x, y + dy))) continue;
-                    float c = c0 + (dx != 0 && dy != 0 ? 1.414f : 1f) + FireCost(nx, ny);
+                    float c = c0 + (dx != 0 && dy != 0 ? 1.414f : 1f) + FireCost(nx, ny) + (IsGrappleCell(Key(nx, ny)) ? 15 : 0);   // grimper prend du temps
                     int k = Key(nx, ny);
                     if (cost.TryGetValue(k, out var old) && old <= c) continue;
                     cost[k] = c; prev[k] = Key(x, y);
@@ -879,6 +894,8 @@ public sealed partial class UnitManager
     private void Move(Unit u, float dt)
     {
         if (u.IsVehicle) { VehicleMove(u, dt); return; }
+        if (u.Climb != ClimbPhase.None) { UpdateClimb(u, dt); return; }   // au grappin : voir Grapple.cs
+        if (u.Path.Count > 0 && StartClimbIfNeeded(u, u.Path.Peek())) return;
         float step = u.Speed * dt * (u.Carry == CarryPhase.Walking ? CarrySpeed : 1f);   // chargé d'un corps : plus lent
         while (step > 0 && u.Path.Count > 0)
         {
