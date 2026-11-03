@@ -491,7 +491,7 @@ public sealed partial class Fd3Game
     }
 
     // ---- curseurs du jeu (Gfx\Textures\_cache\MouseCursors.dds, cases de 32 × 32, 8 par ligne) ----
-    private enum Cur { Grapple = 12, Normal = 0, Unit = 1, Use = 2, Heal = 3, Axe = 4, Move = 5, Target = 8, Rescue = 12, Forbidden = 13, Enter = 14, Water = 15 }
+    private enum Cur { Grapple = 12, Normal = 0, Unit = 1, Use = 2, Heal = 3, Axe = 4, Move = 5, Target = 8, Rescue = 3, Forbidden = 13, Enter = 14, Water = 15 }
     private readonly Dictionary<Cur, MouseCursor> _cursors = new();
     private readonly List<Texture2D> _cursorTex = new();
     private Cur _cur = (Cur)(-1);
@@ -550,6 +550,7 @@ public sealed partial class Fd3Game
         if (MiniToWorld(x, y) != null) want = Cur.Normal;
         else if (walkers.Count == 0) want = UnitAt(x, y) != null ? Cur.Unit : Cur.Normal;
         else if (GrappleAt(x, y) != null) want = walkers.Any(u => u.CanGrapple) ? Cur.Grapple : Cur.Forbidden;
+        else if (UnitAt(x, y) is { Unconscious: true }) want = Cur.Heal;   // pompier ou médecin inconscient : le ranimer
         else if (CivilianAt(x, y) is { } civ)
             want = civ.State == CivilianState.Unconscious && walkers.Any(u => u.CanHeal) ? Cur.Heal : Cur.Rescue;   // inconscient : le médecin le soigne, un pompier le porte
         else if (VehicleAt(x, y) is { } v)

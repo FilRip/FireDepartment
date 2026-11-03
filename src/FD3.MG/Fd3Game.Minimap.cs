@@ -90,14 +90,15 @@ public sealed partial class Fd3Game
             _ui.Rect(p.X - s - px, p.Y - s - px, 2 * s + 2 * px, 2 * s + 2 * px, new SN.Vector4(0, 0, 0, 0.8f));
             _ui.Rect(p.X - s, p.Y - s, 2 * s, 2 * s, new SN.Vector4(0.2f, 0.5f, 1f, 1));
         }
-        // unités : vert au repos, jaune quand elles font quelque chose (gris : inconscient ou détruit) ;
+        // unités : vert au repos, jaune quand elles font quelque chose, rouge inconscient, gris détruit ;
         // pompiers en carré, véhicules en rectangle (deux carrés côte à côte) ; celles choisies entourées de blanc
         foreach (var u in _session.Units.Active)
         {
             var p = MiniPos(u.Position.X, u.Position.Y); float s = 2.5f * px, hw = u.IsVehicle ? 2 * s : s, hh = s;
             if (_sel.Contains(u)) _ui.Rect(p.X - hw - px, p.Y - hh - px, 2 * hw + 2 * px, 2 * hh + 2 * px, new SN.Vector4(1, 1, 1, 1));
             else _ui.Rect(p.X - hw - px, p.Y - hh - px, 2 * hw + 2 * px, 2 * hh + 2 * px, new SN.Vector4(0, 0, 0, 0.8f));
-            var col = u.Unconscious || u.Destroyed ? new SN.Vector4(0.55f, 0.55f, 0.55f, 1)
+            var col = u.Unconscious ? new SN.Vector4(1, 0.2f, 0.2f, 1)                  // pompier, médecin… inconscient : rouge, comme les civils
+                : u.Destroyed ? new SN.Vector4(0.55f, 0.55f, 0.55f, 1)
                 : Busy(u) ? new SN.Vector4(1f, 0.9f, 0.15f, 1) : new SN.Vector4(0.2f, 0.95f, 0.3f, 1);
             _ui.Rect(p.X - hw, p.Y - hh, 2 * hw, 2 * hh, col);
         }
