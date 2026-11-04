@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\OpenFD.Formats\OpenFD.Formats.csproj" />
+    <ProjectReference Include="..\OpenFD.Fire\OpenFD.Fire.csproj" />
+    <ProjectReference Include="..\OpenFD.Script\OpenFD.Script.csproj" />
+    <ProjectReference Include="..\OpenFD.Game\OpenFD.Game.csproj" />
+    <ProjectReference Include="..\OpenFD.Video\OpenFD.Video.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

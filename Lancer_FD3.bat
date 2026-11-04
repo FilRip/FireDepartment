@@ -11,5 +11,5 @@ if errorlevel 1 (
   exit /b 1
 )
 echo Compilation et lancement, patientez...
-dotnet run --project src\FD3.MG -c Release -- "%JEU%"
+dotnet run --project src\OpenFD.MG -c Release -- "%JEU%"
 if errorlevel 1 pause
