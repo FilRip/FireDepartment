@@ -550,7 +550,8 @@ public sealed partial class OpenFDGame
         {
             // mention en bas à gauche du menu principal
             const string copyright = "(C) 2026 CoolBytes - FilRip";
-            _ui.TextItalic(18 * _scale, _fbH - _ui.LineHeight - 14 * _scale, copyright, new SN.Vector4(0.82f, 0.82f, 0.82f, 0.9f));
+            _ui.TextItalic((18 * _scale) - 2, (_fbH - _ui.LineHeight - 14 * _scale) - 2, copyright, new SN.Vector4(0.0f, 0.0f, 0.0f, 0.9f));
+            _ui.TextItalic(18 * _scale, _fbH - _ui.LineHeight - 14 * _scale, copyright, new SN.Vector4(1.0f, 0.84f, 0.0f, 0.9f));
         }
         if (_screen == 2)
         {

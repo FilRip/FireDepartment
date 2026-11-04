@@ -53,13 +53,14 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     private float _flameFps = 10f, _flameFpsVar = 4f;   // vitesse des flammes (options : Gameplay.FlameSpeed)
     private float _visTime;   // temps des animations (flammes, fumée…) : avance seulement quand la partie tourne
     private bool _altEnterDown;
-    private readonly List<string> _log = new();
+    private readonly List<(string text, bool error)> _log = new();   // journal de débogage (touche D) ; les erreurs s'affichent en rouge
     private int _frame;
 
     private string _unitClass = "Unit\\Fireman\\fireman_medic";
     private readonly Dictionary<string, List<(MeshGpu mesh, SN.Matrix4x4 part)>> _unitModels = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<Unit> _sel = new();
     private int _unitLogSeen;
+    private int _scriptLogSeen;
     public const float ModelYaw = MathF.PI / 2;    // les véhicules regardent vers −Y (comme les personnages)
     public const float CharYaw = MathF.PI / 2;     // les personnages (squelette Biped) regardent vers −Y
 
@@ -759,7 +760,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         foreach (List<(MeshGpu mesh, SN.Matrix4x4 part)> l in _unitModels.Values) foreach ((MeshGpu? m, _) in l) m.Dispose();
         foreach (MeshGpu? m in _partMeshes.Values) m?.Dispose();
         foreach (CharAnim c in _chars.Values) foreach ((MeshGpu mesh, float[] pos, float[] nrm) s in c.Skinned.Values) s.mesh.Dispose();
-        _draw.Clear(); _fireRoom.Clear(); _texCache.Clear(); _log.Clear(); _unitModels.Clear(); _sel.Clear(); _unitLogSeen = 0;
+        _draw.Clear(); _fireRoom.Clear(); _texCache.Clear(); _log.Clear(); _unitModels.Clear(); _sel.Clear(); _unitLogSeen = 0; _scriptLogSeen = 0;
         _chars.Clear(); _rigs.Clear(); _partMeshes.Clear(); _lastAnimTime = -1; _prevPose.Clear(); _shownHeading.Clear();
         _audio?.StopAll();
         UnitManager.Nationality = _loadNat ?? _settings.Nationality; _gameNationality = UnitManager.Nationality;
@@ -768,7 +769,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         LoadSun();
         // les missions commencent tout de suite (cinématique d'introduction des scripts) ; sans script : en pause
         _paused = false; _speed = 1; _owed = 0;
-        _cineOn = false; _cineMoving = false; _cineBars = 0; _subtitle = null;
+        _cineOn = false; _cineMoving = false; _cineBars = 0; _subtitle = null; _messages.Clear(); _showMessageHistory = false;
         _ended = false; _endSoundPlayed = false; _menu = false;
 
         // décor (éclairage précalculé du jeu quand il existe)
@@ -1012,13 +1013,26 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             _session.Step();
         }
         foreach (string l in _session.Fire.ExtinguishLog.Skip(before)) Log("Éteint : " + l.Trim());
-        List<string> ul = _session.Units.Log;
-        for (; _unitLogSeen < ul.Count; _unitLogSeen++) Log(ul[_unitLogSeen].Trim());
+        PullLogs();
     }
 
-    private void Log(string s)
+    /// <summary>Recopie dans le journal de débogage (touche D) les nouvelles lignes des unités et les erreurs de script.</summary>
+    private void PullLogs()
     {
-        _log.Add(s);
+        List<string> ul = _session!.Units.Log;
+        for (; _unitLogSeen < ul.Count; _unitLogSeen++)
+            Log(ul[_unitLogSeen].Trim());
+        if (_session.Scripts is { } sc)
+            for (; _scriptLogSeen < sc.Log.Count; _scriptLogSeen++)
+            {
+                Log("Script : " + sc.Log[_scriptLogSeen].Trim(), true);
+                Console.WriteLine("Erreur de script : " + sc.Log[_scriptLogSeen]);
+            }
+    }
+
+    private void Log(string s, bool error = false)
+    {
+        _log.Add((s, error));
         if (_log.Count > 6)
             _log.RemoveAt(0);
     }
@@ -1726,7 +1740,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _ui.Begin(); RenderFireBars(); RenderClickMarks(); _ui.End();
         RenderHudPanels();
         _ui.Begin(); RenderSelectionPanel(); _ui.End();
-        _ui.Begin(); RenderObjectives(); RenderExitIcon(); _ui.End();
+        _ui.Begin(); RenderObjectives(); RenderMessages(); RenderExitIcon(); _ui.End();
         RenderCinema();   // sous-titres hors cinématique
         _ui.Begin(); RenderEndScreen(); _ui.End();
     }
@@ -1781,12 +1795,17 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 }
         if (_log.Count > 0 && _debugAi)   // journal (feux, arrivées, explosions…) : seulement avec les infos de débogage (touche D)
         {
-            // journal : à droite de la mini-carte
-            float lx = MiniVisible ? MiniRect().x + MiniRect().w + 3 * _scale + m : m;
-            float lw = _log.Max(l => _ui.Measure(l)) + 2 * pad, lhh = _log.Count * lh + 16 * _scale, up = SelectionPanelHeight;   // au-dessus du panneau des unités choisies
-            _ui.Rect(lx, _fbH - lhh - m - up, lw, lhh, panel);
-            float yy = _fbH - lhh - m - up + 8 * _scale;
-            foreach (string l in _log) { _ui.Text(lx + pad, yy, l, muted); yy += lh; }
+            // journal : en haut, au centre de l'écran
+            SN.Vector4 red = new SN.Vector4(1f, 0.35f, 0.3f, 1);
+            float lw = MathF.Min(_log.Max(l => _ui.Measure(l.text)) + 2 * pad, _fbW * 0.5f), lhh = _log.Count * lh + 16 * _scale;
+            float lx = (_fbW - lw) / 2;
+            _ui.Rect(lx, m, lw, lhh, panel);
+            float yy = m + 8 * _scale;
+            foreach ((string l, bool err) in _log)
+            {
+                _ui.Text(lx + pad, yy, l, err ? red : muted);
+                yy += lh;
+            }
         }
         _ui.End();
         RenderMinimap();

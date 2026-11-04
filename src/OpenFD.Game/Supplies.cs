@@ -74,6 +74,8 @@ public sealed partial class UnitManager
             dn.Reserve -= give;
         }
         n.Reserve += give;
+        if (n.Reserve > n.ReserveMax - 0.01f)
+            n.Reserve = n.ReserveMax;
         if (v.Target == null && !v.Status.StartsWith("arrose"))
             v.Status = $"se recharge en eau ({n.Reserve:0}/{n.ReserveMax:0})";
         if (n.Reserve >= n.ReserveMax && v.Status.StartsWith("se recharge"))

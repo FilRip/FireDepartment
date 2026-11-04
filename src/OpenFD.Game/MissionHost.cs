@@ -31,8 +31,10 @@ public sealed class MissionHost : IScriptHost
     public string? Subtitle { get; private set; }
     /// <summary>Sons 2D demandés (étiquettes de la base de sons), à jouer par le jeu.</summary>
     public List<string> Sounds2D { get; } = new();
-    /// <summary>Messages (PNL_AddMessage) : clés de traduction.</summary>
-    public List<string> Messages { get; } = new();
+    /// <summary>Messages (PNL_AddMessage(voix, texte, x, y)) : étiquette de la voix (peut être vide), clé de traduction du texte, point de la carte.</summary>
+    public List<(string vocal, string text, float x, float y)> Messages { get; } = new();
+    /// <summary>PNL_ClearAllMessages demandé depuis la dernière image : le panneau des messages se vide.</summary>
+    public bool MessagesCleared { get; set; }
     /// <summary>Visibilité changée par les scripts (ENT_SetVisibility).</summary>
     public Dictionary<uint, bool> Visibility { get; } = new();
     /// <summary>Points des entités sans vie propre, modifiés par ENT_AddDamage (maisons de Residental…), 100 au départ.</summary>
@@ -105,8 +107,20 @@ public sealed class MissionHost : IScriptHost
     }
 
     private readonly Dictionary<long, List<long>> _groups = new();
+    /// <summary>Noms des groupes créés par ENT_GroupCreate("nom"), retrouvés ensuite par ENT_FindByName (tutoriel : « group_soldat_8_1 »).</summary>
+    private readonly Dictionary<string, long> _groupNames = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>Entités d'un groupe du script (ENT_GroupCreate), ou l'entité elle-même.</summary>
     private IEnumerable<long> Members(long id) => _groups.TryGetValue(id, out List<long>? l) ? l.ToList() : new List<long> { id };
+
+    /// <summary>Membres d'un groupe créé par le script ou d'un groupe du niveau (« group_soldat_8_1 ») ; l'entité seule sinon.</summary>
+    private IEnumerable<long> UnitMembers(long id)
+    {
+        if (_groups.TryGetValue(id, out List<long>? l))
+            return l.ToList();
+        if (Units?.ById(id) == null && _byId.TryGetValue((uint)id, out LevelObject? g) && g.Members.Length > 0)
+            return g.Members.Select(m => (long)m).ToList();
+        return new List<long> { id };
+    }
 
     /// <summary>
     /// Points de vie d'une entité (ENT_GetDamage) : porte ou fenêtre, objet qui peut exploser, entité abîmée par
@@ -190,15 +204,24 @@ public sealed class MissionHost : IScriptHost
         switch (name.ToUpperInvariant())
         {
             // ---------- entités ----------
-            case "ENT_FINDBYNAME": return Value.I(Units?.ByScriptName(V(0).AsText) is { } su ? su.Id : _byName.TryGetValue(V(0).AsText, out LevelObject? o) ? o.Id : 0);
+            case "ENT_FINDBYNAME":
+                return Value.I(Units?.ByScriptName(V(0).AsText) is { } su ? su.Id : _byName.TryGetValue(V(0).AsText, out LevelObject? o) ? o.Id
+                    : _groupNames.TryGetValue(V(0).AsText, out long sg) ? sg : 0);
             case "ENT_GETTYPE": return Value.I(_byId.TryGetValue((uint)V(0).AsInt, out LevelObject? t) ? (int)t.Kind : 0);
             case "ENT_GETNAME":
                 if (a.Count > 1)
                     a[1].Set(Value.T(NameOf(V(0).AsInt))); return Value.T(NameOf(V(0).AsInt));
-            case "ENT_GROUPGETNBENTITIES": return Value.I(_byId.TryGetValue((uint)V(0).AsInt, out LevelObject? g) ? g.Members.Length : 0);
+            case "ENT_GROUPGETNBENTITIES":
+                if (_groups.TryGetValue(V(0).AsInt, out List<long>? cg))
+                    return Value.I(cg.Count);
+                return Value.I(_byId.TryGetValue((uint)V(0).AsInt, out LevelObject? g) ? g.Members.Length : 0);
             case "ENT_GROUPGETENTITYAT":
+                if (_groups.TryGetValue(V(0).AsInt, out List<long>? cg2))
+                    return Value.I(V(1).AsInt >= 0 && V(1).AsInt < cg2.Count ? cg2[(int)V(1).AsInt] : 0);
                 return Value.I(_byId.TryGetValue((uint)V(0).AsInt, out LevelObject? g2) && V(1).AsInt >= 0 && V(1).AsInt < g2.Members.Length ? g2.Members[V(1).AsInt] : 0);
             case "ENT_ISENTITYINGROUP":
+                if (_groups.TryGetValue(V(1).AsInt, out List<long>? cg3))
+                    return Value.I(cg3.Contains(V(0).AsInt) ? 1 : 0);
                 return Value.I(_byId.TryGetValue((uint)V(1).AsInt, out LevelObject? g3) && g3.Members.Contains((uint)V(0).AsInt) ? 1 : 0);
             case "ENT_GETPOSITION":
                 if (a.Count >= 3 && PositionOf(V(0).AsInt) is { } p)
@@ -338,8 +361,11 @@ public sealed class MissionHost : IScriptHost
             case "LEV_ISFIREMANSUPPLIERREMAINING": return Value.I(Units?.SupplierRemaining != false ? 1 : 0);
             case "PNL_PRINTSUBTITLE": Subtitle = V(0).AsText; return Value.Zero;
             case "PNL_CLEARSUBTITLE": Subtitle = null; return Value.Zero;
-            case "PNL_ADDMESSAGE": Messages.Add(V(0).AsText); return Value.Zero;
-            case "PNL_CLEARALLMESSAGES": return Value.Zero;   // le journal du jeu garde ses lignes
+            case "PNL_ADDMESSAGE": Messages.Add((V(0).AsText, V(1).AsText, (float)V(2).AsNum, (float)V(3).AsNum)); return Value.Zero;
+            case "PNL_CLEARALLMESSAGES":
+                Messages.Clear();
+                MessagesCleared = true;
+                return Value.Zero;
             case "ENT_SETSTAMINA": return Value.Zero;
             case "SND_PLAYSOUND2D": Sounds2D.Add(V(0).AsText); return Value.Zero;
             // LEV_RoofVisibility(maillage, 0) : retire le toit (London : « Hide_Roof_Kino ») ; 1 : le remet
@@ -383,13 +409,22 @@ public sealed class MissionHost : IScriptHost
             }
             case "ENT_GETUNITTYPE": return Value.I(Units?.ById(V(0).AsInt) is { } yu && Units != null ? Units.UnitType(yu) : 0);
             case "ENT_SETRESERVE":
-                foreach (long id in Members(V(0).AsInt))
+                foreach (long id in UnitMembers(V(0).AsInt))
                     if (Units?.ById(id) is { } ru)
                         UnitManager.SetReserve(ru, (float)V(1).AsNum);
                 return Value.Zero;
-            case "ENT_GETRESERVE": return Value.F(Units?.ById(V(0).AsInt) is { } gr ? UnitManager.ReserveOf(gr) : 0);
+            // sur un groupe : la somme des réserves (le tutoriel attend 750 pour trois sapeurs pleins)
+            case "ENT_GETRESERVE":
+                return Value.F(UnitMembers(V(0).AsInt).Sum(id => Units?.ById(id) is { } gr ? (double)UnitManager.ReserveOf(gr) : 0));
             case "ENT_GETNBPASSENGERS": return Value.I(Units?.ById(V(0).AsInt) is { } pv ? pv.Passengers.Count : 0);
-            case "ENT_GROUPCREATE": { long gid = 0x7F000000 + _groups.Count; _groups[gid] = new(); return Value.I(gid); }
+            case "ENT_GROUPCREATE":
+            {
+                long gid = 0x7F000000 + _groups.Count;
+                _groups[gid] = new();
+                if (V(0).AsText.Length > 0)
+                    _groupNames[V(0).AsText] = gid;
+                return Value.I(gid);
+            }
             case "ENT_GROUPADDENTITY":
                 if (_groups.TryGetValue(V(0).AsInt, out List<long>? gl))
                     gl.Add(V(1).AsInt); return Value.Zero;

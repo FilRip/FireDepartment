@@ -128,6 +128,17 @@ public sealed class Localization
     public string Get(string key)
     {
         string k = key.Trim().TrimStart('&');
-        return _texts.TryGetValue(k, out string? t) ? t : k;
+        return _texts.TryGetValue(k, out string? t) ? Expand(t, 0) : k;
+    }
+
+    // « Voici un &UNIT_FireFighter : » : un mot précédé de « & » dans un texte renvoie à une autre entrée
+    // (souvent dans Unit_XXX.loc) ; on le remplace par son texte s'il existe, sinon on le laisse tel quel.
+    private static readonly System.Text.RegularExpressions.Regex Token = new(@"&([A-Za-z0-9_]+)");
+
+    private string Expand(string text, int depth)
+    {
+        if (depth > 4 || text.IndexOf('&') < 0)
+            return text;
+        return Token.Replace(text, m => _texts.TryGetValue(m.Groups[1].Value, out string? t) ? Expand(t, depth + 1) : m.Value);
     }
 }
