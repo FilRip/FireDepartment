@@ -5,10 +5,10 @@ using SN = System.Numerics;
 
 namespace OpenFD.MG;
 
-// briefing avant la mission : Data\Video\<mission>_briefing.bik (nom donné par VIDEOFEEDFILE du fichier .mis), avec ses
+// briefing de la mission, joué une fois la mission chargée (avant qu'elle commence) : Data\Video\<mission>_briefing.bik (nom donné par VIDEOFEEDFILE du fichier .mis), avec ses
 // sous-titres (<même nom>.subtitle : début et fin en millisecondes, puis la clé du texte dans MISSION_xxx.loc) et la voix
 // de chaque sous-titre (<clé>.wav, voix de la langue choisie d'abord). Échap : passer et commencer la mission.
-public sealed partial class Fd3Game
+public sealed partial class OpenFDGame
 {
     private VideoScreen? _briefing;
     private readonly List<(double from, double to, string key)> _briefSubs = new();
@@ -16,16 +16,21 @@ public sealed partial class Fd3Game
     private (string dir, string difficulty)? _briefGo;
     private bool _briefFrozen;   // essais (captures) : la vidéo reste sur l'image choisie
 
+    /// <summary>Charge la mission (fichiers du jeu), puis joue son briefing ; la mission commence à la fin du briefing.</summary>
     private void StartBriefing(string dir, string difficulty, string? video)
     {
+        StopMenuVideo();
+        if (_net != null && _net.State == OpenFD.Multiplayer.NetState.Briefing)
+            StartNetMission();
+        else
+            BeginMission(dir, difficulty);
+        _audio?.StopAll();
         string? path = BriefingPath(video ?? dir + "_briefing", dir);
         if (path == null || Environment.GetEnvironmentVariable("FD3_SANS_BRIEFING") != null)
         {
             FinishBriefing(dir, difficulty);
             return;
         }
-        StopMenuVideo();
-        _audio?.StopAll();
         _briefing = VideoScreen.Open(GraphicsDevice, path, false, VideoVolume);
         if (_briefing == null)
         {
@@ -66,20 +71,17 @@ public sealed partial class Fd3Game
     }
 
     /// <summary>
-    /// Fin du briefing (passé ou terminé). En réseau : le serveur lance la mission chez tous ; un client attend que le
-    /// serveur la lance (il ne peut pas passer le briefing lui-même).
+    /// Fin du briefing (passé ou terminé) : la mission, déjà chargée, commence. En réseau : le serveur la lance chez
+    /// tous ; un client attend que le serveur la lance (il ne peut pas passer le briefing lui-même).
     /// </summary>
     private void FinishBriefing(string dir, string difficulty)
     {
         if (_net == null || _net.State != OpenFD.Multiplayer.NetState.Briefing)
-        {
-            BeginMission(dir, difficulty);
             return;
-        }
         if (_net.IsServer)
         {
             _net.BeginMission();
-            StartNetMission();
+            _net.MissionLoaded();
         }
         else
             _briefWaiting = true;

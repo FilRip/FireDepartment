@@ -12,7 +12,7 @@ namespace OpenFD.MG;
 //    barre d'eau ;
 //  - barre de vie des feux proches des pompiers ou attaqués ;
 //  - repère jaune (Focus_Instant.tga) à l'endroit d'un ordre, et voix « VOCAL_ACKNOWLEDGE » quand l'ordre est accepté.
-public sealed partial class Fd3Game
+public sealed partial class OpenFDGame
 {
     private readonly Dictionary<string, Texture2D?> _overlayTex = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, string>? _widgetFiles;

@@ -21,8 +21,12 @@ public sealed class Pak
     public Pak(byte[] data, string path = "")
     {
         _data = data; Path = path;
+        // « fin du répertoire central » : 22 octets à la fin de l'archive, suivis d'un commentaire de 65 535 octets au plus.
+        // On la cherche donc seulement dans les 22 + 65 535 derniers octets, en partant de la fin : c'est rapide, et une
+        // suite d'octets « QL\5\6 » qui se trouverait par hasard au milieu des données compressées n'est jamais prise.
+        const int EndRecord = 22, MaxComment = 65_535;
         int eocd = -1;
-        for (int i = data.Length - 22; i >= Math.Max(0, data.Length - 70_000); i--)
+        for (int i = data.Length - EndRecord; i >= Math.Max(0, data.Length - EndRecord - MaxComment); i--)
             if ((data[i] == 'Q' || data[i] == 'P') && (data[i + 1] == 'L' || data[i + 1] == 'K') && data[i + 2] == 5 && data[i + 3] == 6)
             {
                 eocd = i;

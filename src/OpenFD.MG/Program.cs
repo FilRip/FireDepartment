@@ -21,9 +21,13 @@ public static class Program
             return 1;
         }
 
-        Fd3Game Make() => new(new GameFiles(dataDir), Opt("--mission") ?? "London", (Opt("--difficulte") ?? "EASY").ToUpperInvariant())
+        // le jeu démarre toujours sur le menu. Seuls les essais automatiques (--capture : image enregistrée puis arrêt)
+        // peuvent ouvrir directement une mission (--mission, --difficulte) pour la photographier
+        string? capture = Opt("--capture");
+        string? testMission = capture != null ? Opt("--mission") : null;
+        OpenFDGame Make() => new(new GameFiles(dataDir), testMission ?? "London", (capture != null ? Opt("--difficulte") ?? "EASY" : "EASY").ToUpperInvariant())
         {
-            CapturePath = Opt("--capture"),
+            CapturePath = capture,
             CaptureAfter = int.TryParse(Opt("--images"), out int nf) ? nf : 5,
             StartSeconds = float.TryParse(Opt("--avance"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float av) ? av : 0,
             StartMap = argList.Contains("--carte"),
@@ -32,11 +36,11 @@ public static class Program
             TestDoors = Opt("--portes"),
             NoRoofs = argList.Contains("--sans-toits"),
             NoHelp = argList.Contains("--sans-aide"),
-            StartMenu = argList.Contains("--menu") || (Opt("--mission") == null && Opt("--capture") == null),
+            StartMenu = testMission == null || argList.Contains("--menu"),
         };
         try
         {
-            using Fd3Game game = Make();
+            using OpenFDGame game = Make();
             game.Run();
         }
         catch (Microsoft.Xna.Framework.Graphics.NoSuitableGraphicsDeviceException) when (Environment.GetEnvironmentVariable("FD3_SANS_MSAA") == null)
@@ -44,7 +48,7 @@ public static class Program
             // certaines cartes (ou machines virtuelles) refusent l'anticrénelage : on réessaie sans
             Console.WriteLine("Carte graphique : nouvel essai sans anticrénelage.");
             Environment.SetEnvironmentVariable("FD3_SANS_MSAA", "1");
-            using Fd3Game game = Make();
+            using OpenFDGame game = Make();
             game.Run();
         }
         return 0;

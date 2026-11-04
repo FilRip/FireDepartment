@@ -6,7 +6,7 @@ using SN = System.Numerics;
 namespace OpenFD.MG;
 
 // personnages animés, véhicules et sons
-public sealed partial class Fd3Game
+public sealed partial class OpenFDGame
 {
     private sealed class CharAnim
     {

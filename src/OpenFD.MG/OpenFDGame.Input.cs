@@ -8,7 +8,7 @@ using SN = System.Numerics;
 namespace OpenFD.MG;
 
 // clavier, souris, choix des unités, ordres, curseurs
-public sealed partial class Fd3Game
+public sealed partial class OpenFDGame
 {
     private KeyboardState _kPrev; private MouseState _mPrev;
     // gauche : choisir (clic) ou encadrer (glisser) ; milieu : tourner la vue ; droit : ordre (clic) ou déplacer la vue (glisser)

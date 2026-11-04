@@ -7,7 +7,7 @@ namespace OpenFD.MG;
 // de la caserne) ont un sol dessiné plus haut que celui de la grille ; les véhicules s'enfonçaient alors dans le bitume.
 // On relève, pour chaque case, la face tournée vers le haut la plus haute des maillages du sol (GROUND, Tile_ground,
 // routes, trottoirs…) proche de la hauteur de la grille, et la simulation pose les unités dessus.
-public sealed partial class Fd3Game
+public sealed partial class OpenFDGame
 {
     /// <summary>
     /// Objet posé sur le sol de la grille alors que le sol dessiné est plus haut (Tutorial) : remonté sur le sol dessiné.
