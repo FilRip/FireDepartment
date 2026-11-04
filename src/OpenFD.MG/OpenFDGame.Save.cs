@@ -181,7 +181,7 @@ public sealed partial class OpenFDGame
                     break;
                 _session.Step();
                 if (_session.Steps % 300 == 0)
-                    Status($"Chargement de la partie... {100 * _session.Steps / Math.Max(1, g.Steps)} %");
+                    Status($"Chargement de la partie... {100 * _session.Steps / Math.Max(1, g.Steps)} %", (float)_session.Steps / Math.Max(1, g.Steps));
             }
             _journal = g.Journal.ToList();
         }
