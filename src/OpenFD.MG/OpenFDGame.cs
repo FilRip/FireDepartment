@@ -296,6 +296,20 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             base.Draw(gameTime);
             return;
         }
+        // essai : FD3_TEST_CHARGEMENT=mission,progression → l'écran de chargement de cette mission
+        if (Environment.GetEnvironmentVariable("FD3_TEST_CHARGEMENT") is { } tc && tc.Split(',') is { Length: 2 } tcp)
+        {
+            _mission = tcp[0];
+            _loadProgress = float.Parse(tcp[1], System.Globalization.CultureInfo.InvariantCulture);
+            DrawLoading();
+            base.Draw(gameTime);
+            if (CapturePath != null && ++_frame >= CaptureAfter)
+            {
+                Capture(CapturePath);
+                Exit();
+            }
+            return;
+        }
         if (_briefing != null || _briefWaiting)
         {
             DrawBriefing();
@@ -479,18 +493,6 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     protected override void UnloadContent() { _audio?.Dispose(); base.UnloadContent(); }
 
     // ------------------------------------------------------------------ chargement
-    private void Status(string text)
-    {
-        GraphicsDevice gd = GraphicsDevice;
-        _fbW = gd.PresentationParameters.BackBufferWidth; _fbH = gd.PresentationParameters.BackBufferHeight;
-        gd.Clear(new Color(0.07f, 0.07f, 0.08f));
-        _ui.Begin();
-        float w = _ui.Measure(text);
-        _ui.Text((_fbW - w) / 2, _fbH / 2f, text, new SN.Vector4(0.9f, 0.9f, 0.9f, 1));
-        _ui.End();
-        gd.Present();
-    }
-
     private Texture2D? TexOf(string? name)
     {
         if (string.IsNullOrEmpty(name))
@@ -749,7 +751,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     {
         StopMenuVideo();
         _mission = mission; _difficulty = difficulty;
-        Status($"Chargement de {mission}...");
+        Status($"Chargement de {mission}...", 0);
         foreach ((MeshGpu mesh, bool roof, int layer) d in _draw) d.mesh.Dispose();
         foreach ((VertexBuffer vb, IndexBuffer ib, int count, Texture2D? tex, Texture2D? dirt, Texture2D? lm, bool alpha, bool roof, int mode, bool caster, int bld) d in _sceneDraw) { d.vb.Dispose(); d.ib.Dispose(); }
         _sceneDraw.Clear();
@@ -779,7 +781,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         foreach (SceneAssets.Node n in scenery)
         {
             if (++k % 16 == 0)
-                Status($"Chargement du décor... {k} / {scenery.Count}");
+                Status($"Chargement du décor... {k} / {scenery.Count}", 0.05f + 0.45f * k / Math.Max(1, scenery.Count));
             // bâtiments (tout sauf le sol) : coupés à hauteur d'étage, le haut disparaît avec T (voir AddRoofCut)
             bool ground = System.Text.RegularExpressions.Regex.IsMatch(n.Mesh, @"^(FGD_|GROUND|Tile_ground)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             _curBuilding = _nodeBuilding.TryGetValue(n.Mesh, out int bi) ? bi : -1;
@@ -872,7 +874,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         foreach (IGrouping<string, SceneAssets.Placed> grp in placed)
         {
             if (++k % 20 == 0)
-                Status($"Chargement des objets... {k} / {placed.Count}");
+                Status($"Chargement des objets... {k} / {placed.Count}", 0.5f + 0.4f * k / Math.Max(1, placed.Count));
             try
             {
                 foreach (SceneAssets.Node part in _assets.ModelParts(grp.Key))
@@ -896,9 +898,9 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             }
             catch (Exception e) { Console.WriteLine($"{grp.Key} : {e.Message}"); }
         }
-        Status("Croissance des arbres...");
+        Status("Croissance des arbres...", 0.92f);
         LoadTrees();
-        Status("Envoi à la carte graphique...");
+        Status("Envoi à la carte graphique...", 0.97f);
         FlushStatic();
         // cadrage
         _sceneMin = new SN.Vector3(float.MaxValue); _sceneMax = new SN.Vector3(float.MinValue);
