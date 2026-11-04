@@ -1,5 +1,5 @@
 /*
- * fd3video : petite bibliothèque native de lecture des vidéos du jeu (Bink, .bik) avec FFmpeg.
+ * openfdvideo : petite bibliothèque native de lecture des vidéos du jeu (Bink, .bik) avec FFmpeg.
  * Une API C très simple, appelée depuis C# (FD3.Video) :
  *   fv_open(chemin UTF-8)  -> poignée (ou NULL)
  *   fv_width / fv_height / fv_fps / fv_duration / fv_audio_rate / fv_audio_channels

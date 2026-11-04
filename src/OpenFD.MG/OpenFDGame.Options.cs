@@ -546,6 +546,12 @@ public sealed partial class OpenFDGame
         float hw = MathF.Max(lw + 24 * _scale, MathF.Max(_ui.Measure(help), _screen == 2 ? _ui.Measure(O("OptionsNote")) : 0) + 32 * _scale);
         _ui.Rect((_fbW - hw) / 2, ly + rows.Count * lh + 16 * _scale, hw, _ui.LineHeight * (_screen == 2 ? 3f : 1.6f), new SN.Vector4(0, 0, 0, 0.7f));
         _ui.Text((_fbW - _ui.Measure(help)) / 2, ly + rows.Count * lh + 24 * _scale, help, new SN.Vector4(0.65f, 0.65f, 0.65f, 1));
+        if (_screen == 0)
+        {
+            // mention en bas à gauche du menu principal
+            const string copyright = "(C) 2026 CoolBytes - FilRip";
+            _ui.TextItalic(18 * _scale, _fbH - _ui.LineHeight - 14 * _scale, copyright, new SN.Vector4(0.82f, 0.82f, 0.82f, 0.9f));
+        }
         if (_screen == 2)
         {
             string note = O("OptionsNote");
