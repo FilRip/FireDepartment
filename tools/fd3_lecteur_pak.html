@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lecteur de .pak FD3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Lecteur d'archives .pak / .bank de Fire Department 3 : liste des fichiers, filtre, aperçu, extraction */
+:root {
+  --bg: #eceeed; --panel: #f7f8f7; --ink: #1b2220; --muted: #59645f; --line: #cdd3d0;
+  --accent: #c42a1c; --accent-ink: #ffffff; --sel: #0a6cff; --sel-bg: #dce9ff;
+  --f-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111514; --panel: #181d1c; --ink: #e5eae7; --muted: #94a09b; --line: #2b3331;
+  --accent: #ff5644; --accent-ink: #1a0603; --sel: #5aa8ff; --sel-bg: #18304f; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111514; --panel: #181d1c; --ink: #e5eae7; --muted: #94a09b; --line: #2b3331;
+  --accent: #ff5644; --accent-ink: #1a0603; --sel: #5aa8ff; --sel-bg: #18304f; color-scheme: dark }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-body); display: flex; flex-direction: column; }
+header.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 8px 16px; background: var(--panel); border-bottom: 3px solid var(--accent); }
+header h1 { font: 700 22px var(--f-display); letter-spacing: .02em; margin: 0; text-transform: uppercase; }
+header h1 span { color: var(--accent); }
+.btn { font: 500 13px var(--f-body); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px; cursor: pointer; white-space: nowrap; }
+.btn:hover:not(:disabled) { border-color: var(--ink); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+input[type=search] { font: 13px var(--f-body); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px; min-width: 220px; flex: 1; max-width: 420px; }
+.info { color: var(--muted); font-size: 13px; }
+main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 380px; min-height: 0; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; grid-template-rows: 1fr 280px; } }
+.list { overflow: auto; min-height: 0; border-right: 1px solid var(--line); }
+table { width: 100%; border-collapse: collapse; font: 13px var(--f-mono); }
+thead th { position: sticky; top: 0; background: var(--panel); text-align: left; font: 600 12px var(--f-body); color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); cursor: pointer; user-select: none; white-space: nowrap; }
+thead th.num, td.num { text-align: right; }
+tbody tr { cursor: default; }
+tbody td { padding: 3px 8px; border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent); white-space: nowrap; }
+tbody td.path { overflow: hidden; text-overflow: ellipsis; max-width: 0; width: 100%; }
+tbody td.path .dir { color: var(--muted); }
+tbody tr:hover { background: color-mix(in srgb, var(--sel-bg) 50%, transparent); }
+tbody tr.sel { background: var(--sel-bg); }
+tbody tr.cur td.path { box-shadow: inset 3px 0 0 var(--sel); }
+td.chk, th.chk { width: 28px; text-align: center; }
+aside { overflow: auto; padding: 12px 14px; background: var(--panel); min-height: 0; }
+aside h2 { font: 700 16px var(--f-display); text-transform: uppercase; letter-spacing: .03em; margin: 0 0 6px; }
+aside .name { font: 13px var(--f-mono); word-break: break-all; margin-bottom: 8px; }
+aside dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 13px; margin: 0 0 10px; }
+aside dt { color: var(--muted); }
+aside pre { font: 12px/1.4 var(--f-mono); white-space: pre-wrap; word-break: break-word; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 8px; max-height: 60vh; overflow: auto; }
+aside img { max-width: 100%; image-rendering: pixelated; background: repeating-conic-gradient(#8884 0 25%, transparent 0 50%) 0 0 / 16px 16px; border: 1px solid var(--line); }
+.drop { flex: 1; display: grid; place-items: center; text-align: center; color: var(--muted); padding: 40px 16px; }
+.drop .zone { border: 2px dashed var(--line); border-radius: 8px; padding: 40px 30px; max-width: 560px; }
+.drop .zone strong { display: block; font: 700 22px var(--f-display); color: var(--ink); text-transform: uppercase; margin-bottom: 6px; }
+body.dragging .drop .zone, body.dragging .list { outline: 3px dashed var(--accent); outline-offset: -6px; }
+footer { padding: 6px 16px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); background: var(--panel); display: flex; gap: 16px; flex-wrap: wrap; }
+.hidden { display: none !important; }
+progress { width: 160px; }
+</style>
+</head>
+<body>
+<header class="bar">
+  <h1>Lecteur <span>.pak</span> FD3</h1>
+  <label class="btn primary">Ouvrir un .pak / .bank…<input id="file" type="file" accept=".pak,.bank,.zip" multiple hidden></label>
+  <input id="filter" type="search" placeholder="Filtrer (ex. : gfx\anim  ou  *.dds)" disabled>
+  <button class="btn" id="selAll" disabled>Tout cocher (filtré)</button>
+  <button class="btn" id="selNone" disabled>Tout décocher</button>
+  <button class="btn primary" id="extract" disabled>Extraire la sélection</button>
+  <button class="btn" id="extractDir" disabled title="Chrome / Edge : écrit les fichiers, avec leurs dossiers, dans un dossier choisi">Extraire dans un dossier…</button>
+  <span class="info" id="status"></span>
+  <progress id="prog" class="hidden" max="1" value="0"></progress>
+</header>
+
+<div class="drop" id="drop">
+  <div class="zone">
+    <strong>Déposez un fichier .pak ici</strong>
+    ou utilisez le bouton « Ouvrir ». Les archives du jeu (Data\*.pak, Data\Gfx\Mission\*.bank…) sont des zip dont
+    les signatures commencent par « QL » au lieu de « PK ». Rien n'est envoyé sur Internet : tout se passe dans le navigateur.
+    Plusieurs archives peuvent être ouvertes ensemble.
+  </div>
+</div>
+
+<main id="main" class="hidden">
+  <div class="list" id="list">
+    <table>
+      <thead><tr>
+        <th class="chk"><input type="checkbox" id="chkAll" title="Cocher / décocher les fichiers affichés"></th>
+        <th data-k="path">Chemin</th>
+        <th data-k="size" class="num">Taille</th>
+        <th data-k="csize" class="num">Compressé</th>
+        <th data-k="pak">Archive</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <aside id="side">
+    <h2>Aperçu</h2>
+    <div class="info">Cliquez sur un fichier pour le voir ; double-clic pour l'extraire. Maj + clic : cocher une plage.</div>
+  </aside>
+</main>
+<footer><span id="count"></span><span>Clic : aperçu · Double-clic : extraire · Espace : cocher la ligne · ↑ ↓ : naviguer</span></footer>
+
+<script>
+"use strict";
+// ---------------------------------------------------------------- lecture des archives (zip « QL »)
+const archives = [];       // { name, file }
+let entries = [];          // { pak, path, method, csize, size, crc, offset, time, date }
+let shown = [];            // entrées filtrées et triées
+const checked = new Set(); // index dans entries
+let current = -1, lastClicked = -1, sortKey = "path", sortDir = 1;
+const $ = id => document.getElementById(id);
+const latin1 = new TextDecoder("latin1");
+
+async function readSlice(file, start, len) { return new Uint8Array(await file.slice(start, start + len).arrayBuffer()); }
+
+async function openArchive(file) {
+  // fin du répertoire central : signature « QL\5\6 » (ou « PK\5\6 ») dans les derniers 70 Ko
+  const tailLen = Math.min(file.size, 70000 + 22);
+  const tail = await readSlice(file, file.size - tailLen, tailLen);
+  let eocd = -1;
+  for (let i = tail.length - 22; i >= 0; i--)
+    if ((tail[i] === 0x51 || tail[i] === 0x50) && (tail[i + 1] === 0x4c || tail[i + 1] === 0x4b) && tail[i + 2] === 5 && tail[i + 3] === 6) { eocd = i; break; }
+  if (eocd < 0) throw new Error(file.name + " : archive non reconnue");
+  const tv = new DataView(tail.buffer, tail.byteOffset);
+  const n = tv.getUint16(eocd + 10, true), cdSize = tv.getUint32(eocd + 12, true), cdOff = tv.getUint32(eocd + 16, true);
+  const cd = await readSlice(file, cdOff, cdSize);
+  const v = new DataView(cd.buffer, cd.byteOffset);
+  const pak = archives.length;
+  archives.push({ name: file.name, file });
+  let p = 0;
+  for (let i = 0; i < n && p + 46 <= cd.length; i++) {
+    const fl = v.getUint16(p + 28, true), xl = v.getUint16(p + 30, true), cl = v.getUint16(p + 32, true);
+    const path = latin1.decode(cd.subarray(p + 46, p + 46 + fl)).replace(/\//g, "\\");
+    entries.push({
+      pak, path, method: v.getUint16(p + 10, true), time: v.getUint16(p + 12, true), date: v.getUint16(p + 14, true),
+      crc: v.getUint32(p + 16, true), csize: v.getUint32(p + 20, true), size: v.getUint32(p + 24, true), offset: v.getUint32(p + 42, true)
+    });
+    p += 46 + fl + xl + cl;
+  }
+}
+
+// données d'une entrée : brutes (compressées) ou décompressées
+async function rawData(e) {
+  const f = archives[e.pak].file;
+  const h = await readSlice(f, e.offset, 30);
+  const hv = new DataView(h.buffer, h.byteOffset);
+  const start = e.offset + 30 + hv.getUint16(26, true) + hv.getUint16(28, true);
+  return readSlice(f, start, e.csize);
+}
+async function fileData(e) {
+  const raw = await rawData(e);
+  if (e.method === 0) return raw;
+  if (e.method !== 8) throw new Error("compression " + e.method + " non gérée");
+  const ds = new DecompressionStream("deflate-raw");
+  const out = await new Response(new Blob([raw]).stream().pipeThrough(ds)).arrayBuffer();
+  return new Uint8Array(out);
+}
+
+// ---------------------------------------------------------------- liste
+const fmt = n => n < 1024 ? n + " o" : n < 1048576 ? (n / 1024).toFixed(1) + " Ko" : (n / 1048576).toFixed(2) + " Mo";
+const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function matcher(q) {
+  q = q.trim().toLowerCase().replace(/\//g, "\\");
+  if (!q) return () => true;
+  const words = q.split(/\s+/);
+  const tests = words.map(w => {
+    if (w.includes("*") || w.includes("?")) {
+      const re = new RegExp("^" + w.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$", "i");
+      return s => re.test(s) || re.test(s.slice(s.lastIndexOf("\\") + 1));
+    }
+    return s => s.toLowerCase().includes(w);
+  });
+  return s => tests.every(t => t(s));
+}
+
+function refresh() {
+  const m = matcher($("filter").value);
+  shown = [];
+  for (let i = 0; i < entries.length; i++) if (m(entries[i].path)) shown.push(i);
+  shown.sort((a, b) => {
+    const x = entries[a], y = entries[b];
+    const k = sortKey === "pak" ? (archives[x.pak].name.localeCompare(archives[y.pak].name) || x.path.localeCompare(y.path)) :
+      sortKey === "path" ? x.path.localeCompare(y.path, "fr", { sensitivity: "base" }) : (x[sortKey] - y[sortKey]);
+    return k * sortDir;
+  });
+  render();
+}
+
+// rendu par tranches (archives de plusieurs milliers de fichiers)
+const ROW_H = 24;
+let renderStart = 0;
+function render() {
+  const list = $("list"), body = $("rows");
+  const total = shown.length;
+  const first = Math.max(0, Math.floor(list.scrollTop / ROW_H) - 30);
+  const last = Math.min(total, first + Math.ceil(list.clientHeight / ROW_H) + 60);
+  renderStart = first;
+  let html = `<tr style="height:${first * ROW_H}px"></tr>`;
+  for (let r = first; r < last; r++) {
+    const i = shown[r], e = entries[i];
+    const cut = e.path.lastIndexOf("\\");
+    const dir = cut >= 0 ? e.path.slice(0, cut + 1) : "", name = e.path.slice(cut + 1);
+    html += `<tr data-i="${i}" data-r="${r}" class="${checked.has(i) ? "sel" : ""}${i === current ? " cur" : ""}" style="height:${ROW_H}px">` +
+      `<td class="chk"><input type="checkbox"${checked.has(i) ? " checked" : ""}></td>` +
+      `<td class="path" title="${esc(e.path)}"><span class="dir">${esc(dir)}</span>${esc(name)}</td>` +
+      `<td class="num">${fmt(e.size)}</td><td class="num">${e.method === 0 ? "—" : fmt(e.csize)}</td>` +
+      `<td>${esc(archives[e.pak].name)}</td></tr>`;
+  }
+  html += `<tr style="height:${(total - last) * ROW_H}px"></tr>`;
+  body.innerHTML = html;
+  const sel = [...checked];
+  const selSize = sel.reduce((s, i) => s + entries[i].size, 0);
+  $("count").textContent = `${entries.length} fichier(s) dans ${archives.length} archive(s) · ${shown.length} affiché(s) · ${checked.size} coché(s) (${fmt(selSize)})`;
+  $("extract").disabled = checked.size === 0 && current < 0;
+  $("extractDir").disabled = (checked.size === 0 && current < 0) || !window.showDirectoryPicker;
+  $("chkAll").checked = shown.length > 0 && shown.every(i => checked.has(i));
+}
+$("list").addEventListener("scroll", () => render());
+window.addEventListener("resize", () => render());
+
+document.querySelectorAll("thead th[data-k]").forEach(th => th.addEventListener("click", () => {
+  const k = th.dataset.k;
+  sortDir = sortKey === k ? -sortDir : 1; sortKey = k; refresh();
+}));
+let filterTimer = 0;
+$("filter").addEventListener("input", () => { clearTimeout(filterTimer); filterTimer = setTimeout(refresh, 120); });
+$("selAll").onclick = () => { shown.forEach(i => checked.add(i)); render(); };
+$("selNone").onclick = () => { checked.clear(); render(); };
+$("chkAll").onchange = ev => { if (ev.target.checked) shown.forEach(i => checked.add(i)); else shown.forEach(i => checked.delete(i)); render(); };
+
+$("rows").addEventListener("click", ev => {
+  const tr = ev.target.closest("tr[data-i]");
+  if (!tr) return;
+  const i = +tr.dataset.i, r = +tr.dataset.r;
+  if (ev.target.type === "checkbox" || ev.shiftKey || ev.ctrlKey || ev.metaKey) {
+    if (ev.shiftKey && lastClicked >= 0) {
+      const a = Math.min(lastClicked, r), b = Math.max(lastClicked, r);
+      for (let k = a; k <= b; k++) checked.add(shown[k]);
+    } else if (checked.has(i)) checked.delete(i); else checked.add(i);
+    lastClicked = r;
+    render();
+    if (ev.target.type === "checkbox") return;
+  }
+  lastClicked = r;
+  preview(i);
+});
+$("rows").addEventListener("dblclick", ev => {
+  const tr = ev.target.closest("tr[data-i]");
+  if (tr && ev.target.type !== "checkbox") extractOne(entries[+tr.dataset.i]);
+});
+document.addEventListener("keydown", ev => {
+  if (document.activeElement === $("filter") || !shown.length) return;
+  const r = shown.indexOf(current);
+  if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+    ev.preventDefault();
+    const nr = Math.max(0, Math.min(shown.length - 1, (r < 0 ? -1 : r) + (ev.key === "ArrowDown" ? 1 : -1)));
+    preview(shown[nr]);
+    const list = $("list");
+    const y = nr * ROW_H;
+    if (y < list.scrollTop + 30) list.scrollTop = y - 30;
+    else if (y > list.scrollTop + list.clientHeight - 2 * ROW_H) list.scrollTop = y - list.clientHeight + 2 * ROW_H;
+  } else if (ev.key === " " && current >= 0) {
+    ev.preventDefault();
+    if (checked.has(current)) checked.delete(current); else checked.add(current);
+    render();
+  } else if (ev.key === "Enter" && current >= 0) extractOne(entries[current]);
+});
+
+// ---------------------------------------------------------------- aperçu
+let previewToken = 0;
+async function preview(i) {
+  current = i; render();
+  const e = entries[i], token = ++previewToken, side = $("side");
+  const ext = e.path.slice(e.path.lastIndexOf(".") + 1).toLowerCase();
+  side.innerHTML = `<h2>Aperçu</h2><div class="name">${esc(e.path)}</div>
+    <dl><dt>Archive</dt><dd>${esc(archives[e.pak].name)}</dd><dt>Taille</dt><dd>${fmt(e.size)} (${e.size.toLocaleString("fr")} octets)</dd>
+    <dt>Compressé</dt><dd>${e.method === 0 ? "non (stocké)" : fmt(e.csize) + " (deflate)"}</dd><dt>CRC-32</dt><dd>${e.crc.toString(16).padStart(8, "0")}</dd></dl>
+    <button class="btn primary" id="one">Extraire ce fichier</button> <div id="pv" style="margin-top:10px" class="info">…</div>`;
+  $("one").onclick = () => extractOne(e);
+  const pv = $("pv");
+  try {
+    if (e.size > 30 * 1048576) { pv.textContent = "Fichier trop gros pour l'aperçu."; return; }
+    const data = await fileData(e);
+    if (token !== previewToken) return;
+    if (["png", "jpg", "jpeg", "bmp", "gif"].includes(ext)) {
+      const url = URL.createObjectURL(new Blob([data], { type: "image/" + (ext === "jpg" ? "jpeg" : ext) }));
+      pv.innerHTML = `<img src="${url}" alt="">`;
+    } else if (ext === "tga" && tgaToCanvas(data)) {
+      pv.innerHTML = ""; pv.appendChild(tgaToCanvas(data));
+    } else if (ext === "dds" && ddsInfo(data)) {
+      pv.textContent = ddsInfo(data);
+    } else {
+      const txt = asText(data);
+      if (txt != null) { pv.innerHTML = "<pre></pre>"; pv.firstChild.textContent = txt.length > 200000 ? txt.slice(0, 200000) + "\n…" : txt; }
+      else pv.innerHTML = "<pre></pre>", pv.firstChild.textContent = hexDump(data.subarray(0, 1024)) + (data.length > 1024 ? "\n…" : "");
+    }
+  } catch (err) { pv.textContent = "Aperçu impossible : " + err.message; }
+}
+
+function asText(d) {
+  if (d.length >= 2 && d[0] === 0xff && d[1] === 0xfe) return new TextDecoder("utf-16le").decode(d);
+  if (d.length >= 3 && d[0] === 0xef && d[1] === 0xbb && d[2] === 0xbf) return new TextDecoder("utf-8").decode(d);
+  const n = Math.min(d.length, 4096); let bad = 0;
+  for (let i = 0; i < n; i++) { const c = d[i]; if (c === 0 || (c < 9) || (c > 13 && c < 32)) bad++; }
+  return bad > n * 0.02 ? null : new TextDecoder("windows-1252").decode(d);
+}
+function hexDump(d) {
+  let s = "";
+  for (let i = 0; i < d.length; i += 16) {
+    const row = d.subarray(i, i + 16);
+    s += i.toString(16).padStart(6, "0") + "  " + [...row].map(b => b.toString(16).padStart(2, "0")).join(" ").padEnd(48) + "  " +
+      [...row].map(b => b >= 32 && b < 127 ? String.fromCharCode(b) : ".").join("") + "\n";
+  }
+  return s;
+}
+function ddsInfo(d) {
+  if (d.length < 128 || d[0] !== 0x44 || d[1] !== 0x44 || d[2] !== 0x53) return null;
+  const v = new DataView(d.buffer, d.byteOffset);
+  const fourcc = latin1.decode(d.subarray(84, 88)).replace(/\0/g, "");
+  return `Texture DDS ${v.getUint32(16, true)} × ${v.getUint32(12, true)}, format ${fourcc || "non compressé"}, ${v.getUint32(28, true) || 1} niveau(x) de mipmap (pas d'aperçu)`;
+}
+// TGA non compressé ou RLE, 24 / 32 bits
+function tgaToCanvas(d) {
+  try {
+    const idLen = d[0], type = d[2], w = d[12] | (d[13] << 8), h = d[14] | (d[15] << 8), bpp = d[16], desc = d[17];
+    if (![2, 10].includes(type) || ![24, 32].includes(bpp) || !w || !h) return null;
+    const px = bpp / 8, out = new Uint8ClampedArray(w * h * 4);
+    let p = 18 + idLen, n = 0;
+    const put = (o) => { out[n * 4] = d[o + 2]; out[n * 4 + 1] = d[o + 1]; out[n * 4 + 2] = d[o]; out[n * 4 + 3] = px === 4 ? d[o + 3] : 255; n++; };
+    if (type === 2) for (let i = 0; i < w * h; i++, p += px) put(p);
+    else while (n < w * h && p < d.length) {
+      const c = d[p++], cnt = (c & 0x7f) + 1;
+      if (c & 0x80) { for (let k = 0; k < cnt; k++) put(p); p += px; }
+      else for (let k = 0; k < cnt; k++, p += px) put(p);
+    }
+    const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+    const ctx = cv.getContext("2d"), img = new ImageData(out, w, h);
+    if (desc & 0x20) ctx.putImageData(img, 0, 0);
+    else { const t = document.createElement("canvas"); t.width = w; t.height = h; t.getContext("2d").putImageData(img, 0, 0); ctx.scale(1, -1); ctx.drawImage(t, 0, -h); }
+    cv.style.maxWidth = "100%";
+    return cv;
+  } catch { return null; }
+}
+
+// ---------------------------------------------------------------- extraction
+function download(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+}
+const baseName = p => p.slice(p.lastIndexOf("\\") + 1);
+function status(t) { $("status").textContent = t; }
+function progress(v, max) { const p = $("prog"); if (max == null) { p.classList.add("hidden"); return; } p.classList.remove("hidden"); p.max = max; p.value = v; }
+
+async function extractOne(e) {
+  try { status("Extraction de " + baseName(e.path) + "…"); download(new Blob([await fileData(e)]), baseName(e.path)); status(""); }
+  catch (err) { status("Erreur : " + err.message); }
+}
+
+function selection() { return checked.size ? [...checked].map(i => entries[i]) : current >= 0 ? [entries[current]] : []; }
+
+// plusieurs fichiers : un .zip ordinaire (signatures « PK »), avec les dossiers ; les données compressées sont recopiées telles quelles
+$("extract").onclick = async () => {
+  const list = selection();
+  if (list.length === 1) return extractOne(list[0]);
+  try {
+    const parts = [], central = [], enc = new TextEncoder();
+    let offset = 0;
+    for (let k = 0; k < list.length; k++) {
+      const e = list[k];
+      progress(k, list.length); status(`Archive zip : ${k + 1} / ${list.length}`);
+      const raw = await rawData(e);
+      const name = enc.encode((list.length > 1 && archives.length > 1 ? archives[e.pak].name.replace(/\.[^.]+$/, "") + "/" : "") + e.path.replace(/\\/g, "/"));
+      const lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x800, true); lh.setUint16(8, e.method, true);
+      lh.setUint16(10, e.time, true); lh.setUint16(12, e.date, true); lh.setUint32(14, e.crc, true);
+      lh.setUint32(18, e.csize, true); lh.setUint32(22, e.size, true); lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+      parts.push(lh.buffer, name, raw);
+      const ch = new DataView(new ArrayBuffer(46));
+      ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x800, true); ch.setUint16(10, e.method, true);
+      ch.setUint16(12, e.time, true); ch.setUint16(14, e.date, true); ch.setUint32(16, e.crc, true); ch.setUint32(20, e.csize, true); ch.setUint32(24, e.size, true);
+      ch.setUint16(28, name.length, true); ch.setUint32(42, offset, true);
+      central.push(ch.buffer, name);
+      offset += 30 + name.length + raw.length;
+    }
+    const cdSize = central.reduce((s, b) => s + b.byteLength, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, list.length, true); end.setUint16(10, list.length, true);
+    end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+    const zipName = (archives.length === 1 ? archives[0].name.replace(/\.[^.]+$/, "") : "fd3") + "_extrait.zip";
+    download(new Blob([...parts, ...central, end.buffer], { type: "application/zip" }), zipName);
+    status(`${list.length} fichier(s) dans ${zipName}`);
+  } catch (err) { status("Erreur : " + err.message); }
+  progress(0, null);
+};
+
+// Chrome / Edge : les fichiers décompressés, avec leurs dossiers, dans un dossier choisi
+$("extractDir").onclick = async () => {
+  const list = selection();
+  let root;
+  try { root = await window.showDirectoryPicker({ mode: "readwrite" }); } catch { return; }
+  try {
+    for (let k = 0; k < list.length; k++) {
+      const e = list[k];
+      progress(k, list.length); status(`${k + 1} / ${list.length} : ${baseName(e.path)}`);
+      const parts = e.path.split("\\").filter(Boolean);
+      let dir = root;
+      for (const p of parts.slice(0, -1)) dir = await dir.getDirectoryHandle(p, { create: true });
+      const fh = await dir.getFileHandle(parts[parts.length - 1], { create: true });
+      const w = await fh.createWritable();
+      await w.write(await fileData(e)); await w.close();
+    }
+    status(`${list.length} fichier(s) extrait(s) dans « ${root.name} »`);
+  } catch (err) { status("Erreur : " + err.message); }
+  progress(0, null);
+};
+
+// ---------------------------------------------------------------- ouverture (bouton ou glisser-déposer)
+async function openFiles(files) {
+  for (const f of files) {
+    try { status("Lecture de " + f.name + "…"); await openArchive(f); }
+    catch (err) { status("Erreur : " + err.message); }
+  }
+  if (!entries.length) return;
+  $("drop").classList.add("hidden"); $("main").classList.remove("hidden");
+  ["filter", "selAll", "selNone"].forEach(id => $(id).disabled = false);
+  status(archives.map(a => a.name).join(", "));
+  document.title = archives.map(a => a.name).join(", ") + " · Lecteur de .pak FD3";
+  refresh();
+}
+$("file").onchange = ev => { openFiles([...ev.target.files]); ev.target.value = ""; };
+document.addEventListener("dragover", ev => { ev.preventDefault(); document.body.classList.add("dragging"); });
+document.addEventListener("dragleave", ev => { if (!ev.relatedTarget) document.body.classList.remove("dragging"); });
+document.addEventListener("drop", ev => { ev.preventDefault(); document.body.classList.remove("dragging"); openFiles([...ev.dataTransfer.files]); });
+</script>
+</body>
+</html>

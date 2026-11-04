@@ -11,5 +11,5 @@ if errorlevel 1 (
   exit /b 1
 )
 echo Compilation et lancement, patientez (la premiere fois peut prendre une minute)...
-dotnet run --project src\FD3.Viewer -c Release -- "%JEU%"
+dotnet run --project src\OpenFD.Viewer -c Release -- "%JEU%"
 pause

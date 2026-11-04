@@ -1,0 +1,211 @@
+using System.Numerics;
+using OpenFD.Formats;
+using OpenFD.Script;
+
+namespace OpenFD.Game;
+
+/// <summary>
+/// Objet sur lequel un pompier agit (armoire électrique, vanne, transformateur…) : classe [CAPACITIES_TARGET] CouldBeUse
+/// (n'importe quel pompier) ou CouldBeRepair (le technicien, [CAPACITIES_ACTIONS] CanRepair).
+/// Le composant A027 de l'objet donne, par action (« use », « use2 », « repair »), la fonction du script à appeler :
+/// Fonction(Utilisateur, Objet, Action).
+/// </summary>
+public sealed class UsableObject
+{
+    public required uint Id { get; init; }
+    public required string Name { get; init; }
+    public required Vector3 Position { get; init; }
+    public bool CanBeUsed, CanBeRepaired;
+    public readonly List<(string action, string script)> Actions = new();
+    public int Uses;                      // nombre de fois utilisé (les actions alternent : use, use2…)
+    public bool Repaired;
+    public bool Enabled => CanBeUsed || (CanBeRepaired && !Repaired);
+}
+
+public sealed partial class UnitManager
+{
+    public List<UsableObject> Usables { get; } = new();
+    public const float UseObjectSeconds = 2.0f, RepairSeconds = 6.0f;
+
+    private void LoadUsables(Level level)
+    {
+        foreach (LevelObject o in level.Objects.Where(o => o.Kind == EntityKind.Placeable && o.HasTransform))
+        {
+            ClassFile? c = Class("Design\\" + o.ClassPath["design\\".Length..] + ".class");
+            if (c == null)
+                continue;
+            bool use = c.GetBool("CAPACITIES_ACTIONS", "CouldBeUse") || c.GetBool("CAPACITIES_TARGET", "CouldBeUse"), repair = c.GetBool("CAPACITIES_ACTIONS", "CouldBeRepair") || c.GetBool("CAPACITIES_TARGET", "CouldBeRepair");
+            if (Openings.Any(d => d.Id == o.Id))
+                continue;   // portes et fenêtres : voir Openings
+            UsableObject u = new UsableObject { Id = o.Id, Name = o.Name, Position = o.Position, CanBeUsed = use, CanBeRepaired = repair };
+            if (o.GetComponent(0xA027) is { } comp)
+                u.Actions.AddRange(ParseActions(o.ComponentBytes(comp).ToArray()));
+            // objets sans action de script mais utilisables (les scripts peuvent les activer : ENT_SetCapacityTarget)
+            if (!use && !repair && u.Actions.Count == 0)
+                continue;
+            Usables.Add(u);
+        }
+    }
+
+    // chaînes du composant A027 (longueur sur 4 octets, puis le texte terminé par 0) : nom de l'action, animation, fonction
+    private static List<(string action, string script)> ParseActions(byte[] b)
+    {
+        List<string> strings = new List<string>();
+        for (int p = 0; p + 4 < b.Length; p++)
+        {
+            int len = BitConverter.ToInt32(b, p);
+            if (len < 2 || len > 80 || p + 4 + len > b.Length || b[p + 4 + len - 1] != 0)
+                continue;
+            bool ok = true;
+            for (int i = 0; i < len - 1 && ok; i++) ok = b[p + 4 + i] >= 32 && b[p + 4 + i] < 127;
+            if (!ok)
+                continue;
+            strings.Add(System.Text.Encoding.Latin1.GetString(b, p + 4, len - 1));
+            p += 3 + len;
+        }
+        List<(string, string)> res = new List<(string, string)>();
+        string? action = null;
+        foreach (string s in strings)
+        {
+            if (s.Contains('\\') || s.Contains('$'))
+                continue;                       // animation (ItemChar\ic_…)
+            if (System.Text.RegularExpressions.Regex.IsMatch(s, @"^(use\d*|repair\d*|open|close)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            {
+                action = s;
+                continue;
+            }
+            if (action != null && System.Text.RegularExpressions.Regex.IsMatch(s, @"^[A-Za-z_]\w+$"))
+            {
+                res.Add((action, s));
+                action = null;
+            }
+        }
+        return res;
+    }
+
+    public UsableObject? UsableAt(Vector2 p, float radius) =>
+        Usables.Where(o => o.Enabled && Vector2.Distance(new(o.Position.X, o.Position.Y), p) < radius)
+            .OrderBy(o => Vector2.Distance(new(o.Position.X, o.Position.Y), p)).FirstOrDefault();
+
+    /// <summary>Le pompier peut-il agir sur cet objet ? (le technicien seul répare)</summary>
+    public bool CanWorkOn(Unit u, UsableObject o) => !u.IsVehicle && ((o.CanBeUsed && u.CanUse) || (o.CanBeRepaired && !o.Repaired && u.CanRepair));
+
+    /// <summary>Clic droit d'un pompier sur un objet utilisable : il y va et agit dessus.</summary>
+    public void UseObject(Unit u, UsableObject o)
+    {
+        if (!CanWorkOn(u, o))
+        {
+            u.Status = o.CanBeRepaired && !o.CanBeUsed ? "seul un technicien peut réparer cela" : "ne peut pas utiliser cet objet";
+            return;
+        }
+        u.Target = null; u.Opening = null; u.GoTo = null; u.GoToVehicle = null; u.Boarding = false;
+        u.UseTarget = o; u.ActionTimer = 0;
+        Vector2 me = new Vector2(u.Position.X, u.Position.Y); Vector2 at = new Vector2(o.Position.X, o.Position.Y);
+        if (Vector2.Distance(me, at) > ActionReach)
+        {
+            Vector2 spot = Walkable(at + Vector2.Normalize(me - at + new Vector2(0.01f, 0)) * 120);
+            if (!Order(u, spot, refuseUnreachable: false))
+            {
+                u.UseTarget = null;
+                u.Status = "ne peut pas atteindre l'objet";
+                return;
+            }
+        }
+        u.Status = o.CanBeRepaired && !o.CanBeUsed ? "va réparer" : "va utiliser l'objet";
+    }
+
+    /// <summary>IA_CmdUse(unité, objet) : porte (ouvre ou ferme) ou objet utilisable.</summary>
+    public void ScriptUse(Unit u, uint id)
+    {
+        if (Openings.FirstOrDefault(d => d.Id == id) is { } door)
+        {
+            WorkOnOpening(u, door);
+            return;
+        }
+        if (Usables.FirstOrDefault(o => o.Id == id) is { } obj)
+        {
+            bool was = obj.CanBeUsed;
+            obj.CanBeUsed = true;
+            UseObject(u, obj);
+            obj.CanBeUsed = was || obj.CanBeUsed;
+        }
+    }
+
+    /// <summary>ENT_SetCapacityTarget(objet, « COULDBEUSE » / « COULDBEBREAK » / « COULDBEREPAIR », 0/1).</summary>
+    public void SetCapacity(uint id, string capacity, bool on)
+    {
+        string cap = capacity.ToUpperInvariant();
+        if (Openings.FirstOrDefault(d => d.Id == id) is { } d)
+        {
+            if (cap == "COULDBEBREAK")
+                d.Breakable = on;
+            else if (cap == "COULDBEUSE")
+                d.Usable = on;
+            return;
+        }
+        UsableObject? o = Usables.FirstOrDefault(x => x.Id == id);
+        if (o == null)
+        {
+            LevelObject? lo = _s.Level.Objects.FirstOrDefault(x => x.Id == id);
+            if (lo == null)
+                return;
+            o = new UsableObject { Id = lo.Id, Name = lo.Name, Position = lo.Position };
+            if (lo.GetComponent(0xA027) is { } comp)
+                o.Actions.AddRange(ParseActions(lo.ComponentBytes(comp).ToArray()));
+            Usables.Add(o);
+        }
+        if (cap == "COULDBEUSE")
+            o.CanBeUsed = on;
+        else if (cap == "COULDBEREPAIR")
+        {
+            o.CanBeRepaired = on;
+            if (on)
+                o.Repaired = false;
+        }
+    }
+
+    public bool GetCapacity(uint id, string capacity)
+    {
+        string cap = capacity.ToUpperInvariant();
+        if (Openings.FirstOrDefault(d => d.Id == id) is { } d)
+            return cap == "COULDBEBREAK" ? d.Breakable : cap == "COULDBEUSE" && d.Usable;
+        if (Usables.FirstOrDefault(x => x.Id == id) is { } o)
+            return cap == "COULDBEUSE" ? o.CanBeUsed : cap == "COULDBEREPAIR" && o.CanBeRepaired && !o.Repaired;
+        return false;
+    }
+
+    // le pompier arrivé près de l'objet agit dessus pendant quelques secondes, puis le script de l'objet est appelé
+    private void WorkUsable(Unit u, float dt)
+    {
+        if (u.UseTarget is not { } o || u.Moving || u.OnBoard || u.Unconscious || u.InjuredTimer > 0)
+            return;
+        Vector2 me = new Vector2(u.Position.X, u.Position.Y); Vector2 at = new Vector2(o.Position.X, o.Position.Y);
+        if (Vector2.Distance(me, at) > ActionReach + 150)
+        {
+            u.UseTarget = null;
+            u.Status = "trop loin de l'objet";
+            return;
+        }
+        u.Heading = MathF.Atan2(at.Y - me.Y, at.X - me.X);
+        bool repair = o.CanBeRepaired && !o.Repaired && u.CanRepair && !o.CanBeUsed;
+        float need = repair ? RepairSeconds : UseObjectSeconds;
+        u.ActionTimer += dt;
+        u.Status = repair ? $"répare ({100 * u.ActionTimer / need:0} %)" : "utilise l'objet";
+        if (u.ActionTimer < need)
+            return;
+        u.ActionTimer = 0; u.UseTarget = null;
+        string kind = repair ? "repair" : "use";
+        List<(string action, string script)> candidates = o.Actions.Where(a => a.action.StartsWith(kind, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (candidates.Count == 0)
+            candidates = o.Actions;
+        (string action, string script)? act = candidates.Count > 0 ? candidates[o.Uses % candidates.Count] : ((string action, string script)?)null;
+        o.Uses++;
+        if (repair)
+            o.Repaired = true;
+        Sounds.Add((repair ? "SC_REPAIR" : "SC_USE_GENERIC", o.Position));
+        Log.Add($"{_s.Time,6:0} s : {(repair ? "réparation" : "action")} sur {o.Name}" + (act is { } a0 ? $" ({a0.script})" : ""));
+        u.Status = "attend les ordres";
+        if (act is { } a1)
+            _s.Scripts?.TryRun(a1.script, Value.I(u.Id), Value.I(o.Id), Value.T(a1.action));
+    }
+}

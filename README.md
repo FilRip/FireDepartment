@@ -37,26 +37,26 @@ Il faut le kit .NET 8 (ou plus récent) : https://dotnet.microsoft.com/download
 
 | Projet | Contenu |
 |---|---|
-| `FD3.Formats` | Modèles 3D (`.mesh`/`.meshdata`, `Mesh.cs`), matériaux `.stdmat`, archives `.pak`/`.bank` (zip « QL »), fichiers libres prioritaires, `.level`, `.grid`, classes `.class`/`.cfg`/`.mis` avec héritage, pièces (volumes `_ROOM` du décor) |
-| `FD3.Fire` | Simulation du feu, de la fumée et de l'extinction, sans affichage (voir `docs/MODELE_FEU.md`) |
-| `FD3.Script` | Interpréteur des scripts de mission `.scp` (analyse, exécution, appels différés) |
-| `FD3.Game` | Une partie : carte, feu, fumée, scripts de mission, unités qui arrosent |
-| `FD3.MG` | Le jeu, version MonoGame DesktopGL : 3D, carte, interface, personnages animés, sons, curseurs |
-| `FD3.EzTree` | Générateur d'arbres : portage en C# d'EZ-Tree 1.1 (licence MIT), utilisé par FD3.MG |
-| `FD3.Viewer` | Visualiseur vue de dessus dans le navigateur (serveur local) |
-| `FD3.Tools` | Outils en ligne de commande pour vérifier et comparer |
+| `OpenFD.Formats` | Modèles 3D (`.mesh`/`.meshdata`, `Mesh.cs`), matériaux `.stdmat`, archives `.pak`/`.bank` (zip « QL »), fichiers libres prioritaires, `.level`, `.grid`, classes `.class`/`.cfg`/`.mis` avec héritage, pièces (volumes `_ROOM` du décor) |
+| `OpenFD.Fire` | Simulation du feu, de la fumée et de l'extinction, sans affichage (voir `docs/MODELE_FEU.md`) |
+| `OpenFD.Script` | Interpréteur des scripts de mission `.scp` (analyse, exécution, appels différés) |
+| `OpenFD.Game` | Une partie : carte, feu, fumée, scripts de mission, unités qui arrosent |
+| `OpenFD.MG` | Le jeu, version MonoGame DesktopGL : 3D, carte, interface, personnages animés, sons, curseurs |
+| `OpenFD.EzTree` | Générateur d'arbres : portage en C# d'EZ-Tree 1.1 (licence MIT), utilisé par OpenFD.MG |
+| `OpenFD.Viewer` | Visualiseur vue de dessus dans le navigateur (serveur local) |
+| `OpenFD.Tools` | Outils en ligne de commande pour vérifier et comparer |
 
 ## Utilisation (.NET 8)
 
 ```
 dotnet build
-dotnet run --project src/FD3.Tools -- roundtrip "C:\Jeux\Fire Department 3\Data"
-dotnet run --project src/FD3.Tools -- simulate  "C:\Jeux\Fire Department 3\Data" London 15 NORMAL
-dotnet run --project src/FD3.Tools -- scripts   "C:\Jeux\Fire Department 3\Data"
-dotnet run --project src/FD3.Tools -- mission   "C:\Jeux\Fire Department 3\Data" Fireworks 4 EASY pieces=auto fumee=auto
-dotnet run --project src/FD3.Tools -- simulate  "C:\Jeux\Fire Department 3\Data" London 2.5 EASY pieces=auto sans-voisinage 3d "arroser=ground_l109@60.6-74"
-dotnet run --project src/FD3.Tools -- pieces    "C:\Jeux\Fire Department 3\Data" London pieces_London.json
-dotnet run --project src/FD3.Tools -- typesfeu  "C:\Jeux\Fire Department 3\Data"
+dotnet run --project src/OpenFD.Tools -- roundtrip "C:\Jeux\Fire Department 3\Data"
+dotnet run --project src/OpenFD.Tools -- simulate  "C:\Jeux\Fire Department 3\Data" London 15 NORMAL
+dotnet run --project src/OpenFD.Tools -- scripts   "C:\Jeux\Fire Department 3\Data"
+dotnet run --project src/OpenFD.Tools -- mission   "C:\Jeux\Fire Department 3\Data" Fireworks 4 EASY pieces=auto fumee=auto
+dotnet run --project src/OpenFD.Tools -- simulate  "C:\Jeux\Fire Department 3\Data" London 2.5 EASY pieces=auto sans-voisinage 3d "arroser=ground_l109@60.6-74"
+dotnet run --project src/OpenFD.Tools -- pieces    "C:\Jeux\Fire Department 3\Data" London pieces_London.json
+dotnet run --project src/OpenFD.Tools -- typesfeu  "C:\Jeux\Fire Department 3\Data"
 ```
 
 `simulate` affiche l'évolution minute par minute et écrit un fichier CSV (intensité de chaque
@@ -69,4 +69,4 @@ n'a pas accès à nuget.org). Supprimez-le sur votre machine quand nous ajoutero
 (plus besoin des scripts Python ni des fichiers JSON du dossier `tools`).
 
 La vue 3D utilise three.js 0.170 et EZ-Tree 1.1 (arbres réalistes générés, Daniel Greenheck), tous deux sous
-licence MIT, copiés dans `src/FD3.Viewer/wwwroot/lib`.
+licence MIT, copiés dans `src/OpenFD.Viewer/wwwroot/lib`.
