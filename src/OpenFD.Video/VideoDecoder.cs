@@ -5,7 +5,7 @@ namespace OpenFD.Video;
 
 /// <summary>
 /// Décodeur de vidéo (Bink .bik du jeu) : images RGBA et son 16 bits entrelacé, dans l'ordre du fichier.
-/// S'appuie sur la bibliothèque native « fd3video » (FFmpeg) ; si elle manque, <see cref="Open"/> renvoie null
+/// S'appuie sur la bibliothèque native « openfdvideo » (FFmpeg) ; si elle manque, <see cref="Open"/> renvoie null
 /// et le jeu continue sans vidéo.
 /// </summary>
 public sealed class VideoDecoder : IDisposable
@@ -48,7 +48,7 @@ public sealed class VideoDecoder : IDisposable
         }
         catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
         {
-            LastError = "bibliothèque vidéo fd3video absente : " + e.Message;
+            LastError = "bibliothèque vidéo openfdvideo absente : " + e.Message;
             return null;
         }
     }
@@ -98,7 +98,7 @@ public sealed class VideoDecoder : IDisposable
 
     private static unsafe class Native
     {
-        private const string Lib = "fd3video";
+        private const string Lib = "openfdvideo";
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] public static extern IntPtr fv_open(byte[] utf8Path);
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] public static extern void fv_close(IntPtr v);
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] public static extern int fv_width(IntPtr v);

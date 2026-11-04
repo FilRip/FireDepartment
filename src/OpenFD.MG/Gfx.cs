@@ -459,6 +459,37 @@ public sealed class Ui
         _hard = new Texture2D(gd, S, S); _hard.SetData(px);
     }
 
+    /// <summary>
+    /// Texte en italique : la police du jeu n'en a pas, chaque lettre est donc penchée (dessinée ligne de pixels par
+    /// ligne de pixels, le haut décalé vers la droite).
+    /// </summary>
+    public float TextItalic(float x, float y, string s, SN.Vector4 c, float scale = 0f, float slant = 0.22f)
+    {
+        if (scale <= 0)
+            scale = Scale;
+        float x0 = x;
+        Color col = c.C();
+        foreach (char ch in Font.Fit(s))
+        {
+            if (!Font.Glyphs.TryGetValue(ch, out Font.Glyph g))
+            {
+                x += Font.LineHeight / 3 * scale;
+                continue;
+            }
+            if (g.W > 1)
+                for (int row = 0; row < g.H; row++)
+                {
+                    // décalage : nul sur la ligne de base, croissant vers le haut de la lettre
+                    float lift = (Font.LineHeight - (g.Oy + row)) * scale * slant;
+                    int top = (int)MathF.Round(y + (g.Oy + row) * scale), bottom = (int)MathF.Round(y + (g.Oy + row + 1) * scale);
+                    _sb.Draw(Font.Texture, new Rectangle((int)MathF.Round(x + g.Ox * scale + lift), top, (int)(g.W * scale), Math.Max(1, bottom - top)),
+                        new Rectangle(g.X, g.Y + row, g.W, 1), col);
+                }
+            x += g.Adv * scale;
+        }
+        return x - x0;
+    }
+
     public float Text(float x, float y, string s, SN.Vector4 c, float scale = 0f)
     {
         if (scale <= 0)

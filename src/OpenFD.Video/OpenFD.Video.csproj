@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
-    Lecture des vidéos du jeu (Data\Video\*.bik, format Bink) : décodeur natif « fd3video » (FFmpeg minimal, LGPL),
+    Lecture des vidéos du jeu (Data\Video\*.bik, format Bink) : décodeur natif « openfdvideo » (FFmpeg minimal, LGPL),
     une bibliothèque par système dans runtimes\<système>\native. Pour porter le jeu sur un autre système, il suffit
-    de compiler native\fd3video pour lui (voir native\fd3video\LISEZMOI.md) : le code C# ne change pas.
+    de compiler native\OpenFDvideo pour lui (voir native\OpenFDvideo\LISEZMOI.md) : le code C# ne change pas.
   -->
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -11,8 +11,8 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
-    <None Include="runtimes\win-x64\native\fd3video.dll" Link="fd3video.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('runtimes\win-x64\native\fd3video.dll')" />
-    <None Include="runtimes\linux-x64\native\libfd3video.so" Link="libfd3video.so" CopyToOutputDirectory="PreserveNewest" Condition="Exists('runtimes\linux-x64\native\libfd3video.so')" />
-    <None Include="runtimes\osx-x64\native\libfd3video.dylib" Link="libfd3video.dylib" CopyToOutputDirectory="PreserveNewest" Condition="Exists('runtimes\osx-x64\native\libfd3video.dylib')" />
+    <None Include="runtimes\win-x64\native\openfdvideo.dll" Link="openfdvideo.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('runtimes\win-x64\native\openfdvideo.dll')" />
+    <None Include="runtimes\linux-x64\native\libopenfdvideo.so" Link="libopenfdvideo.so" CopyToOutputDirectory="PreserveNewest" Condition="Exists('runtimes\linux-x64\native\libopenfdvideo.so')" />
+    <None Include="runtimes\osx-x64\native\libopenfdvideo.dylib" Link="libopenfdvideo.dylib" CopyToOutputDirectory="PreserveNewest" Condition="Exists('runtimes\osx-x64\native\libopenfdvideo.dylib')" />
   </ItemGroup>
 </Project>
