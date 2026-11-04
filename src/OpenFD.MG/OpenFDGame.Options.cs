@@ -78,7 +78,7 @@ public sealed class GameplaySettings
 }
 
 // menu principal (lancer une mission, charger une sauvegarde, options, quitter) et écran des options
-public sealed partial class Fd3Game
+public sealed partial class OpenFDGame
 {
     private Settings _settings = new();
     private int _screen;          // 0 menu principal, 1 choix de la mission, 2 options, 3 pause, 4 sauvegardes

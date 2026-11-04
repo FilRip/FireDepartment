@@ -11,7 +11,7 @@ namespace OpenFD.MG;
 // Multijoueur (voir OpenFD.Multiplayer) : écrans du menu (6 : liste des serveurs et pseudo, 7 : serveur, 8 : client)
 // et partie en réseau. La simulation est la même chez tous : seuls les ordres des joueurs voyagent, chacun appliqué
 // au même pas de simulation partout (le serveur donne ce pas). Chaque joueur garde sa caméra et sa sélection.
-public sealed partial class Fd3Game
+public sealed partial class OpenFDGame
 {
     private NetSession? _net;
     private bool _netGame;                       // une partie en réseau est en cours (briefing compris)
@@ -69,8 +69,6 @@ public sealed partial class Fd3Game
             Replay(e);
             if (who != null && before is { } b && !b.Equals(Feedback(who)) && !RefusedStatus(who.Status))
                 _netAck = true;
-            if (Environment.GetEnvironmentVariable("FD3_NET_HOST") != null || Environment.GetEnvironmentVariable("FD3_NET_JOIN") != null)
-                Console.WriteLine($"ESSAI réseau : ordre {c} appliqué ; joueur {c.Player}/{_net.MyId}, unité {who?.Name}, avant {before}, après {(who != null ? Feedback(who) : null)}");
         }
         finally
         {
@@ -240,7 +238,7 @@ public sealed partial class Fd3Game
                     _audio?.StopAll();
                 }
                 _briefWaiting = false;
-                StartNetMission();
+                n.MissionLoaded();   // mission chargée avant le briefing : le serveur peut compter sur ce joueur
                 break;
             case NetEventKind.Desync:
                 Console.WriteLine($"Réseau : {e.Text} n'a plus le même état au pas {e.Step} : la partie lui est renvoyée");
@@ -296,7 +294,7 @@ public sealed partial class Fd3Game
         }
     }
 
-    /// <summary>La mission démarre chez ce joueur (après le briefing).</summary>
+    /// <summary>La mission se charge chez ce joueur (avant le briefing) ; elle commence quand le serveur la lance.</summary>
     private void StartNetMission()
     {
         NetSession n = _net!;
@@ -317,7 +315,6 @@ public sealed partial class Fd3Game
             _loadNat = null;
         }
         _paused = false;
-        n.MissionLoaded();
         Log(n.IsServer ? "Partie en réseau : en attente des autres joueurs…" : "Partie en réseau : " + n.ServerName);
     }
 

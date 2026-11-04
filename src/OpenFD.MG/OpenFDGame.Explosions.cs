@@ -5,7 +5,7 @@ using SN = System.Numerics;
 namespace OpenFD.MG;
 
 // explosions : objets explosifs dessinés selon leur état (intact, abîmé, épave), boule de feu et fumée, son, secousse
-public sealed partial class Fd3Game
+public sealed partial class OpenFDGame
 {
     private readonly List<(ExplosiveItem item, string model, SN.Matrix4x4 world)> _explosives = new();
     private readonly Dictionary<(string model, string state), List<(MeshGpu mesh, SN.Matrix4x4 part)>> _stateModels = new();

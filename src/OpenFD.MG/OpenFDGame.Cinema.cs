@@ -12,7 +12,7 @@ namespace OpenFD.MG;
 //  • SND_PlaySound2D : voix off (Data\Sound\Vocal) ;
 //  • CAM_ModePlay : fin, le joueur reprend la main là où la caméra s'est arrêtée.
 // Pendant la cinématique : bandes noires, pas d'interface ; Échap ou Entrée la passe.
-public sealed partial class Fd3Game
+public sealed partial class OpenFDGame
 {
     private Localization? _loc;
     private bool _cineOn;                                  // cinématique en cours (vue du jeu)

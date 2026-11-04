@@ -11,7 +11,7 @@ namespace OpenFD.MG;
 // [CAMPAIGNn_MISSIONm]). Flèches en haut à gauche et à droite (BUT_PREVIOUS_CAMPAIGN / BUT_NEXT_CAMPAIGN) pour passer
 // d'une mission à l'autre ; à gauche le pays, le nom et l'image de la mission (GameGraphicDB2.Ini), à droite le texte de
 // la mission (StoryTextKey du fichier .mis, dans MISSION_xxx.loc) ; en bas à droite « Démarrer ».
-public sealed partial class Fd3Game
+public sealed partial class OpenFDGame
 {
     private sealed record CampaignPage(int Number, string Dir, string CampaignKey, string NameKey, string? ImageFile, int ImageW, int ImageH,
         string? Background, string? StoryTitleKey, string? StoryKey, string? Briefing);

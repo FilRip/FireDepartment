@@ -5,7 +5,7 @@ namespace OpenFD.MG;
 
 // liaison d'eau : un camion à lance garé à portée d'une bouche d'incendie (ResupplyRadius, 20 m) est relié à elle par une
 // ligne de petites flèches vertes posées sur le sol, de la bouche vers le camion, qui défilent doucement
-public sealed partial class Fd3Game
+public sealed partial class OpenFDGame
 {
     // débogage (touche D) : portée où chaque pompier repère un feu (vert), portée de propagation de chaque feu (orange)
     private bool _debugAi = Environment.GetEnvironmentVariable("FD3_DEBUG_IA") != null;

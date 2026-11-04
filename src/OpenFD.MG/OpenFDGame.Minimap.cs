@@ -9,7 +9,7 @@ namespace OpenFD.MG;
 // mini-carte en bas à gauche, comme dans le jeu : image vue de dessus de la mission ([MISSION] Minimap du fichier .mis,
 // par exemple « eng_bank_minimap » pour London), feux, unités, civils et champ de la caméra (trapèze jaune).
 // Clic gauche (ou glisser) : la vue va à cet endroit ; clic droit : les unités choisies y vont.
-public sealed partial class Fd3Game
+public sealed partial class OpenFDGame
 {
     private Texture2D? _miniTex; private Rectangle _miniSrc;   // image et partie utile (la carte occupe le haut à gauche de l'image)
     private bool _dragMini;

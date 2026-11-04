@@ -7,7 +7,7 @@ namespace OpenFD.MG;
 // ses portes ouverte ou cassée (ou l'ouvre). La touche T enlève ou remet tous les toits (essais).
 // Bâtiment = maillages du décor regroupés quand l'un est presque entièrement dans l'emprise de l'autre
 // (London : « Bank_fasad », « Bank_fasad_ROOF », « Bank_ROOM… », « roof_bank_glass » forment la banque).
-public sealed partial class Fd3Game
+public sealed partial class OpenFDGame
 {
     private sealed class Building { public SN.Vector2 Min, Max; public float MinZ = float.MaxValue; public readonly List<string> Nodes = new(); public bool Open; }
     private readonly List<Building> _buildings = new();

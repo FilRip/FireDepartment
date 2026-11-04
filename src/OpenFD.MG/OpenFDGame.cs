@@ -12,7 +12,7 @@ namespace OpenFD.MG;
 /// Le jeu (MonoGame) : chargement d'une mission, simulation, rendu 3D et carte, interface.
 /// La logique (feu, fumée, unités, portes…) est celle des bibliothèques OpenFD.Fire / OpenFD.Game, inchangée.
 /// </summary>
-public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
+public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
 {
     private readonly GraphicsDeviceManager _gdm;
     private readonly GameFiles _files;
@@ -63,7 +63,7 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
     public const float ModelYaw = MathF.PI / 2;    // les véhicules regardent vers −Y (comme les personnages)
     public const float CharYaw = MathF.PI / 2;     // les personnages (squelette Biped) regardent vers −Y
 
-    public Fd3Game(GameFiles files, string mission, string difficulty)
+    public OpenFDGame(GameFiles files, string mission, string difficulty)
     {
         _files = files; _assets = new SceneAssets(files); _mission = mission; _difficulty = difficulty;
         _gdm = new GraphicsDeviceManager(this)

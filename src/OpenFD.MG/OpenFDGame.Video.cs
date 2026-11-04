@@ -6,7 +6,7 @@ namespace OpenFD.MG;
 
 // vidéos du jeu : Data\Video\intro.bik au démarrage (Échap, Entrée, Espace ou clic pour passer), puis
 // Data\Video\menu.bik en boucle derrière les menus (à la place de l'image de fond)
-public sealed partial class Fd3Game
+public sealed partial class OpenFDGame
 {
     private VideoScreen? _intro, _menuVideo;
     private bool _introDone;

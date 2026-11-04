@@ -8,7 +8,7 @@ using SN = System.Numerics;
 namespace OpenFD.MG;
 
 // menu de démarrage (choix de la mission et de la difficulté), objectifs de la mission, écran de victoire ou de défaite
-public sealed partial class Fd3Game
+public sealed partial class OpenFDGame
 {
     public bool StartMenu;
     private bool _menu, _ended;

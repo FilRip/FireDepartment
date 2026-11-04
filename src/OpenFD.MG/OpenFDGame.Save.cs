@@ -35,7 +35,7 @@ public sealed class SavedGame
 // La simulation est déterministe : la sauvegarde garde la mission et les ordres du joueur (avec le moment où il les a
 // donnés) ; le chargement rejoue la mission depuis le début, sans l'afficher, jusqu'au moment de la sauvegarde. Tout
 // (feux, fumée, portes cassées, civils, scripts, objectifs) revient donc exactement comme il était.
-public sealed partial class Fd3Game
+public sealed partial class OpenFDGame
 {
     private List<JournalEntry> _journal = new();
     private bool _replaying;
