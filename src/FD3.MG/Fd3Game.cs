@@ -1456,7 +1456,7 @@ public sealed partial class Fd3Game : Microsoft.Xna.Framework.Game
                     _ui.Rect(bp.X - bw / 2 - 2 * _scale, bp.Y - 2 * _scale, bw + 4 * _scale, 10 * _scale, new SN.Vector4(0, 0, 0, 0.7f));
                     _ui.Rect(bp.X - bw / 2, bp.Y, bw * k, 6 * _scale, new SN.Vector4(1 - k, 0.3f + 0.6f * k, 0.2f, 1));
                 }
-        if (_log.Count > 0)
+        if (_log.Count > 0 && _debugAi)   // journal (feux, arrivées, explosions…) : seulement avec les infos de débogage (touche D)
         {
             // journal : à droite de la mini-carte
             float lx = MiniVisible ? MiniRect().x + MiniRect().w + 3 * _scale + m : m;
