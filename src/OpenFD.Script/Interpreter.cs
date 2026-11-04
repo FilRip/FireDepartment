@@ -49,7 +49,9 @@ public interface IScriptHost
     Value? Call(string name, IReadOnlyList<Arg> args);
 }
 
-public sealed class ScriptError(string message) : Exception(message);
+public class ScriptError(string message) : Exception(message);
+/// <summary>Erreur qui doit arrêter toute la fonction (boucle infinie, récursion) : on ne passe pas à la ligne suivante.</summary>
+public sealed class ScriptAbort(string message) : ScriptError(message);
 
 public sealed class Interpreter
 {
@@ -107,7 +109,7 @@ public sealed class Interpreter
     private Value Invoke(string name, Value[] args, int depth)
     {
         if (depth > 200)
-            throw new ScriptError("récursion trop profonde");
+            throw new ScriptAbort("récursion trop profonde");
         if (!_functions.TryGetValue(name, out Function? f))
             throw new ScriptError($"fonction de script inconnue « {name} »");
         Frame fr = new Frame();
@@ -116,15 +118,52 @@ public sealed class Interpreter
             (string? ty, string? pn) = f.Params[i];
             fr.Vars[pn] = (ty, Value.Convert(ty, i < args.Length ? args[i] : Value.Zero));
         }
-        try { Exec(f.Body, fr, depth); }
-        catch (ReturnSignal r) { return Value.Convert(f.ReturnType, r.V); }
+        string caller = _current;
+        _current = f.Name;
+        try
+        {
+            Exec(f.Body, fr, depth);
+        }
+        catch (ReturnSignal r)
+        {
+            return Value.Convert(f.ReturnType, r.V);
+        }
+        finally
+        {
+            _current = caller;
+        }
         return Value.Zero;
     }
 
     private void Tick()
     {
         if (++_steps > StepBudget)
-            throw new ScriptError("boucle trop longue (arrêtée)");
+            throw new ScriptAbort("boucle trop longue (arrêtée)");
+    }
+
+    /// <summary>Fonction en cours d'exécution, pour situer les erreurs dans le journal.</summary>
+    private string _current = "";
+
+    /// <summary>Exécute une instruction d'un bloc ; en cas d'erreur, la note dans le journal et passe à l'instruction suivante,
+    /// comme le moteur d'origine qui ne s'arrête pas sur une erreur d'exécution.</summary>
+    private void ExecSafe(Stmt x, Frame fr, int depth)
+    {
+        try
+        {
+            Exec(x, fr, depth);
+        }
+        catch (ScriptAbort)
+        {
+            throw;
+        }
+        catch (ScriptError e)
+        {
+            Log.Add($"[{Host.GameTime:0.0}] {_current} : {e.Message}");
+        }
+        catch (Exception e) when (e is not ReturnSignal)
+        {
+            Log.Add($"[{Host.GameTime:0.0}] {_current} : erreur interne ({e.GetType().Name} : {e.Message})");
+        }
     }
 
     private void Exec(Stmt s, Frame fr, int depth)
@@ -132,7 +171,7 @@ public sealed class Interpreter
         Tick();
         switch (s)
         {
-            case Block b: foreach (Stmt x in b.Body) Exec(x, fr, depth); break;
+            case Block b: foreach (Stmt x in b.Body) ExecSafe(x, fr, depth); break;
             case Decl d:
                 foreach ((string? n, Expr? init) in d.Vars)
                     fr.Vars[n] = (d.Type, Value.Convert(d.Type, init == null ? (d.Type == "mcString" ? Value.T("") : Value.Zero) : Eval(init, fr, depth)));

@@ -197,6 +197,7 @@ public sealed partial class OpenFDGame
         }
         _session.Units.Sounds.Clear(); _session.Explosions.Happened.Clear();
         _unitLogSeen = _session.Units.Log.Count;
+        _scriptLogSeen = _session.Scripts?.Log.Count ?? 0;
         _audio?.StopAll();
         if (g.Camera.Length == 6)
         {

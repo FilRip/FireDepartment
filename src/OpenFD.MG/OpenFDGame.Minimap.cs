@@ -169,6 +169,7 @@ public sealed partial class OpenFDGame
 
     // ---- bouton « i » au-dessus de la mini-carte (WID_MAP_BUT_AREA.png) : affiche ou cache le panneau des objectifs ----
     private bool _showObjectives = true;
+    private bool _showMessageHistory;
     private const int IconW = 54, IconH = 26;   // partie utile de l'icône (le bas de la bande est vide)
 
     private (float x, float y, float s) ObjButton()
@@ -202,6 +203,7 @@ public sealed partial class OpenFDGame
         if (sx < x || sy < y || sx > x + s * IconW / IconH || sy > y + s)
             return false;
         _showObjectives = !_showObjectives;
+        _showMessageHistory = _showObjectives;   // le bouton « I » réaffiche aussi les derniers messages de la mission
         return true;
     }
 

@@ -815,6 +815,8 @@ public sealed partial class UnitManager
             tn.Reserve -= give;
         }
         n.Reserve += give;
+        if (n.Reserve > n.ReserveMax - 0.01f)
+            n.Reserve = n.ReserveMax;   // valeur exacte : les scripts comparent avec « == » (tutoriel, étape 8)
         if (!asked && u.Status.StartsWith("attend"))
             u.Status = $"se recharge ({n.Reserve:0}/{n.ReserveMax:0})";
     }

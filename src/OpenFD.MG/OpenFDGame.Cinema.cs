@@ -20,6 +20,43 @@ public sealed partial class OpenFDGame
     private double _cineT0; private float _cineDur; private bool _cineMoving;
     private float _cineBars;                               // 0 → 1 : hauteur des bandes noires (apparition en douceur)
     private string? _subtitle;
+    // panneau des messages des scripts (PNL_AddMessage) : texte et heure de la partie où il est apparu
+    private readonly List<(string text, double at)> _messages = new();
+    private const int MaxMessages = 6;
+    private const double MessageLife = 14;
+
+    /// <summary>Messages des scripts, en bas, à droite de la mini-carte : les nouveaux s'effacent après quelques secondes ;
+    /// le bouton « I » (au-dessus de la mini-carte) réaffiche les 6 derniers.</summary>
+    private void RenderMessages()
+    {
+        if (_session == null || _messages.Count == 0)
+            return;
+        double now = _session.Time;
+        bool history = _showMessageHistory && MiniVisible;
+        float maxW = MathF.Min(640 * _scale, _fbW * 0.45f), pad = 10 * _scale, lh = _ui.LineHeight + 3 * _scale, m = 12 * _scale;
+        List<(string s, float a)> rows = new List<(string s, float a)>();
+        foreach ((string text, double at) in _messages)
+        {
+            float a = history ? 1 : (float)Math.Clamp((MessageLife - (now - at)) / 1.5, 0, 1);   // fondu pendant la dernière seconde et demie
+            if (a <= 0)
+                continue;
+            foreach (string l in Wrap(text, maxW - 2 * pad, _scale))
+                rows.Add((l, a));
+        }
+        if (rows.Count == 0)
+            return;
+        float w = MathF.Min(maxW, rows.Max(r => _ui.Measure(r.s)) + 2 * pad), hgt = rows.Count * lh + 2 * pad;
+        float x = MiniVisible ? MiniRect().x + MiniRect().w + 3 * _scale + m : m;
+        float y = _fbH - hgt - m - SelectionPanelHeight;   // au-dessus du panneau des unités choisies
+        float alpha = rows.Max(r => r.a);
+        _ui.Rect(x, y, w, hgt, new SN.Vector4(0.09f, 0.09f, 0.11f, 0.85f * alpha));
+        y += pad;
+        foreach ((string l, float a) in rows)
+        {
+            _ui.Text(x + pad, y, l, new SN.Vector4(1f, 0.96f, 0.85f, a));
+            y += lh;
+        }
+    }
 
     private MissionHost? Host => _session?.Host;
 
@@ -58,7 +95,22 @@ public sealed partial class OpenFDGame
         _loc ??= Localization.Load(_files.DataDir);
         foreach (string s in h.Sounds2D) _audio?.Play(s);
         h.Sounds2D.Clear();
-        foreach (string m in h.Messages) Log(_loc.Get(m));
+        if (h.MessagesCleared)
+        {
+            _messages.Clear();
+            h.MessagesCleared = false;
+        }
+        foreach ((string vocal, string text, float mx, float my) in h.Messages)
+        {
+            // PNL_AddMessage : la voix (si elle existe) et le texte dans le panneau des messages, toujours visible
+            if (vocal.Length > 0)
+                _audio?.Play(vocal);
+            string shown = _loc.Get(text.Length > 0 ? text : vocal);
+            _messages.Add((shown, _session!.Time));
+            if (_messages.Count > MaxMessages)
+                _messages.RemoveAt(0);
+            Log(shown);
+        }
         h.Messages.Clear();
         _subtitle = h.Subtitle != null ? _loc.Get(h.Subtitle) : null;
 

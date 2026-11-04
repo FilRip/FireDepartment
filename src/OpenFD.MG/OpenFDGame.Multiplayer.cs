@@ -156,9 +156,7 @@ public sealed partial class OpenFDGame
         }
         foreach (string l in _session.Fire.ExtinguishLog.Skip(before))
             Log("Éteint : " + l.Trim());
-        List<string> ul = _session.Units.Log;
-        for (; _unitLogSeen < ul.Count; _unitLogSeen++)
-            Log(ul[_unitLogSeen].Trim());
+        PullLogs();
     }
 
     // un pas : les ordres de ce pas, l'empreinte de contrôle, puis la simulation

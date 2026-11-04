@@ -884,6 +884,31 @@ public static class Program
                 Console.WriteLine($"{args[2]} : {seen.Count(b => b)} cases atteintes ; {rooms.Count} zones B, {miss.Count} jamais atteintes : " + string.Join(" ", miss.Select(r => $"{r.Key}({r.Count()}c @{(r.First() % g.Width) * 100},{(r.First() / g.Width) * 100})").Take(25)));
                 return 0;
             }
+            case "journalscript":
+            {
+                // journalscript <Data> <Mission> <secondes> : erreurs des scripts et objectifs pendant la partie
+                Session ses = new Session(files, args[2], "EASY");
+                for (int i = 0; i < (int)(float.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture) / Session.Dt); i++)
+                {
+                    ses.Step();
+                    if (ses.Host?.Cinematic == true && i % 50 == 0)
+                        ses.Host.EndCinematic();
+                }
+                foreach (string l in ses.Scripts!.Log)
+                    Console.WriteLine("script : " + l);
+                foreach (OpenFD.Game.MissionHost.Objective o in ses.Host!.Objectives)
+                    Console.WriteLine($"objectif : {o.Text} {o.Status}");
+                // journalscript … <secondes> "<expression de script>" : valeur d'une expression à la fin
+                if (args.Length > 4)
+                {
+                    ses.Scripts.Load(OpenFD.Script.Parser.ParseFile("float __Eval() { return " + args[4] + "; }", "eval"));
+                    Console.WriteLine($"{args[4]} = {ses.Scripts.TryRun("__Eval")?.AsNum}");
+                    foreach (string l in ses.Scripts.Log)
+                        Console.WriteLine("script : " + l);
+                }
+                Console.WriteLine("texte : " + OpenFD.Game.Localization.Load(files.DataDir).Get("&Tuto_Texte_3_1_1"));
+                return 0;
+            }
             case "traverse":
             {
                 // traverse <Data> <Mission> <porte> x y : la porte s'ouvre, tous les pompiers vont en (x,y) ; cases interdites traversées
