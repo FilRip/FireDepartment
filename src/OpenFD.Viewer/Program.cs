@@ -195,7 +195,8 @@ public static class Program
             W(a.Uv0);
             if (a.Uv1 != null)
                 W(a.Uv1);
-            foreach (uint i in m.Indices) bw.Write(i);
+            foreach (uint i in m.Indices)
+                bw.Write(i);
             return ms.ToArray();
         }), "application/octet-stream"));
 

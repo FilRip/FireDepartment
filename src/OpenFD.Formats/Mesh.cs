@@ -34,12 +34,14 @@ public sealed class Mesh
         int p = 4;
         int ni = BitConverter.ToInt32(mesh, p); p += 4;
         m.Indices = new uint[ni];
-        for (int i = 0; i < ni; i++) m.Indices[i] = BitConverter.ToUInt16(mesh, p + 2 * i);
+        for (int i = 0; i < ni; i++)
+            m.Indices[i] = BitConverter.ToUInt16(mesh, p + 2 * i);
         p += 2 * ni;
         string Str() { int l = BitConverter.ToInt32(mesh, p); string s = Encoding.ASCII.GetString(mesh, p + 4, Math.Max(0, l - 1)); p += 4 + l; return s; }
         int nm = BitConverter.ToInt32(mesh, p); p += 4;
         List<string> mats = new List<string>();
-        for (int i = 0; i < nm; i++) mats.Add(Str());
+        for (int i = 0; i < nm; i++)
+            mats.Add(Str());
         int nr = BitConverter.ToInt32(mesh, p); p += 4;
         for (int i = 0; i < nr; i++)
         {
@@ -70,17 +72,23 @@ public sealed class Mesh
             m.Positions[3 * i + 2] = mz + q[2][i] / 65535f * ez;
         }
         byte[][] bytes = new byte[9][];
-        for (int k = 0; k < 9; k++) { bytes[k] = d.AsSpan(p + 4, n).ToArray(); p += 4 + n; }
+        for (int k = 0; k < 9; k++)
+        {
+            bytes[k] = d.AsSpan(p + 4, n).ToArray();
+            p += 4 + n;
+        }
         m.Normals = new float[3 * n];
         for (int i = 0; i < n; i++)
-            for (int k = 0; k < 3; k++) m.Normals[3 * i + k] = bytes[k][i] / 127.5f - 1f;
+            for (int k = 0; k < 3; k++)
+                m.Normals[3 * i + k] = bytes[k][i] / 127.5f - 1f;
         for (int s = 0; s < 8; s++)
         {
             int c = BitConverter.ToInt32(d, p); p += 4;
             if (c == 0)
                 continue;
             float[] uv = new float[2 * c];
-            for (int i = 0; i < 2 * c; i++) uv[i] = (float)BitConverter.ToHalf(d, p + 2 * i);
+            for (int i = 0; i < 2 * c; i++)
+                uv[i] = (float)BitConverter.ToHalf(d, p + 2 * i);
             m.Uv[s] = uv; p += 4 * c;
         }
         if (p + 4 <= d.Length)
@@ -99,34 +107,5 @@ public sealed class Mesh
             }
         }
         return m;
-    }
-}
-
-/// <summary>Matériau (.stdmat) : on en retient le nom et les textures dans l'ordre (la première = couleur).</summary>
-public sealed class Material
-{
-    public string Name = "";
-    public List<string> Textures = new();
-    public string? Diffuse => Textures.FirstOrDefault(t => !t.Contains("lightmap", StringComparison.OrdinalIgnoreCase));
-    public string? Lightmap => Textures.FirstOrDefault(t => t.Contains("lightmap", StringComparison.OrdinalIgnoreCase));
-
-    public static Material Load(byte[] d, string name)
-    {
-        Material mat = new Material { Name = name };
-        // chaînes préfixées par leur longueur, terminées par 0 ; les textures finissent par .tga/.dds
-        for (int i = 0; i + 8 < d.Length; i++)
-        {
-            int l = BitConverter.ToInt32(d, i);
-            if (l < 5 || l > 200 || i + 4 + l > d.Length || d[i + 3 + l] != 0)
-                continue;
-            string s = Encoding.ASCII.GetString(d, i + 4, l - 1);
-            if (s.Any(c => c < 32 || c > 126))
-                continue;
-            string low = s.ToLowerInvariant();
-            if ((low.EndsWith(".tga") || low.EndsWith(".dds") || low.EndsWith(".bmp")) && (mat.Textures.Count == 0 || mat.Textures[^1] != s))
-                mat.Textures.Add(s);
-            i += 3 + l;
-        }
-        return mat;
     }
 }

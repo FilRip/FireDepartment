@@ -367,12 +367,14 @@ public sealed partial class OpenFDGame
                     Log("Ce véhicule n'a pas de place");
                     return;
                 }
-                foreach (Unit u in walkers) DoBoard(u, veh);
+                foreach (Unit u in walkers)
+                    DoBoard(u, veh);
                 Log($"{walkers.Count} pompier(s) vont monter à bord ({veh.Seats - veh.Passengers.Count} place(s) libre(s))");
                 return;
             }
             // clic droit : aller au véhicule (y déposer les civils qui suivent, s'y recharger en eau)
-            foreach (Unit u in walkers) DoGoToVehicle(u, veh);
+            foreach (Unit u in walkers)
+                DoGoToVehicle(u, veh);
             Log(veh.IsAmbulance && walkers.Any(u => _session.Units.Civilians.Any(c => c.Leader == u)) ? "Direction l'ambulance"
                 : veh.ResupplyPower > 0 ? "Direction le camion pour remplir l'eau" : "Direction le véhicule");
             return;
@@ -419,7 +421,11 @@ public sealed partial class OpenFDGame
         if (fire != null)
         {
             int n = 0;
-            foreach (Unit u in _sel.Where(u => u.Nozzle != null)) { DoAttack(u, fire); n++; }
+            foreach (Unit u in _sel.Where(u => u.Nozzle != null))
+            {
+                DoAttack(u, fire);
+                n++;
+            }
             Log(n > 0 ? $"{n} unité(s) envoyée(s) sur {fire.Name}" : "Ces unités ne peuvent pas éteindre un feu");
             return;
         }
@@ -733,8 +739,10 @@ public sealed partial class OpenFDGame
         float scale = _scale;
         _cursorScale = scale;
         int size = Math.Max(16, (int)MathF.Round(32 * scale));
-        foreach (MouseCursor c in _cursors.Values) c.Dispose();
-        foreach (Texture2D t in _cursorTex) t.Dispose();
+        foreach (MouseCursor c in _cursors.Values)
+            c.Dispose();
+        foreach (Texture2D t in _cursorTex)
+            t.Dispose();
         _cursors.Clear(); _cursorTex.Clear(); _cur = (Cur)(-1);
         foreach (Cur c in Enum.GetValues<Cur>())
         {

@@ -148,7 +148,8 @@ public sealed class TreeGenerator
     {
         _rng = new Rng(O.Seed);
         _queue.Enqueue(new Branch(Vector3.Zero, Vector3.Zero, O.Length[0], O.Radius[0], 0, O.Sections[0], O.Segments[0]));
-        while (_queue.Count > 0) GenerateBranch(_queue.Dequeue());
+        while (_queue.Count > 0)
+            GenerateBranch(_queue.Dequeue());
         ComputeLeafNormals();
     }
 
@@ -298,6 +299,10 @@ public sealed class TreeGenerator
             Vector3 f = Vector3.Cross(P(c) - P(b), P(a) - P(b));
             n[a] += f; n[b] += f; n[c] += f;
         }
-        foreach (Vector3 v in n) { Vector3 u = v.LengthSquared() > 0 ? Vector3.Normalize(v) : Vector3.UnitY; LeafNrm.AddRange(new[] { u.X, u.Y, u.Z }); }
+        foreach (Vector3 v in n)
+        {
+            Vector3 u = v.LengthSquared() > 0 ? Vector3.Normalize(v) : Vector3.UnitY;
+            LeafNrm.AddRange(new[] { u.X, u.Y, u.Z });
+        }
     }
 }

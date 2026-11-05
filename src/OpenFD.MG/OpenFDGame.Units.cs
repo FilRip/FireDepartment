@@ -182,8 +182,10 @@ public sealed partial class OpenFDGame
 
     private void SnapshotPoses()
     {
-        foreach (Unit u in _session.Units.Active) _prevPose[u] = (u.Position, u.Heading);
-        foreach (Civilian c in _session.Units.Civilians) _prevPose[c] = (c.Position, c.Heading);
+        foreach (Unit u in _session.Units.Active)
+            _prevPose[u] = (u.Position, u.Heading);
+        foreach (Civilian c in _session.Units.Civilians)
+            _prevPose[c] = (c.Position, c.Heading);
     }
 
     private (SN.Vector3 p, float h) PoseOf(object o, SN.Vector3 p, float h)
@@ -294,12 +296,14 @@ public sealed partial class OpenFDGame
             SN.Matrix4x4 w = world;
             if (Host?.MovedObjects.TryGetValue(id, out SN.Vector2 mv) == true)
                 w.Translation += new SN.Vector3(mv.X - origin.X, mv.Y - origin.Y, 0);
-            foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(model)) DrawMesh(mesh, (part * w).X());
+            foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(model))
+                DrawMesh(mesh, (part * w).X());
         }
         if (Host is { } hv)
             foreach ((uint id, string? model, SN.Matrix4x4 world) in _scriptShown)
                 if (hv.Visibility.TryGetValue(id, out bool vis) && vis)
-                    foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(model)) DrawMesh(mesh, (part * world).X());
+                    foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(model))
+                        DrawMesh(mesh, (part * world).X());
         foreach (Unit u in _session.Units.Active.Where(u => u.IsVehicle || stillUnits.Contains(u)))
         {
             _charred = u.Destroyed;
@@ -326,7 +330,8 @@ public sealed partial class OpenFDGame
             _audio.ExtraDistance = _dist * 0.35f;
         }
         List<(string label, SN.Vector3? pos)> ev = _session.Units.Sounds;
-        foreach ((string? label, SN.Vector3? pos) in ev.Distinct().Take(4)) _audio.Play(label, pos);
+        foreach ((string? label, SN.Vector3? pos) in ev.Distinct().Take(4))
+            _audio.Play(label, pos);
         ev.Clear();
         if (!_paused)
         {

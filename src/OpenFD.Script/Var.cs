@@ -1,0 +1,6 @@
+using System.Globalization;
+using System.Text;
+
+namespace OpenFD.Script;
+
+public sealed record Var(int Line, string Name) : Expr(Line);

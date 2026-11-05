@@ -119,7 +119,8 @@ public sealed partial class UnitManager
             List<Unit> saved = v.Passengers.ToList();
             UnloadPassengers(v);
             if (v.Passengers.Count > 0)
-                foreach (Unit p in saved) { p.InVehicle = null; }
+                foreach (Unit p in saved)
+                    p.InVehicle = null;
             v.Passengers.Clear();
         }
         Sounds.Add(("VOCAL_VEHICLE_KILLED", v.Position));

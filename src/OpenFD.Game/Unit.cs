@@ -1,0 +1,81 @@
+using System.Numerics;
+using OpenFD.Fire;
+using OpenFD.Formats;
+
+namespace OpenFD.Game;
+
+/// <summary>Une unité du joueur : véhicule ou pompier (classes Design\Unit\…).</summary>
+public sealed class Unit
+{
+    public required int Id { get; init; }
+    public required string Name { get; init; }
+    public required string ClassPath { get; init; }     // « Fireman\fireman_sp »
+    public required string Model { get; init; }         // chemin Gfx du modèle 3D
+    public required bool IsVehicle { get; init; }
+    public Vector3 Position;
+    public float Heading;                                 // radians, 0 = vers +X
+    public float Speed;                                   // unités par seconde
+    public Extinguisher? Nozzle;                          // lance (pompiers, médecin)
+    public bool HasHose;                                  // (non utilisé : le jeu n'a pas de tuyaux)
+    public bool CanHeal;                                  // médecin : peut réanimer un civil inconscient
+    public float ResupplyPower;                           // véhicule : eau rendue par seconde aux pompiers (0 = aucune)
+    public bool IsAmbulance;
+    public Civilian? GoTo;                                // civil vers lequel l'unité se dirige
+    public Civilian? Carrying;                            // civil inconscient porté sur le dos
+    public CarryPhase Carry;
+    public float CarryTimer;
+    public Unit? GoToVehicle;                             // véhicule vers lequel l'unité se dirige (remplir, déposer des civils)
+    public float HealTimer;
+    public bool CanBreak, CanUse;                         // hache (portes, fenêtres) ; ouvrir une porte
+    public bool CanGrapple;                               // grappin ([CAPACITIES_ACTIONS] CanGrapplin : le « scout »)
+    public float ClimbSpeed = 133;                        // [MOVING] ClimbGrapplinSpeed (unités par seconde)
+    public ClimbPhase Climb;                              // passage d'un mur au grappin (voir Grapple.cs)
+    public float ClimbTimer;
+    public Vector3 ClimbFrom, ClimbWall, ClimbTo, ClimbAnchor;   // ancre : là où le grappin est accroché (corde)
+    public GrapplePoint? ClimbGrapple;
+    public bool CanRepair;                                // technicien : répare les objets CouldBeRepair
+    public UsableObject? UseTarget;                       // objet sur lequel agir (armoire électrique…)
+    public float BreakPower = 1;
+    public Opening? Opening;                              // porte ou fenêtre à casser / ouvrir
+    public bool OpeningBreak;
+    public float ActionTimer;
+    public int Blows;                                     // coups de hache donnés (affichage)
+    public readonly Queue<Vector2> Path = new();
+    public HotPoint? Target;                              // feu à éteindre
+    public string Status = "";
+    public bool Moving => Path.Count > 0;
+    /// <summary>Blessé (backdraft, explosion) : au sol, ne peut rien faire pendant ce temps (s).</summary>
+    public float InjuredTimer;
+    public int Wounds;
+    /// <summary>Inconscient (backdraft) : reste au sol jusqu'à ce qu'un autre pompier le ranime.</summary>
+    public bool Unconscious;
+    public Unit? ReviveTarget;                            // collègue inconscient que l'unité va ranimer
+    /// <summary>Véhicule : places ([CAPACITIES_PROPS] EmbarkCapacity) et passagers à bord.</summary>
+    public int Seats;
+    public readonly List<Unit> Passengers = new();
+    public Unit? InVehicle;                               // pompier à bord de ce véhicule (invisible, suit le véhicule)
+    public bool Boarding;                                 // en route pour monter dans GoToVehicle
+    public bool AutoResupply;                             // [CAPACITIES_PROPS] AutomaticResupply : se recharge près d'un camion
+    public bool IsCanon;                                  // [UNIT] TYPE=CANON : grosse lance sans eau, reliée à un camion (Canon.cs)
+    public Unit? FeedTruck;                               // canon : camion qui l'alimente (null : aucun à portée)
+    public bool IsDog;                                    // [UNIT] TYPE=CYNOPHILE : maître-chien, flaire les victimes enterrées (Dog.cs)
+    public float SenseTimer;                              // chien : aboiement en cours (animation SENSE_VICTIM)
+    public bool OnBoard => InVehicle != null;
+    /// <summary>Véhicule : équipage à bord (classes), qui descend quand le véhicule est arrivé.</summary>
+    public readonly List<string> Crew = new();
+    public string? TeamName;                              // nom de l'équipe (journal à l'arrivée)
+    /// <summary>Endurance (pompiers : [CAPACITIES_PROPS] StaminaPoints/Max/Regen) : la chaleur des feux la fait baisser ;
+    /// à 0, le pompier s'évanouit. Vie (véhicules : [DAMAGE] LifePoints, 500) : à 0, le véhicule est hors service.</summary>
+    public float Stamina = 100, StaminaMax = 100, StaminaRegen = 0.5f, HeatCoef = 1, SmokeCoef = 0.7f;
+    public float Life = 500, LifeMax = 500, FireDamageCoef = 3;
+    public float ScriptHeatCoef = 1;                      // ENT_SetFireDamageCoef sur un pompier (0 : insensible au feu)
+    public bool Destroyed;                                // véhicule détruit : inutilisable jusqu'à la fin de la partie
+    public bool HealsUnits;                               // ambulance : soigne les pompiers venus à elle
+    public string? Icon;                                  // [UNIT] Icon : image de l'unité (Data\Overlay\Textures)
+    public float Reversing, ManeuverLeft;                 // véhicule : marche arrière restante ; longueur de la manœuvre en cours
+    public int ManeuverDir;                               // -1 recule, 1 avance
+    /// <summary>Unité créée par le script de la mission (ENT_CreateUnitPath) : son nom dans le script.</summary>
+    public string? ScriptName;
+    /// <summary>Cachée par le script (ENT_SetVisibility 0) : ni dessinée, ni choisie, ni comptée.</summary>
+    public bool Hidden;
+}

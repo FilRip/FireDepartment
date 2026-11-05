@@ -39,7 +39,8 @@ public sealed partial class OpenFDGame
                     if (Tex.DecodeTga(File.ReadAllBytes(path)) is { } img)
                     {
                         (w, h) = (img.w, img.h); px = new Color[w * h];
-                        for (int i = 0; i < px.Length; i++) px[i] = new Color(img.rgba[4 * i], img.rgba[4 * i + 1], img.rgba[4 * i + 2], img.rgba[4 * i + 3]);
+                        for (int i = 0; i < px.Length; i++)
+                            px[i] = new Color(img.rgba[4 * i], img.rgba[4 * i + 1], img.rgba[4 * i + 2], img.rgba[4 * i + 3]);
                     }
                 }
                 else
@@ -53,12 +54,15 @@ public sealed partial class OpenFDGame
                     // image dont le dessin tient dans un cadre noir en haut à gauche (WID_CHECK_…) : on ne garde que le cadre
                     bool Dark(Color c) => c.A > 128 && Math.Max(c.R, Math.Max(c.G, c.B)) < 40;
                     int fw = 0, fh = 0;
-                    while (fw < w && Dark(px[fw])) fw++;
-                    while (fh < h && Dark(px[fh * w])) fh++;
+                    while (fw < w && Dark(px[fw]))
+                        fw++;
+                    while (fh < h && Dark(px[fh * w]))
+                        fh++;
                     if (fw >= 4 && fh >= 4 && (fw < w || fh < h))
                     {
                         Color[] cut = new Color[fw * fh];
-                        for (int y = 0; y < fh; y++) Array.Copy(px, y * w, cut, y * fw, fw);
+                        for (int y = 0; y < fh; y++)
+                            Array.Copy(px, y * w, cut, y * fw, fw);
                         px = cut; w = fw; h = fh;
                     }
                 }
@@ -66,7 +70,12 @@ public sealed partial class OpenFDGame
                 {
                     // repère : on garde la forme (alpha et luminosité) en blanc, pour le teinter
                     if (whiteMask)
-                        for (int i = 0; i < px.Length; i++) { Color c = px[i]; byte a = (byte)Math.Min(c.A, Math.Max(c.R, Math.Max(c.G, c.B))); px[i] = new Color((byte)255, (byte)255, (byte)255, a); }
+                        for (int i = 0; i < px.Length; i++)
+                        {
+                            Color c = px[i];
+                            byte a = (byte)Math.Min(c.A, Math.Max(c.R, Math.Max(c.G, c.B)));
+                            px[i] = new Color((byte)255, (byte)255, (byte)255, a);
+                        }
                     t = new Texture2D(GraphicsDevice, w, h); t.SetData(px);
                 }
             }

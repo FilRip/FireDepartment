@@ -4,107 +4,6 @@ using OpenFD.Formats;
 
 namespace OpenFD.Game;
 
-/// <summary>Une unité du joueur : véhicule ou pompier (classes Design\Unit\…).</summary>
-public sealed class Unit
-{
-    public required int Id { get; init; }
-    public required string Name { get; init; }
-    public required string ClassPath { get; init; }     // « Fireman\fireman_sp »
-    public required string Model { get; init; }         // chemin Gfx du modèle 3D
-    public required bool IsVehicle { get; init; }
-    public Vector3 Position;
-    public float Heading;                                 // radians, 0 = vers +X
-    public float Speed;                                   // unités par seconde
-    public Extinguisher? Nozzle;                          // lance (pompiers, médecin)
-    public bool HasHose;                                  // (non utilisé : le jeu n'a pas de tuyaux)
-    public bool CanHeal;                                  // médecin : peut réanimer un civil inconscient
-    public float ResupplyPower;                           // véhicule : eau rendue par seconde aux pompiers (0 = aucune)
-    public bool IsAmbulance;
-    public Civilian? GoTo;                                // civil vers lequel l'unité se dirige
-    public Civilian? Carrying;                            // civil inconscient porté sur le dos
-    public CarryPhase Carry;
-    public float CarryTimer;
-    public Unit? GoToVehicle;                             // véhicule vers lequel l'unité se dirige (remplir, déposer des civils)
-    public float HealTimer;
-    public bool CanBreak, CanUse;                         // hache (portes, fenêtres) ; ouvrir une porte
-    public bool CanGrapple;                               // grappin ([CAPACITIES_ACTIONS] CanGrapplin : le « scout »)
-    public float ClimbSpeed = 133;                        // [MOVING] ClimbGrapplinSpeed (unités par seconde)
-    public ClimbPhase Climb;                              // passage d'un mur au grappin (voir Grapple.cs)
-    public float ClimbTimer;
-    public Vector3 ClimbFrom, ClimbWall, ClimbTo, ClimbAnchor;   // ancre : là où le grappin est accroché (corde)
-    public GrapplePoint? ClimbGrapple;
-    public bool CanRepair;                                // technicien : répare les objets CouldBeRepair
-    public UsableObject? UseTarget;                       // objet sur lequel agir (armoire électrique…)
-    public float BreakPower = 1;
-    public Opening? Opening;                              // porte ou fenêtre à casser / ouvrir
-    public bool OpeningBreak;
-    public float ActionTimer;
-    public int Blows;                                     // coups de hache donnés (affichage)
-    public readonly Queue<Vector2> Path = new();
-    public HotPoint? Target;                              // feu à éteindre
-    public string Status = "";
-    public bool Moving => Path.Count > 0;
-    /// <summary>Blessé (backdraft, explosion) : au sol, ne peut rien faire pendant ce temps (s).</summary>
-    public float InjuredTimer;
-    public int Wounds;
-    /// <summary>Inconscient (backdraft) : reste au sol jusqu'à ce qu'un autre pompier le ranime.</summary>
-    public bool Unconscious;
-    public Unit? ReviveTarget;                            // collègue inconscient que l'unité va ranimer
-    /// <summary>Véhicule : places ([CAPACITIES_PROPS] EmbarkCapacity) et passagers à bord.</summary>
-    public int Seats;
-    public readonly List<Unit> Passengers = new();
-    public Unit? InVehicle;                               // pompier à bord de ce véhicule (invisible, suit le véhicule)
-    public bool Boarding;                                 // en route pour monter dans GoToVehicle
-    public bool AutoResupply;                             // [CAPACITIES_PROPS] AutomaticResupply : se recharge près d'un camion
-    public bool IsCanon;                                  // [UNIT] TYPE=CANON : grosse lance sans eau, reliée à un camion (Canon.cs)
-    public Unit? FeedTruck;                               // canon : camion qui l'alimente (null : aucun à portée)
-    public bool IsDog;                                    // [UNIT] TYPE=CYNOPHILE : maître-chien, flaire les victimes enterrées (Dog.cs)
-    public float SenseTimer;                              // chien : aboiement en cours (animation SENSE_VICTIM)
-    public bool OnBoard => InVehicle != null;
-    /// <summary>Véhicule : équipage à bord (classes), qui descend quand le véhicule est arrivé.</summary>
-    public readonly List<string> Crew = new();
-    public string? TeamName;                              // nom de l'équipe (journal à l'arrivée)
-    /// <summary>Endurance (pompiers : [CAPACITIES_PROPS] StaminaPoints/Max/Regen) : la chaleur des feux la fait baisser ;
-    /// à 0, le pompier s'évanouit. Vie (véhicules : [DAMAGE] LifePoints, 500) : à 0, le véhicule est hors service.</summary>
-    public float Stamina = 100, StaminaMax = 100, StaminaRegen = 0.5f, HeatCoef = 1, SmokeCoef = 0.7f;
-    public float Life = 500, LifeMax = 500, FireDamageCoef = 3;
-    public float ScriptHeatCoef = 1;                      // ENT_SetFireDamageCoef sur un pompier (0 : insensible au feu)
-    public bool Destroyed;                                // véhicule détruit : inutilisable jusqu'à la fin de la partie
-    public bool HealsUnits;                               // ambulance : soigne les pompiers venus à elle
-    public string? Icon;                                  // [UNIT] Icon : image de l'unité (Data\Overlay\Textures)
-    public float Reversing, ManeuverLeft;                 // véhicule : marche arrière restante ; longueur de la manœuvre en cours
-    public int ManeuverDir;                               // -1 recule, 1 avance
-    /// <summary>Unité créée par le script de la mission (ENT_CreateUnitPath) : son nom dans le script.</summary>
-    public string? ScriptName;
-    /// <summary>Cachée par le script (ENT_SetVisibility 0) : ni dessinée, ni choisie, ni comptée.</summary>
-    public bool Hidden;
-}
-
-public enum CivilianState { Conscious, Unconscious, Rescued, Dead }
-
-/// <summary>Pompier qui porte un civil inconscient : il le soulève, le porte sur son dos, puis le dépose à l'ambulance.</summary>
-public enum CarryPhase { None, Lifting, Walking, Dropping }
-
-/// <summary>Civil à sauver (entité Civilian de la carte ; état de départ lu dans le composant A02A).</summary>
-public sealed class Civilian
-{
-    public required uint Id { get; init; }
-    public required string Name { get; init; }
-    public required string Model { get; init; }
-    public string ClassPath = "";                         // Design\Unit\Civilian\….class (animations)
-    public Vector3 Position;
-    public float Heading;
-    public CivilianState State;
-    public Unit? Leader;                                  // pompier ou médecin qu'il suit
-    public Unit? Carrier;                                 // pompier qui le porte (inconscient)
-    public bool Hidden;                                   // caché au départ par le script de mission
-    public readonly Queue<Vector2> Path = new();
-    /// <summary>Chemin vers son guide (calculé sur la grille), but visé et délai avant de le recalculer.</summary>
-    public readonly Queue<Vector2> FollowPath = new();
-    public Vector2 FollowGoal; public float Replan;
-    public float RunSpeed = 280f;                         // vitesse d'un trajet commandé par le script
-}
-
 /// <summary>
 /// Unités du joueur : arrivée des secours ([FIRESTATION] de la mission), déplacements sur la grille,
 /// attaque des feux. Règles de déplacement simplifiées en attendant l'étude du code d'origine.
@@ -225,23 +124,37 @@ public sealed partial class UnitManager
             u.Status = u.InjuredTimer > 0 ? "blessé, au sol" : "attend les ordres";
         }
         UpdateHealth(dt);
-        foreach (Unit u in Units) Move(u, dt);
+        foreach (Unit u in Units)
+            Move(u, dt);
         UpdateVehicleObstacles();
-        foreach (Unit v in Units.Where(u => u.IsVehicle && u.Crew.Count > 0 && !u.Moving).ToList()) Unload(v);
+        foreach (Unit v in Units.Where(u => u.IsVehicle && u.Crew.Count > 0 && !u.Moving).ToList())
+            Unload(v);
         _autoTick++;
-        foreach (Unit u in Units) UpdateCanonLink(u);
-        foreach (Unit u in Units) UpdateDog(u, dt);
-        foreach (Unit u in Units) AutoAttack(u);
-        foreach (Unit u in Units) Fight(u, dt);
-        foreach (Unit u in Units) Rescue(u, dt);
-        foreach (Unit u in Units) CarryVictim(u, dt);   // voir CivilianAI.cs
-        foreach (Unit u in Units) Revive(u, dt);
-        foreach (Unit u in Units) Resupply(u, dt);
-        foreach (Unit v in Units.Where(v => v.IsVehicle)) VehicleResupply(v, dt);
+        foreach (Unit u in Units)
+            UpdateCanonLink(u);
+        foreach (Unit u in Units)
+            UpdateDog(u, dt);
+        foreach (Unit u in Units)
+            AutoAttack(u);
+        foreach (Unit u in Units)
+            Fight(u, dt);
+        foreach (Unit u in Units)
+            Rescue(u, dt);
+        foreach (Unit u in Units)
+            CarryVictim(u, dt);   // voir CivilianAI.cs
+        foreach (Unit u in Units)
+            Revive(u, dt);
+        foreach (Unit u in Units)
+            Resupply(u, dt);
+        foreach (Unit v in Units.Where(v => v.IsVehicle))
+            VehicleResupply(v, dt);
         CheckTriggers();
-        foreach (Unit u in Units) WorkOpening(u, dt);
-        foreach (Unit u in Units) WorkUsable(u, dt);
-        foreach (Civilian c in Civilians) Follow(c, dt);
+        foreach (Unit u in Units)
+            WorkOpening(u, dt);
+        foreach (Unit u in Units)
+            WorkUsable(u, dt);
+        foreach (Civilian c in Civilians)
+            Follow(c, dt);
     }
 
     /// <summary>Arrivée d'une équipe : les véhicules entrent par locstartN_k et rejoignent locendN_k, l'équipage descend.</summary>
@@ -284,8 +197,10 @@ public sealed partial class UnitManager
         {
             // l'équipage monte dans les véhicules (répartis à tour de rôle, les camions d'abord) et descend à l'arrivée
             List<Unit> order = trucks.OrderBy(t => t.IsAmbulance ? 1 : 0).ToList();
-            for (int i = 0; i < crew.Count; i++) order[i % order.Count].Crew.Add(crew[i]);
-            foreach (Unit t in trucks) t.TeamName = team;
+            for (int i = 0; i < crew.Count; i++)
+                order[i % order.Count].Crew.Add(crew[i]);
+            foreach (Unit t in trucks)
+                t.TeamName = team;
             Log.Add($"{_s.Time,6:0} s : l'équipe {team} est en route ({list.Count} unités)");
             return;
         }
@@ -439,7 +354,6 @@ public sealed partial class UnitManager
         return u;
     }
 
-
     /// <summary>Recherche de chemin et cases libres ou fermées : voir PathFind.cs.</summary>
     public PathFind Paths { get; }
     private float Ground(Vector2 p) => Paths.Ground(p);
@@ -559,15 +473,14 @@ public sealed partial class UnitManager
         {
             List<Vector2> pts = new List<Vector2> { new(u.Position.X, u.Position.Y) }; pts.AddRange(u.Path);
             bool crosses = false;
-            for (int i = 0; i + 1 < pts.Count && !crosses; i++) crosses = !LineFree(pts[i], pts[i + 1], ignoreFire: true);
+            for (int i = 0; i + 1 < pts.Count && !crosses; i++)
+                crosses = !LineFree(pts[i], pts[i + 1], ignoreFire: true);
             if (!crosses)
                 continue;
             Vector2 dest = pts[^1]; List<Vector2> path = FindPath(pts[0], Walkable(dest));
             u.Path.Clear(); foreach (Vector2 p in path) u.Path.Enqueue(p);
         }
     }
-
-
 
     /// <summary>
     /// Ordre de déplacement : chemin le plus court sur la grille (A*, 8 directions), puis lissé.
@@ -592,7 +505,8 @@ public sealed partial class UnitManager
         try
         {
             List<Vector2> path = FindPath(new(u.Position.X, u.Position.Y), Walkable(dest), out partial);
-            foreach (Vector2 p in path) u.Path.Enqueue(p);
+            foreach (Vector2 p in path)
+                u.Path.Enqueue(p);
         }
         finally { Paths.PathingVehicle = false; Paths.Clearance = 0; Paths.SelfId = 0; Paths.PathingGrapple = false; }
         // point inatteignable : l'unité ne bouge pas et le dit (« VOCAL_IMPOSSIBLE_TO_ACCESS »)
@@ -659,7 +573,6 @@ public sealed partial class UnitManager
         dir = new(dir.X * MathF.Cos(spread) - dir.Y * MathF.Sin(spread), dir.X * MathF.Sin(spread) + dir.Y * MathF.Cos(spread));
         Order(u, f + dir * want, h);
     }
-
 
     /// <summary>Clic droit sur un véhicule : remplir la réserve (camion) ou y déposer les civils qui suivent (ambulance).</summary>
     public void GoToVehicle(Unit u, Unit vehicle)
@@ -770,7 +683,6 @@ public sealed partial class UnitManager
 
     private static string UnitName(Unit u) => u.Name;
 
-
     /// <summary>Clic droit d'un pompier sur un collègue inconscient : il va le ranimer.</summary>
     public void ReviveColleague(Unit u, Unit victim)
     {
@@ -877,7 +789,8 @@ public sealed partial class UnitManager
             return;
         }
         v.Passengers.Add(u); u.InVehicle = v;
-        foreach (Civilian civ in Civilians.Where(c => c.Leader == u)) civ.Leader = null;
+        foreach (Civilian civ in Civilians.Where(c => c.Leader == u))
+            civ.Leader = null;
         Sounds.Add(("VEHICLE_EMBARK", v.Position));
         Log.Add($"{_s.Time,6:0} s : un pompier monte à bord ({v.Passengers.Count}/{v.Seats})");
     }

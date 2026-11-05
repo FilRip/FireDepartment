@@ -4,221 +4,6 @@ using System.Text.RegularExpressions;
 namespace OpenFD.MG;
 
 /// <summary>
-/// Base de sons du jeu (Data\Sound\SoundDB.INI et ses #INCLUDE) : pour chaque étiquette, le fichier, le volume,
-/// la boucle, le son 3D et ses distances d'atténuation. Lue telle quelle dans l'installation du joueur.
-/// </summary>
-public sealed class SoundDb
-{
-    public sealed record Entry(string Label, string File, float Volume, bool Loop, bool Use3D, float MinDist, float MaxDist, int Priority, float StartDelay);
-    public Dictionary<string, Entry> Entries { get; } = new(StringComparer.OrdinalIgnoreCase);
-
-    private Dictionary<string, Entry> _orig = new(StringComparer.OrdinalIgnoreCase);
-    /// <summary>Dossiers des voix (langue choisie d'abord, puis Data\Sound\Vocal) : pour les voix absentes de la base.</summary>
-    private readonly List<string> _vocalDirs = new();
-    private string _baseVocal = "";
-
-    /// <summary>
-    /// Étiquette de la base, ou voix « Vocal\étiquette.wav » que la base n'a pas (le jeu a mis en commentaire
-    /// VOCAL_ACKNOWLEDGE1…6 dans SoundDB_Vocal.INI alors que les fichiers sont là).
-    /// </summary>
-    public bool TryGet(string label, out Entry e)
-    {
-        if (Entries.TryGetValue(label, out e!))
-            return true;
-        foreach (string dir in _vocalDirs)
-        {
-            if (!Directory.Exists(dir))
-                continue;
-            string? f = Directory.EnumerateFiles(dir).FirstOrDefault(x => Path.GetFileNameWithoutExtension(x).Equals(label, StringComparison.OrdinalIgnoreCase) && x.EndsWith(".wav", StringComparison.OrdinalIgnoreCase));
-            if (f == null)
-                continue;
-            e = new Entry(label, f, 0.8f, false, false, 700, 4500, 75, -1);
-            Entries[label] = e;
-            return true;
-        }
-        return false;
-    }
-
-    public static SoundDb Load(string dataDir)
-    {
-        SoundDb db = new SoundDb();
-        string root = Directory.GetParent(dataDir)?.FullName ?? dataDir;
-        db.ReadInto(Path.Combine(dataDir, "Sound", "SoundDB.INI"), root);
-        db._orig = new(db.Entries, StringComparer.OrdinalIgnoreCase);
-        db._baseVocal = Path.Combine(dataDir, "Sound", "Vocal");
-        db._vocalDirs.Add(db._baseVocal);
-        return db;
-    }
-
-    /// <summary>
-    /// Voix d'une autre langue : Data\Localize\Lang_XXX\Data\Sound (SoundDB_Vocal.INI et Vocal\*.wav) remplace les voix
-    /// installées quand le fichier existe ; vide ou langue sans voix : celles de l'installation.
-    /// </summary>
-    public void ApplyLanguage(string dataDir, string? lang)
-    {
-        Entries.Clear();
-        foreach (KeyValuePair<string, Entry> kv in _orig) Entries[kv.Key] = kv.Value;
-        _vocalDirs.Clear(); _vocalDirs.Add(_baseVocal);
-        if (string.IsNullOrEmpty(lang))
-            return;
-        string locRoot = Path.Combine(dataDir, "Localize");
-        if (!Directory.Exists(locRoot))
-            return;
-        string? langDir = Directory.EnumerateDirectories(locRoot).FirstOrDefault(d => Path.GetFileName(d).Equals("Lang_" + lang, StringComparison.OrdinalIgnoreCase));
-        if (langDir == null)
-            return;
-        string? Sub(string dir, string name) => Directory.Exists(dir) ? Directory.EnumerateFileSystemEntries(dir).FirstOrDefault(e => Path.GetFileName(e).Equals(name, StringComparison.OrdinalIgnoreCase)) : null;
-        string? vocal = Sub(langDir, "Data") is { } d1 && Sub(d1, "Sound") is { } d2 ? d2 : null;
-        if (vocal == null)
-            return;
-        if (Sub(vocal, "SoundDB_Vocal.INI") is { } ini)
-            ReadInto(ini, langDir);
-        string? vocalDir = Sub(vocal, "Vocal");
-        if (vocalDir != null)
-            _vocalDirs.Insert(0, vocalDir);
-        if (vocalDir == null)
-            return;
-        Dictionary<string, string> files = Directory.EnumerateFiles(vocalDir).ToDictionary(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase);
-        int n = 0;
-        foreach (Entry e in Entries.Values.ToList())
-            if (files.TryGetValue(Path.GetFileName(e.File), out string? f) && !string.Equals(f, e.File, StringComparison.OrdinalIgnoreCase)
-                && e.File.Replace('\\', '/').Contains("/Vocal/", StringComparison.OrdinalIgnoreCase))
-            {
-                Entries[e.Label] = e with { File = f };
-                n++;
-            }
-        Console.WriteLine($"Voix : {lang} ({n} sons remplacés)");
-    }
-
-    private void ReadInto(string iniPath, string root)
-    {
-        SoundDb db = this;
-        HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        void Read(string file)
-        {
-            string? path = FindFile(file);
-            if (path == null || !seen.Add(path))
-                return;
-            string? section = null; Dictionary<string, string> keys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            void Flush()
-            {
-                if (section == null)
-                    return;
-                if (section.Equals("#INCLUDE", StringComparison.OrdinalIgnoreCase))
-                    foreach (string v in keys.Values) Read(Path.Combine(Path.GetDirectoryName(path)!, v.Replace('/', Path.DirectorySeparatorChar).TrimStart('.', '\\', '/')));
-                else if (keys.TryGetValue("FILENAME", out string? fn))
-                {
-                    float F(string k, float d) => keys.TryGetValue(k, out string? s) && float.TryParse(s.TrimEnd('f', 'F', ';'), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float x) ? x : d;
-                    string full = Resolve(root, fn);
-                    db.Entries[section] = new Entry(section, full, F("VOLUME", 100) / 100f, F("LOOP", 0) != 0, F("USE_3D", 0) != 0,
-                        F("3D_MIN_DISTANCE", 700), F("3D_MAX_DISTANCE", 4500), (int)F("PRIORITY", 50), F("START_DELAY", -1));
-                }
-                keys.Clear();
-            }
-            foreach (string raw in File.ReadAllLines(path, System.Text.Encoding.Latin1))
-            {
-                string line = raw.Trim();
-                int sc = line.IndexOf(';');
-                if (sc == 0)
-                    continue;
-                if (line.StartsWith('[') && line.Contains(']'))
-                {
-                    Flush();
-                    section = line[1..line.IndexOf(']')].Trim();
-                    continue;
-                }
-                int eq = line.IndexOf('=');
-                if (eq <= 0 || section == null)
-                    continue;
-                string val = line[(eq + 1)..].Trim();
-                int c2 = val.IndexOf(';');
-                if (c2 >= 0 && !val.StartsWith('"'))
-                    val = val[..c2].Trim();
-                keys[line[..eq].Trim()] = val.Trim('"', ' ', '\t');
-            }
-            Flush();
-        }
-        string? FindFile(string p)
-        {
-            if (File.Exists(p))
-                return p;
-            string? dir = Path.GetDirectoryName(p); string name = Path.GetFileName(p);
-            if (dir == null || !Directory.Exists(dir))
-                return null;
-            return Directory.EnumerateFiles(dir).FirstOrDefault(f => Path.GetFileName(f).Equals(name, StringComparison.OrdinalIgnoreCase));
-        }
-        // chemin « data/Sound/… » relatif au dossier du jeu ; casse ignorée (utile hors de Windows)
-        static string Resolve(string root, string rel)
-        {
-            string cur = root;
-            foreach (string part in rel.Split('/', '\\', StringSplitOptions.RemoveEmptyEntries))
-            {
-                string next = Path.Combine(cur, part);
-                if (!File.Exists(next) && !Directory.Exists(next) && Directory.Exists(cur))
-                    next = Directory.EnumerateFileSystemEntries(cur).FirstOrDefault(e => Path.GetFileName(e).Equals(part, StringComparison.OrdinalIgnoreCase)) ?? next;
-                cur = next;
-            }
-            return cur;
-        }
-        Read(iniPath);
-    }
-}
-
-/// <summary>Son décodé : échantillons 16 bits (mono ou stéréo entrelacé) et fréquence.</summary>
-public sealed class SoundData
-{
-    public short[] Samples = Array.Empty<short>();
-    public int Channels = 1, Rate = 22050;
-    public int Frames => Samples.Length / Channels;
-
-    /// <summary>WAV PCM 8 ou 16 bits (les fichiers du jeu sont en 16 bits mono 22 050 Hz). Autres formats : null.</summary>
-    public static SoundData? LoadWav(string path)
-    {
-        try
-        {
-            byte[] d = File.ReadAllBytes(path);
-            if (d.Length < 44 || d[0] != 'R' || d[8] != 'W')
-                return null;
-            int p = 12, fmt = 0, ch = 1, rate = 22050, bits = 16;
-            while (p + 8 <= d.Length)
-            {
-                string id = System.Text.Encoding.ASCII.GetString(d, p, 4); int sz = BitConverter.ToInt32(d, p + 4);
-                if (id == "fmt ")
-                {
-                    fmt = BitConverter.ToUInt16(d, p + 8);
-                    ch = BitConverter.ToUInt16(d, p + 10);
-                    rate = BitConverter.ToInt32(d, p + 12);
-                    bits = BitConverter.ToUInt16(d, p + 22);
-                }
-                else if (id == "data")
-                {
-                    if (fmt != 1 || ch < 1 || ch > 2)
-                        return null;
-                    sz = Math.Min(sz, d.Length - p - 8);
-                    SoundData s = new SoundData { Channels = ch, Rate = rate };
-                    if (bits == 16)
-                    {
-                        s.Samples = new short[sz / 2];
-                        Buffer.BlockCopy(d, p + 8, s.Samples, 0, s.Samples.Length * 2);
-                    }
-                    else if (bits == 8)
-                    {
-                        s.Samples = new short[sz];
-                        for (int i = 0; i < sz; i++) s.Samples[i] = (short)((d[p + 8 + i] - 128) << 8);
-                    }
-                    else
-                        return null;
-                    return s;
-                }
-                p += 8 + sz + (sz & 1);
-            }
-        }
-        catch { }
-        return null;
-    }
-}
-
-/// <summary>
 /// Sons par le moteur audio de MonoGame (OpenAL, sur Windows, Linux et macOS).
 /// Sons ponctuels (2D ou 3D, atténués et placés gauche-droite d'après la caméra) et sons en boucle
 /// entretenus image par image (lance, feu, moteur…) qui s'éteignent en douceur quand on cesse de les entretenir.
@@ -390,9 +175,17 @@ public sealed class Audio : IDisposable
 
     public void StopAll()
     {
-        foreach (Loop l in _loops.Values) { l.Inst.Stop(); l.Inst.Dispose(); }
+        foreach (Loop l in _loops.Values)
+        {
+            l.Inst.Stop();
+            l.Inst.Dispose();
+        }
         _loops.Clear();
-        foreach (Microsoft.Xna.Framework.Audio.SoundEffectInstance s in _oneShots) { s.Stop(); s.Dispose(); }
+        foreach (Microsoft.Xna.Framework.Audio.SoundEffectInstance s in _oneShots)
+        {
+            s.Stop();
+            s.Dispose();
+        }
         _oneShots.Clear(); _delayed.Clear();
     }
 

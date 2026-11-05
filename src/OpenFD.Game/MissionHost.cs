@@ -74,7 +74,8 @@ public sealed class MissionHost : IScriptHost
         _level = level; _fire = fire;
         _byId = level.Objects.ToDictionary(o => o.Id);
         _byName = new(StringComparer.OrdinalIgnoreCase);
-        foreach (LevelObject o in level.Objects) _byName.TryAdd(o.Name, o);
+        foreach (LevelObject o in level.Objects)
+            _byName.TryAdd(o.Name, o);
     }
 
     private List<HotPoint> HotPointsOf(long id)
@@ -88,7 +89,8 @@ public sealed class MissionHost : IScriptHost
                 return;
             }
             if (depth < 6 && _byId.TryGetValue(i, out LevelObject? o))
-                foreach (uint m in o.Members) Walk(m, depth + 1);
+                foreach (uint m in o.Members)
+                    Walk(m, depth + 1);
         }
         Walk((uint)id, 0);
         return res;
@@ -268,7 +270,8 @@ public sealed class MissionHost : IScriptHost
                 float amount = (float)V(1).AsNum;
                 if (GroupAddSplits && hs.Count > 1)
                     amount /= hs.Count;
-                foreach (HotPoint h in hs) _fire.AddIntensity(h, amount);
+                foreach (HotPoint h in hs)
+                    _fire.AddIntensity(h, amount);
                 FireLog.Add($"{GameTime,6:0.0} FIR_HPAddIntensity {NameOf(V(0).AsInt)} {V(1).AsNum} ({hs.Count} foyers)");
                 return Value.Zero;
             }
@@ -281,11 +284,13 @@ public sealed class MissionHost : IScriptHost
                 }
                 return Value.Zero;
             case "FIR_HPMULTGROWTHRATE":
-                foreach (HotPoint h in HotPointsOf(V(0).AsInt)) h.GrowthMultiplier *= (float)V(1).AsNum;
+                foreach (HotPoint h in HotPointsOf(V(0).AsInt))
+                    h.GrowthMultiplier *= (float)V(1).AsNum;
                 FireLog.Add($"{GameTime,6:0.0} FIR_HPMultGrowthRate {NameOf(V(0).AsInt)} {V(1).AsNum}");
                 return Value.Zero;
             case "FIR_HPSETGROWTHRATE":
-                foreach (HotPoint h in HotPointsOf(V(0).AsInt)) h.GrowthMultiplier = h.Class.GrowthRate == 0 ? 1 : (float)V(1).AsNum / h.Class.GrowthRate;
+                foreach (HotPoint h in HotPointsOf(V(0).AsInt))
+                    h.GrowthMultiplier = h.Class.GrowthRate == 0 ? 1 : (float)V(1).AsNum / h.Class.GrowthRate;
                 return Value.Zero;
             case "FIR_HPGETGROWTHRATE": { List<HotPoint> hs = HotPointsOf(V(0).AsInt); return Value.F(hs.Count > 0 ? hs[0].Class.GrowthRate * hs[0].GrowthMultiplier : 0); }
             case "FIR_SPGETINTENSITY": case "FIR_SPADDINTENSITY": return Value.F(0); // fumée : pas encore simulée

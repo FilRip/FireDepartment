@@ -3,40 +3,6 @@ using OpenFD.Formats;
 
 namespace OpenFD.Fire;
 
-/// <summary>Paramètres d'une classe de point de fumée (SMOKEPOINT_PROPS, _DAMAGE, _TAGS).</summary>
-public sealed record SmokePointClass(
-    string Name, float IntensityMax, float FlashoverThreshold, float FirstFlashoverTempo, float FlashoverTempo,
-    float InfluenceRange, float HotPointIntensityDamage, bool Extractor, float ExtractionRate)
-{
-    public static SmokePointClass From(string name, ClassFile c)
-    {
-        const string P = "SMOKEPOINT_PROPS", D = "SMOKEPOINT_DAMAGE", T = "SMOKEPOINT_TAGS";
-        return new SmokePointClass(name,
-            c.GetFloat(P, "IntensityMax", 100), c.GetFloat(P, "FlashoverThreshold", 75),
-            c.GetFloat(P, "FirstFlashoverTempo", 45), c.GetFloat(P, "FlashoverTempo", 1000),
-            c.GetFloat(P, "InfluenceRange", 400), c.GetFloat(D, "HotPointIntensityDamage", 50),
-            c.GetBool(T, "Extractor"), c.GetFloat(T, "ExtractionRate", 50));
-    }
-}
-
-public sealed class SmokePoint
-{
-    public required uint Id { get; init; }
-    public required string Name { get; init; }
-    public required SmokePointClass Class { get; init; }
-    public required Vector3 Position { get; init; }
-    public float Intensity;
-    public float Max;
-    public bool Active;
-    public string Room = "";
-    public void Add(float v)
-    {
-        Intensity = Math.Clamp(Intensity + v, 0, Max);
-        if (Intensity > 0)
-            Active = true;
-    }
-}
-
 /// <summary>
 /// Fumée (voir docs/MODELE_FEU.md § 9). Règles :
 /// 1. un foyer allumé relié à un point de fumée (lien de type 2) le remplit (SmokeGenerationRate par seconde) ;
@@ -202,7 +168,8 @@ public sealed class SmokeSystem
             float tempo = st.first ? pts[0].Class.FirstFlashoverTempo : pts[0].Class.FlashoverTempo;
             if (st.timer >= tempo)
             {
-                foreach (HotPoint h in hps.Where(h => !h.Lit)) fire.AddIntensity(h, pts[0].Class.HotPointIntensityDamage);
+                foreach (HotPoint h in hps.Where(h => !h.Lit))
+                    fire.AddIntensity(h, pts[0].Class.HotPointIntensityDamage);
                 Log.Add($"{fire.Time,6:0.0} flashover dans {room}");
                 st = (0f, false);
             }

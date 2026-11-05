@@ -79,13 +79,15 @@ public sealed class ClassFile
         {
             if (!_values.TryGetValue(sec, out Dictionary<string, string>? dst))
                 _values[sec] = dst = new(StringComparer.OrdinalIgnoreCase);
-            foreach ((string? k, string? v) in kv) dst[k] = v;
+            foreach ((string? k, string? v) in kv)
+                dst[k] = v;
         }
         foreach ((string? sec, Dictionary<string, string>? kv) in other._types)
         {
             if (!_types.TryGetValue(sec, out Dictionary<string, string>? dst))
                 _types[sec] = dst = new(StringComparer.OrdinalIgnoreCase);
-            foreach ((string? k, string? v) in kv) dst[k] = v;
+            foreach ((string? k, string? v) in kv)
+                dst[k] = v;
         }
     }
 

@@ -186,7 +186,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             if (i == 40 && Environment.GetEnvironmentVariable("FD3_A_BORD") != null
                 && _session.Units.Active.FirstOrDefault(u => u.IsVehicle && u.Seats > 0) is { } veh)
             {
-                foreach (Unit man in _session.Units.Active.Where(u => !u.IsVehicle).Take(2)) _session.Units.BoardNow(man, veh);
+                foreach (Unit man in _session.Units.Active.Where(u => !u.IsVehicle).Take(2))
+                    _session.Units.BoardNow(man, veh);
                 _sel.Clear(); _sel.Add(veh);
             }
             if (i == 30 && Environment.GetEnvironmentVariable("FD3_BOUCHE") != null && _session.Units.Supplies.FirstOrDefault() is { } hyd
@@ -204,7 +205,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 Console.WriteLine($"essai hache : {axeman.Status}");
             }
             if (i > 400 && i % 20 == 0 && Environment.GetEnvironmentVariable("FD3_CASSER") != null)
-                foreach (Unit u0 in _sel) Console.WriteLine($"  {i / 10} s : {u0.Status} ({u0.Position.X:0},{u0.Position.Y:0},{u0.Position.Z:0})");
+                foreach (Unit u0 in _sel)
+                    Console.WriteLine($"  {i / 10} s : {u0.Status} ({u0.Position.X:0},{u0.Position.Y:0},{u0.Position.Z:0})");
             if (TestAttack && i == 50)
                 foreach (Unit u in _session.Units.Active.Where(u => u.Nozzle != null))
                 {
@@ -380,7 +382,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         {
             CampaignPage pg = _campaign[_campaignIndex];
             StartBriefing(pg.Dir, "EASY", pg.Briefing);
-            for (int i = 0; i < (int)(bts * 10) && _briefing != null; i++) UpdateBriefing(0.1f);
+            for (int i = 0; i < (int)(bts * 10) && _briefing != null; i++)
+                UpdateBriefing(0.1f);
             _briefFrozen = true;
         }
         // essai : FD3_PORTER=phase,secondes → un pompier va chercher le civil inconscient le plus proche ; la partie avance
@@ -389,7 +392,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         if (_frame == 4 && Environment.GetEnvironmentVariable("FD3_VEHICULES") is { } vies && _session != null)
         {
             SkipCinematic();
-            for (int i = 0; i < 600 && !_session.Units.Active.Any(u => u.IsVehicle && !u.Moving); i++) _session.Step();
+            for (int i = 0; i < 600 && !_session.Units.Active.Any(u => u.IsVehicle && !u.Moving); i++)
+                _session.Step();
             List<Unit> vs = _session.Units.Active.Where(u => u.IsVehicle).ToList(); string[] fr = vies.Split(',');
             for (int i = 0; i < Math.Min(vs.Count, fr.Length); i++)
             {
@@ -399,7 +403,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 else
                     vs[i].Life = vs[i].LifeMax * f;
             }
-            for (int i = 0; i < vs.Count; i++) Console.WriteLine($"véhicule {vs[i].Name} ({vs[i].Position.X:0},{vs[i].Position.Y:0}) vie {vs[i].Life:0}/{vs[i].LifeMax:0}");
+            for (int i = 0; i < vs.Count; i++)
+                Console.WriteLine($"véhicule {vs[i].Name} ({vs[i].Position.X:0},{vs[i].Position.Y:0}) vie {vs[i].Life:0}/{vs[i].LifeMax:0}");
             SnapshotPoses();
         }
         // essai : FD3_LANCE=1 → un pompier arrose le feu le plus proche ; la caméra le regarde de près
@@ -407,14 +412,17 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         {
             SkipCinematic();
             UnitManager um = _session.Units;
-            for (int i = 0; i < 600 && !um.Active.Any(u => !u.IsVehicle && u.Nozzle != null && !u.Moving); i++) _session.Step();
+            for (int i = 0; i < 600 && !um.Active.Any(u => !u.IsVehicle && u.Nozzle != null && !u.Moving); i++)
+                _session.Step();
             Unit? man = um.Active.FirstOrDefault(u => !u.IsVehicle && u.Nozzle != null);
             HotPoint? fire = man == null ? null : _session.Fire.HotPoints.Where(h => h.IsBurning && MathF.Abs(h.Position.Z - man.Position.Z) < 200).OrderBy(h => SN.Vector3.Distance(h.Position, man.Position)).FirstOrDefault();
             if (man != null && fire != null)
             {
                 um.Attack(man, fire);
-                for (int i = 0; i < 1200 && !(man.Target != null && !man.Moving); i++) _session.Step();
-                for (int i = 0; i < 20; i++) _session.Step();
+                for (int i = 0; i < 1200 && !(man.Target != null && !man.Moving); i++)
+                    _session.Step();
+                for (int i = 0; i < 20; i++)
+                    _session.Step();
                 SnapshotPoses();
                 _target = man.Position + new SN.Vector3(0, 0, 100); _dist = 450; _pitch = 0.45f; _paused = true;
                 Console.WriteLine($"lance : {man.Status}");
@@ -425,13 +433,16 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         {
             string[] pr = grap.Split(','); ClimbPhase want = Enum.Parse<ClimbPhase>(pr[0]); float extra = pr.Length > 1 ? float.Parse(pr[1], System.Globalization.CultureInfo.InvariantCulture) : 0;
             UnitManager um = _session.Units; SkipCinematic();
-            for (int i = 0; i < 600 && !um.Active.Any(u => u.CanGrapple && !u.Moving); i++) _session.Step();
+            for (int i = 0; i < 600 && !um.Active.Any(u => u.CanGrapple && !u.Moving); i++)
+                _session.Step();
             Unit? sc = um.Active.FirstOrDefault(u => u.CanGrapple); GrapplePoint gp = um.Grapples[0];
             if (sc != null)
             {
                 sc.Position = new SN.Vector3(gp.SideA, 0); um.GrappleOver(sc, gp);
-                for (int i = 0; i < 600 && sc.Climb != want; i++) _session.Step();
-                for (int i = 0; i < (int)(extra / Session.Dt); i++) _session.Step();
+                for (int i = 0; i < 600 && sc.Climb != want; i++)
+                    _session.Step();
+                for (int i = 0; i < (int)(extra / Session.Dt); i++)
+                    _session.Step();
                 SnapshotPoses();
                 _target = sc.Position; _dist = 1100; _pitch = 0.5f; _yaw = MathF.Atan2(gp.Axis.Y, gp.Axis.X); _paused = true;
                 Console.WriteLine($"grappin : {sc.Status} {sc.Climb} {sc.Position}");
@@ -442,7 +453,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             string[] pr = porter.Split(','); CarryPhase want = Enum.Parse<CarryPhase>(pr[0]); float extra = pr.Length > 1 ? float.Parse(pr[1], System.Globalization.CultureInfo.InvariantCulture) : 0;
             UnitManager um = _session.Units;
             SkipCinematic();
-            for (int i = 0; i < 600 && !um.Active.Any(u => !u.IsVehicle && !u.CanHeal && !u.Moving); i++) _session.Step();   // équipes arrivées
+            for (int i = 0; i < 600 && !um.Active.Any(u => !u.IsVehicle && !u.CanHeal && !u.Moving); i++)
+                _session.Step();   // équipes arrivées
             Unit? man = um.Active.FirstOrDefault(u => !u.IsVehicle && !u.CanHeal);
             Civilian? civ = man == null ? null : um.Civilians.Where(c => c.State == CivilianState.Unconscious && !c.Hidden && um.CanReach(new(man.Position.X, man.Position.Y), new(c.Position.X, c.Position.Y)))
                 .OrderBy(c => SN.Vector3.Distance(c.Position, man.Position)).FirstOrDefault();
@@ -450,8 +462,10 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             {
                 SkipCinematic();
                 um.FetchCivilian(man, civ);
-                for (int i = 0; i < 3000 && man.Carry != want; i++) _session.Step();
-                for (int i = 0; i < (int)(extra / Session.Dt); i++) _session.Step();
+                for (int i = 0; i < 3000 && man.Carry != want; i++)
+                    _session.Step();
+                for (int i = 0; i < (int)(extra / Session.Dt); i++)
+                    _session.Step();
                 SnapshotPoses();
                 _target = new SN.Vector3(man.Position.X, man.Position.Y, man.Position.Z); _dist = 900; _paused = true; _roofCheck = 0; UpdateRoofs(0.3f);
                 Console.WriteLine($"porteur : {man.Status} · {man.Carry} · civil {civ.State} · z {man.Position.Z:0}");
@@ -461,7 +475,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         }
         if (_frame == 4 && Environment.GetEnvironmentVariable("FD3_ACCES") != null && _session != null)
         {
-            foreach (Opening d in _session.Units.Openings.Where(o => !o.IsWindow)) _session.Units.SetOpeningState(d, OpeningState.Open);
+            foreach (Opening d in _session.Units.Openings.Where(o => !o.IsWindow))
+                _session.Units.SetOpeningState(d, OpeningState.Open);
             Unit? man = _session.Units.Active.FirstOrDefault(u => !u.IsVehicle);
             if (man != null)
                 foreach (Civilian c in _session.Units.Civilians.Where(c => !c.Hidden))
@@ -480,7 +495,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             SN.Vector2? gp = Ground(xy[0], xy[1]);
             Console.WriteLine($"clic d'essai : sol visé {gp}, {_sel.Count} pompier(s)");
             Command(xy[0], xy[1]);
-            foreach (Unit u in _sel) Console.WriteLine($"  {u.Name} : {u.Status} chemin {u.Path.Count}");
+            foreach (Unit u in _sel)
+                Console.WriteLine($"  {u.Name} : {u.Status} chemin {u.Path.Count}");
         }
         if (CapturePath != null && ++_frame >= CaptureAfter)
         {
@@ -508,7 +524,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     private MeshGpu Upload(SceneAssets.MeshAsset a, bool dynamic = false)
     {
         MeshGpu g = MeshGpu.Create(GraphicsDevice, a.Mesh.Positions, a.Mesh.Normals, a.Uv0, a.Mesh.Indices, dynamic);
-        foreach (SceneAssets.Group gr in a.Groups) g.Groups.Add((gr.Start, gr.Count, TexOf(gr.Diffuse), null, gr.Alpha));
+        foreach (SceneAssets.Group gr in a.Groups)
+            g.Groups.Add((gr.Start, gr.Count, TexOf(gr.Diffuse), null, gr.Alpha));
         return g;
     }
 
@@ -645,7 +662,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                     List<CutV> poly = Clip(tri, cut, below);
                     if (!below && _dropRoof)
                         continue;
-                    for (int i = 1; i + 1 < poly.Count; i++) EmitTri(poly[0], poly[i], poly[i + 1], tex, dirt, lm, gr.Alpha, !below, mode, true);
+                    for (int i = 1; i + 1 < poly.Count; i++)
+                        EmitTri(poly[0], poly[i], poly[i + 1], tex, dirt, lm, gr.Alpha, !below, mode, true);
                 }
             }
         }
@@ -758,13 +776,24 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             _settings.Save();
         }
         Status($"Chargement de {mission}...", 0);
-        foreach ((MeshGpu mesh, bool roof, int layer) d in _draw) d.mesh.Dispose();
-        foreach ((VertexBuffer vb, IndexBuffer ib, int count, Texture2D? tex, Texture2D? dirt, Texture2D? lm, bool alpha, bool roof, int mode, bool caster, int bld) d in _sceneDraw) { d.vb.Dispose(); d.ib.Dispose(); }
+        foreach ((MeshGpu mesh, bool roof, int layer) d in _draw)
+            d.mesh.Dispose();
+        foreach ((VertexBuffer vb, IndexBuffer ib, int count, Texture2D? tex, Texture2D? dirt, Texture2D? lm, bool alpha, bool roof, int mode, bool caster, int bld) d in _sceneDraw)
+        {
+            d.vb.Dispose();
+            d.ib.Dispose();
+        }
         _sceneDraw.Clear();
-        foreach (Texture2D? t in _texCache.Values) t?.Dispose();
-        foreach (List<(MeshGpu mesh, SN.Matrix4x4 part)> l in _unitModels.Values) foreach ((MeshGpu? m, _) in l) m.Dispose();
-        foreach (MeshGpu? m in _partMeshes.Values) m?.Dispose();
-        foreach (CharAnim c in _chars.Values) foreach ((MeshGpu mesh, float[] pos, float[] nrm) s in c.Skinned.Values) s.mesh.Dispose();
+        foreach (Texture2D? t in _texCache.Values)
+            t?.Dispose();
+        foreach (List<(MeshGpu mesh, SN.Matrix4x4 part)> l in _unitModels.Values)
+            foreach ((MeshGpu? m, _) in l)
+                m.Dispose();
+        foreach (MeshGpu? m in _partMeshes.Values)
+            m?.Dispose();
+        foreach (CharAnim c in _chars.Values)
+            foreach ((MeshGpu mesh, float[] pos, float[] nrm) s in c.Skinned.Values)
+                s.mesh.Dispose();
         _draw.Clear(); _fireRoom.Clear(); _texCache.Clear(); _log.Clear(); _unitModels.Clear(); _sel.Clear(); _unitLogSeen = 0; _scriptLogSeen = 0;
         _chars.Clear(); _rigs.Clear(); _partMeshes.Clear(); _lastAnimTime = -1; _prevPose.Clear(); _shownHeading.Clear();
         _audio?.StopAll();
@@ -910,7 +939,11 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         FlushStatic();
         // cadrage
         _sceneMin = new SN.Vector3(float.MaxValue); _sceneMax = new SN.Vector3(float.MinValue);
-        foreach (HotPoint h in _session.Fire.HotPoints) { _sceneMin = SN.Vector3.Min(_sceneMin, h.Position); _sceneMax = SN.Vector3.Max(_sceneMax, h.Position); }
+        foreach (HotPoint h in _session.Fire.HotPoints)
+        {
+            _sceneMin = SN.Vector3.Min(_sceneMin, h.Position);
+            _sceneMax = SN.Vector3.Max(_sceneMax, h.Position);
+        }
         if (_session.Grid is { } grid)
         {
             _sceneMin = new(0, 0, 0);
@@ -944,8 +977,16 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 o.Seed = 1000 + t.Seed % 3;
                 EzTree.TreeGenerator tr = new OpenFD.EzTree.TreeGenerator(o); tr.Generate();
                 float ymin = float.MaxValue, ymax = float.MinValue;
-                for (int i = 1; i < tr.BranchPos.Count; i += 3) { ymin = MathF.Min(ymin, tr.BranchPos[i]); ymax = MathF.Max(ymax, tr.BranchPos[i]); }
-                for (int i = 1; i < tr.LeafPos.Count; i += 3) { ymin = MathF.Min(ymin, tr.LeafPos[i]); ymax = MathF.Max(ymax, tr.LeafPos[i]); }
+                for (int i = 1; i < tr.BranchPos.Count; i += 3)
+                {
+                    ymin = MathF.Min(ymin, tr.BranchPos[i]);
+                    ymax = MathF.Max(ymax, tr.BranchPos[i]);
+                }
+                for (int i = 1; i < tr.LeafPos.Count; i += 3)
+                {
+                    ymin = MathF.Min(ymin, tr.LeafPos[i]);
+                    ymax = MathF.Max(ymax, tr.LeafPos[i]);
+                }
                 float[] barkUv = tr.BranchUv.Select((v, i) => i % 2 == 0 ? v * o.BarkScale.X : v * o.BarkScale.Y).ToArray();
                 SceneAssets.MeshAsset Asset(List<float> pos, List<float> nrm, float[] uv, List<uint> idx, string texKey, bool alpha) => new()
                 {
@@ -1017,7 +1058,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 SnapshotPoses();
             _session.Step();
         }
-        foreach (string l in _session.Fire.ExtinguishLog.Skip(before)) Log("Éteint : " + l.Trim());
+        foreach (string l in _session.Fire.ExtinguishLog.Skip(before))
+            Log("Éteint : " + l.Trim());
         PullLogs();
     }
 
@@ -1159,9 +1201,15 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                     continue;
                 _depth.Set(Matrix.Identity * _lightVp, d.alpha ? d.tex : null);
                 gd.SetVertexBuffer(d.vb); gd.Indices = d.ib;
-                foreach (EffectPass pass in _depth.Fx.CurrentTechnique.Passes) { pass.Apply(); gd.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, d.count / 3); }
+                foreach (EffectPass pass in _depth.Fx.CurrentTechnique.Passes)
+                {
+                    pass.Apply();
+                    gd.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, d.count / 3);
+                }
             }
-            foreach ((MeshGpu? mesh, bool roof, int layer) in _draw) if (layer == 2 && _objects) DrawMesh(mesh, Matrix.Identity);   // arbres
+            foreach ((MeshGpu? mesh, bool roof, int layer) in _draw)
+                if (layer == 2 && _objects)
+                    DrawMesh(mesh, Matrix.Identity);   // arbres
             RenderUnits();
         }
         finally { _shadowPass = false; gd.SetRenderTarget(null); }
@@ -1190,7 +1238,12 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _proj = SN.Matrix4x4.CreatePerspectiveFieldOfView(50f * MathF.PI / 180, (float)_fbW / _fbH, 20f, 80000f);
         _viewProj = _view * _proj;
         Matrix view = _view.X(); Matrix proj = _proj.X();
-        foreach (IEffectMatrices e in new IEffectMatrices[] { _lit, _plain, _dual, _alphaFx, _part, _ghost, _burnt }) { e.View = view; e.Projection = proj; e.World = Matrix.Identity; }
+        foreach (IEffectMatrices e in new IEffectMatrices[] { _lit, _plain, _dual, _alphaFx, _part, _ghost, _burnt })
+        {
+            e.View = view;
+            e.Projection = proj;
+            e.World = Matrix.Identity;
+        }
         // luminosité réglable (touches + et −) : multiplie l'éclairage du décor, des objets et des personnages
         foreach (BasicEffect e in new[] { _lit, _plain })
         {
@@ -1200,7 +1253,11 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         }
         _dual.DiffuseColor = (_bright * _tint).X(); _alphaFx.DiffuseColor = (0.95f * _bright * _tint).X();
         foreach (IEffectFog f in new IEffectFog[] { _lit, _plain, _dual, _alphaFx })
-        { f.FogColor = Sky.X(); f.FogStart = 30000; f.FogEnd = 90000; }
+        {
+            f.FogColor = Sky.X();
+            f.FogStart = 30000;
+            f.FogEnd = 90000;
+        }
 
         // décor : effet « sol / bâtiment » d'après les shaders du jeu
         _scene.SetFrame((_viewProj).X(), _eye.X(), 30000, 90000, Sky.X(), _tint.X());
@@ -1214,7 +1271,11 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 continue;
             _scene.Set(Matrix.Identity, d.tex, d.dirt, d.lm, d.mode, d.alpha, _bright, _lmScale);
             gd.SetVertexBuffer(d.vb); gd.Indices = d.ib;
-            foreach (EffectPass pass in _scene.Fx.CurrentTechnique.Passes) { pass.Apply(); gd.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, d.count / 3); }
+            foreach (EffectPass pass in _scene.Fx.CurrentTechnique.Passes)
+            {
+                pass.Apply();
+                gd.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, d.count / 3);
+            }
         }
         gd.RasterizerState = RasterizerState.CullNone;
         gd.SamplerStates[1] = SamplerState.AnisotropicWrap; gd.SamplerStates[2] = SamplerState.LinearWrap;
@@ -1245,7 +1306,11 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             foreach ((int start, int count, Texture2D? tex, _, bool alpha) in mesh.Groups)
             {
                 _depth.Set(world * _lightVp, alpha ? tex : null);
-                foreach (EffectPass pass in _depth.Fx.CurrentTechnique.Passes) { pass.Apply(); gd.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, start, count / 3); }
+                foreach (EffectPass pass in _depth.Fx.CurrentTechnique.Passes)
+                {
+                    pass.Apply();
+                    gd.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, start, count / 3);
+                }
             }
             return;
         }
@@ -1254,7 +1319,11 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             // silhouette d'un pompier caché par un mur : vert uni, avancé vers la caméra pour ne pas se cacher lui-même
             _ghost.World = world * Matrix.CreateTranslation(_ghostShift);
             foreach ((int start, int count, _, _, _) in mesh.Groups)
-                foreach (EffectPass pass in _ghost.CurrentTechnique.Passes) { pass.Apply(); gd.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, start, count / 3); }
+                foreach (EffectPass pass in _ghost.CurrentTechnique.Passes)
+                {
+                    pass.Apply();
+                    gd.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, start, count / 3);
+                }
             return;
         }
         foreach ((int start, int count, Texture2D? tex, Texture2D? lm, bool alpha) in mesh.Groups)
@@ -1325,7 +1394,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         bool Vis(uint id, bool def) => Host?.Visibility.TryGetValue(id, out bool v) == true ? v : def;
         foreach ((uint id, string? model, SN.Matrix4x4 world, Opening? ob) in _axeMarks)
             if (ob.State != OpeningState.Broken && Vis(id, true))
-                foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(model)) DrawMesh(mesh, (part * world).X());
+                foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(model))
+                    DrawMesh(mesh, (part * world).X());
         foreach ((uint id, string? model, SN.Matrix4x4 world, bool arrow) in _animMarks)
         {
             if (!Vis(id, true))
@@ -1336,11 +1406,13 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             float bob = 0.5f - 0.5f * MathF.Cos(_visTime * MathF.Tau / 1.2f);
             SN.Matrix4x4 anim = arrow ? SN.Matrix4x4.CreateTranslation(0, -55 * bob, 55 * bob) * w * SN.Matrix4x4.CreateTranslation(t)
                 : SN.Matrix4x4.CreateRotationZ(_visTime * 2.1f) * w * SN.Matrix4x4.CreateTranslation(t);
-            foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(model)) DrawMesh(mesh, (part * anim).X());
+            foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(model))
+                DrawMesh(mesh, (part * anim).X());
         }
         foreach ((uint id, string? model, SN.Matrix4x4 world, Opening? ob) in _brokenParts)
             if (Vis(id, ob.State == OpeningState.Broken))
-                foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(model)) DrawMesh(mesh, (part * world).X());
+                foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(model))
+                    DrawMesh(mesh, (part * world).X());
         foreach (Opening o in _session.Units.Openings.Where(o => o.Model != null && o.State != OpeningState.Broken && Vis(o.Id, true) && (o.OpenAnim != null || o.CloseAnim != null)))
             DrawAnimatedOpening(o);
         foreach (Opening o in _session.Units.Openings.Where(o => o.Model != null && o.State != OpeningState.Broken && Vis(o.Id, true) && o.OpenAnim == null && o.CloseAnim == null))
@@ -1516,12 +1588,20 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         if (smokeCount > 0)
         {
             gd.BlendState = BlendState.NonPremultiplied;
-            foreach (EffectPass pass in _part.CurrentTechnique.Passes) { pass.Apply(); gd.DrawUserPrimitives(PrimitiveType.TriangleList, arr, 0, smokeCount / 3); }
+            foreach (EffectPass pass in _part.CurrentTechnique.Passes)
+            {
+                pass.Apply();
+                gd.DrawUserPrimitives(PrimitiveType.TriangleList, arr, 0, smokeCount / 3);
+            }
         }
         if (arr.Length > smokeCount)
         {
             gd.BlendState = BlendState.Additive;                    // feu : couleurs additionnées
-            foreach (EffectPass pass in _part.CurrentTechnique.Passes) { pass.Apply(); gd.DrawUserPrimitives(PrimitiveType.TriangleList, arr, smokeCount, (arr.Length - smokeCount) / 3); }
+            foreach (EffectPass pass in _part.CurrentTechnique.Passes)
+            {
+                pass.Apply();
+                gd.DrawUserPrimitives(PrimitiveType.TriangleList, arr, smokeCount, (arr.Length - smokeCount) / 3);
+            }
         }
         if (_fv.Count > 0 && FlameTexture() is { } ft)
         {
@@ -1529,10 +1609,18 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             VertexPositionColorTexture[] fa = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_fv).ToArray();
             _part.Texture = ft;
             gd.BlendState = BlendState.NonPremultiplied;
-            foreach (EffectPass pass in _part.CurrentTechnique.Passes) { pass.Apply(); gd.DrawUserPrimitives(PrimitiveType.TriangleList, fa, 0, fa.Length / 3); }
+            foreach (EffectPass pass in _part.CurrentTechnique.Passes)
+            {
+                pass.Apply();
+                gd.DrawUserPrimitives(PrimitiveType.TriangleList, fa, 0, fa.Length / 3);
+            }
             gd.BlendState = BlendState.Additive;
             _part.Alpha = 0.2f;
-            foreach (EffectPass pass in _part.CurrentTechnique.Passes) { pass.Apply(); gd.DrawUserPrimitives(PrimitiveType.TriangleList, fa, 0, fa.Length / 3); }
+            foreach (EffectPass pass in _part.CurrentTechnique.Passes)
+            {
+                pass.Apply();
+                gd.DrawUserPrimitives(PrimitiveType.TriangleList, fa, 0, fa.Length / 3);
+            }
             _part.Alpha = 1f;
         }
         gd.DepthStencilState = DepthStencilState.Default; gd.BlendState = BlendState.Opaque;
@@ -1721,7 +1809,11 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             if (u.Target != null)
             {
                 SN.Vector2 q = MapToScreen(u.Target.Position.X, u.Target.Position.Y);
-                for (int k = 1; k < 8; k++) { SN.Vector2 m = SN.Vector2.Lerp(p, q, k / 8f); _ui.Disc(m.X, m.Y, 1.5f * px, new SN.Vector4(0.5f, 0.8f, 1, 0.8f)); }
+                for (int k = 1; k < 8; k++)
+                {
+                    SN.Vector2 m = SN.Vector2.Lerp(p, q, k / 8f);
+                    _ui.Disc(m.X, m.Y, 1.5f * px, new SN.Vector4(0.5f, 0.8f, 1, 0.8f));
+                }
             }
         }
         _ui.End();
@@ -1763,7 +1855,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             ($"{t / 60}:{t % 60:00}   {(_paused ? "en pause" : $"vitesse ×{_speed:0}")}", txt),
             ($"{_session.Fire.HotPoints.Count(h => h.IsBurning)} foyers en feu · fumée {_session.Smoke.Total:0}", txt),
         };
-        foreach ((Extinguisher? u, HotPoint? target) in _session.Sprayers) lines.Add(($"Arrosage : {target.Name} - réserve {u.Reserve:0}", new SN.Vector4(0.45f, 0.75f, 1, 1)));
+        foreach ((Extinguisher? u, HotPoint? target) in _session.Sprayers)
+            lines.Add(($"Arrosage : {target.Name} - réserve {u.Reserve:0}", new SN.Vector4(0.45f, 0.75f, 1, 1)));
         List<Civilian> civs = _session.Units.Civilians.Where(c => !c.Hidden).ToList();
         lines.Add(($"Civils : {civs.Count(c => c.State == CivilianState.Rescued)} sauvé(s) sur {civs.Count} · {civs.Count(c => c.State == CivilianState.Unconscious)} inconscient(s)", txt));
         lines.Add(($"{_session.Units.Active.Count} unités · {_sel.Count} sélectionnée(s)", txt));
@@ -1789,7 +1882,11 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         float px0 = _fbW - w - m;   // en haut à droite (les objectifs sont à gauche)
         _ui.Rect(px0, m, w, h, panel);
         float y = m + 10 * _scale;
-        foreach ((string? s, SN.Vector4 c) in lines) { _ui.Text(px0 + pad, y, s, c); y += lh; }
+        foreach ((string? s, SN.Vector4 c) in lines)
+        {
+            _ui.Text(px0 + pad, y, s, c);
+            y += lh;
+        }
         // barre de vie des portes et fenêtres entamées
         if (!_map)
             foreach (Opening o in _session.Units.Openings.Where(o => o.State != OpeningState.Broken && o.Life < o.MaxLife))
@@ -1841,16 +1938,29 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         byte[] row = new byte[_fbW * 4];
         for (int y = 0; y < _fbH; y++)
         {
-            for (int x = 0; x < _fbW; x++) { Color c = px[y * _fbW + x]; row[x * 4] = c.B; row[x * 4 + 1] = c.G; row[x * 4 + 2] = c.R; row[x * 4 + 3] = 255; }
+            for (int x = 0; x < _fbW; x++)
+            {
+                Color c = px[y * _fbW + x];
+                row[x * 4] = c.B;
+                row[x * 4 + 1] = c.G;
+                row[x * 4 + 2] = c.R;
+                row[x * 4 + 3] = 255;
+            }
             f.Write(row);
         }
         Console.WriteLine("Image enregistrée : " + path);
         if (_session != null)
-            foreach (Unit u in _session.Units.Units.Take(12)) { Grid g = _session.Grid!; (int cx, int cy) = g.CellOf(u.Position); Console.WriteLine($"unité {u.Name} [{u.Status}] feu le plus proche {_session.Fire.HotPoints.Where(h => h.IsBurning).Select(h => SN.Vector2.Distance(new(h.Position.X, h.Position.Y), new(u.Position.X, u.Position.Y))).DefaultIfEmpty(-1).Min():0} portée {u.Nozzle?.RangeMax} {_session.Units.AutoDiag(u)} pos {u.Position} sol {GroundAt(u.Position.X, u.Position.Y)} grille {string.Join(" ", Enumerable.Range(-2, 5).Select(d => g.Inside(cx + d, cy) ? g.GroundHeight[g.Index(cx + d, cy)].ToString("0") + "/" + g.ZoneA[g.Index(cx + d, cy)] : "-"))}"); }
+            foreach (Unit u in _session.Units.Units.Take(12))
+            {
+                Grid g = _session.Grid!;
+                (int cx, int cy) = g.CellOf(u.Position);
+                Console.WriteLine($"unité {u.Name} [{u.Status}] feu le plus proche {_session.Fire.HotPoints.Where(h => h.IsBurning).Select(h => SN.Vector2.Distance(new(h.Position.X, h.Position.Y), new(u.Position.X, u.Position.Y))).DefaultIfEmpty(-1).Min():0} portée {u.Nozzle?.RangeMax} {_session.Units.AutoDiag(u)} pos {u.Position} sol {GroundAt(u.Position.X, u.Position.Y)} grille {string.Join(" ", Enumerable.Range(-2, 5).Select(d => g.Inside(cx + d, cy) ? g.GroundHeight[g.Index(cx + d, cy)].ToString("0") + "/" + g.ZoneA[g.Index(cx + d, cy)] : "-"))}");
+            }
         if (_session?.Scripts is { } sc)
         {
             Console.WriteLine("Fonctions non simulées : " + string.Join(", ", sc.UnknownCalls.OrderByDescending(k => k.Value).Select(k => $"{k.Key}×{k.Value}")));
-            foreach (string l in sc.Log.Distinct().Take(15)) Console.WriteLine("  script : " + l);
+            foreach (string l in sc.Log.Distinct().Take(15))
+                Console.WriteLine("  script : " + l);
         }
     }
 }

@@ -241,7 +241,8 @@ public sealed partial class UnitManager
         {
             c.Replan = 0.6f; c.FollowGoal = to; c.FollowPath.Clear();
             List<Vector2> path = FindPath(me, to, out _);
-            foreach (Vector2 p in path) c.FollowPath.Enqueue(p);
+            foreach (Vector2 p in path)
+                c.FollowPath.Enqueue(p);
             if (c.FollowPath.Count == 0)
                 c.FollowPath.Enqueue(to);
         }

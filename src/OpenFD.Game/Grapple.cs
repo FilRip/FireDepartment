@@ -3,24 +3,6 @@ using OpenFD.Formats;
 
 namespace OpenFD.Game;
 
-/// <summary>Phases du passage d'un mur au grappin (animations SingleChar\sc_grappling_hook_…).</summary>
-public enum ClimbPhase { None, Launch, Climb, Stand, Step, Turn, Top, Descend, Land }
-
-/// <summary>
-/// Passage au grappin : repère « koshka_symbol » (« кошка », le grappin) posé en haut d'un mur. Dans la grille du jeu,
-/// les cases du mur sous le repère sont ouvertes (le jeu y met un lien « grappin ») : seul un pompier qui a le grappin
-/// ([CAPACITIES_ACTIONS] CanGrapplin, le « scout ») peut y passer, en grimpant d'un côté et en redescendant de l'autre.
-/// </summary>
-public sealed class GrapplePoint
-{
-    public required uint Id { get; init; }
-    public required Vector3 Top { get; init; }        // haut du mur (repère)
-    public required Vector2 Axis { get; init; }       // le long du mur
-    public required Vector2 Perp { get; init; }       // en travers du mur
-    public readonly HashSet<int> Cells = new();
-    public Vector2 SideA, SideB;                      // points au sol de part et d'autre (côté +Perp, côté −Perp)
-}
-
 public sealed partial class UnitManager
 {
     public List<GrapplePoint> Grapples { get; } = new();
@@ -62,12 +44,12 @@ public sealed partial class UnitManager
                 return p + perp * (s * 300);
             }
             gp.SideA = Side(1); gp.SideB = Side(-1);
-            foreach (int i in gp.Cells) Paths.GrappleCell[i] = true;
+            foreach (int i in gp.Cells)
+                Paths.GrappleCell[i] = true;
             Grapples.Add(gp);
             Log.Add($"Passage au grappin : {o.Name} ({gp.Cells.Count} case(s) du mur, haut à {o.Position.Z:0})");
         }
     }
-
 
     /// <summary>
     /// Pompier à grappin en marche : le prochain point de son chemin passe par le mur d'un passage au grappin →
