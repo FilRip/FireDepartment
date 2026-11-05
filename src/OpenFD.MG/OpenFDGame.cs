@@ -77,7 +77,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             _gdm.PreferMultiSampling = false;
         IsMouseVisible = true; IsFixedTimeStep = false;
         Window.AllowUserResizing = true;
-        Window.Title = "Fire Department 3 - simulation du feu";
+        Window.Title = "Open Fire Department";
     }
 
     protected override void Initialize()
@@ -954,7 +954,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _mapCenter = new(_target.X, _target.Y); _mapScale = 0;
         BuildGridTexture();
         LoadMinimap();
-        Window.Title = $"Fire Department 3 - {mission} ({DiffName})";
+        Window.Title = $"Open Fire Department - {mission} ({DiffName})";
     }
 
     private string DiffName => _difficulty switch { "EASY" => "facile", "HARD" => "difficile", _ => "normal" };
@@ -1563,7 +1563,9 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 continue;
             float k = Math.Min(1, h.Intensity / h.Class.IntensityMax);
             (float clr0, _) = FireRoom(h);
-            P(h.Position + new SN.Vector3(0, 0, 60), MathF.Min(260 + 500 * k, clr0 * 1.6f + 120), new SN.Vector4(0.9f, 0.35f, 0.08f, flames != null ? 0.07f : 0.45f), right, up);
+            bool chem = h.Class.FireType == 'D';   // feu chimique (type D, agent anti-métal) : flammes vertes
+            SN.Vector4 glow = chem ? new SN.Vector4(0.2f, 0.85f, 0.25f, flames != null ? 0.07f : 0.45f) : new SN.Vector4(0.9f, 0.35f, 0.08f, flames != null ? 0.07f : 0.45f);
+            P(h.Position + new SN.Vector3(0, 0, 60), MathF.Min(260 + 500 * k, clr0 * 1.6f + 120), glow, right, up);
             if (flames != null)
             {
                 Flames(h, hpIndex, k, time, right);
@@ -1574,7 +1576,9 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 float ph = Frac(q * 0.618f + hpIndex * 0.137f), t = Frac(time * 0.9f + ph);
                 float ox = MathF.Sin(ph * 40) * (40 + 90 * k) * (1 - 0.6f * t), oy = MathF.Cos(ph * 53) * (40 + 90 * k) * (1 - 0.6f * t);
                 ox += MathF.Sin(time * 7 + ph * 20) * 12 * t; oy += MathF.Cos(time * 6 + ph * 13) * 12 * t;
-                SN.Vector4 col = SN.Vector4.Lerp(new SN.Vector4(1f, 0.9f, 0.45f, 0.9f), new SN.Vector4(0.95f, 0.25f, 0.05f, 0.9f), Math.Clamp((t - 0.1f) / 0.7f, 0, 1));
+                SN.Vector4 col = chem
+                    ? SN.Vector4.Lerp(new SN.Vector4(0.75f, 1f, 0.5f, 0.9f), new SN.Vector4(0.1f, 0.7f, 0.15f, 0.9f), Math.Clamp((t - 0.1f) / 0.7f, 0, 1))
+                    : SN.Vector4.Lerp(new SN.Vector4(1f, 0.9f, 0.45f, 0.9f), new SN.Vector4(0.95f, 0.25f, 0.05f, 0.9f), Math.Clamp((t - 0.1f) / 0.7f, 0, 1));
                 col.W *= 1 - t;
                 P(h.Position + new SN.Vector3(ox, oy, 20 + t * (120 + 380 * k)), (90 + 240 * k) * (1 - 0.7f * t), col, right, up);
             }
@@ -1653,10 +1657,10 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
 
     // plusieurs langues de feu par foyer : debout (toujours verticales), chacune avec son image de départ, sa vitesse,
     // sa taille et sa teinte (rouge, orange, jaune), qui ondulent un peu ; plus le feu est fort, plus elles sont grandes et nombreuses
-    private void Flames(HotPoint h, int seed, float k, float time, SN.Vector3 right) => FlamesAt(h.Position, FireRoom(h), seed, k, time, right);
+    private void Flames(HotPoint h, int seed, float k, float time, SN.Vector3 right) => FlamesAt(h.Position, FireRoom(h), seed, k, time, right, h.Class.FireType == 'D');
 
     /// <summary>Flammes d'un foyer (ou d'un véhicule en feu) posées en <paramref name="pos"/> ; room : place libre autour (murs).</summary>
-    private void FlamesAt(SN.Vector3 pos, (float clear, SN.Vector2 away) room0, int seed, float k, float time, SN.Vector3 right)
+    private void FlamesAt(SN.Vector3 pos, (float clear, SN.Vector2 away) room0, int seed, float k, float time, SN.Vector3 right, bool chemical = false)
     {
         SN.Vector3 flat = new SN.Vector3(right.X, right.Y, 0);
         flat = flat.LengthSquared() > 1e-6f ? SN.Vector3.Normalize(flat) : SN.Vector3.UnitX;
@@ -1682,7 +1686,14 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             // au centre du foyer : rouge profond ; vers le bord : orange puis jaune (avec un peu de variété)
             float centre = 1 - Math.Clamp(off.Length() / MathF.Max(1, spread), 0, 1);
             SN.Vector3 edge = (q % 2) == 0 ? new SN.Vector3(1f, 0.92f, 0.6f) : new SN.Vector3(1f, 0.7f, 0.35f);
-            SN.Vector3 tintRgb = SN.Vector3.Lerp(edge, new SN.Vector3(1f, 0.32f, 0.14f), centre * centre * 0.9f + 0.1f * ph2);
+            SN.Vector3 core = new SN.Vector3(1f, 0.32f, 0.14f);
+            if (chemical)
+            {
+                // feu chimique : vert-jaune pâle au bord, vert profond au centre
+                edge = (q % 2) == 0 ? new SN.Vector3(0.8f, 1f, 0.55f) : new SN.Vector3(0.5f, 1f, 0.4f);
+                core = new SN.Vector3(0.12f, 0.8f, 0.2f);
+            }
+            SN.Vector3 tintRgb = SN.Vector3.Lerp(edge, core, centre * centre * 0.9f + 0.1f * ph2);
             float sway = MathF.Sin(time * 1.6f + ph * 17) * 0.1f;
             SN.Vector3 bottom = centre0 + off + new SN.Vector3(0, 0, -10);
             SN.Vector3 r = flat * (w / 2); SN.Vector3 up = new SN.Vector3(flat.Y * sway, -flat.X * sway, 1) * hgt;
@@ -1861,7 +1872,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         lines.Add(($"Civils : {civs.Count(c => c.State == CivilianState.Rescued)} sauvé(s) sur {civs.Count} · {civs.Count(c => c.State == CivilianState.Unconscious)} inconscient(s)", txt));
         lines.Add(($"{_session.Units.Active.Count} unités · {_sel.Count} sélectionnée(s)", txt));
         foreach (Unit u in _sel.Take(6))
-            lines.Add(($"  {UnitLabel(u)} : {u.Status}{(u.IsCanon ? (u.FeedTruck != null ? " · relié à un camion" : " · aucun camion à portée") : u.Nozzle != null ? $" · eau {u.Nozzle.Reserve:0}/{u.Nozzle.ReserveMax:0}" : "")}{(u.Seats > 0 ? $" · à bord {u.Passengers.Count}/{u.Seats}" : "")}", new SN.Vector4(0.45f, 0.75f, 1, 1)));
+            lines.Add(($"  {UnitLabel(u)} : {u.Status}{(u.IsCanon ? (u.FeedTruck != null ? " · relié à un camion" : " · aucun camion à portée") : u.Nozzle != null ? $" · {UnitManager.AgentName(u.Nozzle.Agent)} {u.Nozzle.Reserve:0}/{u.Nozzle.ReserveMax:0}" : "")}{(u.Seats > 0 ? $" · à bord {u.Passengers.Count}/{u.Seats}" : "")}", new SN.Vector4(0.45f, 0.75f, 1, 1)));
         if (_help)
         {
             lines.Add(("", txt));

@@ -19,6 +19,8 @@ public sealed class Unit
     public bool HasHose;                                  // (non utilisé : le jeu n'a pas de tuyaux)
     public bool CanHeal;                                  // médecin : peut réanimer un civil inconscient
     public float ResupplyPower;                           // véhicule : eau rendue par seconde aux pompiers (0 = aucune)
+    public string SupplyAgent = "WATER";                  // véhicule : agent qu'il fournit ([CAPACITIES_RESERVE] FireAgent, voir Agents.cs)
+    public OpenFD.Fire.HotPoint? WarnedAgent;             // feu pour lequel « mauvais agent » a déjà été annoncé
     public bool IsAmbulance;
     public Civilian? GoTo;                                // civil vers lequel l'unité se dirige
     public Civilian? Carrying;                            // civil inconscient porté sur le dos

@@ -34,6 +34,45 @@ public static class Program
                 }
                 return bad == 0 ? 0 : 2;
             }
+            case "agents":
+            {
+                // agents <Data> <Mission> : agents des unités ; changement d'agent à un camion d'un autre agent
+                Session ses = new Session(files, args[2], "EASY");
+                int steps = args.Length > 3 ? int.Parse(args[3]) : 300;
+                for (int i = 0; i < steps; i++)
+                {
+                    ses.Step();
+                    if (i % 50 == 0)
+                        ses.Host?.EndCinematic();
+                }
+                foreach (Unit x in ses.Units.Units.Where(x => !x.OnBoard))
+                    Console.WriteLine($"{x.Name,-28} véhicule {x.IsVehicle,-5} agent {x.Nozzle?.Agent ?? "-",-6} fournit {(x.ResupplyPower > 0 ? UnitManager.SupplyAgentOf(x) : "-")}");
+                Unit? w = ses.Units.Units.FirstOrDefault(x => !x.IsVehicle && !x.OnBoard && x.Nozzle is { Agent: "WATER", InfiniteReserve: false } && !x.IsCanon);
+                Unit? tox = ses.Units.Units.FirstOrDefault(x => x.IsVehicle && !x.OnBoard && x.ResupplyPower > 0 && UnitManager.SupplyAgentOf(x) == "METAL");
+                if (w == null || tox == null)
+                {
+                    Console.WriteLine("pas de pompier à l'eau ou pas de camion anti-métal");
+                    return 0;
+                }
+                w.Position = tox.Position + new System.Numerics.Vector3(250, 0, 0); w.Path.Clear(); w.Target = null;
+                Console.WriteLine($"{w.Name} : {w.Nozzle!.Agent} {w.Nozzle.Reserve:0}/{w.Nozzle.ReserveMax:0} → camion {tox.Name}");
+                ses.Units.GoToVehicle(w, tox);
+                for (int k = 0; k < 14; k++)
+                {
+                    for (int i = 0; i < 20; i++) ses.Step();
+                    Console.WriteLine($"  {k * 2 + 2} s : {w.Nozzle.Agent} {w.Nozzle.Reserve:0} · {w.Status}");
+                }
+                foreach (string l in ses.Units.Log.TakeLast(3)) Console.WriteLine("journal : " + l.Trim());
+                return 0;
+            }
+            case "typesfeux":
+            {
+                // typesfeux <Data> <Mission> : nombre de foyers par type de feu et par classe
+                Session ses = new Session(files, args[2], "EASY", false);
+                foreach (IGrouping<string, OpenFD.Fire.HotPoint> g in ses.Fire.HotPoints.GroupBy(h => $"{h.Class.FireType} {h.Class.Name}").OrderBy(g => g.Key))
+                    Console.WriteLine($"{g.Key,-50} {g.Count()}");
+                return 0;
+            }
             case "groupefeux":
             {
                 // groupefeux <Data> <Mission> <groupe> : foyers du groupe (classe, type de feu, actif)
@@ -71,7 +110,7 @@ public static class Program
                     ses.Step();
                 Console.WriteLine($"  sous tension : {u.Status} · vie {u.Life:0} · cible {u.Target?.Name ?? "aucune"}");
                 ses.Scripts.TryRun("__Off");
-                Console.WriteLine($"  courant coupé : électrique {h.Electrified}, actif {h.Enabled} · puissance {u.Nozzle!.Power} · efficacité C {(u.Nozzle.Efficiency.TryGetValue('C', out float ef) ? ef : -1)} · réserve {u.Nozzle.Reserve} · max {h.Class.IntensityMax} état {h.State}");
+                Console.WriteLine($"  courant coupé : électrique {h.Electrified}, actif {h.Enabled} · puissance {u.Nozzle!.Power} · efficacité C {u.Nozzle.EfficiencyFor('C')} · réserve {u.Nozzle.Reserve} · max {h.Class.IntensityMax} état {h.State}");
                 ses.Units.Attack(u, h);
                 for (int k = 0; k < 6; k++)
                 {
@@ -1271,7 +1310,7 @@ public static class Program
                     {
                         u.Heading = MathF.Atan2(spot.h.Position.Y - spot.p.Y, spot.h.Position.X - spot.p.X) + 2.2f;
                         ses.Units.Attack(u, spot.h);
-                        for (int k = 0; k < 8; k++)
+                        for (int k = 0; k < 14; k++)
                         {
                             Run(1);
                             Console.WriteLine($"   {ses.Time:0} s ({u.Position.X:0},{u.Position.Y:0}) cap {u.Heading:0.00} {u.Status}");
