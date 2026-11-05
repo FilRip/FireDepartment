@@ -52,7 +52,8 @@ public sealed partial class UnitManager
     {
         u.Path.Clear();
         u.Position = new Vector3(p, Ground(p));
-        foreach (Unit pas in u.Passengers) pas.Position = u.Position;
+        foreach (Unit pas in u.Passengers)
+            pas.Position = u.Position;
     }
 
     /// <summary>IA_CmdMoveTo : l'unité va à ce point (le véhicule y roule ; sans chemin trouvé, en ligne droite).</summary>
@@ -175,7 +176,8 @@ public sealed partial class UnitManager
         List<Vector2> path = FindPath(from, dest, out _);
         if (path.Count == 0)
             path.Add(dest);
-        foreach (Vector2 p in path) c.Path.Enqueue(p);
+        foreach (Vector2 p in path)
+            c.Path.Enqueue(p);
     }
 
     public static float ReserveOf(Unit u) => u.Nozzle?.Reserve ?? 0;

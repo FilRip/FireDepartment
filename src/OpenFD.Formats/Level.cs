@@ -3,104 +3,6 @@ using System.Text;
 
 namespace OpenFD.Formats;
 
-/// <summary>Types d'entités de la table de classes d'un .level.</summary>
-public enum EntityKind : ushort
-{
-    Placeable = 2, Waypoint = 8, HotPoint = 11, SmokePoint = 12, FireVehicle = 14,
-    Group = 15, Trigger = 16, Light = 17, Civilian = 18, Sound = 20,
-}
-
-/// <summary>Blocs balisés : AA AA FF FF + version ouvre, CC CC BB BB ferme.</summary>
-public static class Chunks
-{
-    public static bool IsBegin(ReadOnlySpan<byte> d, int p) => p + 4 <= d.Length && d[p] == 0xAA && d[p + 1] == 0xAA && d[p + 2] == 0xFF && d[p + 3] == 0xFF;
-    public static bool IsEnd(ReadOnlySpan<byte> d, int p) => p + 4 <= d.Length && d[p] == 0xCC && d[p + 1] == 0xCC && d[p + 2] == 0xBB && d[p + 3] == 0xBB;
-
-    /// <summary>Position juste après la fin du bloc qui commence en p (comptage des marqueurs).</summary>
-    public static int NodeEnd(ReadOnlySpan<byte> d, int p)
-    {
-        if (!IsBegin(d, p))
-            throw new InvalidDataException($"Bloc attendu en 0x{p:x}");
-        int depth = 0, i = p;
-        while (i < d.Length - 3)
-        {
-            if (d[i] == 0xAA && IsBegin(d, i))
-            {
-                depth++;
-                i += 5;
-                continue;
-            }
-            if (d[i] == 0xCC && IsEnd(d, i))
-            {
-                depth--;
-                i += 4;
-                if (depth == 0)
-                    return i;
-                continue;
-            }
-            i++;
-        }
-        throw new InvalidDataException($"Bloc non fermé en 0x{p:x}");
-    }
-
-    public static string ReadString(ReadOnlySpan<byte> d, ref int p)
-    {
-        int n = BitConverter.ToInt32(d[p..]);
-        string s = Encoding.Latin1.GetString(d.Slice(p + 4, Math.Max(0, n - 1)));
-        p += 4 + n;
-        return s;
-    }
-}
-
-public sealed record Component(ushort Id, int Offset, int Size);
-
-/// <summary>Un objet du niveau : octets bruts conservés pour une réécriture exacte.</summary>
-public sealed class LevelObject
-{
-    public required uint Id { get; init; }
-    public required EntityKind Kind { get; init; }
-    public required string ClassPath { get; init; }   // ex. design\hotpoint\groundmulti_xs
-    public required int Extra { get; init; }
-    public required byte[] Raw { get; init; }
-    public required int NodeLength { get; init; }
-    public required string Name { get; init; }
-    public required IReadOnlyList<Component> Components { get; init; }
-    public required int List { get; init; }
-    public uint[] Members { get; init; } = Array.Empty<uint>();
-    public int TransformOffset { get; init; } = -1;
-
-    public string ClassName => ClassPath[(ClassPath.LastIndexOf('\\') + 1)..];
-    public bool HasTransform => TransformOffset >= 0;
-    public Vector3 Position => HasTransform ? new(F(13), F(14), F(15)) : default;
-    /// <summary>Angles d'Euler en radians (X, Y, Z) ; la matrice vaut Rz·Rx·Ry.</summary>
-    public Vector3 Rotation => HasTransform ? new(F(17), F(18), F(19)) : default;
-    private float F(int i) => BitConverter.ToSingle(Raw, TransformOffset + i * 4);
-    /// <summary>Matrice monde 4×4 (convention vecteur-ligne, translation en dernière ligne).</summary>
-    public Matrix4x4 Matrix => HasTransform
-        ? new(F(1), F(2), F(3), F(4), F(5), F(6), F(7), F(8), F(9), F(10), F(11), F(12), F(13), F(14), F(15), F(16))
-        : Matrix4x4.Identity;
-
-    public Component? GetComponent(ushort id) => Components.FirstOrDefault(c => c.Id == id);
-
-    /// <summary>
-    /// Visible au départ : dans le composant A001, après la transformation, le bloc « AA AA FF FF 0A » commence par un
-    /// entier puis un octet de visibilité (Paris : 0 pour les victimes enterrées sous les décombres, que le chien révèle).
-    /// </summary>
-    public bool StartVisible
-    {
-        get
-        {
-            if (GetComponent(0xA001) is not { } c)
-                return true;
-            ReadOnlySpan<byte> b = ComponentBytes(c);
-            ReadOnlySpan<byte> mark = stackalloc byte[] { 0xAA, 0xAA, 0xFF, 0xFF, 0x0A };
-            int i = b.LastIndexOf(mark);
-            return i < 0 || i + 9 >= b.Length || b[i + 9] != 0;
-        }
-    }
-    public ReadOnlySpan<byte> ComponentBytes(Component c) => Raw.AsSpan(c.Offset, c.Size);
-}
-
 public sealed class Level
 {
     public string Version = "", Build = "", MissionPath = "";
@@ -161,7 +63,11 @@ public sealed class Level
     private static int ObjectEnd(ReadOnlySpan<byte> d, int p)
     {
         int depth = 0;
-        while (Chunks.IsBegin(d, p)) { depth++; p += 5; }
+        while (Chunks.IsBegin(d, p))
+        {
+            depth++;
+            p += 5;
+        }
         p += 8;
         if (!Chunks.IsEnd(d, p))
             throw new InvalidDataException($"En-tête objet inattendu en 0x{p:x}");
@@ -172,7 +78,8 @@ public sealed class Level
         p = Chunks.NodeEnd(d, p);
         int nc = BitConverter.ToInt32(d[p..]);
         p += 4;
-        for (int i = 0; i < nc; i++) p += 6 + BitConverter.ToInt32(d[(p + 2)..]);
+        for (int i = 0; i < nc; i++)
+            p += 6 + BitConverter.ToInt32(d[(p + 2)..]);
         while (depth > 0)
         {
             if (!Chunks.IsEnd(d, p))
@@ -187,7 +94,8 @@ public sealed class Level
     private static LevelObject ParseObject(byte[] raw, int nodeLen, string cls, EntityKind kind, int extra, int list)
     {
         int p = 0;
-        while (Chunks.IsBegin(raw, p)) p += 5;
+        while (Chunks.IsBegin(raw, p))
+            p += 5;
         uint id = BitConverter.ToUInt32(raw, p);
         p += 12;
         string name = Chunks.ReadString(raw, ref p);
@@ -209,7 +117,8 @@ public sealed class Level
         {
             int n = BitConverter.ToInt32(raw, nodeLen);
             members = new uint[n];
-            for (int i = 0; i < n; i++) members[i] = BitConverter.ToUInt32(raw, nodeLen + 4 + 4 * i);
+            for (int i = 0; i < n; i++)
+                members[i] = BitConverter.ToUInt32(raw, nodeLen + 4 + 4 * i);
         }
         return new LevelObject { Id = id, Kind = kind, ClassPath = cls, Extra = extra, Raw = raw, NodeLength = nodeLen, Name = name, Components = comps, List = list, Members = members, TransformOffset = tOff };
     }
@@ -258,46 +167,10 @@ public sealed class Level
                 ms.Write(BitConverter.GetBytes(o.Extra));
             }
         }
-        for (int list = 0; list < 2; list++) foreach (LevelObject o in Objects.Where(o => o.List == list)) ms.Write(o.Raw);
+        for (int list = 0; list < 2; list++)
+            foreach (LevelObject o in Objects.Where(o => o.List == list))
+                ms.Write(o.Raw);
         ms.Write(Suffix);
         return ms.ToArray();
-    }
-}
-
-/// <summary>Grille de simulation (.grid) : cellules de 100 unités, stockées colonne par colonne.</summary>
-public sealed class Grid
-{
-    public const float CellSize = 100f;
-    public int Width, Height;
-    public float[] GroundHeight = Array.Empty<float>();
-    public ushort[] ZoneA = Array.Empty<ushort>(), ZoneB = Array.Empty<ushort>();
-
-    public int Index(int cx, int cy) => cy * Width + cx;
-    public bool Inside(int cx, int cy) => cx >= 0 && cy >= 0 && cx < Width && cy < Height;
-    public (int cx, int cy) CellOf(Vector3 p) => ((int)MathF.Floor(p.X / CellSize), (int)MathF.Floor(p.Y / CellSize));
-
-    public static Grid Parse(byte[] d)
-    {
-        int p = 0;
-        if (Chunks.ReadString(d, ref p) != "GRD")
-            throw new InvalidDataException("Pas un fichier .grid");
-        Chunks.ReadString(d, ref p); Chunks.ReadString(d, ref p);
-        Grid g = new Grid { Width = BitConverter.ToUInt16(d, p), Height = BitConverter.ToUInt16(d, p + 2) };
-        p += 4 + 5 + 4;
-        if (!Chunks.IsBegin(d, p))
-            throw new InvalidDataException("Grille inattendue");
-        p += 5;
-        int n = g.Width * g.Height;
-        g.GroundHeight = new float[n]; g.ZoneA = new ushort[n]; g.ZoneB = new ushort[n];
-        for (int i = 0; i < n; i++)
-        {
-            int e = Chunks.NodeEnd(d, p);
-            int cx = i / g.Height, cy = i % g.Height, k = g.Index(cx, cy);
-            g.ZoneA[k] = BitConverter.ToUInt16(d, p + 5);
-            g.ZoneB[k] = BitConverter.ToUInt16(d, p + 7);
-            g.GroundHeight[k] = BitConverter.ToSingle(d, p + 9);
-            p = e;
-        }
-        return g;
     }
 }

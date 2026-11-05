@@ -4,41 +4,6 @@ using OpenFD.Formats;
 
 namespace OpenFD.Game;
 
-/// <summary>
-/// Objet qui peut exploser (classe : [EXPLOSION] CanExplode = 1 ; voitures, bouteilles de gaz, fûts…).
-/// Ses points de vie baissent quand les foyers proches brûlent ; à 0, il explose.
-/// Valeurs de la carte (.level) quand elles y sont : composant A024 (points de vie), A029 (explosion), D007 (son).
-/// </summary>
-public sealed class ExplosiveItem
-{
-    public required uint Id { get; init; }
-    public required string Name { get; init; }
-    public required Vector3 Position { get; init; }
-    public float Life, MaxLife = 100, FireDamageCoef = 1;
-    public float LpPower, LpRadius, HpPower, HpRadius, StaminaPower, StaminaRadius;
-    public string? Sound;
-    public float[] Thresholds = Array.Empty<float>();   // [DAMAGE] DamageTresholdStep0…n (points de vie)
-    public bool Exploded;
-    public readonly List<HotPoint> NearFires = new();
-
-    /// <summary>État d'affichage : « e1 » intact, « e2 », « e3 » de plus en plus abîmé, « dead » après l'explosion.</summary>
-    public string State
-    {
-        get
-        {
-            if (Exploded)
-                return "dead";
-            int step = 1;
-            for (int i = 1; i < Thresholds.Length; i++)
-                if (Thresholds[i] > 0 && Life < Thresholds[i])
-                    step = i + 1;
-            return "e" + Math.Min(step, 3);
-        }
-    }
-}
-
-public sealed record Explosion(Vector3 Position, float Time, float Radius, string? Sound, string Name);
-
 public sealed class ExplosionSystem
 {
     public List<ExplosiveItem> Items { get; } = new();
@@ -148,7 +113,8 @@ public sealed class ExplosionSystem
                 it.Life -= dmg * it.FireDamageCoef * dt;
         }
         // explosions (en chaîne : une explosion abîme les objets voisins, qui peuvent exploser au pas suivant)
-        foreach (ExplosiveItem it in Items.Where(i => !i.Exploded && i.Life <= 0).ToList()) Explode(it, fire, time);
+        foreach (ExplosiveItem it in Items.Where(i => !i.Exploded && i.Life <= 0).ToList())
+            Explode(it, fire, time);
     }
 
     /// <summary>Explosion : souffle sur les objets (points de vie), les foyers (le feu prend ou grandit) et les personnes.</summary>

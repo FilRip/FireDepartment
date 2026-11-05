@@ -305,7 +305,8 @@ public sealed partial class OpenFDGame
             SN.Vector4 col = o.Status == 2 ? new SN.Vector4(0.45f, 0.95f, 0.45f, 1) : o.Status == 0 ? new SN.Vector4(1f, 0.4f, 0.35f, 1) : new SN.Vector4(0.98f, 0.92f, 0.45f, 1);
             string text = _loc.Get(o.Text) + (o.Progress && o.Status == 1 ? $" ({o.Value:0})" : "");
             List<string> lines = Wrap(text, maxW - 2 * pad - gap, _scale);
-            for (int k = 0; k < lines.Count; k++) rows.Add((lines[k], col, o.Status, k == 0));
+            for (int k = 0; k < lines.Count; k++)
+                rows.Add((lines[k], col, o.Status, k == 0));
         }
         float w = MathF.Min(maxW, rows.Max(r => _ui.Measure(r.s)) + 2 * pad + gap), hgt = rows.Count * lh + 16 * _scale + lh;
         float x = m;
@@ -335,7 +336,8 @@ public sealed partial class OpenFDGame
         float w = MathF.Min(_fbW * 0.6f, 900 * _scale), pad = 24 * _scale, lh = _ui.LineHeight + 6 * _scale;
         List<(string s, SN.Vector4 c)> lines = new List<(string s, SN.Vector4 c)>();
         if (!string.IsNullOrEmpty(h.DebriefText))
-            foreach (string l in Wrap(_loc.Get(h.DebriefText!), w - 2 * pad, _scale)) lines.Add((l, new SN.Vector4(0.92f, 0.92f, 0.9f, 1)));
+            foreach (string l in Wrap(_loc.Get(h.DebriefText!), w - 2 * pad, _scale))
+                lines.Add((l, new SN.Vector4(0.92f, 0.92f, 0.9f, 1)));
         if (h.Scoring.Count > 0)
             lines.Add(("", default));
         foreach ((string? label, double value, int medals) in h.Scoring)

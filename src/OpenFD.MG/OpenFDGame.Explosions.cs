@@ -20,7 +20,9 @@ public sealed partial class OpenFDGame
 
     private void LoadExplosives(IEnumerable<SceneAssets.Placed> placed)
     {
-        foreach (List<(MeshGpu mesh, SN.Matrix4x4 part)> l in _stateModels.Values) foreach ((MeshGpu? m, _) in l) m.Dispose();
+        foreach (List<(MeshGpu mesh, SN.Matrix4x4 part)> l in _stateModels.Values)
+            foreach ((MeshGpu? m, _) in l)
+                m.Dispose();
         _stateModels.Clear(); _explosives.Clear(); _blastFx.Clear(); _shake = 0;
         Dictionary<string, ExplosiveItem> byName = _session.Explosions.Items.ToDictionary(i => i.Name, StringComparer.OrdinalIgnoreCase);
         foreach (SceneAssets.Placed p in placed)

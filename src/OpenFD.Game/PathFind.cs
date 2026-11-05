@@ -231,7 +231,10 @@ public sealed class PathFind
                 nearDoor.Add(g.Index(dx, dy));
             // porte sans case dans la grille (ouverte au départ) : le passage autour de son centre
             if (d.Cells.Count == 0)
-                for (int ox = -1; ox <= 1; ox++) for (int oy = -1; oy <= 1; oy++) if (g.Inside(dx + ox, dy + oy)) nearDoor.Add(g.Index(dx + ox, dy + oy));
+                for (int ox = -1; ox <= 1; ox++)
+                    for (int oy = -1; oy <= 1; oy++)
+                        if (g.Inside(dx + ox, dy + oy))
+                            nearDoor.Add(g.Index(dx + ox, dy + oy));
         }
         // jamais sous un civil ni sur un point de passage des scripts
         foreach (Vector2 w in keep)
@@ -332,7 +335,8 @@ public sealed class PathFind
                     continue;
                 pts = new();
                 for (float x = -sx * 50 + 25; x < sx * 50; x += 50)
-                    for (float y = -sy * 50 + 25; y < sy * 50; y += 50) pts.Add(new(x, y));
+                    for (float y = -sy * 50 + 25; y < sy * 50; y += 50)
+                        pts.Add(new(x, y));
                 Mark(o, pts, model ?? "");
                 continue;
             }
@@ -345,7 +349,12 @@ public sealed class PathFind
         }
 
         // une case n'est bloquée que si l'objet en couvre plus de la moitié (rangées de sièges, tables : on passe entre)
-        foreach ((int i, int n) in cover) if (n > CoverMin) { Blocked[i] = true; BlockedBy[i] = names[i]; }
+        foreach ((int i, int n) in cover)
+            if (n > CoverMin)
+            {
+                Blocked[i] = true;
+                BlockedBy[i] = names[i];
+            }
 
         void Mark(LevelObject o, List<Vector2> local, string model)
         {
@@ -377,7 +386,8 @@ public sealed class PathFind
                 Mesh m = assets.LoadMesh("", part.Mesh, "gfx").Mesh;
                 Vector3[] v = new Vector3[m.VertexCount];
                 Matrix4x4 pw = pose != null ? pose(part.Mesh, part.World) : part.World;   // pièce déplacée (battant d'un portail ouvert)
-                for (int i = 0; i < v.Length; i++) v[i] = Vector3.Transform(new Vector3(m.Positions[i * 3], m.Positions[i * 3 + 1], m.Positions[i * 3 + 2]), pw);
+                for (int i = 0; i < v.Length; i++)
+                    v[i] = Vector3.Transform(new Vector3(m.Positions[i * 3], m.Positions[i * 3 + 1], m.Positions[i * 3 + 2]), pw);
                 for (int t = 0; t + 2 < m.Indices.Length; t += 3)
                 {
                     Vector3 a = v[m.Indices[t]]; Vector3 b = v[m.Indices[t + 1]]; Vector3 cc = v[m.Indices[t + 2]];
@@ -418,7 +428,10 @@ public sealed class PathFind
                         stack.Push((nx, ny));
                     }
             }
-            for (int y = 0; y < fh; y++) for (int x = 0; x < fw; x++) if (!outside[y * fw + x]) set.Add((x + x0, y + y0));
+            for (int y = 0; y < fh; y++)
+                for (int x = 0; x < fw; x++)
+                    if (!outside[y * fw + x])
+                        set.Add((x + x0, y + y0));
         }
         return set.Select(k => new Vector2((k.Item1 + 0.5f) * Step, (k.Item2 + 0.5f) * Step)).ToList();
     }
@@ -538,7 +551,8 @@ public sealed class PathFind
         while (i < cells.Count)
         {
             int j = cells.Count - 1;
-            while (j > i && !LineFree(cur, cells[j])) j--;
+            while (j > i && !LineFree(cur, cells[j]))
+                j--;
             smooth.Add(cells[j]); cur = cells[j]; i = j + 1;
         }
         return smooth;

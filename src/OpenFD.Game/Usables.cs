@@ -4,24 +4,6 @@ using OpenFD.Script;
 
 namespace OpenFD.Game;
 
-/// <summary>
-/// Objet sur lequel un pompier agit (armoire électrique, vanne, transformateur…) : classe [CAPACITIES_TARGET] CouldBeUse
-/// (n'importe quel pompier) ou CouldBeRepair (le technicien, [CAPACITIES_ACTIONS] CanRepair).
-/// Le composant A027 de l'objet donne, par action (« use », « use2 », « repair »), la fonction du script à appeler :
-/// Fonction(Utilisateur, Objet, Action).
-/// </summary>
-public sealed class UsableObject
-{
-    public required uint Id { get; init; }
-    public required string Name { get; init; }
-    public required Vector3 Position { get; init; }
-    public bool CanBeUsed, CanBeRepaired;
-    public readonly List<(string action, string script)> Actions = new();
-    public int Uses;                      // nombre de fois utilisé (les actions alternent : use, use2…)
-    public bool Repaired;
-    public bool Enabled => CanBeUsed || (CanBeRepaired && !Repaired);
-}
-
 public sealed partial class UnitManager
 {
     public List<UsableObject> Usables { get; } = new();
@@ -57,7 +39,8 @@ public sealed partial class UnitManager
             if (len < 2 || len > 80 || p + 4 + len > b.Length || b[p + 4 + len - 1] != 0)
                 continue;
             bool ok = true;
-            for (int i = 0; i < len - 1 && ok; i++) ok = b[p + 4 + i] >= 32 && b[p + 4 + i] < 127;
+            for (int i = 0; i < len - 1 && ok; i++)
+                ok = b[p + 4 + i] >= 32 && b[p + 4 + i] < 127;
             if (!ok)
                 continue;
             strings.Add(System.Text.Encoding.Latin1.GetString(b, p + 4, len - 1));

@@ -47,7 +47,8 @@ public sealed class CharacterRig
             seen[i] = true;
             order.Add(i);
         }
-        for (int i = 0; i < rig.Names.Length; i++) Visit(i, 0);
+        for (int i = 0; i < rig.Names.Length; i++)
+            Visit(i, 0);
         rig.Order = order.ToArray();
 
         foreach (SceneAssets.Node part in assets.ModelParts(model))
@@ -88,7 +89,8 @@ public sealed class CharacterRig
     {
         Skin s = p.Skin!;
         Matrix4x4[] mats = new Matrix4x4[s.Bones.Length];
-        for (int b = 0; b < mats.Length; b++) mats[b] = p.InvBind[b] * world[p.BoneNode[b]];
+        for (int b = 0; b < mats.Length; b++)
+            mats[b] = p.InvBind[b] * world[p.BoneNode[b]];
         int n = s.Start.Length - 1;
         for (int v = 0; v < n; v++)
         {

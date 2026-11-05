@@ -4,26 +4,6 @@ using OpenFD.Formats;
 
 namespace OpenFD.Game;
 
-/// <summary>
-/// Backdraft. Certains foyers de la carte sont marqués « MakeBackdraft » (London : deux pièces de la banque).
-/// Dans une pièce dont toutes les portes et fenêtres sont fermées, un tel foyer qui atteint son seuil (SleepingThreshold)
-/// « s'endort » faute d'air : il ne grandit plus, la fumée et la chaleur restent enfermées (de la fumée filtre sous les portes).
-///  • Une porte de la pièce qui s'ouvre (ou qu'on casse) : l'air entre d'un coup, la pièce s'embrase (backdraft),
-///    les flammes jaillissent par la porte, les pompiers tout près sont blessés ; voix « VOCAL_BACKDRAFT ».
-///  • Une fenêtre cassée avant : la fumée s'échappe, la chaleur retombe, les foyers se réveillent doucement, sans backdraft.
-/// ([OPENING] AfterBackdraftIntensity = 50 : feu ajouté près de l'ouverture.)
-/// </summary>
-public sealed class BackdraftRoom
-{
-    public required string Name { get; init; }
-    public required Rooms.Room Box { get; init; }
-    public readonly List<HotPoint> Sleepers = new();      // foyers à backdraft de la pièce
-    public readonly List<HotPoint> All = new();           // tous les foyers de la pièce
-    public readonly List<Opening> Openings = new();
-    public bool Closed => Openings.All(o => o.State == OpeningState.Closed);
-    public bool Asleep => Sleepers.Any(h => h.Sleeping);
-}
-
 public sealed partial class UnitManager
 {
     public List<BackdraftRoom> BackdraftRooms { get; } = new();
@@ -91,7 +71,8 @@ public sealed partial class UnitManager
             BackdraftRooms.Add(room);
             Console.WriteLine($"Pièce à risque de backdraft : {room.Name} ({room.Sleepers.Count} foyers, {room.Openings.Count} ouvertures)");
         }
-        foreach (Opening o in Openings) _lastOpeningState[o] = o.State;
+        foreach (Opening o in Openings)
+            _lastOpeningState[o] = o.State;
     }
 
     public void UpdateBackdrafts(float time, float dt)
@@ -127,16 +108,23 @@ public sealed partial class UnitManager
             // une fenêtre cassée (ou une ouverture déjà là) : la fumée s'échappe, la chaleur retombe, sans explosion
             if (opened.Any(o => o.IsWindow))
                 Log.Add($"{time,6:0} s : {room.Name} : fenêtre cassée, la fumée s'échappe, plus de risque de backdraft");
-            foreach (HotPoint h in room.Sleepers.Where(h => h.Sleeping)) { h.Sleeping = false; h.SetIntensity(h.Intensity * 0.6f); }
+            foreach (HotPoint h in room.Sleepers.Where(h => h.Sleeping))
+            {
+                h.Sleeping = false;
+                h.SetIntensity(h.Intensity * 0.6f);
+            }
         }
-        foreach (Opening o in Openings) _lastOpeningState[o] = o.State;
+        foreach (Opening o in Openings)
+            _lastOpeningState[o] = o.State;
     }
 
     private void Backdraft(BackdraftRoom room, Opening door, float time)
     {
-        foreach (HotPoint h in room.Sleepers) h.Sleeping = false;
+        foreach (HotPoint h in room.Sleepers)
+            h.Sleeping = false;
         // la pièce s'embrase d'un coup
-        foreach (HotPoint h in room.All.Where(h => h.Enabled)) _s.Fire.AddIntensity(h, h.Class.IntensityMax);
+        foreach (HotPoint h in room.All.Where(h => h.Enabled))
+            _s.Fire.AddIntensity(h, h.Class.IntensityMax);
         // les flammes sortent par la porte
         foreach (HotPoint h in _s.Fire.HotPoints.Where(h => h.Enabled && Vector3.Distance(h.Position, door.Center) < 600))
             _s.Fire.AddIntensity(h, AfterBackdraftIntensity);

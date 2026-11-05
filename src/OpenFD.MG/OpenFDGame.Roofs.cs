@@ -113,7 +113,8 @@ public sealed partial class OpenFDGame
                 if (_nodeBuilding.TryGetValue(mesh, out int id))
                     _buildings[id].Open = hidden;
                 else
-                    foreach (Building b0 in _buildings.Where(b0 => b0.Nodes.Any(n => n.Contains(mesh, StringComparison.OrdinalIgnoreCase)))) b0.Open = hidden;
+                    foreach (Building b0 in _buildings.Where(b0 => b0.Nodes.Any(n => n.Contains(mesh, StringComparison.OrdinalIgnoreCase))))
+                        b0.Open = hidden;
             h.RoofRequests.Clear();
         }
         if ((_roofCheck -= dt) > 0 || _buildings.Count == 0)

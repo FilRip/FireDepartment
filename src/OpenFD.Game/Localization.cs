@@ -46,9 +46,7 @@ public sealed class Localization
             return loc;
         loc.Language = want;
         foreach (string f in Directory.EnumerateFiles(langDir, "*.loc"))
-        {
             try { loc.Parse(File.ReadAllText(f)); } catch { }
-        }
         return loc;
     }
 

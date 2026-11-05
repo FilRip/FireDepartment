@@ -94,7 +94,8 @@ public sealed partial class OpenFDGame
         if (Host is not { } h)
             return;
         _loc ??= Localization.Load(_files.DataDir);
-        foreach (string s in h.Sounds2D) _audio?.Play(s);
+        foreach (string s in h.Sounds2D)
+            _audio?.Play(s);
         h.Sounds2D.Clear();
         if (h.MessagesCleared)
         {
@@ -187,7 +188,11 @@ public sealed partial class OpenFDGame
         if (Host is not { } h || !h.Cinematic)
             return;
         Rec("skipcine");
-        for (int i = 0; i < 1200 && h.Cinematic; i++) { SnapshotPoses(); _session.Step(); }
+        for (int i = 0; i < 1200 && h.Cinematic; i++)
+        {
+            SnapshotPoses();
+            _session.Step();
+        }
         h.EndCinematic();
         h.Sounds2D.Clear();
         _audio?.StopAll();

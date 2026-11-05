@@ -6,31 +6,6 @@ using SN = System.Numerics;
 
 namespace OpenFD.MG;
 
-/// <summary>Ordre du joueur noté pendant la partie : au pas de simulation Step, l'opération Op sur les objets A et B.</summary>
-public sealed class JournalEntry
-{
-    public int Step { get; set; }
-    public string Op { get; set; } = "";
-    public long A { get; set; }
-    public long B { get; set; }
-    public float X { get; set; }
-    public float Y { get; set; }
-    public string? S { get; set; }
-}
-
-/// <summary>Partie sauvegardée (Save\FD3_CSharp_parties\*.json).</summary>
-public sealed class SavedGame
-{
-    public int Version { get; set; } = 1;
-    public string Mission { get; set; } = "";
-    public string Difficulty { get; set; } = "";
-    public string Nationality { get; set; } = "";
-    public DateTime Date { get; set; }
-    public int Steps { get; set; }
-    public List<JournalEntry> Journal { get; set; } = new();
-    public float[] Camera { get; set; } = Array.Empty<float>();   // cible x y z, cap, inclinaison, distance
-}
-
 // sauvegarde et chargement d'une partie en cours.
 // La simulation est déterministe : la sauvegarde garde la mission et les ordres du joueur (avec le moment où il les a
 // donnés) ; le chargement rejoue la mission depuis le début, sans l'afficher, jusqu'au moment de la sauvegarde. Tout
@@ -57,20 +32,104 @@ public sealed partial class OpenFDGame
     }
 
     // ---- ordres notés : chaque appel du jeu passe par ici ----
-    private void DoRevive(Unit who, Unit victim) { if (NetSubmit("revive", who.Id, victim.Id)) return;  Rec("revive", who.Id, victim.Id); _session.Units.ReviveColleague(who, victim); }
-    private void DoFetch(Unit who, Civilian c) { if (NetSubmit("fetch", who.Id, c.Id)) return;  Rec("fetch", who.Id, c.Id); _session.Units.FetchCivilian(who, c); }
-    private void DoBoard(Unit u, Unit veh) { if (NetSubmit("board", u.Id, veh.Id)) return;  Rec("board", u.Id, veh.Id); _session.Units.BoardVehicle(u, veh); }
-    private void DoGoToVehicle(Unit u, Unit veh) { if (NetSubmit("goveh", u.Id, veh.Id)) return;  Rec("goveh", u.Id, veh.Id); _session.Units.GoToVehicle(u, veh); }
-    private void DoUse(Unit u, UsableObject o) { if (NetSubmit("use", u.Id, o.Id)) return;  Rec("use", u.Id, o.Id); _session.Units.UseObject(u, o); }
-    private void DoOpening(Unit u, Opening d) { if (NetSubmit("door", u.Id, d.Id)) return;  Rec("door", u.Id, d.Id); _session.Units.WorkOnOpening(u, d); }
-    private void DoAttack(Unit u, OpenFD.Fire.HotPoint h) { if (NetSubmit("attack", u.Id, h.Id)) return;  Rec("attack", u.Id, h.Id); _session.Units.Attack(u, h); }
-    private bool DoOrder(Unit u, SN.Vector2 p) { if (NetSubmit("order", u.Id, 0, p.X, p.Y)) return true;  Rec("order", u.Id, 0, p.X, p.Y); return _session.Units.Order(u, p); }
-    private void DoDrive(Unit v, SN.Vector2 p) { if (NetSubmit("drive", v.Id, 0, p.X, p.Y)) return;  Rec("drive", v.Id, 0, p.X, p.Y); _session.Units.Drive(v, p); }
-    private int DoUnload(Unit v) { if (NetSubmit("unload", v.Id)) return 0;  Rec("unload", v.Id); return _session.Units.UnloadPassengers(v); }
-    private void DoSpray(OpenFD.Fire.HotPoint h, string cls) { if (NetSubmit("spray", 0, h.Id, s: cls)) return;  Rec("spray", 0, h.Id, s: cls); _session.Spray(h, cls); }
-    private void DoGrapple(Unit u, GrapplePoint gp) { if (NetSubmit("grapple", u.Id, gp.Id)) return;  Rec("grapple", u.Id, gp.Id); _session.Units.GrappleOver(u, gp); }
-    private void DoSense(Unit u) { if (NetSubmit("sense", u.Id)) return;  Rec("sense", u.Id); _session.Units.DogSense(u); }
-    private void DoScript(OpenFD.Script.Interpreter sc, string fn) { if (NetSubmit("script", s: fn)) return;  Rec("script", s: fn); sc.TryRun(fn); }
+    private void DoRevive(Unit who, Unit victim)
+    {
+        if (NetSubmit("revive", who.Id, victim.Id))
+            return;
+        Rec("revive", who.Id, victim.Id);
+        _session.Units.ReviveColleague(who, victim);
+    }
+    private void DoFetch(Unit who, Civilian c)
+    {
+        if (NetSubmit("fetch", who.Id, c.Id))
+            return;
+        Rec("fetch", who.Id, c.Id);
+        _session.Units.FetchCivilian(who, c);
+    }
+    private void DoBoard(Unit u, Unit veh)
+    {
+        if (NetSubmit("board", u.Id, veh.Id))
+            return;
+        Rec("board", u.Id, veh.Id);
+        _session.Units.BoardVehicle(u, veh);
+    }
+    private void DoGoToVehicle(Unit u, Unit veh)
+    {
+        if (NetSubmit("goveh", u.Id, veh.Id))
+            return;
+        Rec("goveh", u.Id, veh.Id);
+        _session.Units.GoToVehicle(u, veh);
+    }
+    private void DoUse(Unit u, UsableObject o)
+    {
+        if (NetSubmit("use", u.Id, o.Id))
+            return;
+        Rec("use", u.Id, o.Id);
+        _session.Units.UseObject(u, o);
+    }
+    private void DoOpening(Unit u, Opening d)
+    {
+        if (NetSubmit("door", u.Id, d.Id))
+            return;
+        Rec("door", u.Id, d.Id);
+        _session.Units.WorkOnOpening(u, d);
+    }
+    private void DoAttack(Unit u, OpenFD.Fire.HotPoint h)
+    {
+        if (NetSubmit("attack", u.Id, h.Id))
+            return;
+        Rec("attack", u.Id, h.Id);
+        _session.Units.Attack(u, h);
+    }
+    private bool DoOrder(Unit u, SN.Vector2 p)
+    {
+        if (NetSubmit("order", u.Id, 0, p.X, p.Y))
+            return true;
+        Rec("order", u.Id, 0, p.X, p.Y);
+        return _session.Units.Order(u, p);
+    }
+    private void DoDrive(Unit v, SN.Vector2 p)
+    {
+        if (NetSubmit("drive", v.Id, 0, p.X, p.Y))
+            return;
+        Rec("drive", v.Id, 0, p.X, p.Y);
+        _session.Units.Drive(v, p);
+    }
+    private int DoUnload(Unit v)
+    {
+        if (NetSubmit("unload", v.Id))
+            return 0;
+        Rec("unload", v.Id);
+        return _session.Units.UnloadPassengers(v);
+    }
+    private void DoSpray(OpenFD.Fire.HotPoint h, string cls)
+    {
+        if (NetSubmit("spray", 0, h.Id, s: cls))
+            return;
+        Rec("spray", 0, h.Id, s: cls);
+        _session.Spray(h, cls);
+    }
+    private void DoGrapple(Unit u, GrapplePoint gp)
+    {
+        if (NetSubmit("grapple", u.Id, gp.Id))
+            return;
+        Rec("grapple", u.Id, gp.Id);
+        _session.Units.GrappleOver(u, gp);
+    }
+    private void DoSense(Unit u)
+    {
+        if (NetSubmit("sense", u.Id))
+            return;
+        Rec("sense", u.Id);
+        _session.Units.DogSense(u);
+    }
+    private void DoScript(OpenFD.Script.Interpreter sc, string fn)
+    {
+        if (NetSubmit("script", s: fn))
+            return;
+        Rec("script", s: fn);
+        sc.TryRun(fn);
+    }
 
     private void Replay(JournalEntry e)
     {
@@ -180,7 +239,8 @@ public sealed partial class OpenFDGame
             int i = 0;
             while (true)
             {
-                while (i < todo.Count && todo[i].Step <= _session.Steps) Replay(todo[i++]);
+                while (i < todo.Count && todo[i].Step <= _session.Steps)
+                    Replay(todo[i++]);
                 if (_session.Steps >= g.Steps)
                     break;
                 _session.Step();
@@ -349,9 +409,15 @@ public sealed partial class OpenFDGame
     private string StateHash()
     {
         double a = _session.Time, b = 0, c = 0, d = 0;
-        foreach (Unit u in _session.Units.Units) { a += u.Position.X * 0.001 + u.Position.Y * 0.0007 + u.Life + u.Stamina; b += u.Nozzle?.Reserve ?? 0; }
-        foreach (Fire.HotPoint h in _session.Fire.HotPoints) c += h.Intensity + (h.Lit ? 1 : 0);
-        foreach (Civilian cv in _session.Units.Civilians) d += cv.Position.X * 0.001 + cv.Position.Y * 0.0007 + (int)cv.State;
+        foreach (Unit u in _session.Units.Units)
+        {
+            a += u.Position.X * 0.001 + u.Position.Y * 0.0007 + u.Life + u.Stamina;
+            b += u.Nozzle?.Reserve ?? 0;
+        }
+        foreach (Fire.HotPoint h in _session.Fire.HotPoints)
+            c += h.Intensity + (h.Lit ? 1 : 0);
+        foreach (Civilian cv in _session.Units.Civilians)
+            d += cv.Position.X * 0.001 + cv.Position.Y * 0.0007 + (int)cv.State;
         int open = _session.Units.Openings.Count(o => o.State != OpeningState.Closed);
         return $"t={_session.Time:0.0} unités={a:0.0000} eau={b:0.00} feu={c:0.0000} civils={d:0.0000} ouvertures={open} fumée={_session.Smoke.Total:0.00}";
     }

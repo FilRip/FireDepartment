@@ -2,57 +2,6 @@ using System.Globalization;
 
 namespace OpenFD.Script;
 
-public enum VKind { Int, Float, Str }
-
-/// <summary>Valeur du langage : entier (s32, EntityID, mcBool), flottant (f32) ou texte (mcString).</summary>
-public readonly struct Value
-{
-    public readonly VKind Kind; public readonly double N; public readonly string? S;
-    private Value(VKind k, double n, string? s) { Kind = k; N = n; S = s; }
-    public static Value I(long v) => new(VKind.Int, v, null);
-    public static Value F(double v) => new(VKind.Float, v, null);
-    public static Value T(string v) => new(VKind.Str, 0, v);
-    public static readonly Value Zero = I(0);
-    public bool Truthy => Kind == VKind.Str ? !string.IsNullOrEmpty(S) : N != 0;
-    public long AsInt => Kind == VKind.Str ? 0 : (long)Math.Truncate(N);
-    public double AsNum => Kind == VKind.Str ? 0 : N;
-    public string AsText => Kind switch
-    {
-        VKind.Str => S ?? "",
-        VKind.Int => ((long)N).ToString(CultureInfo.InvariantCulture),
-        _ => N.ToString("0.######", CultureInfo.InvariantCulture),
-    };
-    public override string ToString() => Kind == VKind.Str ? $"\"{S}\"" : AsText;
-
-    public static Value Convert(string type, Value v) => type switch
-    {
-        "f32" or "float" => F(v.AsNum),
-        "mcString" => T(v.AsText),
-        "void" => v,
-        _ => I(v.AsInt),
-    };
-}
-
-/// <summary>Argument passé à une fonction du moteur ; certains sont modifiables (ENT_GetPosition(e, x, y)).</summary>
-public sealed class Arg
-{
-    public Value Value;
-    internal Action<Value>? Setter;
-    public void Set(Value v) => Setter?.Invoke(v);
-}
-
-/// <summary>Le moteur de jeu vu par les scripts.</summary>
-public interface IScriptHost
-{
-    double GameTime { get; }
-    /// <summary>Renvoie null si la fonction n'est pas connue du moteur.</summary>
-    Value? Call(string name, IReadOnlyList<Arg> args);
-}
-
-public class ScriptError(string message) : Exception(message);
-/// <summary>Erreur qui doit arrêter toute la fonction (boucle infinie, récursion) : on ne passe pas à la ligne suivante.</summary>
-public sealed class ScriptAbort(string message) : ScriptError(message);
-
 public sealed class Interpreter
 {
     private readonly Dictionary<string, Function> _functions = new(StringComparer.OrdinalIgnoreCase);
@@ -211,7 +160,11 @@ public sealed class Interpreter
                 }
                 break;
             case While w:
-                while (Eval(w.Cond, fr, depth).Truthy) { Exec(w.Body, fr, depth); Tick(); }
+                while (Eval(w.Cond, fr, depth).Truthy)
+                {
+                    Exec(w.Body, fr, depth);
+                    Tick();
+                }
                 break;
             case Return r: throw new ReturnSignal(r.Value == null ? Value.Zero : Eval(r.Value, fr, depth));
             case Empty: break;

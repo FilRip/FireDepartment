@@ -4,42 +4,6 @@ using OpenFD.Formats;
 
 namespace OpenFD.Game;
 
-public enum OpeningState { Closed, Open, Broken }
-
-/// <summary>
-/// Porte ou fenêtre de la carte (objet dont [OCCUPATION] Occupation_Type = DOOR ou WINDOW).
-/// État de départ lu dans le composant A027 (état logique : 0 = « Close », 1 = « Open »).
-/// Vie : [DAMAGE] LifePoints ; un coup de hache retire HitDamageCoef × BreakPower × BlowFactor.
-/// </summary>
-public sealed class Opening
-{
-    public required uint Id { get; init; }
-    public required string Name { get; init; }
-    public required bool IsWindow { get; init; }
-    public required string? Model { get; init; }
-    public required Matrix4x4 World { get; init; }
-    public Vector3 Position => World.Translation;
-    public bool Breakable;          // [CAPACITIES_ACTIONS] CouldBeBreak et [DAMAGE] UseDamage
-    public bool Usable;             // CouldBeUse : s'ouvre et se ferme à la main
-    public float Life, MaxLife, HitCoef;
-    public OpeningState State;
-    public bool OnGround;           // au niveau de la grille (les portes des étages ne touchent pas le chemin)
-    public bool IsObstacle;         // gravats, éboulis… à dégager à la hache (repère « axe_symbol » à côté)
-    public List<int> Cells = new(); // cases de la grille fermées quand la porte est fermée
-    public Vector3 Center;          // milieu du battant (point visé et point de passage)
-    public string? SoundLabel;      // [SOUND] LABEL : bruit de la vitre qui casse
-    public readonly List<(string action, string script)> Actions = new();   // composant A027 : « Open » / « Close » → fonction du script
-    public Vector2 BoxMin, BoxMax;
-    /// <summary>Portail coulissant ouvert : cases qui restent fermées (montants, caisson où rentrent les battants).</summary>
-    public readonly HashSet<int> OpenBlocked = new();
-    /// <summary>Portail coulissant : cases sous le bâti, de part et d'autre du passage (caissons des battants) — toujours fermées.</summary>
-    public readonly HashSet<int> FrameCells = new();
-    public string? OpenAnim, CloseAnim;
-    public Vector2? Lever;          // mécanisme d'ouverture (repère « mechanism_symbol », les rouages) : l'unité s'y arrête   // animations du modèle (portail coulissant) ; sinon la porte pivote de 90°  // emprise du modèle au sol (clic sur tout le portail)
-    public bool Passable => IsWindow || State != OpeningState.Closed;
-    public bool LetsSmokeOut => State != OpeningState.Closed;
-}
-
 public sealed partial class UnitManager
 {
     public List<Opening> Openings { get; } = new();
@@ -92,7 +56,12 @@ public sealed partial class UnitManager
                     Vector2 mid = pts.Aggregate(Vector2.Zero, (a, p) => a + p) / pts.Count;
                     d.Center = Vector3.Transform(new Vector3(mid, 100), o.Matrix);
                     d.BoxMin = new(float.MaxValue); d.BoxMax = new(float.MinValue);
-                    foreach (Vector2 q in pts) { Vector3 wq = Vector3.Transform(new Vector3(q, 0), o.Matrix); d.BoxMin = Vector2.Min(d.BoxMin, new(wq.X, wq.Y)); d.BoxMax = Vector2.Max(d.BoxMax, new(wq.X, wq.Y)); }
+                    foreach (Vector2 q in pts)
+                    {
+                        Vector3 wq = Vector3.Transform(new Vector3(q, 0), o.Matrix);
+                        d.BoxMin = Vector2.Min(d.BoxMin, new(wq.X, wq.Y));
+                        d.BoxMax = Vector2.Max(d.BoxMax, new(wq.X, wq.Y));
+                    }
                     if (_s.Grid is { } g)
                     {
                         // sol le plus haut autour (la case de la porte est un mur, de hauteur 0 même dans un bâtiment
@@ -211,7 +180,9 @@ public sealed partial class UnitManager
             if (_s.Grid is { } g)
             {
                 // ses cases : celles que le décor lui attribue déjà (BuildObstacles) et son emprise au sol
-                foreach ((int i, string? name) in BlockedBy) if (name == o.Name) d.Cells.Add(i);
+                foreach ((int i, string? name) in BlockedBy)
+                    if (name == o.Name)
+                        d.Cells.Add(i);
                 if (model != null)
                 {
                     List<Vector2> pts = PathFind.Footprint(assets, model, -400, 400);
@@ -274,9 +245,15 @@ public sealed partial class UnitManager
             Paths.DoorClosed = new bool[g.Width * g.Height];
         else
             Array.Clear(Paths.DoorClosed);
-        foreach (Opening d in Openings.Where(d => !d.Passable)) foreach (int i in d.Cells) Paths.DoorClosed[i] = true;
-        foreach (Opening d in Openings.Where(d => d.Passable)) foreach (int i in d.OpenBlocked) Paths.DoorClosed[i] = true;
-        foreach (Opening d in Openings) foreach (int i in d.FrameCells) Paths.DoorClosed[i] = true;
+        foreach (Opening d in Openings.Where(d => !d.Passable))
+            foreach (int i in d.Cells)
+                Paths.DoorClosed[i] = true;
+        foreach (Opening d in Openings.Where(d => d.Passable))
+            foreach (int i in d.OpenBlocked)
+                Paths.DoorClosed[i] = true;
+        foreach (Opening d in Openings)
+            foreach (int i in d.FrameCells)
+                Paths.DoorClosed[i] = true;
         _s.Smoke.SetOpenings(Environment.GetEnvironmentVariable("FD3_NOOPEN") != null ? Array.Empty<Vector3>() : Openings.Where(d => d.LetsSmokeOut).Select(d => d.Center));
     }
 
@@ -288,7 +265,6 @@ public sealed partial class UnitManager
             d.Life = 0;
         RefreshDoorCells();
     }
-
 
     /// <summary>
     /// Clic droit sur une porte ou une fenêtre : un pompier qui peut casser (CanBreak) l'enfonce à la hache ;

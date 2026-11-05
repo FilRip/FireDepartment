@@ -3,130 +3,6 @@ using OpenFD.Formats;
 
 namespace OpenFD.Fire;
 
-/// <summary>Réglages globaux du feu pour une mission (voir docs/MODELE_FEU.md).</summary>
-public sealed class FireSettings
-{
-    public float TempoFactor = 1f;            // [DIFFICULTY_*] Tempo
-    public float GrowthFactor = 1f;           // [DIFFICULTY_*] GrowthRate
-    public float FireAttackPower = 1f;        // [DIFFICULTY_*] FireAttackPower (extinction, à venir)
-    public float FireAttackCost = 1f;         // [DIFFICULTY_*] FireAttackCost (extinction, à venir)
-    public float ElectricityStamina = 0.5f;    // [DIFFICULTY_*] ElectricityStamina (électrocution)
-    public float NaturalEvaporationRate = 1.5f;
-    public float FireEvaporationFactor = 0f;
-    public Vector3 WindDirection = Vector3.UnitX;
-    public float WindPower = 1f;              // 1 = pas d'effet
-
-    public static FireSettings FromMission(ClassFile mis, string difficulty = "NORMAL")
-    {
-        FireSettings s = new FireSettings();
-        string d = "DIFFICULTY_" + difficulty;
-        s.TempoFactor = mis.GetFloat(d, "Tempo", 1f);
-        s.GrowthFactor = mis.GetFloat(d, "GrowthRate", 1f);
-        s.FireAttackPower = mis.GetFloat(d, "FireAttackPower", 1f);
-        s.FireAttackCost = mis.GetFloat(d, "FireAttackCost", 1f);
-        s.ElectricityStamina = mis.GetFloat(d, "ElectricityStamina", 0.5f);
-        s.NaturalEvaporationRate = mis.GetFloat("WATER", "NaturalEvaporationRate", 1.5f);
-        s.FireEvaporationFactor = mis.GetFloat("WATER", "FireEvaporationFactor", 0f);
-        return s;
-    }
-}
-
-/// <summary>Paramètres d'une classe de foyer (section HOTPOINT_PROPS et HOTPOINT_TAGS).</summary>
-public sealed record HotPointClass(
-    string Name, float InitialIntensity, float IntensityMax, float IntensityMin,
-    float LifeDamageRange, float HeatRangeMax, float LightingRange, float LightingThreshold,
-    float Tempo, float GrowthRate, float DeathRate, float GrowthTime,
-    float SlopeFactor, bool UnderWindInfluence)
-{
-    public float SmokeGenerationRate { get; init; } = 20f;
-    /// <summary>[HOTPOINT_DAMAGE] UnitLifeDamage : dégâts aux objets et aux unités à portée (par seconde, à pleine intensité).</summary>
-    public float UnitLifeDamage { get; init; } = 2f;
-    /// <summary>[HOTPOINT_DAMAGE] UnitHeatDamage : chaleur (endurance des pompiers) par seconde, à pleine intensité, au contact.</summary>
-    public float UnitHeatDamage { get; init; } = 2f;
-    /// <summary>Type de feu A (ordinaire), B (liquides : essence…), C (électrique), D (métaux).</summary>
-    public char FireType { get; init; } = 'A';
-    public static HotPointClass From(string name, ClassFile c)
-    {
-        const string P = "HOTPOINT_PROPS", T = "HOTPOINT_TAGS";
-        return new HotPointClass(name,
-            c.GetFloat(P, "InitialIntensity", 1), c.GetFloat(P, "IntensityMax", 100), c.GetFloat(P, "IntensityMin", -100),
-            c.GetFloat(P, "LifeDamageRange", 100), c.GetFloat(P, "HeatRangeMax", 250), c.GetFloat(P, "LightingRange", 500),
-            c.GetFloat(P, "LightingThreshold", 50), c.GetFloat(P, "Tempo", 15), c.GetFloat(P, "GrowthRate", 2.5f),
-            c.GetFloat(P, "DeathRate", -1), c.GetFloat(P, "GrowthTime", 120),
-            c.GetFloat(T, "SlopeFactor", 10), c.GetBool(T, "UnderWindInfluence", true))
-        {
-            SmokeGenerationRate = c.GetFloat(T, "SmokeGenerationRate", 20),
-            UnitLifeDamage = c.GetFloat("HOTPOINT_DAMAGE", "UnitLifeDamage", 2),
-            UnitHeatDamage = c.GetFloat("HOTPOINT_DAMAGE", "UnitHeatDamage", 2),
-            FireType = (c.Get(T, "Type") ?? "FireType_A").Trim('"', ' ').ToUpperInvariant() is string t && t.Length > 0 ? t[^1] : 'A',
-        };
-    }
-}
-
-public enum HotPointState { Idle, Heating, Consumed, Growing, Declining }
-
-public sealed class HotPoint
-{
-    public required uint Id { get; init; }
-    public required string Name { get; init; }
-    public required HotPointClass Class { get; init; }
-    public required Vector3 Position { get; init; }
-
-    public float Intensity;
-    public bool Lit;
-    public bool Enabled = true;
-    /// <summary>Feu électrique (type C) encore sous tension : on ne peut pas l'arroser tant que le courant n'est pas coupé.</summary>
-    public bool Powered = true;
-    public bool Electrified => Class.FireType == 'C' && Powered && IsBurning;
-    public HotPointState State = HotPointState.Idle;
-    public float HeatReceived;     // chaleur de la dernière mise à jour
-    public float DelayedHeat;      // apportée par les liens à retardement, consommée à la mise à jour suivante
-    public float HeatingTime;      // compteur de chauffe avant allumage
-    public float BurnTime;         // temps passé à brûler
-    public float GrowthMultiplier = 1f; // modifié par les scripts (FIR_HPMultGrowthRate)
-    /// <summary>[HOTPOINT_TAGS] MakeBackdraft / SleepingThreshold (valeurs de la carte) : dans une pièce fermée, ce foyer
-    /// « s'endort » faute d'air au-delà du seuil ; si on ouvre une porte, il se réveille d'un coup (backdraft).</summary>
-    public bool MakeBackdraft;
-    public float SleepingThreshold = 80f;
-    public bool Sleeping;
-    public float PendingAttack;    // eau/mousse reçue depuis la dernière mise à jour (§ 6)
-    public readonly List<HotPoint> HeatSources = new();
-
-    public bool IsBurning => Lit && Intensity > 0;
-
-    /// <summary>Portée des dégâts (§ 3.5).</summary>
-    public float DamageRange => Intensity > 0
-        ? Class.LifeDamageRange + Intensity / Class.IntensityMax * (Class.HeatRangeMax - Class.LifeDamageRange)
-        : Class.LifeDamageRange;
-
-    public void SetIntensity(float value) => Intensity = Math.Clamp(value, Class.IntensityMin, Class.IntensityMax);
-}
-
-public enum LinkType { Neighbour = 0, Delayed = 1, HotToSmoke = 2 }
-
-public sealed class FireLink
-{
-    public required HotPoint? A { get; init; }
-    public required HotPoint? B { get; init; }
-    public required LinkType Type { get; init; }
-    public required int Way { get; init; }        // 0 = deux sens, 1 = A vers B, 2 = B vers A (sens 1/2 : hypothèse)
-    public required float Tempo { get; init; }
-    public required bool Active { get; init; }
-    public required uint OpeningId { get; init; }
-    public float Elapsed;
-    public bool Pushing;
-
-    public IEnumerable<(HotPoint src, HotPoint dst)> Directions()
-    {
-        if (A == null || B == null)
-            yield break;
-        if (Way is 0 or 1)
-            yield return (A, B);
-        if (Way is 0 or 2)
-            yield return (B, A);
-    }
-}
-
 /// <summary>Simulation du feu d'une mission. Pas de temps fixe ; aucune dépendance graphique.</summary>
 public sealed class FireWorld
 {
@@ -320,7 +196,8 @@ public sealed class FireWorld
             if (ClosedOpeningsBlock && l.OpeningId != 0)
                 continue;
             if (l.Active)
-                foreach ((HotPoint? src, HotPoint? dst) in l.Directions()) AddSource(dst, src);
+                foreach ((HotPoint? src, HotPoint? dst) in l.Directions())
+                    AddSource(dst, src);
             else
             {
                 float d = Vector3.Distance(l.A!.Position, l.B!.Position);
@@ -372,7 +249,8 @@ public sealed class FireWorld
 
         LastDt = dt;
         // 2. chaleur reçue, calculée avant toute mise à jour d'intensité
-        foreach (HotPoint hp in HotPoints) hp.HeatReceived = hp.Lit ? 0f : ComputeHeat(hp);
+        foreach (HotPoint hp in HotPoints)
+            hp.HeatReceived = hp.Lit ? 0f : ComputeHeat(hp);
 
         // 3. mise à jour de chaque foyer
         foreach (HotPoint hp in HotPoints)
