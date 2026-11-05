@@ -246,7 +246,7 @@ public sealed partial class OpenFDGame
             Bar(x, pr.y + pr.iconH + 4 * _scale, iw, 8 * _scale, Math.Clamp(k, 0, 1), u.IsVehicle ? lifeTex : stamTex,
                 new SN.Vector4(1 - Math.Clamp(k, 0, 1), 0.25f + 0.65f * Math.Clamp(k, 0, 1), 0.2f, 1));
             if (u.Nozzle is { } n && !n.InfiniteReserve)
-                Bar(x, pr.y + pr.iconH + 15 * _scale, iw, 7 * _scale, Math.Clamp(n.Reserve / Math.Max(1, n.ReserveMax), 0, 1), waterTex, new SN.Vector4(0.25f, 0.6f, 1f, 1));
+                Bar(x, pr.y + pr.iconH + 15 * _scale, iw, 7 * _scale, Math.Clamp(n.Reserve / Math.Max(1, n.ReserveMax), 0, 1), waterTex, AgentColor(n.Agent));
             x += pr.cell;
         }
         if (_sel.Count > PanelMax)
@@ -284,4 +284,11 @@ public sealed partial class OpenFDGame
         }
         return true;
     }
+
+    /// <summary>Couleur de la jauge de réserve selon l'agent : gris pour l'anti-métal, bleu sinon (eau ; mousse et poudre à choisir).</summary>
+    private static SN.Vector4 AgentColor(string agent) => agent switch
+    {
+        "METAL" => new SN.Vector4(0.62f, 0.64f, 0.68f, 1),
+        _ => new SN.Vector4(0.25f, 0.6f, 1f, 1),
+    };
 }
