@@ -448,7 +448,7 @@ public sealed partial class OpenFDGame
             DrawMenuBack();
         (float lx, float ly, float lw, float lh) = ScreenLayout(rows.Count);
         SN.Vector4 accent = new SN.Vector4(1f, 0.48f, 0.18f, 1); SN.Vector4 txt = new SN.Vector4(0.93f, 0.92f, 0.9f, 1); SN.Vector4 muted = new SN.Vector4(0.5f, 0.5f, 0.5f, 1);
-        string title = _screen == 0 ? "Fire Department 3" : _screen == 3 ? L("&GameInPause", "Jeu en pause") : L("&Options", "Options");
+        string title = _screen == 0 ? "Open Fire Department" : _screen == 3 ? L("&GameInPause", "Jeu en pause") : L("&Options", "Options");
         float ts = _scale * 2f;
         if (_screen != 0)   // le titre du jeu est déjà sur l'image de fond
         {

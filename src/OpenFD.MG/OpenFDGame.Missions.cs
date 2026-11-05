@@ -36,7 +36,7 @@ public sealed partial class OpenFDGame
             if (File.Exists(path) && DecodeBmp(File.ReadAllBytes(path)) is { } img)
                 _menuBack = Tex.FromColors(GraphicsDevice, img.w, img.h, img.px, false);
         }
-        Window.Title = "Fire Department 3";
+        Window.Title = "Open Fire Department";
     }
 
     /// <summary>Liste des missions (titres dans la langue choisie) ; refaite après un changement de langue.</summary>

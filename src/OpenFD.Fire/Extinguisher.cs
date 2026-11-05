@@ -14,7 +14,20 @@ public sealed class Extinguisher
     public float Reserve = 250f, ReserveMax = 250f;
     public bool InfiniteReserve;
     public float Stamina = 100f, StaminaMax = 100f, StaminaRegen = 0.5f, ElectricStaminaCoef = 20f;
-    public readonly Dictionary<char, float> Efficiency = new();
+    /// <summary>Efficacité de chaque agent sur chaque type de feu (FireAgentEfficiency_&lt;AGENT&gt;_TYPE_&lt;X&gt;) : l'agent peut changer en jeu.</summary>
+    public readonly Dictionary<(string agent, char type), float> AgentEfficiency = new();
+    public static readonly string[] Agents = { "WATER", "FOAM", "HALON", "POWDER", "METAL" };
+    /// <summary>Mauvais agent pour ce feu : l'efficacité est divisée par 4.</summary>
+    public const float WrongAgentFactor = 0.25f;
+
+    /// <summary>Efficacité de l'agent actuel sur ce type de feu (valeurs de la classe).</summary>
+    public float EfficiencyFor(char type) => AgentEfficiency.TryGetValue((Agent, type), out float k) ? k : FireWorld.AgentEfficiency(Agent, type);
+
+    /// <summary>L'agent actuel convient à ce type de feu (A : eau, B : mousse, C : eau, D chimique : anti-métal…).</summary>
+    public bool Suits(char type) => EfficiencyFor(type) >= 1f;
+
+    /// <summary>Efficacité réellement appliquée : celle de la classe pour le bon agent, un quart sinon.</summary>
+    public float EffectiveEfficiency(char type) => Suits(type) ? EfficiencyFor(type) : WrongAgentFactor;
 
     public static Extinguisher FromClass(string name, ClassFile c)
     {
@@ -31,8 +44,9 @@ public sealed class Extinguisher
             Stamina = c.GetFloat(P, "StaminaPoints", 100), StaminaMax = c.GetFloat(P, "StaminaMax", 100),
             StaminaRegen = c.GetFloat(P, "StaminaRegen", 0.5f), ElectricStaminaCoef = c.GetFloat(P, "ElectricStaminaCoef", 20),
         };
-        foreach (char t in "ABCD")
-            e.Efficiency[t] = c.GetFloat(R, $"FireAgentEfficiency_{e.Agent}_TYPE_{t}", FireWorld.AgentEfficiency(e.Agent, t));
+        foreach (string a in Agents)
+            foreach (char t in "ABCD")
+                e.AgentEfficiency[(a, t)] = c.GetFloat(R, $"FireAgentEfficiency_{a}_TYPE_{t}", FireWorld.AgentEfficiency(a, t));
         return e;
     }
 
@@ -53,6 +67,6 @@ public sealed class Extinguisher
             Stamina = Math.Max(0, Stamina - ElectricStaminaCoef * world.Settings.ElectricityStamina * dt);
             return;
         }
-        world.Attack(hp, Power, dt, Efficiency.TryGetValue(hp.Class.FireType, out float k) ? k : 1f);
+        world.Attack(hp, Power, dt, EffectiveEfficiency(hp.Class.FireType));
     }
 }

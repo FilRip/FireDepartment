@@ -343,6 +343,7 @@ public sealed partial class UnitManager
         u.IsAmbulance = vehicle && classRel.Contains("ambulance", StringComparison.OrdinalIgnoreCase);
         if (vehicle)
             u.ResupplyPower = c.GetFloat("CAPACITIES_RESERVE", "ResupplyPower", 0);
+            u.SupplyAgent = (c.Get("CAPACITIES_RESERVE", "FireAgent") ?? "WATER").Trim('"', ' ').ToUpperInvariant();
         u.StaminaMax = c.GetFloat("CAPACITIES_PROPS", "StaminaMax", 100); u.Stamina = MathF.Min(u.StaminaMax, c.GetFloat("CAPACITIES_PROPS", "StaminaPoints", u.StaminaMax));
         u.StaminaRegen = c.GetFloat("CAPACITIES_PROPS", "StaminaRegen", 0.5f);
         u.HeatCoef = c.GetFloat("CAPACITIES_PROPS", "HeatStaminaCoef", 1); u.SmokeCoef = c.GetFloat("CAPACITIES_PROPS", "SmokeStaminaCoef", 0.7f);
@@ -623,8 +624,9 @@ public sealed partial class UnitManager
             if (u.Nozzle != null && v.ResupplyPower > 0)
             {
                 // la recharge elle-même se fait dans Resupply, tant qu'il reste près du camion
-                u.Status = $"remplit sa réserve ({u.Nozzle.Reserve:0}/{u.Nozzle.ReserveMax:0})";
-                if (u.Nozzle.Reserve >= u.Nozzle.ReserveMax)
+                if (!u.Status.StartsWith("vide son agent"))
+                    u.Status = $"remplit sa réserve ({u.Nozzle.Reserve:0}/{u.Nozzle.ReserveMax:0})";
+                if (u.Nozzle.Reserve >= u.Nozzle.ReserveMax && u.Nozzle.Agent == SupplyAgentOf(v))
                 {
                     u.GoToVehicle = null;
                     u.Status = "réserve pleine";
@@ -725,14 +727,20 @@ public sealed partial class UnitManager
     /// </summary>
     private void Resupply(Unit u, float dt)
     {
-        if (u.IsVehicle || u.OnBoard || u.Unconscious || u.Nozzle is not { InfiniteReserve: false } n || n.Reserve >= n.ReserveMax || u.Moving)
+        if (u.IsVehicle || u.OnBoard || u.Unconscious || u.Nozzle is not { InfiniteReserve: false } n || u.Moving)
             return;
         bool asked = u.GoToVehicle is { ResupplyPower: > 0 };
         if (!asked && (!u.AutoResupply || u.Target != null))
             return;
-        Unit? truck = Units.Where(v => v.IsVehicle && v.ResupplyPower > 0 && !v.Moving && !v.Destroyed && Vector3.Distance(v.Position, u.Position) < VehicleReach * 1.5f)
-            .OrderBy(v => Vector3.Distance(v.Position, u.Position)).FirstOrDefault();
+        // sur ordre : le camion demandé (il peut fournir un autre agent) ; de lui-même : un camion du même agent
+        Unit? truck = asked && u.GoToVehicle is { Moving: false, Destroyed: false } gv && Vector3.Distance(gv.Position, u.Position) < VehicleReach * 1.5f ? gv
+            : Units.Where(v => v.IsVehicle && v.ResupplyPower > 0 && !v.Moving && !v.Destroyed && SupplyAgentOf(v) == n.Agent && Vector3.Distance(v.Position, u.Position) < VehicleReach * 1.5f)
+                .OrderBy(v => Vector3.Distance(v.Position, u.Position)).FirstOrDefault();
         if (truck == null)
+            return;
+        if (DrainForAgent(u, n, truck, dt))
+            return;   // vide encore son ancien agent (voir Agents.cs)
+        if (n.Reserve >= n.ReserveMax)
             return;
         float give = MathF.Min(n.ReserveMax - n.Reserve, truck.ResupplyPower * ResupplyScale * dt);
         // l'eau vient de la réserve du camion (qui se recharge à une bouche d'incendie ou auprès d'un autre camion)
@@ -871,6 +879,7 @@ public sealed partial class UnitManager
             CanonSpray(u, h, dt);   // eau du camion, pas de message « réserve vide »
             return;
         }
+        WarnWrongAgent(u, h);   // mauvais agent : accepté, efficacité ÷ 4, annoncé une fois (Agents.cs)
         // pompier relié à un camion proche : la réserve se remplit en continu
         if (!u.Nozzle.InfiniteReserve && u.Nozzle.Reserve <= 0)
         {
