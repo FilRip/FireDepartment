@@ -342,8 +342,10 @@ public sealed partial class UnitManager
         u.BreakPower = c.GetFloat("CAPACITIES_PROPS", "BreakPower", 1);
         u.IsAmbulance = vehicle && classRel.Contains("ambulance", StringComparison.OrdinalIgnoreCase);
         if (vehicle)
+        {
             u.ResupplyPower = c.GetFloat("CAPACITIES_RESERVE", "ResupplyPower", 0);
             u.SupplyAgent = (c.Get("CAPACITIES_RESERVE", "FireAgent") ?? "WATER").Trim('"', ' ').ToUpperInvariant();
+        }
         u.StaminaMax = c.GetFloat("CAPACITIES_PROPS", "StaminaMax", 100); u.Stamina = MathF.Min(u.StaminaMax, c.GetFloat("CAPACITIES_PROPS", "StaminaPoints", u.StaminaMax));
         u.StaminaRegen = c.GetFloat("CAPACITIES_PROPS", "StaminaRegen", 0.5f);
         u.HeatCoef = c.GetFloat("CAPACITIES_PROPS", "HeatStaminaCoef", 1); u.SmokeCoef = c.GetFloat("CAPACITIES_PROPS", "SmokeStaminaCoef", 0.7f);
