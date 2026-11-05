@@ -93,6 +93,22 @@ public sealed class Interpreter
     }
     public int Pending => _queue.Count;
 
+    private int _inMainLoop;
+
+    /// <summary>Lance la boucle principale de la mission (MissionScript1/2), appelée régulièrement.</summary>
+    public Value? RunMainLoop(string fn)
+    {
+        _inMainLoop++;
+        try
+        {
+            return TryRun(fn);
+        }
+        finally
+        {
+            _inMainLoop--;
+        }
+    }
+
     public Value? TryRun(string fn, params Value[] args)
     {
         try { _steps = 0; return Invoke(fn, args, 0); }
@@ -314,7 +330,13 @@ public sealed class Interpreter
             case "SCR_GETVARF32": return Value.F(Globals.TryGetValue(N(0), out Value g2) ? g2.AsNum : 0);
             case "SCR_GETVARSTRING": return Value.T(Globals.TryGetValue(N(0), out Value g3) ? g3.AsText : "");
             case "SCR_VAREXISTS": return Value.I(Globals.ContainsKey(N(0)) ? 1 : 0);
-            case "SCR_RUNDELAYED": Schedule(N(0), V(1).AsNum); return Value.Zero;
+            case "SCR_RUNDELAYED":
+                // la boucle principale de la mission est relancée sans cesse : tant qu'un appel identique qu'elle a demandé
+                // attend encore, on ne le redemande pas (Sawmill : « add_obj_bridge » à 5 s, sinon cinématique et objectif × 11)
+                if (_inMainLoop > 0 && _queue.UnorderedItems.Any(q => q.Element.args.Length == 0 && q.Element.fn.Equals(N(0), StringComparison.OrdinalIgnoreCase)))
+                    return Value.Zero;
+                Schedule(N(0), V(1).AsNum);
+                return Value.Zero;
             case "SCR_RUNDELAYEDENTITY": Schedule(N(0), V(1).AsNum, V(2)); return Value.Zero;
             case "SCR_RUNDELAYEDARGS": Schedule(N(0), V(1).AsNum, V(2), V(3), V(4)); return Value.Zero;
             case "SCR_RUNDELAYEDMULTIARGS": Schedule(N(0), V(1).AsNum, a.Skip(2).Select(x => x.Value).ToArray()); return Value.Zero;

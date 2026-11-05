@@ -47,7 +47,7 @@ public sealed class Extinguisher
             return;
         if (!InfiniteReserve)
             Reserve = Math.Max(0, Reserve - Cost * world.Settings.FireAttackCost * dt);
-        if (hp.Class.FireType == 'C' && powered)
+        if (hp.Class.FireType == 'C' && powered && hp.Powered)   // courant coupé : feu ordinaire
         {
             // [hypothèse sur l'échelle de temps] perte d'endurance par seconde
             Stamina = Math.Max(0, Stamina - ElectricStaminaCoef * world.Settings.ElectricityStamina * dt);

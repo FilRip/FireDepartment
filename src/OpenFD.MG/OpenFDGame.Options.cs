@@ -22,6 +22,7 @@ public sealed class Settings
     public string Language { get; set; } = "";      // vide : celle des voix installées ; sinon FRA, ENG…
     public string Nationality { get; set; } = "";   // vide : celle de la mission ; sinon us, fr, gb, gr, ua
     public string PlayerName { get; set; } = "";    // pseudo en multijoueur
+    public string LastMission { get; set; } = "";   // dernière mission jouée : page affichée en ouvrant la campagne
 
     /// <summary>Dossier « Save » du jeu (à côté de Data) : options.json y est enregistré.</summary>
     public static string SaveDir = "";
@@ -550,8 +551,10 @@ public sealed partial class OpenFDGame
         {
             // mention en bas à gauche du menu principal
             const string copyright = "(C) 2026 CoolBytes - FilRip";
-            _ui.TextItalic((18 * _scale) - 2, (_fbH - _ui.LineHeight - 14 * _scale) - 2, copyright, new SN.Vector4(0.0f, 0.0f, 0.0f, 0.9f));
-            _ui.TextItalic(18 * _scale, _fbH - _ui.LineHeight - 14 * _scale, copyright, new SN.Vector4(1.0f, 0.84f, 0.0f, 0.9f));
+            float cx = 18 * _scale, cy = _fbH - _ui.LineHeight - 16 * _scale;
+            // blanc, avec une ombre noire pour rester lisible sur la vidéo du menu
+            _ui.TextItalic(cx + 2 * _scale, cy + 2 * _scale, copyright, new SN.Vector4(0, 0, 0, 1));
+            _ui.TextItalic(cx, cy, copyright, new SN.Vector4(1, 1, 1, 1));
         }
         if (_screen == 2)
         {

@@ -437,6 +437,21 @@ public sealed class Ui
     public void Frame(float x, float y, float w, float h, SN.Vector4 c, float t = 1)
     { Rect(x, y, w, t, c); Rect(x, y + h - t, w, t, c); Rect(x, y, t, h, c); Rect(x + w - t, y, t, h, c); }
 
+    /// <summary>
+    /// Disque plein vu en perspective : l'image d'un cercle de rayon 1 par l'application linéaire (a, b) — a et b sont les
+    /// images à l'écran de deux rayons perpendiculaires posés sur le sol. Décomposée en rotation × échelles (SVD 2×2).
+    /// </summary>
+    public void DiscOnPlane(float cx, float cy, SN.Vector2 a, SN.Vector2 b, SN.Vector4 c)
+    {
+        float m00 = a.X, m01 = b.X, m10 = a.Y, m11 = b.Y;
+        float e = (m00 + m11) / 2, f = (m00 - m11) / 2, g = (m10 + m01) / 2, h = (m10 - m01) / 2;
+        float q = MathF.Sqrt(e * e + h * h), r = MathF.Sqrt(f * f + g * g);
+        float sx = q + r, sy = MathF.Abs(q - r);
+        float rot = (MathF.Atan2(g, f) + MathF.Atan2(h, e)) / 2;
+        Vector2 scale = new Vector2(2 * sx / Hard.Width, 2 * sy / Hard.Height);
+        _sb.Draw(Hard, new Vector2(cx, cy), null, c.C(), rot, new Vector2(Hard.Width / 2f, Hard.Height / 2f), scale, SpriteEffects.None, 0);
+    }
+
     public void Disc(float cx, float cy, float r, SN.Vector4 c, int seg = 16)
     {
         // disque plein : la texture « Soft » a un bord adouci ; on agrandit un peu pour garder le rayon visuel

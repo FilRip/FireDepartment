@@ -73,6 +73,10 @@ public static class Rooms
     public static Matrix4x4 World(Dictionary<string, (string parent, Matrix4x4 m)> nodes, string name, int depth = 0)
     {
         (string? par, Matrix4x4 m) = nodes[name];
+        // le nœud racine « GROUND » porte un décalage (Sawmill : z −701, Eurotunnel : +400, Tutorial : +125) que le jeu
+        // n'applique pas : son maillage et ses enfants sont déjà à leur place (portes, fenêtres et sol en témoignent)
+        if (name.Equals("GROUND", StringComparison.OrdinalIgnoreCase))
+            return Matrix4x4.Identity;
         if (depth > 64 || par == "" || par == name || !nodes.ContainsKey(par))
             return m;
         return m * World(nodes, par, depth + 1);

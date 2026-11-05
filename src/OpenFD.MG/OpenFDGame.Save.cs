@@ -69,6 +69,7 @@ public sealed partial class OpenFDGame
     private int DoUnload(Unit v) { if (NetSubmit("unload", v.Id)) return 0;  Rec("unload", v.Id); return _session.Units.UnloadPassengers(v); }
     private void DoSpray(OpenFD.Fire.HotPoint h, string cls) { if (NetSubmit("spray", 0, h.Id, s: cls)) return;  Rec("spray", 0, h.Id, s: cls); _session.Spray(h, cls); }
     private void DoGrapple(Unit u, GrapplePoint gp) { if (NetSubmit("grapple", u.Id, gp.Id)) return;  Rec("grapple", u.Id, gp.Id); _session.Units.GrappleOver(u, gp); }
+    private void DoSense(Unit u) { if (NetSubmit("sense", u.Id)) return;  Rec("sense", u.Id); _session.Units.DogSense(u); }
     private void DoScript(OpenFD.Script.Interpreter sc, string fn) { if (NetSubmit("script", s: fn)) return;  Rec("script", s: fn); sc.TryRun(fn); }
 
     private void Replay(JournalEntry e)
@@ -117,6 +118,9 @@ public sealed partial class OpenFDGame
             case "grapple":
                 if (U(e.A) is { } a12 && um.Grapples.FirstOrDefault(g => g.Id == e.B) is { } g12)
                     um.GrappleOver(a12, g12); break;
+            case "sense":
+                if (U(e.A) is { } a13)
+                    um.DogSense(a13); break;
         }
     }
 

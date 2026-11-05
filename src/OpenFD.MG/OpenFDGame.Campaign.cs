@@ -110,7 +110,9 @@ public sealed partial class OpenFDGame
             _screen = 5;
             return;
         }
-        int i = _campaign.FindIndex(p => p.Dir.Equals(_mission, StringComparison.OrdinalIgnoreCase));
+        // mission en cours, sinon la dernière jouée (options), sinon la première
+        string last = _session != null && !string.IsNullOrEmpty(_mission) ? _mission : _settings.LastMission;
+        int i = _campaign.FindIndex(p => p.Dir.Equals(last, StringComparison.OrdinalIgnoreCase));
         if (i >= 0)
             _campaignIndex = i;
         _campaignIndex = Math.Clamp(_campaignIndex, 0, _campaign.Count - 1);

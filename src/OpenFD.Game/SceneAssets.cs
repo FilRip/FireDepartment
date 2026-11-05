@@ -138,6 +138,32 @@ public sealed class SceneAssets
         Regex.IsMatch(name, "^[A-Za-z0-9_]+$") ? _files.TryRead("Gfx\\Speedtree\\General\\" + name + ".tga") : null;
 
     private static readonly Regex StateRx = new(@"_e\d$", RegexOptions.IgnoreCase);
+    /// <summary>
+    /// Matrice d'une pièce de modèle. Quand les états d'endommagement sont rangés côte à côte dans le fichier
+    /// (scierie « les_demage » : _e1 à x −4871, _e2 à 79, _e3 à 4691), le jeu les montre tous à l'emplacement de l'objet :
+    /// on retire alors le décalage du nœud d'état.
+    /// </summary>
+    private static Matrix4x4 PartWorld(Dictionary<string, (string parent, Matrix4x4 m)> nodes, string k)
+    {
+        Matrix4x4 w = Rooms.World(nodes, k);
+        List<Vector3> stateOffsets = nodes.Where(kv => StateRx.IsMatch(kv.Key) && !nodes.ContainsKey(kv.Value.parent))
+            .Select(kv => kv.Value.m.Translation).Distinct().ToList();
+        if (stateOffsets.Count < 2)
+            return w;
+        // nœud d'état (au sommet) qui porte cette pièce
+        string cur = k;
+        for (int depth = 0; depth < 64 && nodes.TryGetValue(cur, out (string parent, Matrix4x4 m) e); depth++)
+        {
+            if (!nodes.ContainsKey(e.parent))
+                break;
+            cur = e.parent;
+        }
+        if (!StateRx.IsMatch(cur))
+            return w;
+        w.Translation -= nodes[cur].m.Translation;
+        return w;
+    }
+
     private static readonly Regex SkipRx = new(@"(_LOD[1-9]|_de?br\d+|_deb_\d+|_debris|_dead)$|^gun$|^Phare|Glow|giro", RegexOptions.IgnoreCase);
 
     /// <summary>Pièces d'un modèle (état intact _e1, niveau de détail maximal, sans débris).</summary>
@@ -163,7 +189,7 @@ public sealed class SceneAssets
                     && _files.TryRead("Gfx\\" + dir0 + "\\" + k + ".mesh") != null
                     && !k.ToUpperInvariant().Contains("_COLL") && !k.ToUpperInvariant().Contains("MASK") && !SkipRx.IsMatch(k));
                 return hit.Concat(state == "dead" ? Enumerable.Empty<string>() : plain).Distinct()
-                    .Select(k => new Node(dir0 + "\\" + k, Rooms.World(nodes0, k))).ToList();
+                    .Select(k => new Node(dir0 + "\\" + k, PartWorld(nodes0, k))).ToList();
             }
         }
         string dir = model.Contains('\\') ? model[..model.LastIndexOf('\\')] : "Placeable";
@@ -175,7 +201,7 @@ public sealed class SceneAssets
         return withMesh
             .Where(k => !hasStates || !StateRx.IsMatch(k) || k.EndsWith("_e1", StringComparison.OrdinalIgnoreCase))
             .Where(k => !k.ToUpperInvariant().Contains("_COLL") && !k.ToUpperInvariant().Contains("MASK") && !SkipRx.IsMatch(k))
-            .Select(k => new Node(dir + "\\" + k, Rooms.World(nodes, k)))
+            .Select(k => new Node(dir + "\\" + k, PartWorld(nodes, k)))
             // pièces de l'état brûlé (texture « …_brul ») : seulement après destruction
             .Where(n => { try { return !LoadMesh("", n.Mesh, "gfx").Groups.All(g => g.Diffuse != null && g.Diffuse.Contains("_brul", StringComparison.OrdinalIgnoreCase)); } catch { return true; } })
             .ToList();

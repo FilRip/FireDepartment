@@ -17,6 +17,8 @@ public sealed partial class UnitManager
     {
         if (u.IsVehicle)
             VehicleAutoAttack(u);
+        else if (u.IsCanon)
+            CanonAutoAttack(u);   // il arrose d'où il est, sans jamais se déplacer de lui-même
         else
             FiremanAutoAttack(u);
     }
@@ -71,7 +73,7 @@ public sealed partial class UnitManager
         HotPoint? best = null; float bs = float.MaxValue;
         foreach (HotPoint h in _s.Fire.HotPoints)
         {
-            if (!h.IsBurning || h.Id == skip)
+            if (!h.IsBurning || h.Id == skip || h.Electrified)   // feu électrique sous tension : jamais de leur plein gré
                 continue;
             Vector2 f = new Vector2(h.Position.X, h.Position.Y);
             float d = Vector2.Distance(me, f);

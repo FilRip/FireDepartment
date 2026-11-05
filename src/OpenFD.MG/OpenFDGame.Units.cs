@@ -14,6 +14,7 @@ public sealed partial class OpenFDGame
         public Dictionary<string, string> Tags = new(StringComparer.OrdinalIgnoreCase);
         public string Tag = ""; public float Time;
         public SN.Vector3 LastPos; public float MovingFor;
+        public bool Deployed;   // pompier « canon » : lance posée (animation DEPLOY jouée), il attend accroupi
         public Dictionary<CharacterRig.Part, (MeshGpu mesh, float[] pos, float[] nrm)> Skinned = new();
         public SN.Matrix4x4[] World = Array.Empty<SN.Matrix4x4>();
     }
@@ -57,6 +58,7 @@ public sealed partial class OpenFDGame
     // « @fichier » : animation donnée directement (à deux personnages : CharChar\cc_lift_body…), jouée une seule fois
     private static string UnitTag(Unit u, bool moving) =>
         u.InjuredTimer > 0 || u.Unconscious ? "FAINT"
+        : u.SenseTimer > 0 && !moving ? "SENSE_VICTIM"   // chien : aboie (sc_bark)
         // grappin : lancer, grimper (en boucle), passer le haut du mur, redescendre (en boucle), toucher le sol
         : u.Climb == ClimbPhase.Launch ? "@SingleChar\\sc_grappling_hook_launch"
         : u.Climb == ClimbPhase.Climb ? "~SingleChar\\sc_grappling_hook_climb"
@@ -84,7 +86,40 @@ public sealed partial class OpenFDGame
     // vitesse naturelle des animations de déplacement (recul du pied posé au sol, mesuré avec « OpenFD.Tools foulee »)
     private const float RunAnimSpeed = 520f, WalkAnimSpeed = 300f;
 
-    private bool DrawCharacter(CharAnim a, string tag, SN.Vector3 position, float heading, float dt, bool axe, float rate = 1f)
+    /// <summary>
+    /// Pompier « canon » : il marche lance en main (WALK : sc_walk_canon) ; arrêté, il pose sa lance (DEPLOY, une fois) puis
+    /// attend accroupi (WAIT_DEPLOYED), même sans eau ; il arrose dans cette position (ATTACKFIRE : sc_canon_extinguish).
+    /// </summary>
+    private string CanonTag(Unit u, CharAnim a)
+    {
+        string tag = UnitTag(u, u.Moving);
+        if (tag == "FAINT")
+        {
+            a.Deployed = false;
+            return tag;
+        }
+        if (u.Moving)
+        {
+            a.Deployed = false;
+            return "WALK";
+        }
+        if (u.Target != null)
+        {
+            a.Deployed = true;
+            return "ATTACKFIRE";
+        }
+        if (a.Deployed || !a.Tags.TryGetValue("DEPLOY", out string? deploy))
+            return "WAIT_DEPLOYED";
+        string once = "@" + deploy;
+        if (a.Tag == once && Clip(deploy) is { } dc && a.Time >= dc.Duration)
+        {
+            a.Deployed = true;
+            return "WAIT_DEPLOYED";
+        }
+        return once;
+    }
+
+    private bool DrawCharacter(CharAnim a, string tag, SN.Vector3 position, float heading, float dt, bool axe, float rate = 1f, bool canon = false)
     {
         if (a.Rig is not { } rig)
             return false;
@@ -108,7 +143,11 @@ public sealed partial class OpenFDGame
             string leaf = rig.Names[part.Node];
             // outils du squelette, cachés sauf pendant leur usage : la hache pour casser, la lance (launchfire) pour arroser
             bool nozzle = tag.StartsWith("ATTACKFIRE", StringComparison.OrdinalIgnoreCase) && leaf.Contains("launchfire", StringComparison.OrdinalIgnoreCase);
-            if (ToolRx.IsMatch(leaf) && !(axe && leaf.EndsWith("_axe", StringComparison.OrdinalIgnoreCase)) && !nozzle)
+            // canon : sa grosse lance (CH_P_canon) toujours en main, jamais la petite
+            bool canonTool = canon && leaf.EndsWith("_canon", StringComparison.OrdinalIgnoreCase);
+            if (canon && leaf.Contains("launchfire", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (ToolRx.IsMatch(leaf) && !(axe && leaf.EndsWith("_axe", StringComparison.OrdinalIgnoreCase)) && !nozzle && !canonTool)
                 continue;
             if (part.Skin != null)
             {
@@ -191,7 +230,7 @@ public sealed partial class OpenFDGame
             _ghostShift = (SN.Vector3.Normalize(toEye) * 70f).X();
             CharAnim a = Char(u, u.Model, "Design\\Unit\\" + u.ClassPath + ".class");
             bool axe = u.Opening != null && u.OpeningBreak && !u.Moving;
-            if (!DrawCharacter(a, a.Tag != "" ? a.Tag : UnitTag(u, u.Moving), pose.p, _shownHeading.TryGetValue(u, out float hh) ? hh : pose.h, 0, axe))
+            if (!DrawCharacter(a, a.Tag != "" ? a.Tag : UnitTag(u, u.Moving), pose.p, _shownHeading.TryGetValue(u, out float hh) ? hh : pose.h, 0, axe, 1f, u.IsCanon))
                 foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(u.Model))
                     DrawMesh(mesh, (part * SN.Matrix4x4.CreateRotationZ(pose.h + CharYaw) * SN.Matrix4x4.CreateTranslation(pose.p)).X());
         }
@@ -234,7 +273,14 @@ public sealed partial class OpenFDGame
             float rate = u.Moving ? Math.Clamp(u.Speed / RunAnimSpeed, 0.6f, 1.6f) : 1f;
             if (u.Carry == CarryPhase.Walking)
                 rate = u.Moving ? Math.Clamp(u.Speed * UnitManager.CarrySpeed / WalkAnimSpeed, 0.5f, 1.6f) : 0f;   // arrêté avec le corps : figé
-            if (!DrawCharacter(a, UnitTag(u, u.Moving), PoseOf(u, u.Position, u.Heading).p, SmoothHeading(u, PoseOf(u, u.Position, u.Heading).h, dt), dt, axe, rate))
+            string tag = UnitTag(u, u.Moving);
+            if (u.IsCanon)
+            {
+                tag = CanonTag(u, a);
+                if (u.Moving)
+                    rate = Math.Clamp(u.Speed / WalkAnimSpeed, 0.5f, 1.6f);
+            }
+            if (!DrawCharacter(a, tag, PoseOf(u, u.Position, u.Heading).p, SmoothHeading(u, PoseOf(u, u.Position, u.Heading).h, dt), dt, axe, rate, u.IsCanon))
                 stillUnits.Add(u);
         }
         // sans squelette : dessin figé (civils couchés s'ils sont inconscients)

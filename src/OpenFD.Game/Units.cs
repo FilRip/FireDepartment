@@ -56,6 +56,10 @@ public sealed class Unit
     public Unit? InVehicle;                               // pompier à bord de ce véhicule (invisible, suit le véhicule)
     public bool Boarding;                                 // en route pour monter dans GoToVehicle
     public bool AutoResupply;                             // [CAPACITIES_PROPS] AutomaticResupply : se recharge près d'un camion
+    public bool IsCanon;                                  // [UNIT] TYPE=CANON : grosse lance sans eau, reliée à un camion (Canon.cs)
+    public Unit? FeedTruck;                               // canon : camion qui l'alimente (null : aucun à portée)
+    public bool IsDog;                                    // [UNIT] TYPE=CYNOPHILE : maître-chien, flaire les victimes enterrées (Dog.cs)
+    public float SenseTimer;                              // chien : aboiement en cours (animation SENSE_VICTIM)
     public bool OnBoard => InVehicle != null;
     /// <summary>Véhicule : équipage à bord (classes), qui descend quand le véhicule est arrivé.</summary>
     public readonly List<string> Crew = new();
@@ -142,6 +146,7 @@ public sealed partial class UnitManager
         if (Environment.GetEnvironmentVariable("FD3_NOBLOCK") == null)
             Paths.BuildObstacles(s.Level);
         LoadOpenings(s.Level);
+        LockBuriedRubble();   // voir Dog.cs
         AssignLevers(s.Level);
         Paths.BlockThinWalls(Openings, KeepPoints());
         LoadSupplies(s.Level);
@@ -184,7 +189,7 @@ public sealed partial class UnitManager
                 ClassPath = "Design\\" + o.ClassPath["design\\".Length..] + ".class",
                 Heading = o.Rotation.Z,
                 State = state == 3 ? CivilianState.Unconscious : state == 4 ? CivilianState.Dead : CivilianState.Conscious,
-                Hidden = o.Name.Contains("hide", StringComparison.OrdinalIgnoreCase),
+                Hidden = o.Name.Contains("hide", StringComparison.OrdinalIgnoreCase) || !o.StartVisible,   // enterré : révélé par le chien
             });
         }
     }
@@ -224,6 +229,8 @@ public sealed partial class UnitManager
         UpdateVehicleObstacles();
         foreach (Unit v in Units.Where(u => u.IsVehicle && u.Crew.Count > 0 && !u.Moving).ToList()) Unload(v);
         _autoTick++;
+        foreach (Unit u in Units) UpdateCanonLink(u);
+        foreach (Unit u in Units) UpdateDog(u, dt);
         foreach (Unit u in Units) AutoAttack(u);
         foreach (Unit u in Units) Fight(u, dt);
         foreach (Unit u in Units) Rescue(u, dt);
@@ -402,6 +409,15 @@ public sealed partial class UnitManager
             u.Nozzle = Extinguisher.FromClass(classRel, c);
         u.Seats = vehicle ? c.GetInt("CAPACITIES_PROPS", "EmbarkCapacity", 0) : 0;
         u.AutoResupply = !vehicle && c.GetBool("CAPACITIES_PROPS", "AutomaticResupply");
+        u.IsCanon = !vehicle && u.Nozzle != null && string.Equals(c.Get("UNIT", "Type")?.Trim('"', ' '), "CANON", StringComparison.OrdinalIgnoreCase);
+        u.IsDog = !vehicle && string.Equals(c.Get("UNIT", "Type")?.Trim('"', ' '), "CYNOPHILE", StringComparison.OrdinalIgnoreCase);
+        if (u.IsDog || (!vehicle && !c.GetBool("CAPACITIES_ACTIONS", "CanAttackFire", true)))
+            u.Nozzle = null;   // le chien n'éteint pas (CanAttackFire=0)
+        if (u.IsCanon)
+        {
+            u.Nozzle!.InfiniteReserve = true;   // pas de réserve à lui : l'eau vient du camion (Canon.cs)
+            u.Speed = c.GetFloat("MOVING", "WalkSpeed", 3.5f) * FiremanSpeedFactor;   // il marche avec sa grosse lance (sc_walk_canon)
+        }
         u.CanHeal = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanHeal");
         u.CanBreak = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanBreak");
         u.CanUse = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanUse");
@@ -612,6 +628,11 @@ public sealed partial class UnitManager
         if (u.IsVehicle)
         {
             VehicleAttack(u, h);
+            return;
+        }
+        if (u.IsCanon)
+        {
+            CanonAttack(u, h);
             return;
         }
         if (u.Carrying != null)
@@ -879,6 +900,23 @@ public sealed partial class UnitManager
         return n;
     }
 
+    /// <summary>Feu électrique sous tension arrosé sur ordre : le pompier prend une petite décharge et s'arrête aussitôt ;
+    /// un véhicule s'arrête simplement. Il faut d'abord couper le courant (armoire électrique de la carte).</summary>
+    private void Electrocute(Unit u, HotPoint h)
+    {
+        u.Target = null;
+        u.Status = "feu électrique : coupez d'abord le courant";
+        if (u.IsVehicle)
+            return;
+        u.Life = MathF.Max(1, u.Life - u.LifeMax * ElectricShock);
+        Sounds.Add(("SC_ELECTRICAL_DAMAGE", u.Position));
+        Sounds.Add(("VOCAL_IMPOSSIBLE_TO_ATTACK_ELECTRICAL_FIRE", null));
+        Log.Add($"{_s.Time,6:0} s : un pompier s'électrocute sur {h.Name} (courant non coupé)");
+    }
+
+    /// <summary>Part de la vie perdue par un pompier qui arrose un feu électrique sous tension.</summary>
+    public const float ElectricShock = 0.08f;
+
     /// <summary>Unités visibles sur le terrain (pas celles qui sont à bord d'un véhicule).</summary>
     public List<Unit> Active => Units.Where(u => !u.OnBoard && !u.Hidden).ToList();
 
@@ -894,6 +932,11 @@ public sealed partial class UnitManager
             u.Target = null; u.Status = "attend les ordres"; return;
         }
         _reported.Remove(h);
+        if (h.Electrified)
+        {
+            Electrocute(u, h);
+            return;
+        }
         float want = MathF.Atan2(h.Position.Y - u.Position.Y, h.Position.X - u.Position.X);
         if (u.IsVehicle)
         {
@@ -910,6 +953,11 @@ public sealed partial class UnitManager
         }
         else
             u.Heading = want;
+        if (u.IsCanon)
+        {
+            CanonSpray(u, h, dt);   // eau du camion, pas de message « réserve vide »
+            return;
+        }
         // pompier relié à un camion proche : la réserve se remplit en continu
         if (!u.Nozzle.InfiniteReserve && u.Nozzle.Reserve <= 0)
         {
