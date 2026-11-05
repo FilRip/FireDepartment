@@ -34,6 +34,128 @@ public static class Program
                 }
                 return bad == 0 ? 0 : 2;
             }
+            case "groupefeux":
+            {
+                // groupefeux <Data> <Mission> <groupe> : foyers du groupe (classe, type de feu, actif)
+                Session ses = new Session(files, args[2], "EASY", false);
+                LevelObject g = ses.Level.Objects.First(o => o.Name.Equals(args[3], StringComparison.OrdinalIgnoreCase));
+                foreach (uint m in g.Members)
+                    if (ses.Fire.HotPoints.FirstOrDefault(h => h.Id == m) is { } h)
+                        Console.WriteLine($"{h.Name,-30} type {h.Class.FireType} actif {h.Enabled} ({h.Position.X:0},{h.Position.Y:0},{h.Position.Z:0})");
+                Console.WriteLine("types C de la carte : " + ses.Fire.HotPoints.Count(h => h.Class.FireType == 'C'));
+                return 0;
+            }
+            case "elec":
+            {
+                // elec <Data> <Mission> : feux électriques — ordre d'arroser sous tension, puis courant coupé
+                Session ses = new Session(files, args[2], "EASY");
+                for (int i = 0; i < 300; i++)
+                {
+                    ses.Step();
+                    if (i % 50 == 0)
+                        ses.Host?.EndCinematic();
+                }
+                ses.Scripts!.Load(OpenFD.Script.Parser.ParseFile("void __On() { SCR_SetVarS32(\"ElectroRun\", 1); FIR_HPEnable(ENT_FindByName(\"electrogroup\"), 1); FIR_HPAddIntensity(ENT_FindByName(\"electrogroup\"), 100.0); } void __Off() { FIR_HPEnable(ENT_FindByName(\"electrogroup\"), 0); }", "essai"));
+                ses.Scripts.TryRun("__On");
+                for (int i = 0; i < 20; i++) ses.Step();
+                OpenFD.Fire.HotPoint h = Environment.GetEnvironmentVariable("FD3_FEU_A") != null
+                    ? ses.Fire.HotPoints.Where(x => x.IsBurning && x.Class.FireType == 'A').OrderByDescending(x => x.Intensity).First()
+                    : ses.Fire.HotPoints.First(x => x.Electrified);
+                Unit u = ses.Units.Units.First(x => !x.IsVehicle && x.Nozzle != null && !x.IsCanon && !x.OnBoard);
+                u.Position = h.Position + new System.Numerics.Vector3(500, 0, 0); u.Path.Clear();
+                Console.WriteLine(h.Class.ToString());
+                Console.WriteLine($"{h.Name} électrique {h.Electrified} intensité {h.Intensity:0} ; {u.Name} vie {u.Life:0}");
+                ses.Units.Attack(u, h);
+                for (int i = 0; i < 30; i++) ses.Step();
+                Console.WriteLine($"  sous tension : {u.Status} · vie {u.Life:0} · cible {u.Target?.Name ?? "aucune"}");
+                ses.Scripts.TryRun("__Off");
+                Console.WriteLine($"  courant coupé : électrique {h.Electrified}, actif {h.Enabled} · puissance {u.Nozzle!.Power} · efficacité C {(u.Nozzle.Efficiency.TryGetValue('C', out float ef) ? ef : -1)} · réserve {u.Nozzle.Reserve} · max {h.Class.IntensityMax} état {h.State}");
+                ses.Units.Attack(u, h);
+                for (int k = 0; k < 6; k++)
+                {
+                    for (int i = 0; i < 100; i++)
+                    {
+                        ses.Step();
+                        if (k == 0 && i < 3)
+                            Console.WriteLine($"    pas {i} : attente {h.PendingAttack:0.00} intensité {h.Intensity:0.00} sous tension {h.Powered} activé {h.Enabled} endurance {u.Nozzle!.Stamina:0} u.cible {u.Target?.Name} bouge {u.Moving} dist {System.Numerics.Vector3.Distance(u.Position, h.Position):0}");
+                    }
+                    Console.WriteLine($"  ensuite : {u.Status} · intensité {h.Intensity:0} · éteint ? {!h.IsBurning}");
+                }
+                foreach (string l in ses.Scripts.Log) Console.WriteLine("script : " + l);
+                Civilian? bur = ses.Units.Civilians.FirstOrDefault(c => ses.Units.IsBuried(c));
+                if (bur != null)
+                {
+                    bur.Hidden = false;
+                    ses.Units.FetchCivilian(u, bur);
+                    Console.WriteLine($"civil enterré {bur.Name} : {u.Status}");
+                }
+                return 0;
+            }
+            case "chien":
+            {
+                // chien <Data> <Mission> : victimes enterrées, gravats verrouillés ; le chien est posé près de chacune et flaire
+                Session ses = new Session(files, args[2], "EASY");
+                for (int i = 0; i < 600; i++)
+                {
+                    ses.Step();
+                    if (i % 50 == 0)
+                        ses.Host?.EndCinematic();
+                }
+                Console.WriteLine("cachés : " + string.Join(", ", ses.Units.Civilians.Where(c => c.Hidden).Select(c => c.Name)));
+                Console.WriteLine("gravats cassables : " + string.Join(", ", ses.Units.Openings.Where(o => o.Name.StartsWith("remains")).Select(o => o.Name + "=" + o.Breakable)));
+                if (ses.Units.Units.FirstOrDefault(u => u.IsDog) is not { } dog)
+                {
+                    Console.WriteLine("pas de chien");
+                    return 0;
+                }
+                Console.WriteLine($"chien {dog.Name} ({dog.Position.X:0},{dog.Position.Y:0}) lance {dog.Nozzle != null}");
+                Console.WriteLine($"flaire sur place : {ses.Units.DogSense(dog)}");
+                Civilian v = ses.Units.Civilians.First(c => c.Hidden);
+                dog.Position = v.Position + new System.Numerics.Vector3(600, 0, 0);
+                Console.WriteLine($"près de {v.Name} : {ses.Units.DogSense(dog)}");
+                Console.WriteLine("cachés : " + string.Join(", ", ses.Units.Civilians.Where(c => c.Hidden).Select(c => c.Name)));
+                Console.WriteLine("gravats cassables : " + string.Join(", ", ses.Units.Openings.Where(o => o.Name.StartsWith("remains")).Select(o => o.Name + "=" + o.Breakable)));
+                return 0;
+            }
+            case "canons":
+            {
+                // canons <Data> <Mission> <secondes> : pompiers « canon », leur camion et ce qu'ils font
+                Session ses = new Session(files, args[2], "EASY");
+                int n = (int)(float.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture) / Session.Dt);
+                for (int i = 0; i < n; i++)
+                {
+                    ses.Step();
+                    if (i % 50 == 0)
+                        ses.Host?.EndCinematic();
+                }
+                foreach (Unit u in ses.Units.Units.Where(u => u.IsCanon))
+                    Console.WriteLine($"{u.Name} ({u.Position.X:0},{u.Position.Y:0}) à bord {u.OnBoard} · camion {u.FeedTruck?.Name ?? "aucun"} · {u.Status}");
+                // … attaque : le premier canon reçoit l'ordre d'arroser le feu le plus proche, puis 20 s passent
+                if (args.Length > 4 && ses.Units.Units.FirstOrDefault(u => u.IsCanon) is { } cu)
+                {
+                    OpenFD.Fire.HotPoint h = ses.Fire.HotPoints.Where(h => h.IsBurning).OrderBy(h => System.Numerics.Vector3.Distance(h.Position, cu.Position)).First();
+                    Console.WriteLine($"ordre : arroser {h.Name} à {System.Numerics.Vector3.Distance(h.Position, cu.Position):0}, intensité {h.Intensity:0.0}, camion {cu.FeedTruck?.Nozzle?.Reserve:0}");
+                    ses.Units.Attack(cu, h);
+                    for (int i = 0; i < 200; i++)
+                    {
+                        ses.Step();
+                        if (i % 40 == 0)
+                            Console.WriteLine($"  {i / 10} s : ({cu.Position.X:0},{cu.Position.Y:0}) {cu.Status} · camion {cu.FeedTruck?.Name ?? "aucun"} {cu.FeedTruck?.Nozzle?.Reserve:0} · feu {h.Intensity:0.0}");
+                    }
+                }
+                Console.WriteLine($"portée de liaison {OpenFD.Game.UnitManager.CanonLinkRange:0}");
+                return 0;
+            }
+            case "objliste":
+            {
+                // objliste <Data> <Mission> [motif] : objets du niveau (id, classe, nom, position, rotation)
+                string lvPath = files.List("Design\\Mission\\" + args[2] + "\\").First(p => p.EndsWith(".level", StringComparison.OrdinalIgnoreCase));
+                Level level = Level.Parse(files.Read(lvPath));
+                System.Text.RegularExpressions.Regex rx = new System.Text.RegularExpressions.Regex(args.Length > 3 ? args[3] : ".", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                foreach (LevelObject o in level.Objects.Where(o => rx.IsMatch(o.ClassPath + " " + o.Name)))
+                    Console.WriteLine($"{o.Id,9} {o.Kind,-10} {o.ClassPath,-50} {o.Name,-28} ({o.Position.X:0},{o.Position.Y:0},{o.Position.Z:0}) rot ({o.Rotation.X:0.00},{o.Rotation.Y:0.00},{o.Rotation.Z:0.00})");
+                return 0;
+            }
             case "pieces":
             {
                 // pieces <Data> <Mission> [sortie.json] : pièce de chaque foyer et point de fumée (remplace roomall.py)
@@ -269,6 +391,20 @@ public static class Program
                     System.Numerics.Vector3 mn = new System.Numerics.Vector3(float.MaxValue); System.Numerics.Vector3 mx = new System.Numerics.Vector3(float.MinValue);
                     for (int i = 0; i < m.VertexCount; i++) { System.Numerics.Vector3 v = System.Numerics.Vector3.Transform(new(m.Positions[3 * i], m.Positions[3 * i + 1], m.Positions[3 * i + 2]), n.World); mn = System.Numerics.Vector3.Min(mn, v); mx = System.Numerics.Vector3.Max(mx, v); }
                     Console.WriteLine($"{n.Mesh,-40} {m.VertexCount,6} sommets  ({mn.X:0},{mn.Y:0},{mn.Z:0}) – ({mx.X:0},{mx.Y:0},{mx.Z:0})  {string.Join(" ", a.Groups.Select(g => g.Diffuse))}");
+                    // FD3_ZONE=x0,y0,x1,y1 : hauteurs du maillage dans cette zone
+                    if (Environment.GetEnvironmentVariable("FD3_ZONE") is { } zs)
+                    {
+                        float[] zb = zs.Split(',').Select(float.Parse).ToArray();
+                        List<float> zz = new List<float>();
+                        for (int i = 0; i < m.VertexCount; i++)
+                        {
+                            System.Numerics.Vector3 v = System.Numerics.Vector3.Transform(new(m.Positions[3 * i], m.Positions[3 * i + 1], m.Positions[3 * i + 2]), n.World);
+                            if (v.X >= zb[0] && v.Y >= zb[1] && v.X <= zb[2] && v.Y <= zb[3])
+                                zz.Add(v.Z);
+                        }
+                        if (zz.Count > 0)
+                            Console.WriteLine($"    zone : {zz.Count} sommets, z {zz.Min():0} … {zz.Max():0}, moyenne {zz.Average():0}");
+                    }
                 }
                 return 0;
             }
@@ -356,6 +492,25 @@ public static class Program
                 foreach ((string? k, (int n, float zmin, float zmax) e) in stat) Console.WriteLine($"{k,-70} {e.n,6}  z {e.zmin:0}..{e.zmax:0}");
                 return 0;
             }
+            case "sgnoeuds":
+            {
+                // sgnoeuds <Data> <Gfx\…\x.sg> : nœuds d'un .sg (parent, translation locale, boîte du maillage en monde)
+                string sgp = args[2];
+                string dir = sgp[..sgp.LastIndexOf('\\')] + "\\";
+                Dictionary<string, (string parent, System.Numerics.Matrix4x4 m)> nodes = Rooms.SceneNodes(files.Read(sgp));
+                foreach ((string? k, (string? par, System.Numerics.Matrix4x4 nm)) in nodes)
+                {
+                    System.Numerics.Matrix4x4 w = Rooms.World(nodes, k);
+                    string box = "";
+                    if (files.TryRead(dir + k + ".mesh") is { } md && Rooms.MeshBox(md) is { } mb)
+                    {
+                        System.Numerics.Vector3 a = System.Numerics.Vector3.Transform(mb.min, w), b = System.Numerics.Vector3.Transform(mb.max, w);
+                        box = $" boîte ({a.X:0},{a.Y:0},{a.Z:0})–({b.X:0},{b.Y:0},{b.Z:0})";
+                    }
+                    Console.WriteLine($"  {k,-36} parent {par,-24} local ({nm.M41:0},{nm.M42:0},{nm.M43:0}) monde ({w.M41:0},{w.M42:0},{w.M43:0}){box}");
+                }
+                return 0;
+            }
             case "noeuds":
             {
                 // noeuds <Data> <Mission> : nœuds des .sg de la mission, avec ou sans maillage, et ceux que le décor écarte
@@ -364,8 +519,10 @@ public static class Program
                 {
                     Dictionary<string, (string parent, System.Numerics.Matrix4x4 m)> nodes = Rooms.SceneNodes(files.Read(sg));
                     Console.WriteLine($"== {sg} : {nodes.Count} nœuds");
-                    foreach ((string? k, (string? par, _)) in nodes)
+                    foreach ((string? k, (string? par, System.Numerics.Matrix4x4 nm)) in nodes)
                     {
+                        if (Environment.GetEnvironmentVariable("FD3_MATRICES") != null)
+                            Console.WriteLine($"  {k,-40} local ({nm.M41:0},{nm.M42:0},{nm.M43:0}) diag ({nm.M11:0.00},{nm.M22:0.00},{nm.M33:0.00})");
                         bool mesh = files.TryRead(prefix + k + ".mesh") != null;
                         string up = k.ToUpperInvariant();
                         string why = up.Contains("_ROOM") ? "pièce" : up.Contains("_COLL") ? "collision" : up.Contains("MASK") ? "masque" : !mesh ? "sans maillage" : "affiché";

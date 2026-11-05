@@ -20,6 +20,7 @@ public sealed partial class OpenFDGame
     private double _cineT0; private float _cineDur; private bool _cineMoving;
     private float _cineBars;                               // 0 → 1 : hauteur des bandes noires (apparition en douceur)
     private string? _subtitle;
+    private List<Unit>? _selBeforeCine;
     // panneau des messages des scripts (PNL_AddMessage) : texte et heure de la partie où il est apparu
     private readonly List<(string text, double at)> _messages = new();
     private const int MaxMessages = 6;
@@ -46,7 +47,7 @@ public sealed partial class OpenFDGame
         if (rows.Count == 0)
             return;
         float w = MathF.Min(maxW, rows.Max(r => _ui.Measure(r.s)) + 2 * pad), hgt = rows.Count * lh + 2 * pad;
-        float x = MiniVisible ? MiniRect().x + MiniRect().w + 3 * _scale + m : m;
+        float x = MiniVisible ? MiniRect().x + MiniRect().w + 3 * _scale + m + (SenseButtonShown ? SenseButtonSize + m : 0) : m;
         float y = _fbH - hgt - m - SelectionPanelHeight;   // au-dessus du panneau des unités choisies
         float alpha = rows.Max(r => r.a);
         _ui.Rect(x, y, w, hgt, new SN.Vector4(0.09f, 0.09f, 0.11f, 0.85f * alpha));
@@ -145,9 +146,19 @@ public sealed partial class OpenFDGame
         _cineOn = h.Cinematic;
         if (_cineOn && !was)
         {
+            // sélection mise de côté pendant la cinématique, rendue à la fin
+            _selBeforeCine = _sel.ToList();
             _sel.Clear(); _speed = 1; _paused = false;
             // cinématique en cours de partie (pas celle d'introduction, au tout début) : on retient la vue du joueur
             _viewBeforeCine = _session.Time > 3 ? _playerView : null;
+        }
+        if (!_cineOn && was && _selBeforeCine != null)
+        {
+            // les unités toujours là et en état (ni évanouies, ni à bord, ni cachées par le script)
+            HashSet<Unit> active = _session.Units.Active.ToHashSet();
+            foreach (Unit u in _selBeforeCine.Where(u => active.Contains(u) && !u.Unconscious && !u.Destroyed))
+                _sel.Add(u);
+            _selBeforeCine = null;
         }
         if (!_cineOn && was && _viewBeforeCine is { } v)
         {

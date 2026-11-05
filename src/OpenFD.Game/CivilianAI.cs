@@ -28,6 +28,13 @@ public sealed partial class UnitManager
             u.Status = $"{c.Name} est déjà porté";
             return;
         }
+        if (IsBuried(c))
+        {
+            u.Status = "dégagez d'abord les gravats";   // voir Dog.cs
+            if (PlayerCommand)
+                Sounds.Add(("VOCAL_IMPOSSIBLE_TO_ACCESS", null));
+            return;
+        }
         if (!Order(u, new(c.Position.X, c.Position.Y)))
             return;
         u.GoTo = c;
@@ -41,7 +48,7 @@ public sealed partial class UnitManager
         Vector2 me = new Vector2(u.Position.X, u.Position.Y);
         // médecin arrêté sans ordre à côté d'un civil inconscient : il le réanime de lui-même
         if (u.CanHeal && u.GoTo == null && u.GoToVehicle == null && !u.Moving && u.Target == null)
-            u.GoTo = Civilians.FirstOrDefault(c => c.State == CivilianState.Unconscious && !c.Hidden && Vector2.Distance(me, new(c.Position.X, c.Position.Y)) < 250);
+            u.GoTo = Civilians.FirstOrDefault(c => c.State == CivilianState.Unconscious && !c.Hidden && !IsBuried(c) && Vector2.Distance(me, new(c.Position.X, c.Position.Y)) < 250);
         if (u.GoTo is { } c && !u.Moving)
         {
             if (Vector2.Distance(me, new(c.Position.X, c.Position.Y)) > ReachDistance * 2.5f)

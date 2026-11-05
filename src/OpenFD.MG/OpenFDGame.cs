@@ -752,6 +752,11 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     {
         StopMenuVideo();
         _mission = mission; _difficulty = difficulty;
+        if (CapturePath == null && !mission.Equals(_settings.LastMission, StringComparison.OrdinalIgnoreCase))
+        {
+            _settings.LastMission = mission;   // la campagne s'ouvrira sur cette mission au prochain lancement
+            _settings.Save();
+        }
         Status($"Chargement de {mission}...", 0);
         foreach ((MeshGpu mesh, bool roof, int layer) d in _draw) d.mesh.Dispose();
         foreach ((VertexBuffer vb, IndexBuffer ib, int count, Texture2D? tex, Texture2D? dirt, Texture2D? lm, bool alpha, bool roof, int mode, bool caster, int bld) d in _sceneDraw) { d.vb.Dispose(); d.ib.Dispose(); }
@@ -1451,7 +1456,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             {
                 float t = Frac(time * 1.4f + (float)q / nq);
                 SN.Vector3 p = SN.Vector3.Lerp(ja, jb, t) + new SN.Vector3(0, 0, MathF.Sin(t * MathF.PI) * arc);
-                float size = (u.IsVehicle ? 70 : 45) + (u.IsVehicle ? 150 : 90) * t;
+                bool big = u.IsVehicle || u.IsCanon;   // canon : le gros jet des camions (sprinkler_pumper)
+                float size = (big ? 70 : 45) + (big ? 150 : 90) * t;
                 P(p, size, new SN.Vector4(0.82f, 0.93f, 1f, 0.85f * (1 - t * 0.45f)), right, up);
                 if ((q & 1) == 0)
                     P(p, size * 0.45f, new SN.Vector4(1f, 1f, 1f, 0.9f * (1 - t * 0.5f)), right, up);   // cœur blanc du jet
@@ -1735,7 +1741,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             RenderCinema();
             return;
         }
-        _ui.Begin(); RenderSupplyLinks((float)_session.Time); RenderRopes(); RenderDebugCircles(); _ui.End();
+        _ui.Begin(); RenderSupplyLinks((float)_session.Time); RenderRopes(); RenderElectricArcs(); RenderFireHover(); RenderDebugCircles(); _ui.End();
         _uiClock += 1f / 60f;
         _ui.Begin(); RenderFireBars(); RenderClickMarks(); _ui.End();
         RenderHudPanels();
@@ -1762,7 +1768,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         lines.Add(($"Civils : {civs.Count(c => c.State == CivilianState.Rescued)} sauvé(s) sur {civs.Count} · {civs.Count(c => c.State == CivilianState.Unconscious)} inconscient(s)", txt));
         lines.Add(($"{_session.Units.Active.Count} unités · {_sel.Count} sélectionnée(s)", txt));
         foreach (Unit u in _sel.Take(6))
-            lines.Add(($"  {UnitLabel(u)} : {u.Status}{(u.Nozzle != null ? $" · eau {u.Nozzle.Reserve:0}/{u.Nozzle.ReserveMax:0}" : "")}{(u.Seats > 0 ? $" · à bord {u.Passengers.Count}/{u.Seats}" : "")}", new SN.Vector4(0.45f, 0.75f, 1, 1)));
+            lines.Add(($"  {UnitLabel(u)} : {u.Status}{(u.IsCanon ? (u.FeedTruck != null ? " · relié à un camion" : " · aucun camion à portée") : u.Nozzle != null ? $" · eau {u.Nozzle.Reserve:0}/{u.Nozzle.ReserveMax:0}" : "")}{(u.Seats > 0 ? $" · à bord {u.Passengers.Count}/{u.Seats}" : "")}", new SN.Vector4(0.45f, 0.75f, 1, 1)));
         if (_help)
         {
             lines.Add(("", txt));
@@ -1810,6 +1816,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _ui.End();
         RenderMinimap();
         RenderObjButton();
+        RenderSenseButton();
     }
 
     private static string UnitLabel(Unit u) => u.ClassPath.ToLowerInvariant() switch

@@ -81,6 +81,23 @@ public sealed class LevelObject
         : Matrix4x4.Identity;
 
     public Component? GetComponent(ushort id) => Components.FirstOrDefault(c => c.Id == id);
+
+    /// <summary>
+    /// Visible au départ : dans le composant A001, après la transformation, le bloc « AA AA FF FF 0A » commence par un
+    /// entier puis un octet de visibilité (Paris : 0 pour les victimes enterrées sous les décombres, que le chien révèle).
+    /// </summary>
+    public bool StartVisible
+    {
+        get
+        {
+            if (GetComponent(0xA001) is not { } c)
+                return true;
+            ReadOnlySpan<byte> b = ComponentBytes(c);
+            ReadOnlySpan<byte> mark = stackalloc byte[] { 0xAA, 0xAA, 0xFF, 0xFF, 0x0A };
+            int i = b.LastIndexOf(mark);
+            return i < 0 || i + 9 >= b.Length || b[i + 9] != 0;
+        }
+    }
     public ReadOnlySpan<byte> ComponentBytes(Component c) => Raw.AsSpan(c.Offset, c.Size);
 }
 

@@ -97,7 +97,7 @@ public sealed class Session
         {
             Scripts.Update();
             if (_steps % 5 == 0)
-                foreach (string m in _mainLoops) Scripts.TryRun(m);
+                foreach (string m in _mainLoops) Scripts.RunMainLoop(m);
         }
         Sprayers.RemoveAll(s => !s.target.Lit || (!s.unit.InfiniteReserve && s.unit.Reserve <= 0));
         foreach ((Extinguisher? u, HotPoint? t) in Sprayers) u.Spray(Fire, t, Dt);

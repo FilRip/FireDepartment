@@ -246,4 +246,51 @@ public sealed partial class OpenFDGame
     }
 
     private void MiniLook(SN.Vector2 w) { _target.X = w.X; _target.Y = w.Y; }
+
+    // ---- bouton « flairer » du maître-chien (ActionIcons.png, case x 128, y 64, 32×32), à droite de la mini-carte ----
+    private float SenseButtonSize => 40 * _scale;
+    private bool SenseButtonShown => MiniVisible && !_map && !_cineOn && _sel.Any(u => u.IsDog && !u.Unconscious && !u.OnBoard);
+
+    private (float x, float y, float s) SenseButton()
+    {
+        (float x, float y, float w, float h) r = MiniRect();
+        return (r.x + r.w + 8 * _scale, r.y, SenseButtonSize);
+    }
+
+    private void RenderSenseButton()
+    {
+        if (!SenseButtonShown)
+            return;
+        (float x, float y, float s) = SenseButton();
+        Microsoft.Xna.Framework.Input.MouseState ms = Microsoft.Xna.Framework.Input.Mouse.GetState();
+        (float mx, float my) = Fb(ms.X, ms.Y);
+        bool hover = mx >= x && my >= y && mx <= x + s && my <= y + s;
+        bool busy = _sel.Where(u => u.IsDog).All(u => u.SenseTimer > 0);
+        _ui.Begin();
+        _ui.Rect(x - 2 * _scale, y - 2 * _scale, s + 4 * _scale, s + 4 * _scale, new SN.Vector4(0.09f, 0.09f, 0.11f, 0.85f));
+        SN.Vector4 tint = busy ? new SN.Vector4(0.55f, 0.55f, 0.55f, 1) : hover ? new SN.Vector4(1.15f, 1.15f, 1.15f, 1) : SN.Vector4.One;
+        if (OverlayTexture("ActionIcons.png") is { } t)
+            _ui.Image(t, x, y, s, s, new Rectangle(128, 64, 32, 32), tint);
+        else
+            _ui.Text(x + 4 * _scale, y + (s - _ui.LineHeight) / 2, "Flair", tint);
+        if (hover)
+        {
+            string tip = L("&ActionVictimSense", "Flairer les victimes");
+            _ui.Rect(x, y - _ui.LineHeight - 10 * _scale, _ui.Measure(tip) + 12 * _scale, _ui.LineHeight + 6 * _scale, new SN.Vector4(0, 0, 0, 0.75f));
+            _ui.Text(x + 6 * _scale, y - _ui.LineHeight - 7 * _scale, tip, SN.Vector4.One);
+        }
+        _ui.End();
+    }
+
+    private bool SenseButtonPress(double winX, double winY)
+    {
+        if (!SenseButtonShown)
+            return false;
+        (float sx, float sy) = Fb(winX, winY); (float x, float y, float s) = SenseButton();
+        if (sx < x || sy < y || sx > x + s || sy > y + s)
+            return false;
+        foreach (Unit u in _sel.Where(u => u.IsDog && !u.Unconscious && !u.OnBoard).ToList())
+            DoSense(u);
+        return true;
+    }
 }

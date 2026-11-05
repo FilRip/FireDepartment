@@ -75,6 +75,9 @@ public sealed class HotPoint
     public float Intensity;
     public bool Lit;
     public bool Enabled = true;
+    /// <summary>Feu électrique (type C) encore sous tension : on ne peut pas l'arroser tant que le courant n'est pas coupé.</summary>
+    public bool Powered = true;
+    public bool Electrified => Class.FireType == 'C' && Powered && IsBurning;
     public HotPointState State = HotPointState.Idle;
     public float HeatReceived;     // chaleur de la dernière mise à jour
     public float DelayedHeat;      // apportée par les liens à retardement, consommée à la mise à jour suivante

@@ -244,7 +244,19 @@ public sealed class MissionHost : IScriptHost
 
             // ---------- feu ----------
             case "FIR_HPENABLE":
-                foreach (HotPoint h in HotPointsOf(V(0).AsInt)) h.Enabled = V(1).AsInt != 0;
+                foreach (HotPoint h in HotPointsOf(V(0).AsInt))
+                {
+                    // feu électrique en train de brûler : « désactiver » coupe le courant (Paris : armoire électrique) ;
+                    // il brûle encore, mais devient un feu ordinaire que l'on peut éteindre
+                    if (h.Class.FireType == 'C' && V(1).AsInt == 0 && h.IsBurning)
+                    {
+                        h.Powered = false;
+                        continue;
+                    }
+                    h.Enabled = V(1).AsInt != 0;
+                    if (h.Enabled && h.Class.FireType == 'C')
+                        h.Powered = true;
+                }
                 FireLog.Add($"{GameTime,6:0.0} FIR_HPEnable {NameOf(V(0).AsInt)} {V(1).AsInt}");
                 return Value.Zero;
             case "FIR_HPISENABLE": return Value.I(HotPointsOf(V(0).AsInt).Count(h => h.Enabled));
