@@ -60,14 +60,15 @@ public sealed partial class UnitManager
         !(u.Destroyed || u.InjuredTimer > 0 || u.Unconscious || u.OnBoard || u.Hidden || u.Moving || u.Target != null || u.Nozzle == null
           || (!u.Nozzle.InfiniteReserve && u.Nozzle.Reserve <= 0) || u.GoTo != null || u.Opening != null
           || (u.GoToVehicle != null && (u.Nozzle.Reserve < u.Nozzle.ReserveMax || Civilians.Any(c => c.Leader == u)))
-          || u.UseTarget != null || u.ReviveTarget != null || u.Boarding || u.Carrying != null || u.Climb != ClimbPhase.None);
+          || u.UseTarget != null || u.ReviveTarget != null || u.Boarding || u.Carrying != null || u.Climb != ClimbPhase.None
+          || u.OnLadder != null);
 
     /// <summary>
     /// Feu le plus intéressant (le plus proche, et le plus fort) que l'unité voit à moins de <paramref name="range"/>,
     /// dans un angle de ± <paramref name="angle"/> autour de son cap (lance d'un véhicule) ; null s'il n'y en a pas.
     /// L'eau passe par-dessus les véhicules : seuls les murs et les portes fermées cachent le feu.
     /// </summary>
-    private HotPoint? FindVisibleFire(Unit u, float range, float angle, bool nearest = false, uint skip = uint.MaxValue)
+    private HotPoint? FindVisibleFire(Unit u, float range, float angle, bool nearest = false, uint skip = uint.MaxValue, float? minRange = null)
     {
         Vector2 me = new Vector2(u.Position.X, u.Position.Y);
         HotPoint? best = null;
@@ -78,7 +79,7 @@ public sealed partial class UnitManager
                 continue;
             Vector2 f = new Vector2(h.Position.X, h.Position.Y);
             float d = Vector2.Distance(me, f);
-            if (d > range || d < u.Nozzle!.RangeMin)
+            if (d > range || d < (minRange ?? u.Nozzle!.RangeMin))
                 continue;
             if (MathF.Abs(h.Position.Z - u.Position.Z) > 350)
                 continue;
@@ -91,7 +92,8 @@ public sealed partial class UnitManager
             int savedClear = Paths.Clearance;
             Paths.PathingVehicle = true;
             Paths.Clearance = 0;
-            bool seen = LineFree(me, f - Vector2.Normalize(f - me + new Vector2(0.01f, 0)) * 120, ignoreFire: true);
+            Vector2 end = f - Vector2.Normalize(f - me + new Vector2(0.01f, 0)) * 120;
+            bool seen = u.IsVehicle ? Paths.WaterLineFree(me, end) : LineFree(me, end, ignoreFire: true);
             Paths.PathingVehicle = saved;
             Paths.Clearance = savedClear;
             if (!seen)
@@ -103,6 +105,31 @@ public sealed partial class UnitManager
     }
 
     // ---- diagnostics (OpenFD.Tools) ----
+    /// <summary>Pourquoi le véhicule n'arrose pas le feu h de lui-même (essais).</summary>
+    public string VehicleAutoDiag(Unit u, HotPoint h)
+    {
+        Vector2 me = new Vector2(u.Position.X, u.Position.Y), f = new Vector2(h.Position.X, h.Position.Y);
+        bool saved = Paths.PathingVehicle;
+        Paths.PathingVehicle = true;
+        bool seen = Paths.WaterLineFree(me, f - Vector2.Normalize(f - me + new Vector2(0.01f, 0)) * 120);
+        Paths.PathingVehicle = saved;
+        string why = "";
+        Paths.PathingVehicle = true;
+        if (_s.Grid is { } g)
+        {
+            int n = (int)(Vector2.Distance(me, f) / 40) + 1;
+            for (int i = 1; i < n && why == ""; i++)
+            {
+                Vector2 p = Vector2.Lerp(me, f, (float)i / n);
+                (int cx, int cy) = g.CellOf(new Vector3(p, 0));
+                int k = g.Index(cx, cy);
+                if (!Paths.Free(cx, cy))
+                    why = $" bloqué en ({p.X:0},{p.Y:0}) à {Vector2.Distance(me, p):0} : zone {g.ZoneA[k]} obstacle {(Paths.BlockedBy.TryGetValue(k, out string? bb) ? bb : Paths.IsBlocked(k) ? "?" : "-")} véhicule {Paths.IsVehicleBlocked(k)} porte {Paths.IsClosedDoor(k)}";
+            }
+        }
+        Paths.PathingVehicle = saved;
+        return $"{why} libre {IdleWithWater(u)} équipage {u.Crew.Count} cinématique {_s.Host?.Cinematic} agent {AgentSuits(u, h)} électrique {h.Electrified} dz {h.Position.Z - u.Position.Z:0} vu {seen}";
+    }
     private int _autoTick;
     public bool AutoDiagSpot(Unit u, Vector2 p, HotPoint h)
     {

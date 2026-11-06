@@ -440,6 +440,21 @@ public sealed partial class OpenFDGame
         }
         if (OpeningAt(x, y) is { } door)
         {
+            // débris : le bulldozer choisi va les dégager à coups de pelle
+            if (door.Demolish && _sel.FirstOrDefault(u => u.CanDemolish && !u.Destroyed) is { } dozer)
+            {
+                DoOpening(dozer, door);
+                Log($"{UnitLabel(dozer)} : {dozer.Status}");
+                return;
+            }
+            // fenêtre d'étage : le camion échelle choisi va dresser son échelle devant ; les pompiers choisis y montent ensuite
+            if (_session.Units.IsHighWindow(door) && _sel.FirstOrDefault(u => u.IsAerial && !u.Destroyed) is { } aerial)
+            {
+                DoLadder(aerial, door);
+                Log($"{UnitLabel(aerial)} : {aerial.Status}");
+                if (_session.Units.LadderAt(door) == null)
+                    return;
+            }
             bool wantBreak = door.Breakable && (door.IsWindow || door.State == OpeningState.Closed);
             Unit? who = _sel.Where(u => !u.IsVehicle && (wantBreak && u.CanBreak || door.Usable && u.CanUse))
                 .OrderBy(u => wantBreak && u.CanBreak ? 0 : 1).FirstOrDefault() ?? _sel.FirstOrDefault(u => !u.IsVehicle);
@@ -659,7 +674,7 @@ public sealed partial class OpenFDGame
         SN.Vector2 m = new SN.Vector2(sx, sy);
         Opening? best = null;
         float bd = Tol(26);
-        foreach (Opening o in _session.Units.Openings.Where(o => o.State != OpeningState.Broken && (o.OnGround || o.IsWindow)))
+        foreach (Opening o in _session.Units.Openings.Where(o => (o.State != OpeningState.Broken || _session.Units.LadderAt(o) != null) && (o.OnGround || o.IsWindow)))
         {
             if (Project(o.Center - new SN.Vector3(0, 0, 90)) is not { } a || Project(o.Center + new SN.Vector3(0, 0, 90)) is not { } b)
                 continue;
@@ -803,7 +818,7 @@ public sealed partial class OpenFDGame
     }
 
     // ---- curseurs du jeu (Gfx\Textures\_cache\MouseCursors.dds, cases de 32 × 32, 8 par ligne) ----
-    private enum Cur { Grapple = 12, Normal = 0, Unit = 1, Use = 2, Heal = 3, Axe = 4, Move = 5, Target = 8, Rescue = 3, Forbidden = 13, Enter = 14, Water = 15 }
+    private enum Cur { Grapple = 12, Normal = 0, Unit = 1, Use = 2, Heal = 3, Axe = 4, Move = 5, Target = 8, Rescue = 3, Forbidden = 13, Enter = 14, Water = 15, Ladder = 11, Bulldozer = 20 }
     private readonly Dictionary<Cur, MouseCursor> _cursors = new();
     private readonly List<Texture2D> _cursorTex = new();
     private Cur _cur = (Cur)(-1);
@@ -884,6 +899,10 @@ public sealed partial class OpenFDGame
         walkers = walkers.Where(u => !u.Unconscious).ToList();
         if (MiniToWorld(x, y) != null)
             want = Cur.Normal;
+        else if (_sel.Any(u => u.CanDemolish && !u.Destroyed) && OpeningAt(x, y) is { Demolish: true })
+            want = Cur.Bulldozer;   // débris : le bulldozer les dégage
+        else if (_sel.Any(u => u.IsAerial && !u.Destroyed) && OpeningAt(x, y) is { } hw && _session.Units.IsHighWindow(hw))
+            want = Cur.Ladder;      // fenêtre d'étage : dresser l'échelle
         else if (walkers.Count == 0)
             want = UnitAt(x, y) != null ? Cur.Unit : Cur.Normal;
         else if (GrappleAt(x, y) != null)
@@ -900,8 +919,12 @@ public sealed partial class OpenFDGame
             want = walkers.Any(u => _session.Units.CanWorkOn(u, uo)) ? Cur.Use : Cur.Forbidden;
         else if (OpeningAt(x, y) is { } o)
         {
-            bool brk = o.Breakable && (o.IsWindow || o.State == OpeningState.Closed);
-            want = brk && walkers.Any(u => u.CanBreak) ? Cur.Axe : o.Usable && walkers.Any(u => u.CanUse) ? Cur.Use : Cur.Forbidden;
+            bool brk = o.Breakable && o.State != OpeningState.Broken && (o.IsWindow || o.State == OpeningState.Closed);
+            bool ladder = _session.Units.LadderAt(o) != null && walkers.Any(u => u.CanLadder);
+            want = o.Demolish ? Cur.Forbidden   // débris : seul le bulldozer
+                : brk && walkers.Any(u => u.CanBreak) ? Cur.Axe
+                : ladder ? Cur.Ladder           // échelle dressée devant la fenêtre ouverte : y monter
+                : o.Usable && walkers.Any(u => u.CanUse) ? Cur.Use : Cur.Forbidden;
         }
         else if (FireAt(x, y) != null)
             want = walkers.Any(u => u.Nozzle != null) ? Cur.Target : Cur.Forbidden;

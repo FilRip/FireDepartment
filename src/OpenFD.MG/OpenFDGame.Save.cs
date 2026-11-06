@@ -60,6 +60,14 @@ public sealed partial class OpenFDGame
         Rec("goveh", u.Id, veh.Id);
         _session.Units.GoToVehicle(u, veh);
     }
+    /// <summary>Le joueur choisit la caserne du renfort accordé (clic sur son cadre) : ordre enregistré (sauvegarde, réseau).</summary>
+    private void DoChooseReinforcement(string team)
+    {
+        if (NetSubmit("renfort", s: team))
+            return;
+        Rec("renfort", s: team);
+        _session.Units.ChooseReinforcement(team);
+    }
     private void DoUse(Unit u, UsableObject o)
     {
         if (NetSubmit("use", u.Id, o.Id))
@@ -73,6 +81,13 @@ public sealed partial class OpenFDGame
             return;
         Rec("door", u.Id, d.Id);
         _session.Units.WorkOnOpening(u, d);
+    }
+    private void DoLadder(Unit truck, Opening d)
+    {
+        if (NetSubmit("ladder", truck.Id, d.Id))
+            return;
+        Rec("ladder", truck.Id, d.Id);
+        _session.Units.DeployLadder(truck, d);
     }
     private void DoAttack(Unit u, OpenFD.Fire.HotPoint h)
     {
@@ -153,6 +168,10 @@ public sealed partial class OpenFDGame
                 if (U(e.A) is { } a4 && U(e.B) is { } b4)
                     um.GoToVehicle(a4, b4);
                 break;
+            case "renfort":
+                if (e.S is { } team)
+                    um.ChooseReinforcement(team);
+                break;
             case "use":
                 if (U(e.A) is { } a5 && um.Usables.FirstOrDefault(o => o.Id == e.B) is { } o5)
                     um.UseObject(a5, o5);
@@ -160,6 +179,10 @@ public sealed partial class OpenFDGame
             case "door":
                 if (U(e.A) is { } a6 && um.Openings.FirstOrDefault(o => o.Id == e.B) is { } d6)
                     um.WorkOnOpening(a6, d6);
+                break;
+            case "ladder":
+                if (U(e.A) is { } aL && um.Openings.FirstOrDefault(o => o.Id == e.B) is { } dL)
+                    um.DeployLadder(aL, dL);
                 break;
             case "attack":
                 if (U(e.A) is { } a7 && _session.Fire.HotPoints.FirstOrDefault(h => h.Id == e.B) is { } h7)

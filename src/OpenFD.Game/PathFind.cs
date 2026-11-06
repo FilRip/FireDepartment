@@ -52,7 +52,14 @@ public sealed class PathFind
     /// <summary>Recherche en cours : gabarit autour de la case (véhicule conduit), véhicule qui cherche (ses propres cases restent libres).</summary>
     public int Clearance, SelfId;
     /// <summary>Recherche en cours : véhicule qui suit sa route (ignore les véhicules garés), pompier au grappin (passe les murs à grappin).</summary>
-    public bool PathingVehicle, PathingGrapple;
+    public bool PathingVehicle, PathingGrapple, PathingLadder;
+    /// <summary>Recherche en cours : le pompier peut casser (hache) ou ouvrir une fenêtre fermée pour passer par l'échelle.</summary>
+    public bool PathingBreak, PathingUse;
+    /// <summary>
+    /// Échelles dressées devant une fenêtre : passages directs entre une case au sol et une case de l'étage. Fenêtre
+    /// fermée : seulement pour qui peut la casser (breakable) ou l'ouvrir (usable).
+    /// </summary>
+    public readonly List<(int a, int b, bool closed, bool breakable, bool usable)> Links = new();
 
     public bool FreeCell(int cx, int cy) => _s.Grid is not { } g || (g.Inside(cx, cy) && g.ZoneA[g.Index(cx, cy)] != 0 && (Blocked.Length == 0 || !Blocked[g.Index(cx, cy)])
         && (PathingVehicle || VehicleBlocked.Length == 0 || VehicleBlocked[g.Index(cx, cy)] == 0 || VehicleBlocked[g.Index(cx, cy)] == SelfId)
@@ -607,6 +614,24 @@ public sealed class PathFind
                     Set(k, c, Key(x, y));
                     open.Enqueue((nx, ny), c + MathF.Sqrt((tx - nx) * (tx - nx) + (ty - ny) * (ty - ny)));
                 }
+            if (!PathingLadder)
+                continue;
+            // échelle : de son pied à l'étage (ou l'inverse) d'un seul pas, compté comme une vingtaine de cases (la montée est lente)
+            int here = Key(x, y);
+            foreach ((int la, int lb, bool closed, bool breakable, bool usable) in Links)
+            {
+                int other = la == here ? lb : lb == here ? la : -1;
+                if (other < 0)
+                    continue;
+                if (closed && !(breakable && PathingBreak) && !(usable && PathingUse))
+                    continue;
+                float c = c0 + LadderCost + (closed ? LadderCost / 2 : 0);   // fenêtre à casser d'abord
+                if (Has(other) && _cost[other] <= c)
+                    continue;
+                Set(other, c, here);
+                int ox = other % g.Width, oy = other / g.Width;
+                open.Enqueue((ox, oy), c + MathF.Sqrt((tx - ox) * (tx - ox) + (ty - oy) * (ty - oy)));
+            }
         }
         if (Environment.GetEnvironmentVariable("FD3_DEBUG_CHEMIN") != null)
             Console.WriteLine($"recherche ({sx},{sy}) → ({tx},{ty}) : {guard} cases examinées, {(found >= 0 ? "trouvé" : "non trouvé")}, grille {g.Width}×{g.Height}");
@@ -655,6 +680,41 @@ public sealed class PathFind
         }
         return smooth;
     }
+
+    /// <summary>Coût d'un passage par l'échelle, en cases.</summary>
+    public const float LadderCost = 20f;
+
+    /// <summary>
+    /// Jet d'un véhicule (lance sur le toit, l'eau passe en cloche) : seuls l'arrêtent les murs (des pièces, cloisons), les
+    /// portes fermées et les obstacles épais (bâtiment, gros objet : plus de <see cref="WaterHopMax"/> d'affilée) ; une
+    /// bordure, une barrière, une voiture ou un véhicule ne l'arrêtent pas.
+    /// </summary>
+    public bool WaterLineFree(Vector2 a, Vector2 b)
+    {
+        if (_s.Grid is not { } g)
+            return true;
+        const float Step = 40;
+        int n = (int)(Vector2.Distance(a, b) / Step) + 1;
+        float run = 0;
+        for (int i = 1; i < n; i++)
+        {
+            Vector2 p = Vector2.Lerp(a, b, (float)i / n);
+            (int cx, int cy) = g.CellOf(new Vector3(p, 0));
+            if (!g.Inside(cx, cy))
+                return false;
+            int k = g.Index(cx, cy);
+            if (IsClosedDoor(k) || (BlockedBy.TryGetValue(k, out string? by) && by is "mur" or "cloison" or "mur de pièce"))
+                return false;
+            bool open = g.ZoneA[k] != 0 && !IsBlocked(k);
+            run = open ? 0 : run + Step;
+            if (run > WaterHopMax)
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>Largeur d'obstacle (unités) par-dessus laquelle passe le jet d'un véhicule.</summary>
+    public const float WaterHopMax = 250f;
 
     public bool LineFree(Vector2 a, Vector2 b, bool ignoreFire = false)
     {

@@ -132,15 +132,80 @@ public sealed partial class UnitManager
             Dispatch(ini.cfg, ini.spawn);
     }
 
+    /// <summary>
+    /// LEV_GrantReinforcement : un renfort est accordé (voix « renforts accordés »). S'il reste plusieurs casernes possibles,
+    /// le joueur choisit laquelle vient (clic sur son cadre dans le panneau des unités, Institute : E10 ou W7) ; s'il n'en
+    /// reste qu'une, elle part d'elle-même.
+    /// </summary>
     public void GrantReinforcement()
     {
         if (_toGrant.Count == 0)
             return;
-        (float eta, string cfg, int spawn) r = _toGrant[0];
-        _toGrant.RemoveAt(0);
+        Sounds.Add(("VOCAL_REINFORCEMENT_GRANTED", null));
+        if (_toGrant.Count - GrantsAvailable <= 1)
+        {
+            ChooseReinforcement(TeamCode(_toGrant[GrantsAvailable].cfg));
+            return;
+        }
+        GrantsAvailable++;
+        Log.Add($"{_s.Time,6:0} s : renfort accordé, à choisir ({string.Join(" ou ", _toGrant.Select(t => TeamCode(t.cfg)))})");
+    }
+
+    /// <summary>
+    /// Délai entre le choix d'un renfort et son arrivée sur la carte quand la mission n'en donne pas : celui de la mission
+    /// (ETA de la caserne, 25 ou 30 s à l'Institute) correspond au jeu d'origine (une trentaine de secondes).
+    /// </summary>
+    public const float ReinforcementCallTime = 30f;
+
+    /// <summary>Renforts accordés que le joueur n'a pas encore choisis.</summary>
+    public int GrantsAvailable { get; private set; }
+
+    /// <summary>Casernes que le joueur peut choisir maintenant (vide s'il n'a pas de renfort accordé).</summary>
+    public IEnumerable<string> ChoosableTeams => GrantsAvailable > 0 ? _toGrant.Select(t => TeamCode(t.cfg)) : Enumerable.Empty<string>();
+
+    // renforts choisis, en route : équipe → (moment du choix, durée)
+    private readonly Dictionary<string, (float start, float duration)> _incoming = new();
+
+    /// <summary>Renfort choisi pas encore arrivé : avancement de 0 à 1 (barre sous son nom) ; null sinon.</summary>
+    public float? IncomingProgress(string team) =>
+        _incoming.TryGetValue(team, out (float start, float duration) t) ? Math.Clamp((_s.Time - t.start) / MathF.Max(0.1f, t.duration), 0, 1) : null;
+
+    /// <summary>Le joueur choisit la caserne qui vient (voix « renfort en approche ») ; elle arrive au bout de son délai (ETA).</summary>
+    public bool ChooseReinforcement(string team)
+    {
+        int i = _toGrant.FindIndex(t => TeamCode(t.cfg) == team);
+        if (i < 0)
+            return false;
+        (float eta, string cfg, int spawn) r = _toGrant[i];
+        _toGrant.RemoveAt(i);
+        if (GrantsAvailable > 0)
+            GrantsAvailable--;
         _granted.Add(r);
-        _pending.Add((_s.Time + r.eta, r.cfg, r.spawn));
-        Log.Add($"{_s.Time,6:0} s : renfort accordé ({r.cfg}, dans {r.eta:0} s)");
+        float delay = r.eta > 0 ? r.eta : ReinforcementCallTime;
+        _pending.Add((_s.Time + delay, r.cfg, r.spawn));
+        _incoming[team] = (_s.Time, delay);
+        Sounds.Add(("VOCAL_REINFORCEMENT_CALLED", null));
+        Log.Add($"{_s.Time,6:0} s : renfort {team} en approche (dans {delay:0} s)");
+        return true;
+    }
+
+    /// <summary>Composition d'une caserne de la mission (aperçu au survol de son cadre) : classe, icône, véhicule ou non.</summary>
+    public List<(string cls, string? icon, bool vehicle, bool ambulance)> TeamComposition(string team)
+    {
+        List<(string cls, string? icon, bool vehicle, bool ambulance)> res = new();
+        string? cfgName = _toGrant.Concat(_granted).Select(t => t.cfg).FirstOrDefault(c => TeamCode(c) == team);
+        if (cfgName == null || Class("Design\\Firestation\\" + cfgName + ".cfg") is not { } cfg)
+            return res;
+        for (int i = 1; i <= 20; i++)
+        {
+            string? cls = cfg.Get("FIRESTATION", $"UNIT{i:00}")?.Trim('"', ' ');
+            if (string.IsNullOrEmpty(cls))
+                continue;
+            bool vehicle = cls.StartsWith("Firevehicle", StringComparison.OrdinalIgnoreCase);
+            string? icon = Class("Design\\Unit\\" + cls + ".class")?.Get("UNIT", "Icon")?.Trim('"', ' ');
+            res.Add((cls, icon, vehicle, vehicle && cls.Contains("ambulance", StringComparison.OrdinalIgnoreCase)));
+        }
+        return res;
     }
 
     // renforts dans l'ordre de la mission (1, 2, 3…), pour LEV_CallReinforcement(n)

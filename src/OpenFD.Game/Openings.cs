@@ -10,6 +10,8 @@ public sealed partial class UnitManager
     public IEnumerable<Opening> Doors => Openings;
     /// <summary>Réglé pour qu'une porte ordinaire (HitDamageCoef 10,73, 100 points de vie) tombe en 3 coups.</summary>
     public const float BlowFactor = 3.11f, BlowSeconds = 1.2f, UseSeconds = 1.0f, ActionReach = 260f;
+    /// <summary>Hauteur au-dessus du sol (sous les pieds) jusqu'où un pompier atteint une fenêtre.</summary>
+    public const float ReachHeight = 330f;
 
     /// <summary>Animation de l'état « open » ([LOGICAL_STATE] S0n__NAME = open, S0n_ANIM) ; null s'il n'y en a pas.</summary>
     /// <summary>Vrai si l'animation anime au moins une pièce du modèle.</summary>
@@ -40,9 +42,30 @@ public sealed partial class UnitManager
         return null;
     }
 
+    /// <summary>
+    /// Portes, fenêtres et débris cachés au départ (octet de visibilité du niveau) que le script ne montre jamais
+    /// (ENT_SetVisibility) : absents du jeu d'origine (Institute : « remains29 », débris d'une autre carte). Ni chargés,
+    /// ni dessinés.
+    /// </summary>
+    public HashSet<string> HiddenOpenings { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Numéros des objets que les scripts de la mission montrent ou cachent (ENT_SetVisibility).</summary>
+    private HashSet<uint> ScriptVisibilityIds()
+    {
+        HashSet<uint> ids = new HashSet<uint>();
+        string dir = Path.Combine(_files.DataDir, "Script", "Mission", _s.Mission);
+        if (!Directory.Exists(dir))
+            return ids;
+        foreach (string f in Directory.EnumerateFiles(dir, "*.scp"))
+            foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(f, System.Text.Encoding.Latin1), @"ENT_SetVisibility\s*\(\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                ids.Add(uint.Parse(m.Groups[1].Value));
+        return ids;
+    }
+
     private void LoadOpenings(Level level)
     {
         SceneAssets assets = _assets ??= new SceneAssets(_files);
+        HashSet<uint> scriptShown = ScriptVisibilityIds();
         foreach (LevelObject o in level.Objects.Where(o => o.Kind == EntityKind.Placeable && o.HasTransform))
         {
             ClassFile? c = Class("Design\\" + o.ClassPath["design\\".Length..] + ".class");
@@ -52,6 +75,11 @@ public sealed partial class UnitManager
             string? stateOpen = c == null ? null : StateOpenAnim(c);
             if (c == null || (type is not ("DOOR" or "WINDOW") && stateOpen == null))
                 continue;
+            if (!o.StartVisible && !scriptShown.Contains(o.Id))
+            {
+                HiddenOpenings.Add(o.Name);
+                continue;
+            }
             // un objet que le joueur actionne lui-même (vanne de gaz de Mriya : use → RotateTube) reste un objet à utiliser
             if (type is not ("DOOR" or "WINDOW") && o.GetComponent(0xA027) is { } uc && ParseActions(o.ComponentBytes(uc).ToArray()).Any())
                 continue;
@@ -67,6 +95,7 @@ public sealed partial class UnitManager
                 Usable = type == "DOOR" && c.GetBool("CAPACITIES_ACTIONS", "CouldBeUse"),
                 ScriptGate = type != "DOOR" && type != "WINDOW",
                 MaxLife = c.GetFloat("DAMAGE", "MaxLifePoints", 100), HitCoef = c.GetFloat("DAMAGE", "HitDamageCoef", 1),
+                Demolish = c.GetBool("CAPACITIES_ACTIONS", "CouldBeDemolish"), HitSpeed = c.GetFloat("DAMAGE", "HitDamageSpeed", 20),
             };
             d.Life = c.GetFloat("DAMAGE", "LifePoints", d.MaxLife);
             d.SoundLabel = c.Get("SOUND", "Label")?.Trim('"', ' ');
@@ -219,6 +248,7 @@ public sealed partial class UnitManager
                 Id = o.Id, Name = o.Name, IsWindow = false, Model = model, World = o.Matrix, IsObstacle = true,
                 Breakable = true, Usable = false, MaxLife = c.GetFloat("DAMAGE", "MaxLifePoints", 100), HitCoef = c.GetFloat("DAMAGE", "HitDamageCoef", 1),
                 Life = life, State = OpeningState.Closed, OnGround = true,
+                Demolish = c.GetBool("CAPACITIES_ACTIONS", "CouldBeDemolish"), HitSpeed = c.GetFloat("DAMAGE", "HitDamageSpeed", 20),
             };
             d.Center = d.Position;
             if (_s.Grid is { } g)
@@ -317,9 +347,23 @@ public sealed partial class UnitManager
     public void WorkOnOpening(Unit u, Opening d)
     {
         if (u.IsVehicle)
+        {
+            if (u.CanDemolish && d.Demolish && d.State != OpeningState.Broken)
+                DemolishOrder(u, d);
             return;
+        }
+        // débris pour bulldozer (Institute) : la hache n'y peut rien
+        if (d.Demolish && d.State != OpeningState.Broken)
+        {
+            Sounds.Add(("VOCAL_NO_SKILLS_FOR_THIS_ACTION", null));
+            u.Status = $"{d.Name} : il faut un bulldozer";
+            return;
+        }
         bool breakIt = d.Breakable && u.CanBreak && d.State != OpeningState.Broken && (d.IsWindow || d.State == OpeningState.Closed);
         bool useIt = !breakIt && d.Usable && u.CanUse && d.State != OpeningState.Broken;
+        // échelle dressée devant cette fenêtre : on y monte (casser, ouvrir, entrer) ou on en redescend (voir Ladders.cs)
+        if (d.IsWindow && LadderAt(d) != null && u.CanLadder && (u.OnLadder != null || !CanReachFromHere(u, d)) && LadderOrder(u, d, breakIt, useIt))
+            return;
         if (!breakIt && !useIt)
         {
             Sounds.Add(("VOCAL_NO_SKILLS_FOR_THIS_ACTION", null));
@@ -328,13 +372,19 @@ public sealed partial class UnitManager
                 : "cette ouverture ne peut être ni ouverte ni cassée";
             return;
         }
-        if (d.Center.Z - Ground(new(d.Center.X, d.Center.Y)) > 400)
-        {
-            u.Status = $"{d.Name} est à l'étage : hors d'atteinte depuis le sol";
-            return;
-        }
         // portail à mécanisme : l'unité va sous les rouages, pas au milieu du portail
         Vector2 spot = useIt && d.Lever is { } lv ? Walkable(lv) : ApproachPoint(u, d);
+        // fenêtre d'un étage : hors d'atteinte depuis le sol où l'on se tiendrait (le sol de la case de la fenêtre ne
+        // compte pas : c'est souvent le plancher de l'étage). Fenêtres du rez-de-chaussée : 100 à 250 au-dessus du sol,
+        // fenêtres du premier : 500 et plus (Institute, Londres, Paris)
+        bool noPlace = d.IsWindow && !useIt && !_approachFound;
+        if (d.Center.Z - Ground(spot) > ReachHeight || noPlace)
+        {
+            Sounds.Add(("VOCAL_IMPOSSIBLE_TO_ACCESS", null));
+            u.Status = u.CanLadder && Units.Any(v => v.IsAerial && !v.Hidden && !v.OnBoard && !v.Destroyed)
+                ? $"{d.Name} est à l'étage : dressez l'échelle du camion échelle" : $"{d.Name} est à l'étage : hors d'atteinte d'ici";
+            return;
+        }
         if (!Order(u, spot))
             return;
         u.Opening = d;
@@ -342,6 +392,27 @@ public sealed partial class UnitManager
         u.ActionTimer = 0;
         u.Status = breakIt ? $"va casser {d.Name}" : d.State == OpeningState.Closed ? $"va ouvrir {d.Name}" : $"va fermer {d.Name}";
     }
+
+    /// <summary>Le pompier est déjà à l'étage de cette fenêtre (il y travaille comme au sol, sans échelle).</summary>
+    private bool CanReachFromHere(Unit u, Opening d) => MathF.Abs(d.Center.Z - u.Position.Z) <= ReachHeight && u.OnLadder == null;
+
+    /// <summary>Bulldozer : il se place devant les débris, face à eux, puis les dégage à coups de pelle (WorkOpening).</summary>
+    private void DemolishOrder(Unit u, Opening d)
+    {
+        Vector2 c = new Vector2(d.Center.X, d.Center.Y), me = new Vector2(u.Position.X, u.Position.Y);
+        Vector2 dir = Vector2.Distance(me, c) > 1 ? Vector2.Normalize(me - c) : Vector2.UnitX;
+        // devant les débris, à une demi-longueur d'engin (le pivot est au milieu de l'engin)
+        Vector2 spot = Walkable(c + dir * DozerStandOff);
+        if (!Order(u, spot))
+            return;
+        u.Opening = d;
+        u.OpeningBreak = true;
+        u.ActionTimer = 0;
+        u.Status = $"va déblayer {d.Name}";
+    }
+
+    /// <summary>Distance du pivot du bulldozer aux débris pour les pousser ; durée d'un coup de pelle.</summary>
+    public const float DozerStandOff = 420f, DozerBlowSeconds = 1.6f;
 
     // distance d'une unité à l'ouverture : au battant, ou à la case la plus proche d'un obstacle étendu (gravats)
     private float ReachDist(Vector2 p, Opening d)
@@ -355,9 +426,13 @@ public sealed partial class UnitManager
         return best;
     }
 
+    // vrai si le dernier ApproachPoint a trouvé une case atteignable (sinon il renvoie la case libre la plus proche)
+    private bool _approachFound;
+
     // case libre la plus proche du battant, du côté de l'unité
     private Vector2 ApproachPoint(Unit u, Opening d)
     {
+        _approachFound = false;
         Vector2 c = new Vector2(d.Center.X, d.Center.Y);
         if (_s.Grid is not { } g)
             return c;
@@ -396,7 +471,10 @@ public sealed partial class UnitManager
                         }
                     }
                 if (bestLen < float.MaxValue)
+                {
+                    _approachFound = true;
                     return best;
+                }
             }
         for (int dx = -r; dx <= r; dx++)
             for (int dy = -r; dy <= r; dy++)
@@ -406,6 +484,9 @@ public sealed partial class UnitManager
                     continue;
                 Vector2 p = new Vector2((x + 0.5f) * Grid.CellSize, (y + 0.5f) * Grid.CellSize);
                 if (ReachDist(p, d) > ActionReach * 0.9f)
+                    continue;
+                // fenêtre : seulement d'un sol d'où on l'atteint (dans la pièce à l'étage, plutôt que dans la rue en dessous)
+                if (d.IsWindow && d.Center.Z - Ground(p) > ReachHeight)
                     continue;
                 // chemin partiel (case de l'autre côté de la porte fermée, inatteignable) : on ne la retient pas
                 List<Vector2> path = FindPath(me, p, out bool partial);
@@ -422,16 +503,65 @@ public sealed partial class UnitManager
                 {
                     bestLen = len;
                     best = p;
+                    _approachFound = true;
                 }
             }
         return best;
     }
 
+    /// <summary>
+    /// Coups de pelle du bulldozer : il se tourne vers les débris et avance d'un coup puis recule (Shove, pour le dessin) ;
+    /// chaque coup enlève HitDamageSpeed × la durée du coup (Institute : 100 points, 20 par seconde → 4 coups de 1,6 s).
+    /// </summary>
+    private void Dozer(Unit u, Opening d, float dt)
+    {
+        if (d.State == OpeningState.Broken)
+        {
+            u.Opening = null;
+            u.Status = "attend les ordres";
+            return;
+        }
+        Vector2 me = new Vector2(u.Position.X, u.Position.Y), c = new Vector2(d.Center.X, d.Center.Y);
+        if (Vector2.Distance(me, c) > DozerStandOff + 400)
+        {
+            u.Opening = null;
+            u.Status = $"{d.Name} hors d'atteinte";
+            return;
+        }
+        u.Heading = MathF.Atan2(c.Y - me.Y, c.X - me.X);
+        u.ActionTimer += dt;
+        u.Shove = MathF.Sin(MathF.PI * Math.Clamp(u.ActionTimer / DozerBlowSeconds, 0, 1));
+        u.Status = $"déblaie {d.Name} ({d.Life / d.MaxLife:P0})";
+        if (u.ActionTimer < DozerBlowSeconds)
+            return;
+        u.ActionTimer = 0;
+        d.Life -= d.HitSpeed * DozerBlowSeconds;
+        u.Blows++;
+        Sounds.Add(("BULLDOZER_HORN", u.Position));
+        if (d.Life > 0)
+            return;
+        d.Life = 0;
+        d.State = OpeningState.Broken;
+        u.Opening = null;
+        u.Shove = 0;
+        u.Status = "attend les ordres";
+        Log.Add($"{_s.Time,6:0} s : {d.Name} déblayé par {u.Name}");
+        RefreshDoorCells();
+    }
+
     private void WorkOpening(Unit u, float dt)
     {
-        if (u.Opening is not { } d || u.Moving)
+        u.Shove = 0;
+        if (u.Opening is not { } d || (u.Moving && !u.PassingWindow))
             return;
-        if (ReachDist(new(u.Position.X, u.Position.Y), d) > ActionReach * 1.5f)
+        if (u.OnLadder != null && u.LadderStep != LadderPhase.Top)
+            return;   // il monte à l'échelle : il agira en haut
+        if (u.IsVehicle)
+        {
+            Dozer(u, d, dt);
+            return;
+        }
+        if (!u.PassingWindow && ReachDist(new(u.Position.X, u.Position.Y), d) > ActionReach * 1.5f)
         {
             u.Opening = null;
             u.Status = $"{d.Name} hors d'atteinte";

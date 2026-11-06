@@ -122,18 +122,20 @@ public sealed partial class OpenFDGame
         return _widgetFiles.TryGetValue(widget, out string? f) ? f : null;
     }
 
-    private Texture2D? UnitIcon(Unit u)
+    private Texture2D? UnitIcon(Unit u) => IconFor(u.Icon, u.Name, u.IsVehicle, u.IsAmbulance);
+
+    /// <summary>Image d'une unité : [UNIT] Icon, sinon d'après le nom de sa classe.</summary>
+    private Texture2D? IconFor(string? icon, string name, bool isVehicle, bool isAmbulance)
     {
-        string? icon = u.Icon;
         string? file = null;
         if (!string.IsNullOrEmpty(icon))
             file = WidgetFile(icon + "_BIG") ?? WidgetFile(icon + "_SMALL") ?? WidgetFile(icon);
         if (file == null)
         {
             // sans [UNIT] Icon : d'après le nom de la classe (fireman_sp_gb → FIREFIGHTER_GB…)
-            string n = u.Name.ToUpperInvariant();
+            string n = name.ToUpperInvariant();
             string nat = new[] { "US", "FR", "GB", "GR", "UA" }.FirstOrDefault(x => n.EndsWith("_" + x)) ?? "US";
-            file = u.IsVehicle ? (u.IsAmbulance ? $"AMBU_{nat}_big.png" : $"PUMPER_{nat}_big.png")
+            file = isVehicle ? (isAmbulance ? $"AMBU_{nat}_big.png" : $"PUMPER_{nat}_big.png")
                 : n.Contains("MEDIC") ? "FIREFIGHTER_MEDIC_big.png" : n.Contains("FRANC") ? "FIREFIGHTER_FRANK_big.png"
                 : n.Contains("CANON") ? "FIREFIGHTER_CANON_big.png" : n.Contains("ING") ? "FIREFIGHTER_ING_big.png"
                 : n.Contains("DES") ? "FIREFIGHTER_DES_big.png" : $"FIREFIGHTER_{nat}_big.png";
@@ -223,7 +225,7 @@ public sealed partial class OpenFDGame
     // arrivée) ; les unités choisies sont entourées de vert ; une flamme clignote sur l'image d'une unité dans un feu,
     // un « ? » sur un pompier qui ne fait rien
     private const int PanelMax = 14;
-    private static readonly Rectangle TabOn = new Rectangle(1876, 688, 68, 46), TabOff = new Rectangle(1944, 736, 68, 46);
+    private static readonly Rectangle TabOn = new Rectangle(1876, 688, 68, 46), TabOff = new Rectangle(1944, 736, 68, 46), TabChoose = new Rectangle(1876, 736, 68, 46);
     private static readonly Rectangle FireMark = new Rectangle(1736, 557, 24, 29), IdleMark = new Rectangle(1655, 592, 16, 22);
 
     /// <summary>Lignes du panneau, de bas en haut : (nom de l'équipe, unités). Les unités sans équipe connue vont à la fin.</summary>
@@ -266,14 +268,31 @@ public sealed partial class OpenFDGame
         {
             (string team, List<Unit> units) = rows[ri];
             float y = pr.y - ri * pr.rowH, x = pr.x;
-            // cadre de l'équipe et son nom
+            // cadre de l'équipe et son nom : vert si elle est là, jaune (clignotant) si on peut la choisir comme renfort,
+            // gris sinon ; un renfort choisi a une barre d'avancement sous son nom jusqu'à son arrivée (1 minute)
             bool here = units.Count > 0;
+            bool choosable = _session.Units.ChoosableTeams.Contains(team);
+            float? incoming = _session.Units.IncomingProgress(team);
+            // (cadre jaune : renfort en route, sa fente noire reçoit la barre d'avancement)
+            Rectangle tab = incoming != null ? TabChoose : choosable ? (_uiClock % 1f < 0.6f ? TabOn : TabOff) : here ? TabOn : TabOff;
             if (pages != null)
-                _ui.Image(pages, x, y, pr.tabW, pr.iconH, here ? TabOn : TabOff, SN.Vector4.One);
+                _ui.Image(pages, x, y, pr.tabW, pr.iconH, tab, SN.Vector4.One);
             else
                 _ui.Rect(x, y, pr.tabW, pr.iconH, here ? new SN.Vector4(0.1f, 0.35f, 0.12f, 1) : new SN.Vector4(0.18f, 0.18f, 0.18f, 1));
             float tw = _ui.Measure(team);
-            _ui.Text(x + (pr.tabW - tw) / 2, y + (pr.iconH - _ui.LineHeight) / 2, team, here ? new SN.Vector4(1, 1, 1, 1) : new SN.Vector4(0.75f, 0.75f, 0.75f, 1));
+            float ty = incoming != null ? y + (29f / 46f * pr.iconH - _ui.LineHeight) / 2 : y + (pr.iconH - _ui.LineHeight) / 2;
+            _ui.Text(x + (pr.tabW - tw) / 2, ty, team, here || choosable || incoming != null ? new SN.Vector4(1, 1, 1, 1) : new SN.Vector4(0.75f, 0.75f, 0.75f, 1));
+            if (incoming is { } inc)
+            {
+                // fente noire du cadre jaune : pixels 8 à 58 en largeur, 29 à 37 en hauteur (sur 68 × 46)
+                float k = pr.iconH / 46f, bx = x + 9 * k, bw = 49 * k, by = y + 30 * k, bh = 7 * k;
+                if (pages == null)
+                    _ui.Rect(bx, by, bw, bh, new SN.Vector4(0, 0, 0, 0.8f));
+                _ui.Rect(bx, by, bw * inc, bh, new SN.Vector4(0.35f, 0.95f, 0.35f, 1));
+            }
+            // souris sur le cadre d'un renfort à choisir (ou en route) : aperçu de ses unités à droite
+            if ((choosable || (incoming != null && !here)) && (MouseOver(x, y, pr.tabW, pr.iconH) || Environment.GetEnvironmentVariable("FD3_APERCU") == team))
+                DrawTeamPreview(team, x + pr.tabW + gap, y, pr);
             x += pr.tabW + gap;
             if (units.Count > 0)
                 _ui.Rect(x - pad / 2, y - pad / 2, units.Count * pr.cell + pad / 2, pr.rowH - pad / 2, new SN.Vector4(0.09f, 0.09f, 0.11f, 0.88f));
@@ -311,6 +330,36 @@ public sealed partial class OpenFDGame
                         n.Agent is "WATER" or "" ? waterTex : null, AgentColor(n.Agent));   // autre agent : couleur pleine (l'image de l'eau est bleue)
                 x += pr.cell;
             }
+        }
+    }
+
+    private bool MouseOver(float x, float y, float w, float h)
+    {
+        MouseState ms = Mouse.GetState();
+        (float mx, float my) = Fb(ms.X, ms.Y);
+        return mx >= x && mx < x + w && my >= y && my < y + h;
+    }
+
+    /// <summary>Aperçu des unités d'une caserne (renfort à choisir) : leurs images, un peu transparentes, sur la ligne.</summary>
+    private void DrawTeamPreview(string team, float x, float y, (float x, float y, float cell, float iconH, float rowH, float tabW) pr)
+    {
+        List<(string cls, string? icon, bool vehicle, bool ambulance)> comp = _session.Units.TeamComposition(team);
+        if (comp.Count == 0)
+            return;
+        float pad = 6 * _scale, iw = pr.cell - pad;
+        _ui.Rect(x - pad / 2, y - pad / 2, comp.Count * pr.cell + pad / 2, pr.iconH + pad, new SN.Vector4(0.12f, 0.12f, 0.05f, 0.92f));
+        foreach ((string cls, string? icon, bool vehicle, bool ambulance) in comp)
+        {
+            _ui.Rect(x, y, iw, pr.iconH, new SN.Vector4(0.16f, 0.17f, 0.2f, 1));
+            string shortName = cls[(cls.LastIndexOfAny(new[] { '\\', '/' }) + 1)..];
+            if (IconFor(icon, shortName, vehicle, ambulance) is { } ic)
+            {
+                float s = MathF.Min(iw / ic.Width, pr.iconH / ic.Height);
+                _ui.Image(ic, x + (iw - ic.Width * s) / 2, y + (pr.iconH - ic.Height * s) / 2, ic.Width * s, ic.Height * s, new SN.Vector4(1, 1, 1, 0.85f));
+            }
+            else
+                _ui.Text(x + 4 * _scale, y + 4 * _scale, shortName, new SN.Vector4(0.9f, 0.9f, 0.9f, 1));
+            x += pr.cell;
         }
     }
 
@@ -378,6 +427,12 @@ public sealed partial class OpenFDGame
             bool shift = kb.IsKeyDown(Keys.LeftShift) || kb.IsKeyDown(Keys.RightShift) || kb.IsKeyDown(Keys.LeftControl) || kb.IsKeyDown(Keys.RightControl);
             if (sx >= pr.x && sx < pr.x + pr.tabW)
             {
+                // renfort accordé : le clic sur le cadre d'une caserne la fait venir
+                if (_session.Units.ChoosableTeams.Contains(rows[ri].team))
+                {
+                    DoChooseReinforcement(rows[ri].team);
+                    return true;
+                }
                 if (units.Count == 0)
                     return true;
                 if (!shift)

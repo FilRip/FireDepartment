@@ -913,15 +913,18 @@ public static class Program
                     {
                         Mesh m = assets.LoadMesh("", part.Mesh, "gfx").Mesh;
                         float a0 = float.MaxValue, a1 = float.MinValue;
+                        System.Numerics.Vector3 mn = new System.Numerics.Vector3(float.MaxValue), mx = new System.Numerics.Vector3(float.MinValue);
                         for (int i = 0; i < m.VertexCount; i++)
                         {
                             System.Numerics.Vector3 v = System.Numerics.Vector3.Transform(new(m.Positions[i * 3], m.Positions[i * 3 + 1], m.Positions[i * 3 + 2]), part.World);
                             a0 = Math.Min(a0, v.Z);
                             a1 = Math.Max(a1, v.Z);
+                            mn = System.Numerics.Vector3.Min(mn, v);
+                            mx = System.Numerics.Vector3.Max(mx, v);
                         }
                         lo = Math.Min(lo, a0);
                         hi = Math.Max(hi, a1);
-                        Console.WriteLine($"  {part.Mesh} z {a0:0}..{a1:0} T {part.World.Translation}");
+                        Console.WriteLine($"  {part.Mesh} z {a0:0}..{a1:0} x {mn.X:0}..{mx.X:0} y {mn.Y:0}..{mx.Y:0} T {part.World.Translation}");
                     }
                     Console.WriteLine($"{name} ({gfx}) : z {lo:0}..{hi:0}");
                 }
@@ -1475,6 +1478,253 @@ public static class Program
                 }
                 return 0;
             }
+            case "renforts":
+            {
+                // renforts <Data> <Mission> [équipe choisie] : renforts accordés, choix, arrivée
+                Session ses = new Session(files, args[2], "EASY");
+                string? pick = args.Length > 3 ? args[3] : null;
+                bool chosen = false;
+                for (int i = 0; i <= 3000; i++)
+                {
+                    if (i % 50 == 0)
+                        ses.Host?.EndCinematic();
+                    if (ses.Units.GrantsAvailable > 0 && !chosen && pick != null)
+                    {
+                        Console.WriteLine($"t {ses.Time:0} : à choisir {string.Join("/", ses.Units.ChoosableTeams)} ; aperçu {pick} : {string.Join(", ", ses.Units.TeamComposition(pick).Select(c => c.cls + (c.icon != null ? $" [{c.icon}]" : "")))}");
+                        chosen = ses.Units.ChooseReinforcement(pick);
+                    }
+                    if (i % 200 == 0)
+                        Console.WriteLine($"t {ses.Time,5:0} · accordés {ses.Units.GrantsAvailable} · " + string.Join(" · ", ses.Units.Teams.Select(t => $"{t} : {ses.Units.Units.Count(u => u.TeamName == t)} unité(s){(ses.Units.IncomingProgress(t) is { } p ? $" en approche {p:P0}" : "")}")));
+                    ses.Step();
+                }
+                foreach (string l in ses.Units.Log.Where(l => l.Contains("renfort") || l.Contains("équipe")))
+                    Console.WriteLine("  journal : " + l.Trim());
+                return 0;
+            }
+            case "visible":
+            {
+                // visible <Data> <Mission> <nom>… : visibilité de départ et octets du bloc A001 qui suivent « AA AA FF FF 0A »
+                string lvPath = files.List("Design\\Mission\\" + args[2] + "\\").First(p => p.EndsWith(".level", StringComparison.OrdinalIgnoreCase));
+                Level level = Level.Parse(files.Read(lvPath));
+                foreach (LevelObject o in level.Objects.Where(o => args.Skip(3).Any(n => o.Name.Contains(n, StringComparison.OrdinalIgnoreCase))))
+                {
+                    string bytes = "";
+                    if (o.GetComponent(0xA001) is { } c)
+                    {
+                        byte[] b = o.ComponentBytes(c).ToArray();
+                        int i = ((ReadOnlySpan<byte>)b).LastIndexOf(new byte[] { 0xAA, 0xAA, 0xFF, 0xFF, 0x0A });
+                        if (i >= 0)
+                            bytes = BitConverter.ToString(b, i, Math.Min(24, b.Length - i));
+                    }
+                    Console.WriteLine($"{o.Name,-26} visible {o.StartVisible} · composants {string.Join(",", o.Components.Select(k => k.Id.ToString("X4")))} · {bytes}");
+                }
+                return 0;
+            }
+            case "ouverturescachees":
+            {
+                // ouverturescachees <Data> <Mission>… : portes et débris cachés pour toute la partie (jamais montrés par le script)
+                foreach (string mis in args.Skip(2))
+                {
+                    Session ses = new Session(files, mis, "EASY", false);
+                    Console.WriteLine($"{mis} : {string.Join(", ", ses.Units.HiddenOpenings)} ({ses.Units.Openings.Count} ouvertures)");
+                }
+                return 0;
+            }
+            case "caches":
+            {
+                // caches <Data> <Mission> : objets posés cachés au départ (octet de visibilité à 0), par classe
+                string lvPath = files.List("Design\\Mission\\" + args[2] + "\\").First(p => p.EndsWith(".level", StringComparison.OrdinalIgnoreCase));
+                Level level = Level.Parse(files.Read(lvPath));
+                foreach (IGrouping<string, LevelObject> g in level.Objects.Where(o => o.Kind == EntityKind.Placeable && o.HasTransform && !o.StartVisible).GroupBy(o => o.ClassPath))
+                    Console.WriteLine($"{g.Count(),4} {g.Key} : {string.Join(", ", g.Take(4).Select(o => o.Name + " " + o.Id))}");
+                return 0;
+            }
+            case "camionia":
+            {
+                // camionia <Data> <Mission> [durée] : ce que font les véhicules à lance, et le feu le plus proche (distance, angle)
+                Session ses = new Session(files, args[2], "EASY");
+                int steps = (int)((args.Length > 3 ? float.Parse(args[3]) : 400) / Session.Dt);
+                for (int i = 0; i <= steps; i++)
+                {
+                    ses.Step();
+                    if (i % 50 == 0)
+                        ses.Host?.EndCinematic();
+                    if (i % 200 != 0)
+                        continue;
+                    foreach (Unit v in ses.Units.Units.Where(v => v.IsVehicle && v.Nozzle != null && !v.OnBoard && !v.Hidden))
+                    {
+                        OpenFD.Fire.HotPoint? h = ses.Fire.HotPoints.Where(x => x.IsBurning).OrderBy(x => System.Numerics.Vector3.Distance(x.Position, v.Position)).FirstOrDefault();
+                        string near = h == null ? "aucun feu" : $"feu le plus proche {h.Name} à {System.Numerics.Vector3.Distance(h.Position, v.Position):0} angle {MathF.IEEERemainder(MathF.Atan2(h.Position.Y - v.Position.Y, h.Position.X - v.Position.X) - v.Heading, 2 * MathF.PI):0.00} · {ses.Units.VehicleAutoDiag(v, h)}";
+                        Console.WriteLine($"t {ses.Time,5:0} {v.Name,-22} [{v.Status}] eau {v.Nozzle!.Reserve:0} portée {v.Nozzle.RangeMin:0}-{v.Nozzle.RangeMax:0} · {near}");
+                    }
+                }
+                return 0;
+            }
+            case "vitesses":
+            {
+                // vitesses <Data> <Mission> : vitesse réelle des véhicules (unités par seconde) pendant leur arrivée
+                Session ses = new Session(files, args[2], "EASY");
+                Dictionary<Unit, (float dist, float time, System.Numerics.Vector3 last)> m = new();
+                for (int i = 0; i < 1200; i++)
+                {
+                    ses.Step();
+                    if (i % 50 == 0)
+                        ses.Host?.EndCinematic();
+                    foreach (Unit v in ses.Units.Units.Where(v => v.IsVehicle && !v.Hidden))
+                    {
+                        if (!m.TryGetValue(v, out var e))
+                        {
+                            m[v] = (0, 0, v.Position);
+                            continue;
+                        }
+                        float d = System.Numerics.Vector2.Distance(new(v.Position.X, v.Position.Y), new(e.last.X, e.last.Y));
+                        m[v] = d > 0.01f ? (e.dist + d, e.time + Session.Dt, v.Position) : (e.dist, e.time, v.Position);
+                    }
+                }
+                foreach ((Unit v, (float dist, float time, System.Numerics.Vector3 last) e) in m)
+                    Console.WriteLine($"{v.Name,-28} vitesse classe {v.Speed:0} · parcouru {e.dist:0} en {e.time:0.0} s → {(e.time > 0 ? e.dist / e.time : 0):0} u/s");
+                Console.WriteLine($"grille {ses.Grid!.Width}×{ses.Grid.Height}");
+                return 0;
+            }
+            case "endurance":
+            {
+                // endurance <Data> <Mission> : un pompier posé dans un feu ; endurance et alertes jusqu'à l'évanouissement
+                Session ses = new Session(files, args[2], "EASY");
+                for (int i = 0; i < 400; i++)
+                    ses.Step();
+                Unit man = ses.Units.Units.First(u => !u.IsVehicle && !u.OnBoard && u.StaminaMax > 0 && u.ScriptHeatCoef > 0 && u.HeatCoef > 0 && u.Nozzle != null);
+                OpenFD.Fire.HotPoint hot = ses.Fire.HotPoints.Where(h => h.IsBurning && h.Class.UnitHeatDamage > 0).OrderByDescending(h => h.Intensity).First();
+                ses.Units.Teleport(man, new(hot.Position.X + 60, hot.Position.Y));
+                int logs = ses.Units.Log.Count;
+                for (int i = 0; i < 3000 && !man.Unconscious; i++)
+                {
+                    if (i % 50 == 0)
+                        hot = ses.Fire.HotPoints.Where(h => h.IsBurning && h.Class.UnitHeatDamage > 0).OrderByDescending(h => h.Intensity * h.Class.UnitHeatDamage).First();
+                    man.Path.Clear();
+                    man.Position = new System.Numerics.Vector3(hot.Position.X + 60, hot.Position.Y, hot.Position.Z);
+                    ses.Step();
+                    foreach ((string label, System.Numerics.Vector3? pos) in ses.Units.Sounds.Where(x => x.label == "VOCAL_FIREMAN_CRITICAL"))
+                        Console.WriteLine($"t {ses.Time:0.0} SON {label} endurance {man.Stamina:0.0}/{man.StaminaMax:0}");
+                    ses.Units.Sounds.Clear();
+                    if (i % 50 == 0)
+                        Console.WriteLine($"t {ses.Time:0.0} endurance {man.Stamina:0.0} {man.Name} feu {man.InFire} {hot.Name} {hot.Intensity:0} chaleur {hot.Class.UnitHeatDamage} coef {man.HeatCoef} {man.ScriptHeatCoef} pos {man.Position} feu {hot.Position} caché {man.Hidden}");
+                }
+                Console.WriteLine(string.Join("\n", ses.Units.Log.Skip(logs).Where(l => l.Contains("pompier"))));
+                return 0;
+            }
+            case "bulldo":
+            {
+                // bulldo <Data> <Mission> <débris> x y : un bulldozer part de (x, y) et dégage les débris à coups de pelle
+                Session ses = new Session(files, args[2], "EASY");
+                for (int i = 0; i < 100; i++)
+                    ses.Step();
+                Opening? d = ses.Units.Openings.FirstOrDefault(o => o.Name.Equals(args[3], StringComparison.OrdinalIgnoreCase));
+                if (d == null)
+                    return 1;
+                Unit dozer = ses.Units.SpawnScripted("Data/Design/Unit/Firevehicle/Veh_P_bulldozer.class", "bulldo", new System.Numerics.Vector3(float.Parse(args[4]), float.Parse(args[5]), 0))!;
+                Unit? axe = ses.Units.Units.FirstOrDefault(u => u.CanBreak && !u.OnBoard);
+                if (axe != null)
+                {
+                    ses.Units.WorkOnOpening(axe, d);
+                    Console.WriteLine($"pompier à hache : {axe.Status}");
+                }
+                ses.Units.WorkOnOpening(dozer, d);
+                Console.WriteLine($"débris {d.Name} ({d.Center.X:0},{d.Center.Y:0}) vie {d.Life}/{d.MaxLife} démolir {d.Demolish} ; bulldozer {dozer.CanDemolish} : {dozer.Status} chemin {dozer.Path.Count}");
+                for (int i = 0; i < 600 && d.State != OpeningState.Broken; i++)
+                {
+                    ses.Step();
+                    if (i % 10 == 0)
+                        Console.WriteLine($"t {ses.Time,5:0.0} bulldozer ({dozer.Position.X:0},{dozer.Position.Y:0}) cap {dozer.Heading:0.00} {dozer.Status} pelle {dozer.Shove:0.00} coups {dozer.Blows}");
+                }
+                Console.WriteLine($"fin : {d.State} · {string.Join(" · ", ses.Units.Log.TakeLast(2))}");
+                return 0;
+            }
+            case "echelle":
+            {
+                // echelle <Data> <Mission> <fenêtre> x y : camion échelle garé vers (x, y), échelle dressée, un pompier monte,
+                // casse la fenêtre, entre, puis redescend jusqu'au point de départ du camion
+                Session ses = new Session(files, args[2], "EASY");
+                for (int i = 0; i < 400; i++)
+                    ses.Step();
+                Opening? d = ses.Units.Openings.FirstOrDefault(o => o.Name.Equals(args[3], StringComparison.OrdinalIgnoreCase));
+                if (d == null)
+                    return 1;
+                System.Numerics.Vector3 at = new System.Numerics.Vector3(float.Parse(args[4]), float.Parse(args[5]), 0);
+                Unit truck = ses.Units.Units.FirstOrDefault(u => u.IsAerial && !u.OnBoard) ?? ses.Units.SpawnScripted("Data/Design/Unit/Firevehicle/Veh_P_aerial_ua.class", "echelle", at)!;
+                Unit man = ses.Units.Units.Where(u => u.CanLadder && u.CanBreak && !u.OnBoard && !u.IsVehicle).OrderBy(u => System.Numerics.Vector3.Distance(u.Position, at)).First();
+                if (args.Length > 7)
+                    man.Position = new System.Numerics.Vector3(float.Parse(args[6]), float.Parse(args[7]), 0);
+                Console.WriteLine($"camion {truck.Name} ({truck.Position.X:0},{truck.Position.Y:0}) pivot {truck.LadderPivot} charnière {truck.LadderHinge} repliée {truck.LadderRest:0} ; fenêtre haute {ses.Units.IsHighWindow(d)}");
+                Console.WriteLine($"déploiement : {ses.Units.DeployLadder(truck, d)} · {truck.Status}");
+                bool ordered = false, back = false;
+                for (int i = 0; i < 2400; i++)
+                {
+                    ses.Step();
+                    if (truck.Ladder is { Ready: true } lr && !ordered)
+                    {
+                        ordered = true;
+                        System.Numerics.Matrix4x4 turn = System.Numerics.Matrix4x4.CreateTranslation(-truck.LadderPivot) * System.Numerics.Matrix4x4.CreateRotationZ(lr.Yaw) * System.Numerics.Matrix4x4.CreateTranslation(truck.LadderPivot);
+                        System.Numerics.Matrix4x4 lad = System.Numerics.Matrix4x4.CreateTranslation(0, -lr.Extend, 0) * System.Numerics.Matrix4x4.CreateTranslation(-truck.LadderHinge) * System.Numerics.Matrix4x4.CreateRotationX(-lr.Pitch) * System.Numerics.Matrix4x4.CreateTranslation(truck.LadderHinge) * turn;
+                        System.Numerics.Vector3 tipModel = new System.Numerics.Vector3(truck.LadderHinge.X, truck.LadderHinge.Y - truck.LadderRest, truck.LadderHinge.Z);
+                        System.Numerics.Vector3 drawn = UnitManager.VehicleToWorld(truck, System.Numerics.Vector3.Transform(tipModel, lad));
+                        Console.WriteLine($"cap du camion {truck.Heading:0.00} ; bout dessiné {drawn} ; bout voulu {lr.Tip} ; base {lr.Base} ; fenêtre {d.Center}");
+                        if (args.Length > 9)
+                        {
+                            ses.Units.PlayerCommand = true;
+                            ses.Units.Order(man, new(float.Parse(args[8]), float.Parse(args[9])));
+                            ses.Units.PlayerCommand = false;
+                        }
+                        else
+                            ses.Units.WorkOnOpening(man, d);
+                        Console.WriteLine($"t {ses.Time:0} ordre au pompier : {man.Status} chemin {man.Path.Count} : " + string.Join(" → ", man.Path.Select(p => $"({p.X:0},{p.Y:0})")));
+                    }
+                    if (ordered && !back && d.State == OpeningState.Broken && man.OnLadder == null && !man.Moving && man.Opening == null)
+                    {
+                        back = true;
+                        ses.Units.Order(man, new(at.X + 600, at.Y + 300));
+                        Console.WriteLine($"t {ses.Time:0} ordre de redescendre : {man.Status} chemin {man.Path.Count}");
+                    }
+                    if (i % 20 == 0)
+                        Console.WriteLine($"t {ses.Time,5:0.0} camion ({truck.Position.X:0},{truck.Position.Y:0}) {truck.Status} · échelle {(truck.Ladder is { } l ? $"levée {l.Raise:0.00} long {l.Extend:0}/{l.ExtendWanted:0} lacet {l.Yaw:0.00} incl {l.Pitch:0.00} base {l.Base} bout {l.Tip}" : "-")} · pompier ({man.Position.X:0},{man.Position.Y:0},{man.Position.Z:0}) {man.LadderStep} {man.Status} · fenêtre {d.State}");
+                }
+                return 0;
+            }
+            case "sols":
+            {
+                // sols <Data> <Mission> x0 y0 x1 y1 : hauteur du sol (centaines, ou . si case fermée) case par case
+                Session ses = new Session(files, args[2], "EASY", false);
+                Grid gr = ses.Grid!;
+                int x0 = int.Parse(args[3]) / 100, y0 = int.Parse(args[4]) / 100, x1 = int.Parse(args[5]) / 100, y1 = int.Parse(args[6]) / 100;
+                for (int y = y1; y >= y0; y--)
+                {
+                    System.Text.StringBuilder line = new System.Text.StringBuilder($"{y * 100,6} ");
+                    for (int x = x0; x <= x1; x++)
+                    {
+                        if (!gr.Inside(x, y))
+                            line.Append("  ");
+                        else if (!ses.Units.Paths.FreeCell(x, y))
+                            line.Append(" .");
+                        else
+                            line.Append($"{(int)(ses.Units.GroundZ(new((x + 0.5f) * 100, (y + 0.5f) * 100)) / 100),2}");
+                    }
+                    Console.WriteLine(line.ToString());
+                }
+                foreach (Civilian c in ses.Units.Civilians)
+                    Console.WriteLine($"civil {c.Name} ({c.Position.X:0},{c.Position.Y:0},{c.Position.Z:0})");
+                return 0;
+            }
+            case "fenetres":
+            {
+                // fenetres <Data> <Mission> : hauteur des fenêtres au-dessus du sol (pour savoir ce qui est hors d'atteinte)
+                Session ses = new Session(files, args[2], "EASY");
+                foreach (Opening o in ses.Units.Openings.Where(o => o.IsWindow).OrderByDescending(o => o.Center.Z).Take(int.Parse(args.Length > 3 ? args[3] : "40")))
+                {
+                    (int cx, int cy) = ses.Grid!.CellOf(o.Center);
+                    float g = ses.Grid.Inside(cx, cy) ? ses.Grid.GroundHeight[ses.Grid.Index(cx, cy)] : 0;
+                    Console.WriteLine($"{o.Name,-34} centre ({o.Center.X:0},{o.Center.Y:0},{o.Center.Z:0}) pivot z {o.Position.Z:0} · sol {g:0} · cassable {o.Breakable}");
+                }
+                return 0;
+            }
             case "vieobjet":
             {
                 // vieobjet <Data> <Mission> <numéro> [durée] : vie de l'objet (ENT_GetDamage) et objectifs, toutes les 10 s
@@ -1510,7 +1760,7 @@ public static class Program
                 System.Diagnostics.Stopwatch sw2 = System.Diagnostics.Stopwatch.StartNew();
                 ses.Units.Order(axe, new(d.Position.X - 300, d.Position.Y));
                 Console.WriteLine($"simple déplacement près de la porte : {sw2.ElapsedMilliseconds} ms, {axe.Status}");
-                Console.WriteLine($"{axe.Name} en ({axe.Position.X:0},{axe.Position.Y:0}) ; porte ({d.Position.X:0},{d.Position.Y:0}) cassable {d.Breakable} état {d.State} au sol {d.OnGround}");
+                Console.WriteLine($"{axe.Name} en ({axe.Position.X:0},{axe.Position.Y:0},{axe.Position.Z:0}) ; porte ({d.Position.X:0},{d.Position.Y:0}) centre z {d.Center.Z:0} cassable {d.Breakable} état {d.State} au sol {d.OnGround}");
                 Console.WriteLine(ses.Units.AsciiMap((int)d.Position.X - 1500, (int)d.Position.Y - 1200, (int)d.Position.X + 1500, (int)d.Position.Y + 1200, new List<System.Numerics.Vector2> { new(d.Position.X, d.Position.Y) }));
                 return 0;
             }

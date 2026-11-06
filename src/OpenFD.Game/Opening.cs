@@ -18,6 +18,8 @@ public sealed class Opening
     public required Matrix4x4 World { get; init; }
     public Vector3 Position => World.Translation;
     public bool Breakable;          // [CAPACITIES_ACTIONS] CouldBeBreak et [DAMAGE] UseDamage
+    public bool Demolish;           // [CAPACITIES_ACTIONS] CouldBeDemolish : seul un bulldozer (CanDemolish) le dégage
+    public float HitSpeed = 20;     // [DAMAGE] HitDamageSpeed : points de vie enlevés par seconde de coups de pelle
     public bool Usable;             // CouldBeUse : s'ouvre et se ferme à la main
     public bool ScriptGate;         // portail animé que seul le script ouvre (ENT_SwitchState) : pas de clic du joueur
     public float Life, MaxLife, HitCoef;
