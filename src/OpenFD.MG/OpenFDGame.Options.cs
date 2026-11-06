@@ -148,6 +148,8 @@ public sealed partial class OpenFDGame
             _audio.EffectsVolume = Math.Clamp(_settings.VolumeEffects, 0, 100) / 100f;
             _audio.MusicVolume = Math.Clamp(_settings.VolumeMusic, 0, 100) / 100f;
         }
+        if (_music != null)
+            _music.Volume = Math.Clamp(_settings.Volume, 0, 100) / 100f * Math.Clamp(_settings.VolumeMusic, 0, 100) / 100f;
     }
 
     /// <summary>Réglages de jeu (Gameplay) : ceux du joueur, ou ceux du serveur pendant une partie en réseau.</summary>
