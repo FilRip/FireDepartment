@@ -12,8 +12,10 @@ public sealed partial class OpenFDGame
     {
         public CharacterRig? Rig;
         public Dictionary<string, string> Tags = new(StringComparer.OrdinalIgnoreCase);
-        public string Tag = ""; public float Time;
-        public SN.Vector3 LastPos; public float MovingFor;
+        public string Tag = "";
+        public float Time;
+        public SN.Vector3 LastPos;
+        public float MovingFor;
         public bool Deployed;   // pompier « canon » : lance posée (animation DEPLOY jouée), il attend accroupi
         public Dictionary<CharacterRig.Part, (MeshGpu mesh, float[] pos, float[] nrm)> Skinned = new();
         public SN.Matrix4x4[] World = Array.Empty<SN.Matrix4x4>();
@@ -54,7 +56,11 @@ public sealed partial class OpenFDGame
     {
         if (_rigs.TryGetValue(model, out CharacterRig? r))
             return r;
-        try { r = CharacterRig.Build(_assets, _files, model); } catch (Exception e) { Console.WriteLine($"{model} : {e.Message}"); r = null; }
+        try { r = CharacterRig.Build(_assets, _files, model); } catch (Exception e)
+        {
+            Console.WriteLine($"{model} : {e.Message}");
+            r = null;
+        }
         if (r != null && !r.Animated)
             r = null;
         return _rigs[model] = r;
@@ -245,8 +251,12 @@ public sealed partial class OpenFDGame
         List<Unit> men = _session.Units.Active.Where(u => !u.IsVehicle).ToList();
         if (men.Count == 0)
             return;
-        Microsoft.Xna.Framework.Graphics.DepthStencilState oldDepth = gd.DepthStencilState; Microsoft.Xna.Framework.Graphics.BlendState oldBlend = gd.BlendState; Microsoft.Xna.Framework.Graphics.RasterizerState oldRast = gd.RasterizerState;
-        gd.DepthStencilState = GhostDepth; gd.BlendState = Microsoft.Xna.Framework.Graphics.BlendState.AlphaBlend; gd.RasterizerState = Microsoft.Xna.Framework.Graphics.RasterizerState.CullNone;
+        Microsoft.Xna.Framework.Graphics.DepthStencilState oldDepth = gd.DepthStencilState;
+        Microsoft.Xna.Framework.Graphics.BlendState oldBlend = gd.BlendState;
+        Microsoft.Xna.Framework.Graphics.RasterizerState oldRast = gd.RasterizerState;
+        gd.DepthStencilState = GhostDepth;
+        gd.BlendState = Microsoft.Xna.Framework.Graphics.BlendState.AlphaBlend;
+        gd.RasterizerState = Microsoft.Xna.Framework.Graphics.RasterizerState.CullNone;
         _ghostPass = true;
         foreach (Unit u in men)
         {
@@ -260,7 +270,9 @@ public sealed partial class OpenFDGame
                     DrawMesh(mesh, (part * SN.Matrix4x4.CreateRotationZ(pose.h + CharYaw) * SN.Matrix4x4.CreateTranslation(pose.p)).X());
         }
         _ghostPass = false;
-        gd.DepthStencilState = oldDepth; gd.BlendState = oldBlend; gd.RasterizerState = oldRast;
+        gd.DepthStencilState = oldDepth;
+        gd.BlendState = oldBlend;
+        gd.RasterizerState = oldRast;
     }
 
     private void RenderUnits()
@@ -275,7 +287,8 @@ public sealed partial class OpenFDGame
         foreach (Civilian c in _session.Units.Civilians.Where(c => !c.Hidden && c.State != CivilianState.Rescued))
         {
             CharAnim a = Char(c, c.Model, c.ClassPath);
-            bool moving = SN.Vector3.Distance(a.LastPos, c.Position) > 1f; a.LastPos = c.Position;
+            bool moving = SN.Vector3.Distance(a.LastPos, c.Position) > 1f;
+            a.LastPos = c.Position;
             a.MovingFor = moving ? 0.3f : MathF.Max(0, a.MovingFor - dt);
             if (c.Carrier is { } cu)
             {
@@ -351,7 +364,8 @@ public sealed partial class OpenFDGame
         else
         {
             _audio.Listener = _target;
-            SN.Vector3 back = new SN.Vector3(MathF.Cos(_yaw), MathF.Sin(_yaw), 0); _audio.Right = new SN.Vector3(-back.Y, back.X, 0);
+            SN.Vector3 back = new SN.Vector3(MathF.Cos(_yaw), MathF.Sin(_yaw), 0);
+            _audio.Right = new SN.Vector3(-back.Y, back.X, 0);
             _audio.ExtraDistance = _dist * 0.35f;
         }
         List<(string label, SN.Vector3? pos)> ev = _session.Units.Sounds;

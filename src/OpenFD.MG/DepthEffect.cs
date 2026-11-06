@@ -36,7 +36,9 @@ void main()
 }";
         Fx = GlslEffect.Create(gd, vs, ps, new[] { new GlslEffect.Param("WorldViewProj", 4, true), new GlslEffect.Param("Params", 1, false) },
             new[] { "Tex" }, new[] { ("vs_v0", VertexElementUsage.Position, 0), ("vs_v1", VertexElementUsage.TextureCoordinate, 0) });
-        _wvp = Fx.Parameters["WorldViewProj"]; _params = Fx.Parameters["Params"]; _tex = Fx.Parameters["Tex"];
+        _wvp = Fx.Parameters["WorldViewProj"];
+        _params = Fx.Parameters["Params"];
+        _tex = Fx.Parameters["Tex"];
     }
 
     public void Set(Microsoft.Xna.Framework.Matrix worldLightViewProj, Texture2D? alphaTex)

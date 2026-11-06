@@ -139,47 +139,63 @@ public sealed partial class OpenFDGame
         {
             case "revive":
                 if (U(e.A) is { } a1 && U(e.B) is { } b1)
-                    um.ReviveColleague(a1, b1); break;
+                    um.ReviveColleague(a1, b1);
+                break;
             case "fetch":
                 if (U(e.A) is { } a2 && um.CivilianById(e.B) is { } c2)
-                    um.FetchCivilian(a2, c2); break;
+                    um.FetchCivilian(a2, c2);
+                break;
             case "board":
                 if (U(e.A) is { } a3 && U(e.B) is { } b3)
-                    um.BoardVehicle(a3, b3); break;
+                    um.BoardVehicle(a3, b3);
+                break;
             case "goveh":
                 if (U(e.A) is { } a4 && U(e.B) is { } b4)
-                    um.GoToVehicle(a4, b4); break;
+                    um.GoToVehicle(a4, b4);
+                break;
             case "use":
                 if (U(e.A) is { } a5 && um.Usables.FirstOrDefault(o => o.Id == e.B) is { } o5)
-                    um.UseObject(a5, o5); break;
+                    um.UseObject(a5, o5);
+                break;
             case "door":
                 if (U(e.A) is { } a6 && um.Openings.FirstOrDefault(o => o.Id == e.B) is { } d6)
-                    um.WorkOnOpening(a6, d6); break;
+                    um.WorkOnOpening(a6, d6);
+                break;
             case "attack":
                 if (U(e.A) is { } a7 && _session.Fire.HotPoints.FirstOrDefault(h => h.Id == e.B) is { } h7)
-                    um.Attack(a7, h7); break;
+                    um.Attack(a7, h7);
+                break;
             case "order":
                 if (U(e.A) is { } a8)
-                    um.Order(a8, new SN.Vector2(e.X, e.Y)); break;
+                    um.Order(a8, new SN.Vector2(e.X, e.Y));
+                break;
             case "drive":
                 if (U(e.A) is { } a9)
-                    um.Drive(a9, new SN.Vector2(e.X, e.Y)); break;
+                    um.Drive(a9, new SN.Vector2(e.X, e.Y));
+                break;
             case "unload":
                 if (U(e.A) is { } a10)
-                    um.UnloadPassengers(a10); break;
+                    um.UnloadPassengers(a10);
+                break;
             case "spray":
                 if (_session.Fire.HotPoints.FirstOrDefault(h => h.Id == e.B) is { } h11 && e.S != null)
-                    _session.Spray(h11, e.S); break;
+                    _session.Spray(h11, e.S);
+                break;
             case "script":
                 if (e.S != null)
-                    _session.Scripts?.TryRun(e.S); break;
-            case "skipcine": SkipCinematic(); break;
+                    _session.Scripts?.TryRun(e.S);
+                break;
+            case "skipcine":
+                SkipCinematic();
+                break;
             case "grapple":
                 if (U(e.A) is { } a12 && um.Grapples.FirstOrDefault(g => g.Id == e.B) is { } g12)
-                    um.GrappleOver(a12, g12); break;
+                    um.GrappleOver(a12, g12);
+                break;
             case "sense":
                 if (U(e.A) is { } a13)
-                    um.DogSense(a13); break;
+                    um.DogSense(a13);
+                break;
         }
     }
 
@@ -202,7 +218,11 @@ public sealed partial class OpenFDGame
             _saves = null;
             return path;
         }
-        catch (Exception ex) { Console.WriteLine("Sauvegarde : " + ex.Message); return null; }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Sauvegarde : " + ex.Message);
+            return null;
+        }
     }
 
     private List<(string path, SavedGame game)> Saves()
@@ -228,7 +248,8 @@ public sealed partial class OpenFDGame
     // ---- chargement : la mission est rejouée, sans affichage, jusqu'au moment sauvegardé ----
     private void LoadGame(SavedGame g)
     {
-        _inGame = false; _audio?.PauseAll(false);
+        _inGame = false;
+        _audio?.PauseAll(false);
         _loadNat = g.Nationality;   // les unités de la partie sauvegardée, même si l'option a changé depuis
         try { LoadMission(g.Mission, g.Difficulty); } finally { _loadNat = null; }
         _replaying = true;
@@ -259,7 +280,8 @@ public sealed partial class OpenFDGame
             h.ObjectiveEvents.Clear();
             h.CameraOrders.Clear();
         }
-        _session.Units.Sounds.Clear(); _session.Explosions.Happened.Clear();
+        _session.Units.Sounds.Clear();
+        _session.Explosions.Happened.Clear();
         _unitLogSeen = _session.Units.Log.Count;
         _scriptLogSeen = _session.Scripts?.Log.Count ?? 0;
         _audio?.StopAll();
@@ -271,7 +293,10 @@ public sealed partial class OpenFDGame
             _dist = g.Camera[5];
         }
         _cineOn = Host?.Cinematic ?? false;
-        _paused = false; _owed = 0; _menu = false; _sel.Clear();
+        _paused = false;
+        _owed = 0;
+        _menu = false;
+        _sel.Clear();
         SnapshotPoses();
         Log($"Partie chargée ({g.Mission}, {g.Steps / 600}:{g.Steps / 10 % 60:00})");
     }
@@ -290,7 +315,13 @@ public sealed partial class OpenFDGame
     }
 
     // ---- écran 4 : liste des sauvegardes ----
-    private void OpenLoadScreen(int from) { _saves = null; _loadFrom = from; _loadIndex = 0; _screen = 4; }
+    private void OpenLoadScreen(int from)
+    {
+        _saves = null;
+        _loadFrom = from;
+        _loadIndex = 0;
+        _screen = 4;
+    }
 
     private void LoadScreenInput(KeyboardState k, MouseState m)
     {
@@ -321,7 +352,9 @@ public sealed partial class OpenFDGame
             {
                 // croix rouge : la sauvegarde est effacée
                 try { File.Delete(list[first + i].path); } catch { }
-                _saves = null; _loadIndex = Math.Clamp(first + i, 0, Math.Max(0, list.Count - 2)); return;
+                _saves = null;
+                _loadIndex = Math.Clamp(first + i, 0, Math.Max(0, list.Count - 2));
+                return;
             }
             if (click)
                 go = true;
@@ -339,7 +372,9 @@ public sealed partial class OpenFDGame
         if (Pressed(k, Keys.Delete))
         {
             try { File.Delete(list[_loadIndex].path); } catch { }
-            _saves = null; _loadIndex = Math.Max(0, _loadIndex - 1); return;
+            _saves = null;
+            _loadIndex = Math.Max(0, _loadIndex - 1);
+            return;
         }
         if (go)
             LoadGame(list[_loadIndex].game);
@@ -371,7 +406,9 @@ public sealed partial class OpenFDGame
         else
             DrawMenuBack();
         (float lx, float ly, float lw, float lh, int n) = LoadLayout(list.Count);
-        SN.Vector4 accent = new SN.Vector4(1f, 0.48f, 0.18f, 1); SN.Vector4 txt = new SN.Vector4(0.93f, 0.92f, 0.9f, 1); SN.Vector4 muted = new SN.Vector4(0.6f, 0.6f, 0.6f, 1);
+        SN.Vector4 accent = new SN.Vector4(1f, 0.48f, 0.18f, 1);
+        SN.Vector4 txt = new SN.Vector4(0.93f, 0.92f, 0.9f, 1);
+        SN.Vector4 muted = new SN.Vector4(0.6f, 0.6f, 0.6f, 1);
         string title = L("&LoadSavedGame", "Charger une sauvegarde");
         float ts = _scale * 2f;
         _ui.Rect(0, ly - lh * 2.4f, _fbW, _font.LineHeight * ts + 16 * _scale, new SN.Vector4(0, 0, 0, 0.55f));
@@ -385,7 +422,8 @@ public sealed partial class OpenFDGame
         int first = Math.Clamp(_loadIndex - n + 1, 0, Math.Max(0, list.Count - n));
         for (int i = 0; i < Math.Min(n, list.Count - first); i++)
         {
-            (_, SavedGame? g) = list[first + i]; float y = ly + i * lh, ty = y + (lh - _ui.LineHeight) / 2 - 2 * _scale;
+            (_, SavedGame? g) = list[first + i];
+            float y = ly + i * lh, ty = y + (lh - _ui.LineHeight) / 2 - 2 * _scale;
             if (first + i == _loadIndex)
                 _ui.Rect(lx, y, lw, lh - 4 * _scale, new SN.Vector4(0.85f, 0.35f, 0.1f, 0.55f));
             string left = $"{g.Mission}", right = $"{g.Steps / 600}:{g.Steps / 10 % 60:00}   {g.Date:dd/MM/yyyy HH:mm}";
@@ -397,7 +435,8 @@ public sealed partial class OpenFDGame
             else
                 _ui.Text(cx + (cs - _ui.Measure("X")) / 2, ty, "X", new SN.Vector4(1f, 0.3f, 0.25f, 1));
         }
-        float by = ly + n * lh + 10 * _scale; string back = L("&Back", "Retour");
+        float by = ly + n * lh + 10 * _scale;
+        string back = L("&Back", "Retour");
         _ui.Text(lx + (lw - _ui.Measure(back)) / 2, by + (lh - _ui.LineHeight) / 2, back, txt);
         string help = O("HelpLoad");
         _ui.Rect((_fbW - MathF.Max(lw, _ui.Measure(help) + 32 * _scale)) / 2, by + lh + 14 * _scale, MathF.Max(lw, _ui.Measure(help) + 32 * _scale), _ui.LineHeight * 1.6f, new SN.Vector4(0, 0, 0, 0.7f));
@@ -428,7 +467,11 @@ public sealed partial class OpenFDGame
     private void SaveSelfTest()
     {
         UnitManager um = _session.Units;
-        void Run(int n) { for (int i = 0; i < n; i++) _session.Step(); }
+        void Run(int n)
+        {
+            for (int i = 0; i < n; i++)
+                _session.Step();
+        }
         SkipCinematic();
         Run(50);
         List<Unit> men = um.Active.Where(u => !u.IsVehicle).ToList();

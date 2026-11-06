@@ -32,17 +32,26 @@ public sealed class Mesh
         Mesh m = new Mesh { Name = name };
         // --- .mesh
         int p = 4;
-        int ni = BitConverter.ToInt32(mesh, p); p += 4;
+        int ni = BitConverter.ToInt32(mesh, p);
+        p += 4;
         m.Indices = new uint[ni];
         for (int i = 0; i < ni; i++)
             m.Indices[i] = BitConverter.ToUInt16(mesh, p + 2 * i);
         p += 2 * ni;
-        string Str() { int l = BitConverter.ToInt32(mesh, p); string s = Encoding.ASCII.GetString(mesh, p + 4, Math.Max(0, l - 1)); p += 4 + l; return s; }
-        int nm = BitConverter.ToInt32(mesh, p); p += 4;
+        string Str()
+        {
+            int l = BitConverter.ToInt32(mesh, p);
+            string s = Encoding.ASCII.GetString(mesh, p + 4, Math.Max(0, l - 1));
+            p += 4 + l;
+            return s;
+        }
+        int nm = BitConverter.ToInt32(mesh, p);
+        p += 4;
         List<string> mats = new List<string>();
         for (int i = 0; i < nm; i++)
             mats.Add(Str());
-        int nr = BitConverter.ToInt32(mesh, p); p += 4;
+        int nr = BitConverter.ToInt32(mesh, p);
+        p += 4;
         for (int i = 0; i < nr; i++)
         {
             int a = BitConverter.ToInt32(mesh, p + 8 * i), b = BitConverter.ToInt32(mesh, p + 8 * i + 4);
@@ -83,17 +92,20 @@ public sealed class Mesh
                 m.Normals[3 * i + k] = bytes[k][i] / 127.5f - 1f;
         for (int s = 0; s < 8; s++)
         {
-            int c = BitConverter.ToInt32(d, p); p += 4;
+            int c = BitConverter.ToInt32(d, p);
+            p += 4;
             if (c == 0)
                 continue;
             float[] uv = new float[2 * c];
             for (int i = 0; i < 2 * c; i++)
                 uv[i] = (float)BitConverter.ToHalf(d, p + 2 * i);
-            m.Uv[s] = uv; p += 4 * c;
+            m.Uv[s] = uv;
+            p += 4 * c;
         }
         if (p + 4 <= d.Length)
         {
-            int c = BitConverter.ToInt32(d, p); p += 4;
+            int c = BitConverter.ToInt32(d, p);
+            p += 4;
             if (c > 0 && p + 4 * c <= d.Length)
             {
                 m.Colors = d.AsSpan(p, 4 * c).ToArray();

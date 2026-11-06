@@ -134,9 +134,15 @@ public sealed partial class UnitManager
             u.Status = o.CanBeRepaired && !o.CanBeUsed ? "seul un technicien peut réparer cela" : "ne peut pas utiliser cet objet";
             return;
         }
-        u.Target = null; u.Opening = null; u.GoTo = null; u.GoToVehicle = null; u.Boarding = false;
-        u.UseTarget = o; u.ActionTimer = 0;
-        Vector2 me = new Vector2(u.Position.X, u.Position.Y); Vector2 at = NearestPoint(o, me);
+        u.Target = null;
+        u.Opening = null;
+        u.GoTo = null;
+        u.GoToVehicle = null;
+        u.Boarding = false;
+        u.UseTarget = o;
+        u.ActionTimer = 0;
+        Vector2 me = new Vector2(u.Position.X, u.Position.Y);
+        Vector2 at = NearestPoint(o, me);
         if (Vector2.Distance(me, at) > ActionReach)
         {
             Vector2 spot = Walkable(at + Vector2.Normalize(me - at + new Vector2(0.01f, 0)) * 120);
@@ -216,7 +222,8 @@ public sealed partial class UnitManager
     {
         if (u.UseTarget is not { } o || u.Moving || u.OnBoard || u.Unconscious || u.InjuredTimer > 0)
             return;
-        Vector2 me = new Vector2(u.Position.X, u.Position.Y); Vector2 at = NearestPoint(o, me);
+        Vector2 me = new Vector2(u.Position.X, u.Position.Y);
+        Vector2 at = NearestPoint(o, me);
         if (Vector2.Distance(me, at) > ActionReach + 150)
         {
             u.UseTarget = null;
@@ -230,7 +237,8 @@ public sealed partial class UnitManager
         u.Status = repair ? $"répare ({100 * u.ActionTimer / need:0} %)" : "utilise l'objet";
         if (u.ActionTimer < need)
             return;
-        u.ActionTimer = 0; u.UseTarget = null;
+        u.ActionTimer = 0;
+        u.UseTarget = null;
         string kind = repair ? "repair" : "use";
         List<(string action, string script)> candidates = o.Actions.Where(a => a.action.StartsWith(kind, StringComparison.OrdinalIgnoreCase)).ToList();
         if (candidates.Count == 0)

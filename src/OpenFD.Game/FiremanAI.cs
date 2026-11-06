@@ -70,7 +70,8 @@ public sealed partial class UnitManager
     private HotPoint? FindVisibleFire(Unit u, float range, float angle, bool nearest = false, uint skip = uint.MaxValue)
     {
         Vector2 me = new Vector2(u.Position.X, u.Position.Y);
-        HotPoint? best = null; float bs = float.MaxValue;
+        HotPoint? best = null;
+        float bs = float.MaxValue;
         foreach (HotPoint h in _s.Fire.HotPoints)
         {
             if (!h.IsBurning || h.Id == skip || (h.Electrified && !WaterTruck(u)) || !AgentSuits(u, h))   // feu électrique sous tension, ou mauvais agent : jamais de leur plein gré
@@ -86,12 +87,17 @@ public sealed partial class UnitManager
             float score = nearest ? d : d - 200 * MathF.Min(1, h.Intensity / MathF.Max(1, h.Class.IntensityMax));
             if (score >= bs)
                 continue;
-            bool saved = Paths.PathingVehicle; int savedClear = Paths.Clearance; Paths.PathingVehicle = true; Paths.Clearance = 0;
+            bool saved = Paths.PathingVehicle;
+            int savedClear = Paths.Clearance;
+            Paths.PathingVehicle = true;
+            Paths.Clearance = 0;
             bool seen = LineFree(me, f - Vector2.Normalize(f - me + new Vector2(0.01f, 0)) * 120, ignoreFire: true);
-            Paths.PathingVehicle = saved; Paths.Clearance = savedClear;
+            Paths.PathingVehicle = saved;
+            Paths.Clearance = savedClear;
             if (!seen)
                 continue;
-            bs = score; best = h;
+            bs = score;
+            best = h;
         }
         return best;
     }
@@ -106,7 +112,8 @@ public sealed partial class UnitManager
         if (!FreeCell(cx, cy))
             return false;
         Vector2 f = new Vector2(h.Position.X, h.Position.Y);
-        bool saved = Paths.PathingVehicle; Paths.PathingVehicle = true;
+        bool saved = Paths.PathingVehicle;
+        Paths.PathingVehicle = true;
         bool ok = LineFree(p, f - Vector2.Normalize(f - p) * 120, ignoreFire: true);
         Paths.PathingVehicle = saved;
         return ok;
@@ -120,7 +127,11 @@ public sealed partial class UnitManager
             return "aucun feu";
         Vector2 f = new Vector2(h.Position.X, h.Position.Y);
         List<HotPoint> near = _s.Fire.HotPoints.Where(x => x.IsBurning && Vector2.Distance(me, new(x.Position.X, x.Position.Y)) < 1500).ToList();
-        int vis = near.Count(x => { Vector2 g = new Vector2(x.Position.X, x.Position.Y); return LineFree(me, g - Vector2.Normalize(g - me) * 120, ignoreFire: true); });
+        int vis = near.Count(x =>
+        {
+            Vector2 g = new Vector2(x.Position.X, x.Position.Y);
+            return LineFree(me, g - Vector2.Normalize(g - me) * 120, ignoreFire: true);
+        });
         return $"[{near.Count} feux < 15 m, {vis} visibles : {string.Join(",", near.Take(4).Select(x => x.Name))}] {h.Name} d {Vector2.Distance(me, f):0} dz {h.Position.Z - u.Position.Z:0} vue {LineFree(me, f - Vector2.Normalize(f - me) * 120, ignoreFire: true)} angle {MathF.IEEERemainder(MathF.Atan2(f.Y - me.Y, f.X - me.X) - u.Heading, 2 * MathF.PI):0.00}";
     }
 

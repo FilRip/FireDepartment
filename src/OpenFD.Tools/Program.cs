@@ -54,18 +54,23 @@ public static class Program
                 if (ses.Units.Usables.FirstOrDefault(o => o.CanBeRepaired && !o.Repaired) is { } rep && ses.Units.Units.FirstOrDefault(x => x.CanRepair && !x.OnBoard) is { } ing)
                 {
                     Console.WriteLine($"réparation de {rep.Name} : emprise ({rep.BoxMin.X:0},{rep.BoxMin.Y:0})-({rep.BoxMax.X:0},{rep.BoxMax.Y:0}) par {ing.Name}");
-                    ing.Position = rep.Position + new System.Numerics.Vector3(300, 0, 0); ing.Path.Clear();
+                    ing.Position = rep.Position + new System.Numerics.Vector3(300, 0, 0);
+                    ing.Path.Clear();
                     ses.Units.UseObject(ing, rep);
-                    for (int i = 0; i < 200; i++) ses.Step();
+                    for (int i = 0; i < 200; i++)
+                        ses.Step();
                     Console.WriteLine($"  réparé {rep.Repaired} · {ing.Status} · RepairedGenerator = {ses.Scripts!.TryRun("__V")?.AsNum}");
-                    foreach (string l in ses.Units.Log.TakeLast(4)) Console.WriteLine("  journal : " + l.Trim());
-                    foreach (OpenFD.Game.MissionHost.Objective ob in ses.Host!.Objectives) Console.WriteLine($"  objectif : {ob.Text} {ob.Status}");
+                    foreach (string l in ses.Units.Log.TakeLast(4))
+                        Console.WriteLine("  journal : " + l.Trim());
+                    foreach (OpenFD.Game.MissionHost.Objective ob in ses.Host!.Objectives)
+                        Console.WriteLine($"  objectif : {ob.Text} {ob.Status}");
                 }
                 // puis un pompier actionne l'interrupteur (objet à utiliser) ; état des portes animées
                 if (ses.Units.Usables.FirstOrDefault(o => o.CanBeUsed && o.Actions.Any(a => a.script == "ElectricityClosed")) is { } sw && ses.Units.Units.FirstOrDefault(x => x.CanUse && !x.OnBoard && !x.IsVehicle) is { } user)
                 {
                     Console.WriteLine($"interrupteur {sw.Name} par {user.Name}");
-                    user.Position = sw.Position + new System.Numerics.Vector3(150, 0, 0); user.Path.Clear();
+                    user.Position = sw.Position + new System.Numerics.Vector3(150, 0, 0);
+                    user.Path.Clear();
                     ses.Units.UseObject(user, sw);
                     for (int i = 0; i < 400; i++)
                     {
@@ -74,8 +79,10 @@ public static class Program
                             ses.Host?.EndCinematic();
                     }
                     Console.WriteLine($"  {user.Status}");
-                    foreach (string l in ses.Units.Log.TakeLast(6)) Console.WriteLine("  journal : " + l.Trim());
-                    foreach ((string vocal, string text, float x, float y) m in ses.Host!.Messages.TakeLast(3)) Console.WriteLine("  message : " + m.text);
+                    foreach (string l in ses.Units.Log.TakeLast(6))
+                        Console.WriteLine("  journal : " + l.Trim());
+                    foreach ((string vocal, string text, float x, float y) m in ses.Host!.Messages.TakeLast(3))
+                        Console.WriteLine("  message : " + m.text);
                 }
                 foreach (Opening d in ses.Units.Openings.Where(d => d.ScriptGate))
                     Console.WriteLine($"porte script {d.Id} {d.Name} état {d.State} anim {d.OpenAnim}");
@@ -91,7 +98,9 @@ public static class Program
                     if (t2 != null && ing2 != null)
                     {
                         Console.WriteLine($"réparation 2 de {t2.Name} : emprise ({t2.BoxMin.X:0},{t2.BoxMin.Y:0})-({t2.BoxMax.X:0},{t2.BoxMax.Y:0})");
-                        ing2.Position = t2.Position + new System.Numerics.Vector3(300, 0, 0); ing2.Path.Clear(); ing2.Target = null;
+                        ing2.Position = t2.Position + new System.Numerics.Vector3(300, 0, 0);
+                        ing2.Path.Clear();
+                        ing2.Target = null;
                         ses.Units.UseObject(ing2, t2);
                         int log0 = ses.Host!.FireLog.Count, slog0 = ses.Scripts!.Log.Count;
                         for (int i = 0; i < 400; i++)
@@ -102,9 +111,12 @@ public static class Program
                                     Console.WriteLine($"  t {ses.Time,5:0} {cv.Name} caché {cv.Hidden} état {cv.State} pos ({cv.Position.X:0},{cv.Position.Y:0}) · avion {(ses.Host.MovedObjects.TryGetValue(5004103, out System.Numerics.Vector2 av) ? $"({av.X:0},{av.Y:0})" : "-")}");
                         }
                         Console.WriteLine($"  réparé {t2.Repaired} · {ing2.Status}");
-                        foreach (string l in ses.Host.FireLog.Skip(log0).Take(40)) Console.WriteLine("  hôte : " + l.Trim());
-                        foreach (string l in ses.Scripts.Log.Skip(slog0).Take(20)) Console.WriteLine("  script : " + l.Trim());
-                        foreach (KeyValuePair<string, int> kv in ses.Scripts.UnknownCalls) Console.WriteLine($"  inconnu : {kv.Key} ×{kv.Value}");
+                        foreach (string l in ses.Host.FireLog.Skip(log0).Take(40))
+                            Console.WriteLine("  hôte : " + l.Trim());
+                        foreach (string l in ses.Scripts.Log.Skip(slog0).Take(20))
+                            Console.WriteLine("  script : " + l.Trim());
+                        foreach (KeyValuePair<string, int> kv in ses.Scripts.UnknownCalls)
+                            Console.WriteLine($"  inconnu : {kv.Key} ×{kv.Value}");
                     }
                 }
                 return 0;
@@ -130,15 +142,19 @@ public static class Program
                     Console.WriteLine("pas de pompier à l'eau ou pas de camion anti-métal");
                     return 0;
                 }
-                w.Position = tox.Position + new System.Numerics.Vector3(250, 0, 0); w.Path.Clear(); w.Target = null;
+                w.Position = tox.Position + new System.Numerics.Vector3(250, 0, 0);
+                w.Path.Clear();
+                w.Target = null;
                 Console.WriteLine($"{w.Name} : {w.Nozzle!.Agent} {w.Nozzle.Reserve:0}/{w.Nozzle.ReserveMax:0} → camion {tox.Name}");
                 ses.Units.GoToVehicle(w, tox);
                 for (int k = 0; k < 14; k++)
                 {
-                    for (int i = 0; i < 20; i++) ses.Step();
+                    for (int i = 0; i < 20; i++)
+                        ses.Step();
                     Console.WriteLine($"  {k * 2 + 2} s : {w.Nozzle.Agent} {w.Nozzle.Reserve:0} · {w.Status}");
                 }
-                foreach (string l in ses.Units.Log.TakeLast(3)) Console.WriteLine("journal : " + l.Trim());
+                foreach (string l in ses.Units.Log.TakeLast(3))
+                    Console.WriteLine("journal : " + l.Trim());
                 return 0;
             }
             case "eteindre":
@@ -208,7 +224,8 @@ public static class Program
                 Unit u = Environment.GetEnvironmentVariable("FD3_ELEC_CAMION") != null
                     ? ses.Units.Units.First(x => UnitManager.WaterTruck(x) && !x.OnBoard)
                     : ses.Units.Units.First(x => !x.IsVehicle && x.Nozzle != null && !x.IsCanon && !x.OnBoard);
-                u.Position = h.Position + new System.Numerics.Vector3(500, 0, 0); u.Path.Clear();
+                u.Position = h.Position + new System.Numerics.Vector3(500, 0, 0);
+                u.Path.Clear();
                 Console.WriteLine(h.Class.ToString());
                 Console.WriteLine($"{h.Name} électrique {h.Electrified} intensité {h.Intensity:0} ; {u.Name} vie {u.Life:0}");
                 ses.Units.Attack(u, h);
@@ -365,7 +382,8 @@ public static class Program
             case "plan":
             {
                 // plan <Data> <Mission> x0 y0 x1 y1 : carte texte (# mur, o objet, D porte, F fenêtre, . libre), nord en haut
-                Session ses = new Session(files, args[2], "EASY", false); Grid g = ses.Grid!;
+                Session ses = new Session(files, args[2], "EASY", false);
+                Grid g = ses.Grid!;
                 int x0 = int.Parse(args[3]) / 100, y0 = int.Parse(args[4]) / 100, x1 = Math.Min(g.Width - 1, int.Parse(args[5]) / 100), y1 = Math.Min(g.Height - 1, int.Parse(args[6]) / 100);
                 Dictionary<(int, int), char> marks = new Dictionary<(int, int), char>();
                 foreach (Opening d in ses.Units.Doors)
@@ -444,7 +462,8 @@ public static class Program
             case "conduire":
             {
                 // conduire <Data> <Mission> x y : chaque véhicule roule vers (x, y) ; on vérifie qu'il ne traverse ni mur ni objet
-                Session ses = new Session(files, args[2], "EASY", false); Grid g = ses.Grid!;
+                Session ses = new Session(files, args[2], "EASY", false);
+                Grid g = ses.Grid!;
                 for (int i = 0; i < 300; i++)
                     ses.Step();
                 System.Numerics.Vector2 dest = new System.Numerics.Vector2(float.Parse(args[3]), float.Parse(args[4]));
@@ -479,7 +498,11 @@ public static class Program
                 {
                     string dest = Path.Combine(args[3], f.Replace('\\', '/'));
                     Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-                    try { File.WriteAllBytes(dest, files.Read(f)); n++; } catch { }
+                    try
+                    {
+                        File.WriteAllBytes(dest, files.Read(f));
+                        n++;
+                    } catch { }
                 }
                 Console.WriteLine($"{n} fichiers");
                 return 0;
@@ -507,9 +530,12 @@ public static class Program
                         Console.WriteLine();
                         continue;
                     }
-                    float[] pos = new float[p.BasePos.Length]; float[] nrm = new float[pos.Length];
+                    float[] pos = new float[p.BasePos.Length];
+                    float[] nrm = new float[pos.Length];
                     rig.Deform(p, rig.Pose(null, 0), pos, nrm);
-                    float err = 0; for (int i = 0; i < pos.Length; i++) err = MathF.Max(err, MathF.Abs(pos[i] - p.BasePos[i]));
+                    float err = 0;
+                    for (int i = 0; i < pos.Length; i++)
+                        err = MathF.Max(err, MathF.Abs(pos[i] - p.BasePos[i]));
                     Console.Write($" · écart au repos {err:0.00}");
                     if (clip != null)
                         for (float t = 0; t <= clip.Duration; t += clip.Duration / 4)
@@ -549,8 +575,10 @@ public static class Program
                 SceneAssets assets = new OpenFD.Game.SceneAssets(files);
                 foreach (SceneAssets.Node n in assets.Scenery(args[2]).Where(n => args.Length < 4 || n.Mesh.Contains(args[3], StringComparison.OrdinalIgnoreCase)))
                 {
-                    SceneAssets.MeshAsset a = assets.LoadMesh(args[2], n.Mesh, null); Mesh m = a.Mesh;
-                    System.Numerics.Vector3 mn = new System.Numerics.Vector3(float.MaxValue); System.Numerics.Vector3 mx = new System.Numerics.Vector3(float.MinValue);
+                    SceneAssets.MeshAsset a = assets.LoadMesh(args[2], n.Mesh, null);
+                    Mesh m = a.Mesh;
+                    System.Numerics.Vector3 mn = new System.Numerics.Vector3(float.MaxValue);
+                    System.Numerics.Vector3 mx = new System.Numerics.Vector3(float.MinValue);
                     for (int i = 0; i < m.VertexCount; i++)
                     {
                         System.Numerics.Vector3 v = System.Numerics.Vector3.Transform(new(m.Positions[3 * i], m.Positions[3 * i + 1], m.Positions[3 * i + 2]), n.World);
@@ -581,15 +609,20 @@ public static class Program
                 SceneAssets assets = new OpenFD.Game.SceneAssets(files);
                 SceneAssets.Node n = assets.Scenery(args[2]).FirstOrDefault(n => n.Mesh.Equals(args[3], StringComparison.OrdinalIgnoreCase))
                     ?? new OpenFD.Game.SceneAssets.Node(args[3], Rooms.World(Rooms.SceneNodes(files.Read("Gfx\\Mission\\" + args[2] + "\\" + args[2] + ".sg")), args[3]));
-                SceneAssets.MeshAsset a = assets.LoadMesh(args[2], n.Mesh, null); Mesh m = a.Mesh;
+                SceneAssets.MeshAsset a = assets.LoadMesh(args[2], n.Mesh, null);
+                Mesh m = a.Mesh;
                 SortedDictionary<int, (int h, int v)> hist = new SortedDictionary<int, (int h, int v)>();
                 System.Numerics.Vector3 P(uint i) => System.Numerics.Vector3.Transform(new(m.Positions[3 * i], m.Positions[3 * i + 1], m.Positions[3 * i + 2]), n.World);
                 for (int k = 0; k + 2 < m.Indices.Length; k += 3)
                 {
-                    System.Numerics.Vector3 p0 = P(m.Indices[k]); System.Numerics.Vector3 p1 = P(m.Indices[k + 1]); System.Numerics.Vector3 p2 = P(m.Indices[k + 2]);
-                    System.Numerics.Vector3 nn = System.Numerics.Vector3.Cross(p1 - p0, p2 - p0); bool horiz = MathF.Abs(nn.Z) > 0.9f * nn.Length();
+                    System.Numerics.Vector3 p0 = P(m.Indices[k]);
+                    System.Numerics.Vector3 p1 = P(m.Indices[k + 1]);
+                    System.Numerics.Vector3 p2 = P(m.Indices[k + 2]);
+                    System.Numerics.Vector3 nn = System.Numerics.Vector3.Cross(p1 - p0, p2 - p0);
+                    bool horiz = MathF.Abs(nn.Z) > 0.9f * nn.Length();
                     int z = (int)((p0.Z + p1.Z + p2.Z) / 3 / 50) * 50;
-                    (int h, int v) e = hist.GetValueOrDefault(z); hist[z] = horiz ? (e.h + 1, e.v) : (e.h, e.v + 1);
+                    (int h, int v) e = hist.GetValueOrDefault(z);
+                    hist[z] = horiz ? (e.h + 1, e.v) : (e.h, e.v + 1);
                 }
                 foreach ((int z, (int h, int v) e) in hist)
                     Console.WriteLine($"z {z,5} : {e.h,5} horizontaux {e.v,5} verticaux");
@@ -642,15 +675,20 @@ public static class Program
                 SortedDictionary<string, (int n, float zmin, float zmax)> stat = new SortedDictionary<string, (int n, float zmin, float zmax)>();
                 foreach (SceneAssets.Node n in assets.Scenery(args[2]))
                 {
-                    SceneAssets.MeshAsset a = assets.LoadMesh(args[2], n.Mesh, null); Mesh m = a.Mesh;
+                    SceneAssets.MeshAsset a = assets.LoadMesh(args[2], n.Mesh, null);
+                    Mesh m = a.Mesh;
                     System.Numerics.Vector3 P(uint i) => System.Numerics.Vector3.Transform(new(m.Positions[3 * i], m.Positions[3 * i + 1], m.Positions[3 * i + 2]), n.World);
                     foreach (SceneAssets.Group g in a.Groups)
                         for (int k = g.Start; k + 2 < g.Start + g.Count; k += 3)
                         {
-                            System.Numerics.Vector3 p0 = P(m.Indices[k]); System.Numerics.Vector3 p1 = P(m.Indices[k + 1]); System.Numerics.Vector3 p2 = P(m.Indices[k + 2]); System.Numerics.Vector3 c = (p0 + p1 + p2) / 3;
+                            System.Numerics.Vector3 p0 = P(m.Indices[k]);
+                            System.Numerics.Vector3 p1 = P(m.Indices[k + 1]);
+                            System.Numerics.Vector3 p2 = P(m.Indices[k + 2]);
+                            System.Numerics.Vector3 c = (p0 + p1 + p2) / 3;
                             if (c.X < x0 || c.X > x1 || c.Y < y0 || c.Y > y1)
                                 continue;
-                            System.Numerics.Vector3 nn = System.Numerics.Vector3.Cross(p1 - p0, p2 - p0); string kind = MathF.Abs(nn.Z) > 0.9f * nn.Length() ? "H" : "V";
+                            System.Numerics.Vector3 nn = System.Numerics.Vector3.Cross(p1 - p0, p2 - p0);
+                            string kind = MathF.Abs(nn.Z) > 0.9f * nn.Length() ? "H" : "V";
                             string key = $"{n.Mesh} {g.Diffuse} alpha={g.Alpha} {kind}";
                             (int n, float zmin, float zmax) e = stat.TryGetValue(key, out (int n, float zmin, float zmax) e0) ? e0 : (n: 0, zmin: float.MaxValue, zmax: float.MinValue);
                             float zl = MathF.Min(p0.Z, MathF.Min(p1.Z, p2.Z)), zh = MathF.Max(p0.Z, MathF.Max(p1.Z, p2.Z));
@@ -704,7 +742,8 @@ public static class Program
             case "solz":
             {
                 // solz <Data> <Mission> x0 y0 x1 y1 : hauteur du sol de la grille (0 = mur), une ligne par rangée (nord en haut)
-                Session ses = new Session(files, args[2], "EASY", false); Grid g = ses.Grid!;
+                Session ses = new Session(files, args[2], "EASY", false);
+                Grid g = ses.Grid!;
                 int x0 = int.Parse(args[3]) / 100, y0 = int.Parse(args[4]) / 100, x1 = int.Parse(args[5]) / 100, y1 = int.Parse(args[6]) / 100;
                 for (int y = y1; y >= y0; y -= 2)
                     Console.WriteLine($"{y * 100,6} " + string.Concat(Enumerable.Range(x0, x1 - x0 + 1).Where(x => (x - x0) % 2 == 0).Select(x => g.ZoneA[g.Index(x, y)] == 0 ? "  # " : $"{g.GroundHeight[g.Index(x, y)],4:0}")));
@@ -753,7 +792,8 @@ public static class Program
                     Console.WriteLine($"{tag} = {file} : {clip.Duration:0.000} s ; pieds {string.Join(",", feet.Select(i => rig.Names[i]))}");
                     foreach (int fi in feet)
                     {
-                        int n = 120; List<System.Numerics.Vector3> pts = new List<System.Numerics.Vector3>();
+                        int n = 120;
+                        List<System.Numerics.Vector3> pts = new List<System.Numerics.Vector3>();
                         for (int k = 0; k < n; k++)
                         {
                             System.Numerics.Matrix4x4[] w = rig.Pose(clip, clip.Duration * k / n);
@@ -791,7 +831,8 @@ public static class Program
                 // hpbloc <Data> : bloc de 96 octets des paramètres d'instance des foyers, pour toutes les cartes (octets 80 à 95)
                 foreach (string lv in files.List("Design\\Mission\\").Where(p => p.EndsWith(".level", StringComparison.OrdinalIgnoreCase)))
                 {
-                    Level L; try { L = Level.Parse(files.Read(lv)); } catch { continue; }
+                    Level L;
+                    try { L = Level.Parse(files.Read(lv)); } catch { continue; }
                     Dictionary<string, int> hist = new Dictionary<string, int>();
                     foreach (LevelObject o in L.Objects.Where(o => o.Kind == EntityKind.HotPoint))
                     {
@@ -870,14 +911,16 @@ public static class Program
                     float lo = float.MaxValue, hi = float.MinValue;
                     foreach (SceneAssets.Node part in assets.ModelParts(gfx))
                     {
-                        Mesh m = assets.LoadMesh("", part.Mesh, "gfx").Mesh; float a0 = float.MaxValue, a1 = float.MinValue;
+                        Mesh m = assets.LoadMesh("", part.Mesh, "gfx").Mesh;
+                        float a0 = float.MaxValue, a1 = float.MinValue;
                         for (int i = 0; i < m.VertexCount; i++)
                         {
                             System.Numerics.Vector3 v = System.Numerics.Vector3.Transform(new(m.Positions[i * 3], m.Positions[i * 3 + 1], m.Positions[i * 3 + 2]), part.World);
                             a0 = Math.Min(a0, v.Z);
                             a1 = Math.Max(a1, v.Z);
                         }
-                        lo = Math.Min(lo, a0); hi = Math.Max(hi, a1);
+                        lo = Math.Min(lo, a0);
+                        hi = Math.Max(hi, a1);
                         Console.WriteLine($"  {part.Mesh} z {a0:0}..{a1:0} T {part.World.Translation}");
                     }
                     Console.WriteLine($"{name} ({gfx}) : z {lo:0}..{hi:0}");
@@ -888,19 +931,25 @@ public static class Program
             {
                 // utiliser <Data> <Mission> : objets utilisables ou à réparer, puis un pompier agit sur le premier
                 Session ses = new Session(files, args[2], "EASY");
-                void Run(float sec) { for (int i = 0; i < (int)(sec / Session.Dt); i++) ses.Step(); }
+                void Run(float sec)
+                {
+                    for (int i = 0; i < (int)(sec / Session.Dt); i++)
+                        ses.Step();
+                }
                 foreach (UsableObject o in ses.Units.Usables)
                     Console.WriteLine($"{o.Name} id {o.Id} utiliser {o.CanBeUsed} réparer {o.CanBeRepaired} actions {string.Join(",", o.Actions.Select(a => a.action + ":" + a.script))}");
                 Run(40);
                 (UsableObject o, Unit u) pair = (from o in ses.Units.Usables where o.Enabled from u in ses.Units.Units where !u.Hidden && ses.Units.CanWorkOn(u, o)
                             orderby System.Numerics.Vector3.Distance(u.Position, o.Position) select (o, u)).FirstOrDefault();
-                UsableObject obj = pair.o; Unit man = pair.u;
+                UsableObject obj = pair.o;
+                Unit man = pair.u;
                 if (obj == null || man == null)
                 {
                     Console.WriteLine("aucun objet ou pompier");
                     return 0;
                 }
-                ses.Units.UseObject(man, obj); Console.WriteLine($"{man.Name} → {obj.Name} : {man.Status}");
+                ses.Units.UseObject(man, obj);
+                Console.WriteLine($"{man.Name} → {obj.Name} : {man.Status}");
                 for (int k = 0; k < 10 && man.UseTarget != null; k++)
                 {
                     Run(3);
@@ -942,7 +991,11 @@ public static class Program
                         string? crash = null;
                         for (int i = 0; i < steps; i++)
                         {
-                            try { ses.Step(); } catch (Exception e) { crash = e.GetType().Name + " : " + e.Message; break; }
+                            try { ses.Step(); } catch (Exception e)
+                            {
+                                crash = e.GetType().Name + " : " + e.Message;
+                                break;
+                            }
                             if (ses.Host?.Cinematic == true && i % 50 == 0)
                                 ses.Host.EndCinematic();
                             if (ses.Host?.Outcome != null)
@@ -967,7 +1020,8 @@ public static class Program
                         {
                             if (!total.TryGetValue(k, out (int n, SortedSet<string> where) t))
                                 t = (0, new SortedSet<string>());
-                            t.where.Add(mission); total[k] = (t.n + v, t.where);
+                            t.where.Add(mission);
+                            total[k] = (t.n + v, t.where);
                         }
                     }
                     catch (Exception e) { Console.WriteLine($"== {mission} : impossible de charger ({e.GetType().Name} : {e.Message})"); }
@@ -1012,7 +1066,11 @@ public static class Program
             {
                 // porter <Data> <Mission> : un pompier va chercher un civil inconscient, le porte et le dépose à l'ambulance
                 Session ses = new Session(files, args[2], "EASY");
-                void Run(float sec) { for (int i = 0; i < (int)(sec / Session.Dt); i++) ses.Step(); }
+                void Run(float sec)
+                {
+                    for (int i = 0; i < (int)(sec / Session.Dt); i++)
+                        ses.Step();
+                }
                 Run(40);
                 Unit? man = ses.Units.Units.FirstOrDefault(u => !u.IsVehicle && !u.CanHeal && !u.Hidden && !u.OnBoard);
                 System.Numerics.Vector2 me = man == null ? default : new System.Numerics.Vector2(man.Position.X, man.Position.Y);
@@ -1067,7 +1125,11 @@ public static class Program
             {
                 // interrupteur <Data> <Mission> <objet> <porte> : un pompier utilise l'objet ; état de la porte avant et après
                 Session ses = new Session(files, args[2], "EASY");
-                void Run(float sec) { for (int i = 0; i < (int)(sec / Session.Dt); i++) ses.Step(); }
+                void Run(float sec)
+                {
+                    for (int i = 0; i < (int)(sec / Session.Dt); i++)
+                        ses.Step();
+                }
                 Run(40);
                 UsableObject obj = ses.Units.Usables.First(o => o.Name.Equals(args[3], StringComparison.OrdinalIgnoreCase));
                 Opening door = ses.Units.Openings.First(o => o.Name.Equals(args[4], StringComparison.OrdinalIgnoreCase));
@@ -1106,7 +1168,11 @@ public static class Program
             {
                 // grappin <Data> <Mission> : passages au grappin ; un pompier ordinaire puis le scout essaient de passer le mur
                 Session ses = new Session(files, args[2], "EASY");
-                void Run(float sec) { for (int i = 0; i < (int)(sec / Session.Dt); i++) ses.Step(); }
+                void Run(float sec)
+                {
+                    for (int i = 0; i < (int)(sec / Session.Dt); i++)
+                        ses.Step();
+                }
                 foreach (GrapplePoint gp in ses.Units.Grapples)
                     Console.WriteLine($"passage {gp.Id} : haut {gp.Top}, cases {gp.Cells.Count}, côtés {gp.SideA} / {gp.SideB}");
                 GrapplePoint? g0 = ses.Units.Grapples.FirstOrDefault();
@@ -1168,8 +1234,10 @@ public static class Program
             {
                 // zonescarte <Data> <Mission> x0 y0 x1 y1 [B] : identifiant de zone de chaque case (une lettre par zone)
                 Session ses = new Session(files, args[2], "EASY", false);
-                Grid g = ses.Grid!; ushort[] arr = args.Length > 7 && args[7] == "B" ? g.ZoneB : g.ZoneA;
-                Dictionary<ushort, char> letters = new Dictionary<ushort, char>(); const string L = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+                Grid g = ses.Grid!;
+                ushort[] arr = args.Length > 7 && args[7] == "B" ? g.ZoneB : g.ZoneA;
+                Dictionary<ushort, char> letters = new Dictionary<ushort, char>();
+                const string L = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
                 for (int y = int.Parse(args[6]) / 100; y >= int.Parse(args[4]) / 100; y--)
                 {
                     System.Text.StringBuilder sb = new System.Text.StringBuilder();
@@ -1196,20 +1264,27 @@ public static class Program
                 foreach (string path in files.List("Design\\Mission\\").Where(p => p.EndsWith(".level", StringComparison.OrdinalIgnoreCase)))
                 {
                     string name = path.Split('\\')[2];
-                    Grid? g; try { g = new Session(files, name, "EASY", false).Grid; } catch { continue; }
+                    Grid? g;
+                    try { g = new Session(files, name, "EASY", false).Grid; } catch { continue; }
                     if (g == null)
                         continue;
                     HashSet<int> set = new HashSet<int>(Enumerable.Range(0, g.Width * g.Height).Where(i => g.ZoneA[i] != 0 && g.ZoneB[i] == 0));
-                    int best = 0, comps = 0; HashSet<int> seen = new HashSet<int>(); int bestAt = -1;
+                    int best = 0, comps = 0;
+                    HashSet<int> seen = new HashSet<int>();
+                    int bestAt = -1;
                     foreach (int st in set)
                     {
                         if (!seen.Add(st))
                             continue;
                         comps++;
-                        Queue<int> q = new Queue<int>(); q.Enqueue(st); int n = 0;
+                        Queue<int> q = new Queue<int>();
+                        q.Enqueue(st);
+                        int n = 0;
                         while (q.Count > 0)
                         {
-                            int c = q.Dequeue(); n++; int x = c % g.Width, y = c / g.Width;
+                            int c = q.Dequeue();
+                            n++;
+                            int x = c % g.Width, y = c / g.Width;
                             foreach ((int dx, int dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
                             {
                                 if (!g.Inside(x + dx, y + dy))
@@ -1241,8 +1316,12 @@ public static class Program
                 Grid g = ses.Grid!;
                 Unit u0 = ses.Units.Units.First(u => !u.IsVehicle && !u.Hidden && !u.OnBoard);
                 (int sx, int sy) = g.CellOf(u0.Position);
-                bool[] seen = new bool[g.Width * g.Height]; Queue<(int, int)> q = new Queue<(int, int)>(); q.Enqueue((sx, sy)); seen[g.Index(sx, sy)] = true;
-                while (q.Count > 0) { (int x, int y) = q.Dequeue(); foreach ((int dx, int dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+                bool[] seen = new bool[g.Width * g.Height];
+                Queue<(int, int)> q = new Queue<(int, int)>();
+                q.Enqueue((sx, sy));
+                seen[g.Index(sx, sy)] = true;
+                while (q.Count > 0) { (int x, int y) = q.Dequeue();
+                    foreach ((int dx, int dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
                 {
                     int nx = x + dx, ny = y + dy;
                     if (!g.Inside(nx, ny) || seen[g.Index(nx, ny)] || !ses.Units.WalkableCell(nx, ny))
@@ -1284,7 +1363,11 @@ public static class Program
             {
                 // traverse <Data> <Mission> <porte> x y : la porte s'ouvre, tous les pompiers vont en (x,y) ; cases interdites traversées
                 Session ses = new Session(files, args[2], "EASY");
-                void Run(float sec) { for (int i = 0; i < (int)(sec / Session.Dt); i++) ses.Step(); }
+                void Run(float sec)
+                {
+                    for (int i = 0; i < (int)(sec / Session.Dt); i++)
+                        ses.Step();
+                }
                 Run(40);
                 Opening door = ses.Units.Openings.First(o => o.Name.Equals(args[3], StringComparison.OrdinalIgnoreCase));
                 if (args.Length > 6)
@@ -1333,7 +1416,11 @@ public static class Program
             {
                 // portail <Data> <Mission> <porte> : un pompier va ouvrir la porte ; où il s'arrête (mécanisme)
                 Session ses = new Session(files, args[2], "EASY");
-                void Run(float sec) { for (int i = 0; i < (int)(sec / Session.Dt); i++) ses.Step(); }
+                void Run(float sec)
+                {
+                    for (int i = 0; i < (int)(sec / Session.Dt); i++)
+                        ses.Step();
+                }
                 Run(40);
                 Opening door = ses.Units.Openings.First(o => o.Name.Equals(args[3], StringComparison.OrdinalIgnoreCase));
                 Unit man = ses.Units.Units.First(u => !u.IsVehicle && !u.Hidden && !u.OnBoard && u.CanUse);
@@ -1375,7 +1462,9 @@ public static class Program
                 System.Numerics.Vector3 start = u.Position;
                 foreach (OpenFD.Fire.HotPoint h in ses.Fire.HotPoints.Where(h => h.IsBurning && ses.RoomOf.ContainsKey(h.Id)).Take(6))
                 {
-                    u.Position = start; u.Path.Clear(); u.Target = null;
+                    u.Position = start;
+                    u.Path.Clear();
+                    u.Target = null;
                     ses.Units.Attack(u, h);
                     System.Numerics.Vector2 end = u.Path.Count > 0 ? u.Path.Last() : new(u.Position.X, u.Position.Y);
                     bool wall = ses.Units.WallBetween(end, new(h.Position.X, h.Position.Y));
@@ -1435,7 +1524,8 @@ public static class Program
                 Unit u = ses.Units.SpawnScripted("Data/Design/Unit/Fireman/fireman_sp.class", "essai", new System.Numerics.Vector3(float.Parse(args[3]), float.Parse(args[4]), 0))!;
                 bool ok = ses.Units.Order(u, new(float.Parse(args[5]), float.Parse(args[6])));
                 Console.WriteLine($"ordre {ok} : {u.Status} ; " + string.Join(" → ", u.Path.Select(p => $"({p.X:0},{p.Y:0})")));
-                List<System.Numerics.Vector2> pts = new List<System.Numerics.Vector2> { new(u.Position.X, u.Position.Y) }; pts.AddRange(u.Path);
+                List<System.Numerics.Vector2> pts = new List<System.Numerics.Vector2> { new(u.Position.X, u.Position.Y) };
+                pts.AddRange(u.Path);
                 Console.WriteLine(ses.Units.AsciiMap(Environment.GetEnvironmentVariable("FD3_ZONE") is { } zz ? int.Parse(zz.Split(",")[0]) : 1200, Environment.GetEnvironmentVariable("FD3_ZONE") is { } z2 ? int.Parse(z2.Split(",")[1]) : 10600, Environment.GetEnvironmentVariable("FD3_ZONE") is { } z3 ? int.Parse(z3.Split(",")[2]) : 4200, Environment.GetEnvironmentVariable("FD3_ZONE") is { } z4 ? int.Parse(z4.Split(",")[3]) : 13800, pts));
                 return 0;
             }
@@ -1443,13 +1533,18 @@ public static class Program
             {
                 // ranimer <Data> <Mission> : un pompier inconscient est-il ranimé par un collègue (pompier ou médecin) ?
                 Session ses = new Session(files, args[2], "EASY");
-                void Run(float sec) { for (int i = 0; i < (int)(sec / Session.Dt); i++) ses.Step(); }
+                void Run(float sec)
+                {
+                    for (int i = 0; i < (int)(sec / Session.Dt); i++)
+                        ses.Step();
+                }
                 Run(40);
                 List<Unit> men = ses.Units.Units.Where(u => !u.IsVehicle && !u.Hidden && !u.OnBoard).ToList();
                 foreach (Unit who in men.Skip(1).Take(3))
                 {
                     Unit victim = men[0];
-                    victim.Unconscious = true; victim.Stamina = 0;
+                    victim.Unconscious = true;
+                    victim.Stamina = 0;
                     ses.Units.ReviveColleague(who, victim);
                     Console.WriteLine($"{who.ClassPath} → {victim.ClassPath} ({System.Numerics.Vector3.Distance(who.Position, victim.Position):0}) : {who.Status}");
                     for (int t = 0; t < 60 && victim.Unconscious; t++)
@@ -1463,7 +1558,11 @@ public static class Program
             {
                 // auto <Data> <Mission> : un pompier et un camion posés près d'un feu visible l'éteignent-ils d'eux-mêmes ?
                 Session ses = new Session(files, args[2], "EASY");
-                void Run(float sec) { for (int i = 0; i < (int)(sec / Session.Dt); i++) ses.Step(); }
+                void Run(float sec)
+                {
+                    for (int i = 0; i < (int)(sec / Session.Dt); i++)
+                        ses.Step();
+                }
                 Run(40);
                 foreach (Unit u in ses.Units.Units.Where(u => u.Nozzle != null && !u.Hidden && !u.OnBoard).GroupBy(u => u.IsVehicle).Select(g => g.First()).ToList())
                 {
@@ -1477,7 +1576,10 @@ public static class Program
                         Console.WriteLine($"{u.Name} : aucun emplacement d'essai");
                         continue;
                     }
-                    ses.Units.Teleport(u, spot.p); u.Target = null; u.Path.Clear(); u.GoToVehicle = null;
+                    ses.Units.Teleport(u, spot.p);
+                    u.Target = null;
+                    u.Path.Clear();
+                    u.GoToVehicle = null;
                     if (u.IsVehicle)
                     {
                         u.Heading = MathF.Atan2(spot.h.Position.Y - spot.p.Y, spot.h.Position.X - spot.p.X) + 2.2f;
@@ -1498,7 +1600,11 @@ public static class Program
             {
                 // conduite <Data> <Mission> : le camion part vers un point derrière lui (marche arrière, puis virage)
                 Session ses = new Session(files, args[2], "EASY");
-                void Run(float sec) { for (int i = 0; i < (int)(sec / Session.Dt); i++) ses.Step(); }
+                void Run(float sec)
+                {
+                    for (int i = 0; i < (int)(sec / Session.Dt); i++)
+                        ses.Step();
+                }
                 Run(30);
                 Unit truck = ses.Units.Units.First(u => u.IsVehicle && u.Nozzle != null);
                 System.Numerics.Vector2 back = new System.Numerics.Vector2(truck.Position.X, truck.Position.Y) - new System.Numerics.Vector2(MathF.Cos(truck.Heading), MathF.Sin(truck.Heading)) * 1500;
@@ -1526,7 +1632,8 @@ public static class Program
             {
                 // grille <Data> <Mission> x0 y0 x1 y1 : hauteurs et zones des cases (une lettre par case)
                 Session ses = new Session(files, args[2], "EASY", false);
-                Grid g = ses.Grid!; int x0 = int.Parse(args[3]) / 100, y0 = int.Parse(args[4]) / 100, x1 = int.Parse(args[5]) / 100, y1 = int.Parse(args[6]) / 100;
+                Grid g = ses.Grid!;
+                int x0 = int.Parse(args[3]) / 100, y0 = int.Parse(args[4]) / 100, x1 = int.Parse(args[5]) / 100, y1 = int.Parse(args[6]) / 100;
                 Dictionary<float, int> hs = new Dictionary<float, int>();
                 for (int y = y1; y >= y0; y--)
                 {
@@ -1539,7 +1646,8 @@ public static class Program
                             continue;
                         }
                         int i = g.Index(x, y);
-                        float h = MathF.Round(g.GroundHeight[i]); hs[h] = hs.GetValueOrDefault(h) + 1;
+                        float h = MathF.Round(g.GroundHeight[i]);
+                        hs[h] = hs.GetValueOrDefault(h) + 1;
                         sb.Append(g.ZoneA[i] == 0 ? '#' : ses.Units.IsBlocked(i) ? 'x' : ses.Units.IsClosedDoor(i) ? 'D' : h >= 350 ? '4' : h >= 150 ? '2' : h > 20 ? '1' : '.');
                     }
                     Console.WriteLine(sb.ToString());
@@ -1551,7 +1659,11 @@ public static class Program
             {
                 // casser <Data> <Mission> <nom> : un pompier à hache va casser cet obstacle (ou porte) ; état et réaction du script
                 Session ses = new Session(files, args[2], "EASY");
-                void Run(float sec) { for (int i = 0; i < (int)(sec / Session.Dt); i++) ses.Step(); }
+                void Run(float sec)
+                {
+                    for (int i = 0; i < (int)(sec / Session.Dt); i++)
+                        ses.Step();
+                }
                 Run(40);
                 Opening d = ses.Units.Openings.First(o => o.Name.Equals(args[3], StringComparison.OrdinalIgnoreCase));
                 Unit man = ses.Units.Units.Where(u => u.CanBreak && !u.Hidden && !u.OnBoard).OrderBy(u => System.Numerics.Vector3.Distance(u.Position, d.Position)).First();
@@ -1572,18 +1684,26 @@ public static class Program
             {
                 // declencheur <Data> <Mission> <nom de zone> : un pompier entre, ressort et rentre dans la zone ; combien de déclenchements ?
                 Session ses = new Session(files, args[2], "EASY");
-                void Run(float sec) { for (int i = 0; i < (int)(sec / Session.Dt); i++) ses.Step(); }
+                void Run(float sec)
+                {
+                    for (int i = 0; i < (int)(sec / Session.Dt); i++)
+                        ses.Step();
+                }
                 Run(40);
                 TriggerZone t = ses.Units.Triggers.First(z => z.Name.Equals(args[3], StringComparison.OrdinalIgnoreCase));
                 Unit man = ses.Units.Units.First(u => !u.IsVehicle && !u.Hidden && !u.OnBoard);
                 int fired = 0;
                 for (int k = 0; k < 4; k++)
                 {
-                    ses.Units.Teleport(man, new System.Numerics.Vector2(t.Position.X, t.Position.Y)); man.Path.Clear();
-                    double before = ses.Units.LastTriggerTime; Run(1);
+                    ses.Units.Teleport(man, new System.Numerics.Vector2(t.Position.X, t.Position.Y));
+                    man.Path.Clear();
+                    double before = ses.Units.LastTriggerTime;
+                    Run(1);
                     if (ses.Units.LastTriggerTime != before)
                         fired++;
-                    ses.Units.Teleport(man, new System.Numerics.Vector2(t.Position.X + 2500, t.Position.Y)); man.Path.Clear(); Run(8);
+                    ses.Units.Teleport(man, new System.Numerics.Vector2(t.Position.X + 2500, t.Position.Y));
+                    man.Path.Clear();
+                    Run(8);
                     if (ses.Host!.Cinematic)
                         ses.Host.EndCinematic();
                 }
@@ -1602,8 +1722,11 @@ public static class Program
                     return 1;
                 }
                 Console.WriteLine($"{v.Width}×{v.Height} {v.Fps:0.##} images/s, {v.Duration:0.0} s, son {v.AudioRate} Hz × {v.AudioChannels}");
-                byte[] rgba = new byte[v.Width * v.Height * 4]; short[] audio = new short[16384];
-                int want = args.Length > 2 ? int.Parse(args[2]) : 100, frames = 0; long samples = 0; double last = 0;
+                byte[] rgba = new byte[v.Width * v.Height * 4];
+                short[] audio = new short[16384];
+                int want = args.Length > 2 ? int.Parse(args[2]) : 100, frames = 0;
+                long samples = 0;
+                double last = 0;
                 System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
                 for (;;)
                 {
@@ -1615,11 +1738,13 @@ public static class Program
                         samples += n;
                         continue;
                     }
-                    frames++; last = pts;
+                    frames++;
+                    last = pts;
                     if (frames == want)
                     {
                         using FileStream f = File.Create(Path.Combine(Path.GetTempPath(), "fd3_video.ppm"));
-                        byte[] hdr = System.Text.Encoding.ASCII.GetBytes($"P6\n{v.Width} {v.Height}\n255\n"); f.Write(hdr);
+                        byte[] hdr = System.Text.Encoding.ASCII.GetBytes($"P6\n{v.Width} {v.Height}\n255\n");
+                        f.Write(hdr);
                         for (int i = 0; i < v.Width * v.Height; i++)
                         {
                             f.WriteByte(rgba[i * 4]);
@@ -1636,7 +1761,11 @@ public static class Program
                 // vie <Data> <Mission> : un pompier posé dans les flammes s'évanouit-il ? puis, ranimé, il se soigne à l'ambulance ;
                 // un camion posé dans le feu finit-il hors service ?
                 Session ses = new Session(files, args[2], "EASY");
-                void Run(float sec) { for (int i = 0; i < (int)(sec / Session.Dt); i++) ses.Step(); }
+                void Run(float sec)
+                {
+                    for (int i = 0; i < (int)(sec / Session.Dt); i++)
+                        ses.Step();
+                }
                 Run(40);
                 Fire.HotPoint fire = ses.Fire.HotPoints.Where(h => h.IsBurning).OrderByDescending(h => h.Intensity * h.Class.HeatRangeMax).First();
                 Unit man = ses.Units.Units.First(u => !u.IsVehicle && !u.Hidden && !u.OnBoard);
@@ -1647,7 +1776,8 @@ public static class Program
                     Run(2);
                     Console.WriteLine($"  {ses.Time:0} s : endurance {man.Stamina:0}/{man.StaminaMax} {man.Status}");
                 }
-                man.Unconscious = false; man.Stamina = 20;
+                man.Unconscious = false;
+                man.Stamina = 20;
                 Unit? amb = ses.Units.Units.FirstOrDefault(u => u.HealsUnits);
                 if (amb != null)
                 {
@@ -1673,9 +1803,14 @@ public static class Program
                 // suivre <Data> <Mission> : un pompier va chercher un civil conscient puis l'emmène à l'ambulance ;
                 // le civil passe-t-il par des cases libres (pas à travers les murs) ?
                 Session ses = new Session(files, args[2], "EASY");
-                void Run(float sec) { for (int i = 0; i < (int)(sec / Session.Dt); i++) ses.Step(); }
+                void Run(float sec)
+                {
+                    for (int i = 0; i < (int)(sec / Session.Dt); i++)
+                        ses.Step();
+                }
                 Run(40);
-                Civilian? civ = null; Unit? man = null;
+                Civilian? civ = null;
+                Unit? man = null;
                 foreach (Civilian c0 in ses.Units.Civilians.Where(c => c.State == CivilianState.Conscious && !c.Hidden).ToList())
                 {
                     Unit m0 = ses.Units.Units.Where(u => !u.IsVehicle && !u.Hidden && !u.OnBoard).OrderBy(u => System.Numerics.Vector3.Distance(u.Position, c0.Position)).First();
@@ -1698,10 +1833,12 @@ public static class Program
                 Console.WriteLine($"{man.Name} → {civ.Name} : suit {civ.Leader != null} à {ses.Time:0} s");
                 Unit amb = ses.Units.Units.First(u => u.IsAmbulance);
                 ses.Units.GoToVehicle(man, amb);
-                int bad = 0, steps = 0; Grid g = ses.Grid!;
+                int bad = 0, steps = 0;
+                Grid g = ses.Grid!;
                 for (int i = 0; i < 600 && civ.State == CivilianState.Conscious; i++)
                 {
-                    ses.Step(); steps++;
+                    ses.Step();
+                    steps++;
                     (int cx, int cy) = g.CellOf(civ.Position);
                     if (!g.Inside(cx, cy) || g.ZoneA[g.Index(cx, cy)] == 0 || ses.Units.IsBlocked(g.Index(cx, cy)))
                         bad++;
@@ -1718,7 +1855,8 @@ public static class Program
                 Dictionary<string, ClassFile> cache = new Dictionary<string, ClassFile>(StringComparer.OrdinalIgnoreCase);
                 foreach (LevelObject o in ses.Level.Objects.Where(o => o.Kind == EntityKind.Placeable && o.HasTransform))
                 {
-                    ClassFile? c; try { c = ClassFile.Load(files, "Design\\" + o.ClassPath["design\\".Length..] + ".class", cache); } catch { continue; }
+                    ClassFile? c;
+                    try { c = ClassFile.Load(files, "Design\\" + o.ClassPath["design\\".Length..] + ".class", cache); } catch { continue; }
                     if (!c.GetBool("CAPACITIES_ACTIONS", "CouldBeBreak"))
                         continue;
                     string? type = c.Get("OCCUPATION", "Occupation_Type")?.Trim('"', ' ');
@@ -1730,7 +1868,11 @@ public static class Program
             {
                 // camion <Data> <Mission> : lance du camion, montée / descente, recharge d'eau (essai automatique)
                 Session ses = new Session(files, args[2], "EASY");
-                void Run(float sec) { for (int i = 0; i < (int)(sec / Session.Dt); i++) ses.Step(); }
+                void Run(float sec)
+                {
+                    for (int i = 0; i < (int)(sec / Session.Dt); i++)
+                        ses.Step();
+                }
                 Run(30);
                 Unit truck = ses.Units.Units.First(u => u.IsVehicle && u.Nozzle != null);
                 Console.WriteLine($"camion {truck.Name} : lance portée {truck.Nozzle!.RangeMin}–{truck.Nozzle.RangeMax}, puissance {truck.Nozzle.Power}, réserve {truck.Nozzle.Reserve}, places {truck.Seats}, recharge {truck.ResupplyPower}");
@@ -1755,8 +1897,10 @@ public static class Program
                 }
                 foreach (Unit m in men)
                     ses.Units.BoardVehicle(m, truck);
-                Run(8); Console.WriteLine($"  à bord : {truck.Passengers.Count}/{truck.Seats} ; " + string.Join(" | ", men.Select(m => m.Status)));
-                ses.Units.Drive(truck, new System.Numerics.Vector2(truck.Position.X - 1500, truck.Position.Y)); Run(10);
+                Run(8);
+                Console.WriteLine($"  à bord : {truck.Passengers.Count}/{truck.Seats} ; " + string.Join(" | ", men.Select(m => m.Status)));
+                ses.Units.Drive(truck, new System.Numerics.Vector2(truck.Position.X - 1500, truck.Position.Y));
+                Run(10);
                 Console.WriteLine($"  après trajet : camion {truck.Status} ; passagers {string.Join(",", men.Select(m => $"({m.Position.X:0},{m.Position.Y:0})"))}");
                 Console.WriteLine($"  descente : {ses.Units.UnloadPassengers(truck)} ; " + string.Join(" | ", men.Select(m => $"{m.Status} ({m.Position.X:0},{m.Position.Y:0})")));
                 foreach (string l in ses.Units.Log.TakeLast(6))
@@ -1924,7 +2068,8 @@ public static class Program
                         Session s2 = new Session(files, "London", "EASY", false);
                         for (int i = 0; i < 30; i++)
                             s2.Step();
-                        Unit m2 = s2.Units.Units.First(u => u.CanHeal); Civilian c2 = s2.Units.Civilians.First(c => c.Id == cv.Id);
+                        Unit m2 = s2.Units.Units.First(u => u.CanHeal);
+                        Civilian c2 = s2.Units.Civilians.First(c => c.Id == cv.Id);
                         s2.Units.FetchCivilian(m2, c2);
                         for (int i = 0; i < 2000 && c2.State == OpenFD.Game.CivilianState.Unconscious; i++)
                             s2.Step();
@@ -2115,8 +2260,17 @@ public static class Program
                 int ok = 0, ko = 0, fns = 0;
                 foreach (string f in Directory.EnumerateFiles(Path.Combine(args[1], "Script"), "*.scp", SearchOption.AllDirectories).OrderBy(x => x))
                 {
-                    try { List<Script.Function> list = OpenFD.Script.Parser.ParseFile(File.ReadAllText(f, System.Text.Encoding.Latin1), Path.GetFileName(f)); fns += list.Count; ok++; }
-                    catch (OpenFD.Script.ParseError e) { ko++; Console.WriteLine("ERREUR " + e.Message); }
+                    try
+                    {
+                        List<Script.Function> list = OpenFD.Script.Parser.ParseFile(File.ReadAllText(f, System.Text.Encoding.Latin1), Path.GetFileName(f));
+                        fns += list.Count;
+                        ok++;
+                    }
+                    catch (OpenFD.Script.ParseError e)
+                    {
+                        ko++;
+                        Console.WriteLine("ERREUR " + e.Message);
+                    }
                 }
                 Console.WriteLine($"{ok} fichiers analysés, {ko} en erreur, {fns} fonctions");
                 return ko == 0 ? 0 : 2;

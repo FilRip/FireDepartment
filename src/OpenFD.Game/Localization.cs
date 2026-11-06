@@ -57,7 +57,8 @@ public sealed class Localization
             return "ENG";
         Dictionary<string, long> installed = Directory.EnumerateFiles(vocal, "*.wav").Take(400)
             .ToDictionary(f => Path.GetFileName(f), f => new FileInfo(f).Length, StringComparer.OrdinalIgnoreCase);
-        string best = "ENG"; int bestScore = 0;
+        string best = "ENG";
+        int bestScore = 0;
         foreach ((string? code, string? dir) in langs)
         {
             string? v = FindDir(dir, "Data", "Sound", "Vocal");
@@ -91,12 +92,14 @@ public sealed class Localization
 
     private void Parse(string text)
     {
-        string? key = null; System.Text.StringBuilder sb = new System.Text.StringBuilder();
+        string? key = null;
+        System.Text.StringBuilder sb = new System.Text.StringBuilder();
         void Flush()
         {
             if (key != null)
                 _texts[key] = sb.ToString().Trim().Replace("\\n", "\n");
-            key = null; sb.Clear();
+            key = null;
+            sb.Clear();
         }
         foreach (string raw in text.Split('\n'))
         {

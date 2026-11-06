@@ -39,7 +39,8 @@ public sealed partial class UnitManager
 
     public UnitManager(Session s, GameFiles files, ClassFile mission)
     {
-        _s = s; _files = files;
+        _s = s;
+        _files = files;
         Paths = new PathFind(s, _assets ??= new SceneAssets(files), Class, Log);
         foreach (LevelObject o in s.Level.Objects.Where(o => o.Kind == EntityKind.Waypoint && o.HasTransform))
             _waypoints[o.Name] = new(o.Position.X, o.Position.Y);
@@ -113,7 +114,13 @@ public sealed partial class UnitManager
             }
         foreach (Unit u in Units.Where(u => u.Unconscious || u.OnBoard))
         {
-            u.Path.Clear(); u.Target = null; u.Opening = null; u.GoTo = null; u.GoToVehicle = null; u.ReviveTarget = null; u.UseTarget = null;
+            u.Path.Clear();
+            u.Target = null;
+            u.Opening = null;
+            u.GoTo = null;
+            u.GoToVehicle = null;
+            u.ReviveTarget = null;
+            u.UseTarget = null;
             if (u.Unconscious)
                 u.Status = "inconscient : un collègue doit le ranimer";
             if (u.InVehicle is { } veh)
@@ -125,7 +132,11 @@ public sealed partial class UnitManager
         foreach (Unit u in Units.Where(u => u.InjuredTimer > 0))
         {
             u.InjuredTimer = MathF.Max(0, u.InjuredTimer - dt);
-            u.Path.Clear(); u.Target = null; u.Opening = null; u.GoTo = null; u.GoToVehicle = null;
+            u.Path.Clear();
+            u.Target = null;
+            u.Opening = null;
+            u.GoTo = null;
+            u.GoToVehicle = null;
             u.Status = u.InjuredTimer > 0 ? "blessé, au sol" : "attend les ordres";
         }
         UpdateHealth(dt);
@@ -190,7 +201,8 @@ public sealed partial class UnitManager
         List<string> list = Enumerable.Range(1, 20).Select(i => cfg.Get("FIRESTATION", $"UNIT{i:00}")?.Trim('"', ' ')).Where(x => !string.IsNullOrEmpty(x)).Select(x => x!).ToList();
         List<string> vehicles = list.Where(x => x.StartsWith("Firevehicle", StringComparison.OrdinalIgnoreCase)).ToList();
         List<string> crew = list.Where(x => !x.StartsWith("Firevehicle", StringComparison.OrdinalIgnoreCase)).ToList();
-        Unit? lead = null; int k = 1;
+        Unit? lead = null;
+        int k = 1;
         foreach (string v in vehicles)
         {
             Vector2 start = Wp($"locstart{spawn}_{k}") ?? Wp($"locstart{spawn}_1") ?? Center();
@@ -200,7 +212,8 @@ public sealed partial class UnitManager
                 continue;
             u.Heading = MathF.Atan2(end.Y - start.Y, end.X - start.X);
             Order(u, end, refuseUnreachable: false);
-            lead ??= u; k++;
+            lead ??= u;
+            k++;
         }
         string team = TeamCode(cfgName);
         if (!Teams.Contains(team))
@@ -221,8 +234,10 @@ public sealed partial class UnitManager
         int n = 0;
         foreach (string c in crew)
         {
-            float a = n * 0.9f; Vector2 pos = basePos + new Vector2(MathF.Cos(a), MathF.Sin(a)) * (250 + 60 * n);
-            Unit? u = Create(c, false, Walkable(pos)); n++;
+            float a = n * 0.9f;
+            Vector2 pos = basePos + new Vector2(MathF.Cos(a), MathF.Sin(a)) * (250 + 60 * n);
+            Unit? u = Create(c, false, Walkable(pos));
+            n++;
             if (u != null)
             {
                 u.Status = "attend les ordres";
@@ -274,17 +289,21 @@ public sealed partial class UnitManager
         Vector2 me = new Vector2(v.Position.X, v.Position.Y);
         Vector2 fwd = new Vector2(MathF.Cos(v.Heading), MathF.Sin(v.Heading));
         List<Vector2> taken = Units.Where(u => !u.IsVehicle && !u.OnBoard).Select(u => new Vector2(u.Position.X, u.Position.Y)).ToList();
-        int saved = Paths.SelfId; Paths.SelfId = -1;
+        int saved = Paths.SelfId;
+        Paths.SelfId = -1;
         List<(Vector2 p, float score)> spots = new List<(Vector2 p, float score)>();
         for (float r = 250; r <= 1400 && spots.Count < 40 + count; r += 100)
             for (int k = 0; k < 24; k++)
             {
-                float a = k * MathF.PI / 12; Vector2 dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
+                float a = k * MathF.PI / 12;
+                Vector2 dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
                 Vector2 p = me + dir * r;
                 (int cx, int cy) = g.CellOf(new Vector3(p, 0));
                 if (!FreeCell(cx, cy))
                     continue;
-                Paths.PathingVehicle = true; bool open = LineFree(me, p, ignoreFire: true); Paths.PathingVehicle = false;
+                Paths.PathingVehicle = true;
+                bool open = LineFree(me, p, ignoreFire: true);
+                Paths.PathingVehicle = false;
                 if (!open)
                     continue;
                 spots.Add((new Vector2((cx + 0.5f) * Grid.CellSize, (cy + 0.5f) * Grid.CellSize), r + 150 * MathF.Max(0, Vector2.Dot(dir, fwd))));
@@ -295,7 +314,8 @@ public sealed partial class UnitManager
             Vector2 spot = spots.OrderBy(x => x.score).Select(x => x.p).FirstOrDefault(p => taken.All(t => Vector2.Distance(t, p) > 110));
             if (spot == default)
                 spot = Walkable(me + new Vector2(-fwd.Y, fwd.X) * 350);
-            res.Add(spot); taken.Add(spot);
+            res.Add(spot);
+            taken.Add(spot);
         }
         return res;
     }
@@ -367,10 +387,13 @@ public sealed partial class UnitManager
             u.ResupplyPower = c.GetFloat("CAPACITIES_RESERVE", "ResupplyPower", 0);
             u.SupplyAgent = (c.Get("CAPACITIES_RESERVE", "FireAgent") ?? "WATER").Trim('"', ' ').ToUpperInvariant();
         }
-        u.StaminaMax = c.GetFloat("CAPACITIES_PROPS", "StaminaMax", 100); u.Stamina = MathF.Min(u.StaminaMax, c.GetFloat("CAPACITIES_PROPS", "StaminaPoints", u.StaminaMax));
+        u.StaminaMax = c.GetFloat("CAPACITIES_PROPS", "StaminaMax", 100);
+        u.Stamina = MathF.Min(u.StaminaMax, c.GetFloat("CAPACITIES_PROPS", "StaminaPoints", u.StaminaMax));
         u.StaminaRegen = c.GetFloat("CAPACITIES_PROPS", "StaminaRegen", 0.5f);
-        u.HeatCoef = c.GetFloat("CAPACITIES_PROPS", "HeatStaminaCoef", 1); u.SmokeCoef = c.GetFloat("CAPACITIES_PROPS", "SmokeStaminaCoef", 0.7f);
-        u.LifeMax = c.GetFloat("DAMAGE", "MaxLifePoints", 500); u.Life = MathF.Min(u.LifeMax, c.GetFloat("DAMAGE", "LifePoints", u.LifeMax));
+        u.HeatCoef = c.GetFloat("CAPACITIES_PROPS", "HeatStaminaCoef", 1);
+        u.SmokeCoef = c.GetFloat("CAPACITIES_PROPS", "SmokeStaminaCoef", 0.7f);
+        u.LifeMax = c.GetFloat("DAMAGE", "MaxLifePoints", 500);
+        u.Life = MathF.Min(u.LifeMax, c.GetFloat("DAMAGE", "LifePoints", u.LifeMax));
         u.FireDamageCoef = c.GetFloat("DAMAGE", "FireDamageCoef", vehicle ? 3 : 5);
         u.HealsUnits = vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanHeal");
         u.Icon = c.Get("UNIT", "Icon")?.Trim('"', ' ');
@@ -436,7 +459,8 @@ public sealed partial class UnitManager
                 for (int i = 0; i < m.VertexCount; i++)
                 {
                     Vector3 v = Vector3.Transform(new Vector3(m.Positions[i * 3], m.Positions[i * 3 + 1], m.Positions[i * 3 + 2]), part.World);
-                    mn = Vector2.Min(mn, new(v.X, v.Y)); mx = Vector2.Max(mx, new(v.X, v.Y));
+                    mn = Vector2.Min(mn, new(v.X, v.Y));
+                    mx = Vector2.Max(mx, new(v.X, v.Y));
                 }
             }
             if (mn.X < mx.X)
@@ -479,7 +503,11 @@ public sealed partial class UnitManager
             Matrix4x4 world = Matrix4x4.CreateRotationZ(v.Heading + MathF.PI / 2) * Matrix4x4.CreateTranslation(v.Position.X, v.Position.Y, 0);
             Matrix4x4.Invert(world, out Matrix4x4 inv);
             List<Vector2> corners = new[] { b.min, new Vector2(b.max.X, b.min.Y), new Vector2(b.min.X, b.max.Y), b.max }
-                .Select(p => { Vector3 w = Vector3.Transform(new Vector3(p, 0), world); return new Vector2(w.X, w.Y); }).ToList();
+                .Select(p =>
+                {
+                    Vector3 w = Vector3.Transform(new Vector3(p, 0), world);
+                    return new Vector2(w.X, w.Y);
+                }).ToList();
             (int x0, int y0) = g.CellOf(new Vector3(corners.Min(p => p.X), corners.Min(p => p.Y), 0));
             (int x1, int y1) = g.CellOf(new Vector3(corners.Max(p => p.X), corners.Max(p => p.Y), 0));
             for (int cx = x0; cx <= x1; cx++)
@@ -495,14 +523,18 @@ public sealed partial class UnitManager
         // les piétons en chemin recalculent leur trajet s'il traverse un véhicule qui vient de se garer
         foreach (Unit u in Units.Where(u => !u.IsVehicle && u.Moving))
         {
-            List<Vector2> pts = new List<Vector2> { new(u.Position.X, u.Position.Y) }; pts.AddRange(u.Path);
+            List<Vector2> pts = new List<Vector2> { new(u.Position.X, u.Position.Y) };
+            pts.AddRange(u.Path);
             bool crosses = false;
             for (int i = 0; i + 1 < pts.Count && !crosses; i++)
                 crosses = !LineFree(pts[i], pts[i + 1], ignoreFire: true);
             if (!crosses)
                 continue;
-            Vector2 dest = pts[^1]; List<Vector2> path = FindPath(pts[0], Walkable(dest));
-            u.Path.Clear(); foreach (Vector2 p in path) u.Path.Enqueue(p);
+            Vector2 dest = pts[^1];
+            List<Vector2> path = FindPath(pts[0], Walkable(dest));
+            u.Path.Clear();
+            foreach (Vector2 p in path)
+                u.Path.Enqueue(p);
         }
     }
 
@@ -521,10 +553,16 @@ public sealed partial class UnitManager
         }
         if (u.Unconscious)
             return false;
-        u.Target = target; u.Path.Clear(); u.GoTo = null; u.GoToVehicle = null; u.HealTimer = 0; u.Opening = null;
+        u.Target = target;
+        u.Path.Clear();
+        u.GoTo = null;
+        u.GoToVehicle = null;
+        u.HealTimer = 0;
+        u.Opening = null;
         Paths.PathingVehicle = u.IsVehicle && !drive;
         Paths.PathingGrapple = false;   // le scout ne passe au grappin que sur ordre (clic droit sur la flèche) : sinon il prend le portail comme les autres
-        Paths.Clearance = u.IsVehicle && drive ? 1 : 0; Paths.SelfId = u.IsVehicle ? u.Id : 0;
+        Paths.Clearance = u.IsVehicle && drive ? 1 : 0;
+        Paths.SelfId = u.IsVehicle ? u.Id : 0;
         bool partial = false;
         try
         {
@@ -532,11 +570,18 @@ public sealed partial class UnitManager
             foreach (Vector2 p in path)
                 u.Path.Enqueue(p);
         }
-        finally { Paths.PathingVehicle = false; Paths.Clearance = 0; Paths.SelfId = 0; Paths.PathingGrapple = false; }
+        finally
+        {
+            Paths.PathingVehicle = false;
+            Paths.Clearance = 0;
+            Paths.SelfId = 0;
+            Paths.PathingGrapple = false;
+        }
         // point inatteignable : l'unité ne bouge pas et le dit (« VOCAL_IMPOSSIBLE_TO_ACCESS »)
         if (refuseUnreachable && (partial || (u.Path.Count == 0 && Vector2.Distance(new(u.Position.X, u.Position.Y), dest) > 150)))
         {
-            u.Path.Clear(); u.Target = null;
+            u.Path.Clear();
+            u.Target = null;
             u.Status = "impossible d'y accéder";
             if (PlayerCommand)
                 Sounds.Add(("VOCAL_IMPOSSIBLE_TO_ACCESS", null));   // voix seulement pour un ordre du joueur, pas pour l'IA
@@ -578,7 +623,8 @@ public sealed partial class UnitManager
             u.Status = "porte un civil : ne peut pas arroser";
             return;
         }
-        Vector2 me = new Vector2(u.Position.X, u.Position.Y); Vector2 f = new Vector2(h.Position.X, h.Position.Y);
+        Vector2 me = new Vector2(u.Position.X, u.Position.Y);
+        Vector2 f = new Vector2(h.Position.X, h.Position.Y);
         float range = MathF.Max(150, u.Nozzle.RangeMax * 0.8f), d = Vector2.Distance(me, f);
         float want = range * 0.9f + ExtraStandoff;
         // feu tout proche : il ne recule que jusqu'à une partie de cette distance (AttackBackOff, réglage du jeu)
@@ -594,7 +640,8 @@ public sealed partial class UnitManager
             return;
         }
         // chaque unité se place un peu à côté des autres, autour du feu
-        Vector2 dir = d > 1 ? Vector2.Normalize(me - f) : Vector2.UnitX; float spread = ((u.Id * 7) % 9 - 4) * 0.18f;
+        Vector2 dir = d > 1 ? Vector2.Normalize(me - f) : Vector2.UnitX;
+        float spread = ((u.Id * 7) % 9 - 4) * 0.18f;
         dir = new(dir.X * MathF.Cos(spread) - dir.Y * MathF.Sin(spread), dir.X * MathF.Sin(spread) + dir.Y * MathF.Cos(spread));
         // feu à l'intérieur : la place doit voir le feu sans mur entre les deux (sinon il arroserait à travers une
         // cloison, depuis dehors) ; on cherche autour du feu, de plus en plus près, la place libre la plus proche de lui
@@ -658,7 +705,8 @@ public sealed partial class UnitManager
     {
         if (u.IsVehicle || !vehicle.IsVehicle)
             return;
-        Vector2 me = new Vector2(u.Position.X, u.Position.Y); Vector2 v = new Vector2(vehicle.Position.X, vehicle.Position.Y);
+        Vector2 me = new Vector2(u.Position.X, u.Position.Y);
+        Vector2 v = new Vector2(vehicle.Position.X, vehicle.Position.Y);
         Vector2 dir = Vector2.Distance(me, v) > 1 ? Vector2.Normalize(me - v) : Vector2.UnitX;
         if (!Order(u, v + dir * (VehicleReach * 0.6f)))
             return;
@@ -692,7 +740,8 @@ public sealed partial class UnitManager
                     Log.Add($"{_s.Time,6:0} s : {n} civil(s) mis à l'abri dans l'ambulance ({Rescued} sauvé(s))");
                     Sounds.Add(("VOCAL_CIVILIAN_SAVED", null));
                 }
-                u.GoToVehicle = null; u.Status = "attend les ordres";
+                u.GoToVehicle = null;
+                u.Status = "attend les ordres";
             }
             if (u.Boarding)
             {
@@ -725,14 +774,20 @@ public sealed partial class UnitManager
             VehicleMove(u, dt);
             return;
         }
-        if (u.Climb != ClimbPhase.None) { UpdateClimb(u, dt); return; }   // au grappin : voir Grapple.cs
+        if (u.Climb != ClimbPhase.None)
+        {
+            UpdateClimb(u, dt);
+            return;
+        }   // au grappin : voir Grapple.cs
         if (u.Path.Count > 0 && StartClimbIfNeeded(u, u.Path.Peek()))
             return;
         float step = u.Speed * dt * (u.Carry == CarryPhase.Walking ? CarrySpeed : 1f);   // chargé d'un corps : plus lent
         while (step > 0 && u.Path.Count > 0)
         {
-            Vector2 p = new Vector2(u.Position.X, u.Position.Y); Vector2 t = u.Path.Peek();
-            Vector2 d = t - p; float len = d.Length();
+            Vector2 p = new Vector2(u.Position.X, u.Position.Y);
+            Vector2 t = u.Path.Peek();
+            Vector2 d = t - p;
+            float len = d.Length();
             if (len > 1e-3f)
                 u.Heading = MathF.Atan2(d.Y, d.X);
             if (len <= step)
@@ -770,7 +825,8 @@ public sealed partial class UnitManager
             return;
         if (!Order(u, new(victim.Position.X, victim.Position.Y)))
             return;
-        u.ReviveTarget = victim; u.Status = "va ranimer son collègue";
+        u.ReviveTarget = victim;
+        u.Status = "va ranimer son collègue";
     }
 
     private void Revive(Unit u, float dt)
@@ -794,8 +850,12 @@ public sealed partial class UnitManager
         u.Heading = MathF.Atan2(v.Position.Y - u.Position.Y, v.Position.X - u.Position.X);
         if (u.HealTimer < ReviveSeconds)
             return;
-        v.Unconscious = false; v.Status = "attend les ordres"; v.Stamina = MathF.Max(v.Stamina, v.StaminaMax * ReviveStamina);
-        u.HealTimer = 0; u.ReviveTarget = null; u.Status = "attend les ordres";
+        v.Unconscious = false;
+        v.Status = "attend les ordres";
+        v.Stamina = MathF.Max(v.Stamina, v.StaminaMax * ReviveStamina);
+        u.HealTimer = 0;
+        u.ReviveTarget = null;
+        u.Status = "attend les ordres";
         Log.Add($"{_s.Time,6:0} s : un pompier a été ranimé");
     }
 
@@ -868,13 +928,15 @@ public sealed partial class UnitManager
 
     private void Board(Unit u, Unit v)
     {
-        u.Boarding = false; u.GoToVehicle = null;
+        u.Boarding = false;
+        u.GoToVehicle = null;
         if (v.Passengers.Count >= v.Seats)
         {
             u.Status = "véhicule plein";
             return;
         }
-        v.Passengers.Add(u); u.InVehicle = v;
+        v.Passengers.Add(u);
+        u.InVehicle = v;
         foreach (Civilian civ in Civilians.Where(c => c.Leader == u))
             civ.Leader = null;
         Sounds.Add(("VEHICLE_EMBARK", v.Position));
@@ -891,8 +953,11 @@ public sealed partial class UnitManager
         foreach (Unit u in v.Passengers)
         {
             Vector2 p = n < spots.Count ? spots[n] : new Vector2(v.Position.X, v.Position.Y);
-            u.InVehicle = null; u.Position = new Vector3(p, Ground(p)); u.Status = "attend les ordres";
-            u.Heading = MathF.Atan2(p.Y - v.Position.Y, p.X - v.Position.X); n++;
+            u.InVehicle = null;
+            u.Position = new Vector3(p, Ground(p));
+            u.Status = "attend les ordres";
+            u.Heading = MathF.Atan2(p.Y - v.Position.Y, p.X - v.Position.X);
+            n++;
         }
         v.Passengers.Clear();
         Log.Add($"{_s.Time,6:0} s : {n} pompier(s) descendent du véhicule");
@@ -931,7 +996,9 @@ public sealed partial class UnitManager
         {
             if (_reported.Add(h))
                 Log.Add($"{_s.Time,6:0} s : {h.Name} éteint");
-            u.Target = null; u.Status = "attend les ordres"; return;
+            u.Target = null;
+            u.Status = "attend les ordres";
+            return;
         }
         _reported.Remove(h);
         if (h.Electrified && !WaterTruck(u))   // la lance d'un camion à eau peut arroser un feu électrique sous tension

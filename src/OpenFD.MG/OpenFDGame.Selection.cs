@@ -34,12 +34,14 @@ public sealed partial class OpenFDGame
             string? path = Directory.Exists(dir) ? Directory.EnumerateFiles(dir).FirstOrDefault(f => Path.GetFileName(f).Equals(name, StringComparison.OrdinalIgnoreCase)) : null;
             if (path != null)
             {
-                Color[]? px = null; int w = 0, h = 0;
+                Color[]? px = null;
+                int w = 0, h = 0;
                 if (path.EndsWith(".tga", StringComparison.OrdinalIgnoreCase))
                 {
                     if (Tex.DecodeTga(File.ReadAllBytes(path)) is { } img)
                     {
-                        (w, h) = (img.w, img.h); px = new Color[w * h];
+                        (w, h) = (img.w, img.h);
+                        px = new Color[w * h];
                         for (int i = 0; i < px.Length; i++)
                             px[i] = new Color(img.rgba[4 * i], img.rgba[4 * i + 1], img.rgba[4 * i + 2], img.rgba[4 * i + 3]);
                     }
@@ -48,7 +50,11 @@ public sealed partial class OpenFDGame
                 {
                     using FileStream fs = File.OpenRead(path);
                     Texture2D tex = Texture2D.FromStream(GraphicsDevice, fs);
-                    w = tex.Width; h = tex.Height; px = new Color[w * h]; tex.GetData(px); tex.Dispose();
+                    w = tex.Width;
+                    h = tex.Height;
+                    px = new Color[w * h];
+                    tex.GetData(px);
+                    tex.Dispose();
                 }
                 if (px != null && cropFrame)
                 {
@@ -64,7 +70,9 @@ public sealed partial class OpenFDGame
                         Color[] cut = new Color[fw * fh];
                         for (int y = 0; y < fh; y++)
                             Array.Copy(px, y * w, cut, y * fw, fw);
-                        px = cut; w = fw; h = fh;
+                        px = cut;
+                        w = fw;
+                        h = fh;
                     }
                 }
                 if (px != null)
@@ -77,7 +85,8 @@ public sealed partial class OpenFDGame
                             byte a = (byte)Math.Min(c.A, Math.Max(c.R, Math.Max(c.G, c.B)));
                             px[i] = new Color((byte)255, (byte)255, (byte)255, a);
                         }
-                    t = new Texture2D(GraphicsDevice, w, h); t.SetData(px);
+                    t = new Texture2D(GraphicsDevice, w, h);
+                    t.SetData(px);
                 }
             }
         }
@@ -170,7 +179,8 @@ public sealed partial class OpenFDGame
             if (Project(p) is not { } c || Project(p + new SN.Vector3(90, 0, 0)) is not { } ex || Project(p + new SN.Vector3(0, 90, 0)) is not { } ey)
                 continue;
             float rx = MathF.Max(MathF.Abs(ex.X - c.X), MathF.Abs(ey.X - c.X)), ry = MathF.Max(MathF.Abs(ex.Y - c.Y), MathF.Abs(ey.Y - c.Y));
-            rx = MathF.Max(rx, 12 * _scale); ry = MathF.Max(ry, 7 * _scale);
+            rx = MathF.Max(rx, 12 * _scale);
+            ry = MathF.Max(ry, 7 * _scale);
             float grow = 1.25f - 0.45f * k, a = 1 - k * k;
             SN.Vector4 col = new SN.Vector4(1f, 0.9f, 0.15f, a);
             if (ring != null)
@@ -246,7 +256,9 @@ public sealed partial class OpenFDGame
         if (SelectionPanelRect() is not { } pr)
             return;
         Texture2D? pages = PagesTexture();
-        Texture2D? lifeTex = OverlayTexture("WID_PRO_LIFE.png"); Texture2D? stamTex = OverlayTexture("WID_PRO_STAMINA.png"); Texture2D? waterTex = OverlayTexture("WID_PRO_RESERVE.png");
+        Texture2D? lifeTex = OverlayTexture("WID_PRO_LIFE.png");
+        Texture2D? stamTex = OverlayTexture("WID_PRO_STAMINA.png");
+        Texture2D? waterTex = OverlayTexture("WID_PRO_RESERVE.png");
         bool blink = _uiClock % 1f < 0.5f;   // une demi-seconde affiché, une demi-seconde caché
         float pad = 6 * _scale, gap = 6 * _scale;
         List<(string team, List<Unit> units)> rows = PanelRows();
@@ -303,7 +315,8 @@ public sealed partial class OpenFDGame
     }
 
     // planche d'icônes du jeu (Data\Overlay\Pages\TextureDefinitions0__32bpp.dds : 2048 × 1024, BGRA non compressé)
-    private Texture2D? _pages; private bool _pagesTried;
+    private Texture2D? _pages;
+    private bool _pagesTried;
     private Texture2D? PagesTexture()
     {
         if (_pagesTried)

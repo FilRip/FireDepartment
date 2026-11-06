@@ -12,7 +12,11 @@ namespace OpenFD.MG;
 // (London : « Bank_fasad », « Bank_fasad_ROOF », « Bank_ROOM… », « roof_bank_glass » forment la banque).
 public sealed partial class OpenFDGame
 {
-    private sealed class Building { public SN.Vector2 Min, Max; public float MinZ = float.MaxValue; public readonly List<string> Nodes = new(); public bool Open; public bool HasRooms; }
+    private sealed class Building { public SN.Vector2 Min, Max;
+        public float MinZ = float.MaxValue;
+        public readonly List<string> Nodes = new();
+        public bool Open;
+        public bool HasRooms; }
     private readonly List<Building> _buildings = new();
     private readonly Dictionary<string, int> _nodeBuilding = new(StringComparer.OrdinalIgnoreCase);
     private int _curBuilding = -1;
@@ -54,10 +58,12 @@ public sealed partial class OpenFDGame
                 continue;
             List<int> comp = new List<int>();
             int id = comps.Count;
-            _roomOf[s0] = id; q.Enqueue(s0);
+            _roomOf[s0] = id;
+            q.Enqueue(s0);
             while (q.Count > 0)
             {
-                int c = q.Dequeue(); comp.Add(c);
+                int c = q.Dequeue();
+                comp.Add(c);
                 int cx = c % w, cy = c / w;
                 foreach ((int dx, int dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
                 {
@@ -67,7 +73,8 @@ public sealed partial class OpenFDGame
                     int k2 = ny * w + nx;
                     if (_roomOf[k2] != -1 || _session.Units.IsBlocked(k2) || _openingAt[k2] >= 0 || g.ZoneA[k2] == 0)
                         continue;
-                    _roomOf[k2] = id; q.Enqueue(k2);
+                    _roomOf[k2] = id;
+                    q.Enqueue(k2);
                 }
             }
             comps.Add(comp);
@@ -251,7 +258,8 @@ public sealed partial class OpenFDGame
                 int i = (int)m.Indices[k];
                 SN.Vector3 p = SN.Vector3.Transform(new SN.Vector3(m.Positions[3 * i], m.Positions[3 * i + 1], m.Positions[3 * i + 2]), node.World);
                 v[k] = new VertexPosition(new Vector3(p.X, p.Y, p.Z + 2));
-                mn = SN.Vector2.Min(mn, new(p.X, p.Y)); mx = SN.Vector2.Max(mx, new(p.X, p.Y));
+                mn = SN.Vector2.Min(mn, new(p.X, p.Y));
+                mx = SN.Vector2.Max(mx, new(p.X, p.Y));
             }
             VertexBuffer vb = new VertexBuffer(GraphicsDevice, VertexPosition.VertexDeclaration, v.Length, BufferUsage.WriteOnly);
             vb.SetData(v);
@@ -303,8 +311,12 @@ public sealed partial class OpenFDGame
         if (_lidFx == null || _lids.Count == 0 || _map)
             return;
         GraphicsDevice gd = GraphicsDevice;
-        _lidFx.World = Matrix.Identity; _lidFx.View = Matrix.Identity; _lidFx.Projection = viewProj;
-        gd.DepthStencilState = DepthStencilState.Default; gd.BlendState = BlendState.Opaque; gd.RasterizerState = RasterizerState.CullNone;
+        _lidFx.World = Matrix.Identity;
+        _lidFx.View = Matrix.Identity;
+        _lidFx.Projection = viewProj;
+        gd.DepthStencilState = DepthStencilState.Default;
+        gd.BlendState = BlendState.Opaque;
+        gd.RasterizerState = RasterizerState.CullNone;
         foreach (RoomLid lid in _lids.Where(l => l.Shown))
         {
             gd.SetVertexBuffer(lid.Vb);
@@ -318,7 +330,8 @@ public sealed partial class OpenFDGame
 
     private void FindBuildings(string mission, IReadOnlyList<SceneAssets.Node> scenery)
     {
-        _buildings.Clear(); _nodeBuilding.Clear();
+        _buildings.Clear();
+        _nodeBuilding.Clear();
         List<(string name, SN.Vector2 min, SN.Vector2 max)> boxes = new List<(string name, SN.Vector2 min, SN.Vector2 max)>();
         Dictionary<string, float> zmin = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         foreach (SceneAssets.Node n in scenery)
@@ -332,7 +345,8 @@ public sealed partial class OpenFDGame
                 for (int i = 0; i < m.VertexCount; i++)
                 {
                     SN.Vector3 v = SN.Vector3.Transform(new SN.Vector3(m.Positions[3 * i], m.Positions[3 * i + 1], m.Positions[3 * i + 2]), n.World);
-                    mn = SN.Vector2.Min(mn, new(v.X, v.Y)); mx = SN.Vector2.Max(mx, new(v.X, v.Y));
+                    mn = SN.Vector2.Min(mn, new(v.X, v.Y));
+                    mx = SN.Vector2.Max(mx, new(v.X, v.Y));
                     zmin[n.Mesh] = MathF.Min(zmin.TryGetValue(n.Mesh, out float z0) ? z0 : float.MaxValue, v.Z);
                 }
                 if (mn.X < mx.X)
@@ -343,12 +357,18 @@ public sealed partial class OpenFDGame
         // regroupement : l'emprise de l'un recouvre au moins 60 % de celle de l'autre
         int[] parent = Enumerable.Range(0, boxes.Count).ToArray();
         float mapArea = _session.Grid is { } gg ? gg.Width * gg.Height * OpenFD.Formats.Grid.CellSize * OpenFD.Formats.Grid.CellSize : float.MaxValue;
-        int Find(int i) { while (parent[i] != i) i = parent[i] = parent[parent[i]]; return i; }
+        int Find(int i)
+        {
+            while (parent[i] != i)
+                i = parent[i] = parent[parent[i]];
+            return i;
+        }
         float Area(SN.Vector2 a, SN.Vector2 b) => MathF.Max(0, b.X - a.X) * MathF.Max(0, b.Y - a.Y);
         for (int i = 0; i < boxes.Count; i++)
             for (int j = i + 1; j < boxes.Count; j++)
             {
-                (string name, SN.Vector2 min, SN.Vector2 max) a = boxes[i]; (string name, SN.Vector2 min, SN.Vector2 max) b = boxes[j];
+                (string name, SN.Vector2 min, SN.Vector2 max) a = boxes[i];
+                (string name, SN.Vector2 min, SN.Vector2 max) b = boxes[j];
                 // un toit nommé « …_ROOF » reste seul : il ne part que quand un pompier est dessous (pas dès qu'il est dans
                 // l'emprise de tout un groupe : la place de Maidan couvre presque toute la carte)
                 if (a.name.EndsWith("_ROOF", StringComparison.OrdinalIgnoreCase) || b.name.EndsWith("_ROOF", StringComparison.OrdinalIgnoreCase))
@@ -371,7 +391,9 @@ public sealed partial class OpenFDGame
                 _buildings.Add(new Building { Min = new(float.MaxValue), Max = new(float.MinValue) });
             }
             Building b = _buildings[id];
-            b.Min = SN.Vector2.Min(b.Min, boxes[i].min); b.Max = SN.Vector2.Max(b.Max, boxes[i].max); b.Nodes.Add(boxes[i].name);
+            b.Min = SN.Vector2.Min(b.Min, boxes[i].min);
+            b.Max = SN.Vector2.Max(b.Max, boxes[i].max);
+            b.Nodes.Add(boxes[i].name);
             if (zmin.TryGetValue(boxes[i].name, out float bz))
                 b.MinZ = MathF.Min(b.MinZ, bz);
             _nodeBuilding[boxes[i].name] = id;
@@ -386,11 +408,14 @@ public sealed partial class OpenFDGame
         Formats.Mesh m = a.Mesh;
         if (m.VertexCount == 0)
             return null;
-        SN.Vector2 mn = new(float.MaxValue), mx = new(float.MinValue); float zmin = float.MaxValue;
+        SN.Vector2 mn = new(float.MaxValue), mx = new(float.MinValue);
+        float zmin = float.MaxValue;
         for (int i = 0; i < m.VertexCount; i++)
         {
             SN.Vector3 v = SN.Vector3.Transform(new SN.Vector3(m.Positions[3 * i], m.Positions[3 * i + 1], m.Positions[3 * i + 2]), w);
-            mn = SN.Vector2.Min(mn, new(v.X, v.Y)); mx = SN.Vector2.Max(mx, new(v.X, v.Y)); zmin = MathF.Min(zmin, v.Z);
+            mn = SN.Vector2.Min(mn, new(v.X, v.Y));
+            mx = SN.Vector2.Max(mx, new(v.X, v.Y));
+            zmin = MathF.Min(zmin, v.Z);
         }
         SN.Vector2 c = (mn + mx) / 2;
         float ground = _session.Units.GroundZ(c);

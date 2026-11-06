@@ -27,8 +27,11 @@ public sealed class VideoScreen : IDisposable
 
     private VideoScreen(GraphicsDevice gd, VideoDecoder dec, bool loop, float volume)
     {
-        _gd = gd; _dec = dec; Loop = loop;
-        _rgba = new byte[dec.Width * dec.Height * 4]; _next = new byte[_rgba.Length];
+        _gd = gd;
+        _dec = dec;
+        Loop = loop;
+        _rgba = new byte[dec.Width * dec.Height * 4];
+        _next = new byte[_rgba.Length];
         _audio = new short[16384];
         Texture = new Texture2D(gd, dec.Width, dec.Height, false, SurfaceFormat.Color);
         if (dec.AudioRate > 0 && volume > 0)
@@ -38,7 +41,11 @@ public sealed class VideoScreen : IDisposable
                 _snd = new DynamicSoundEffectInstance(dec.AudioRate, dec.AudioChannels == 2 ? AudioChannels.Stereo : AudioChannels.Mono) { Volume = Math.Clamp(volume, 0, 1) };
                 _snd.Play();
             }
-            catch (Exception e) { Console.WriteLine("Son de la vidéo : " + e.Message); _snd = null; }
+            catch (Exception e)
+            {
+                Console.WriteLine("Son de la vidéo : " + e.Message);
+                _snd = null;
+            }
         }
         Pump(0);   // première image tout de suite
     }
@@ -78,7 +85,8 @@ public sealed class VideoScreen : IDisposable
                     break;
                 Buffer.BlockCopy(_next, 0, _rgba, 0, _rgba.Length);
                 Texture.SetData(_rgba);
-                _shownOnce = true; _haveNext = false;
+                _shownOnce = true;
+                _haveNext = false;
             }
             VideoDecoder.Item it = _dec.Next(_next, _audio, out double pts, out int n);
             if (it == VideoDecoder.Item.Image)
@@ -111,7 +119,11 @@ public sealed class VideoScreen : IDisposable
 
     public void Dispose()
     {
-        try { _snd?.Stop(); _snd?.Dispose(); } catch { }
+        try
+        {
+            _snd?.Stop();
+            _snd?.Dispose();
+        } catch { }
         Texture.Dispose();
         _dec.Dispose();
     }

@@ -83,7 +83,8 @@ public sealed class Font
                 int v = BitConverter.ToUInt16(d, img + 2 * i);
                 px[i] = new Color((byte)(((v >> 8) & 15) * 17), (byte)(((v >> 4) & 15) * 17), (byte)((v & 15) * 17), (byte)(((v >> 12) & 15) * 17));
             }
-            f.Texture = new Texture2D(gd, w, h); f.Texture.SetData(px);
+            f.Texture = new Texture2D(gd, w, h);
+            f.Texture.SetData(px);
             return f;
         }
         catch { return null; }

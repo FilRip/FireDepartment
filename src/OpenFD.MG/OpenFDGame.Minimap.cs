@@ -11,12 +11,14 @@ namespace OpenFD.MG;
 // Clic gauche (ou glisser) : la vue va à cet endroit ; clic droit : les unités choisies y vont.
 public sealed partial class OpenFDGame
 {
-    private Texture2D? _miniTex; private Rectangle _miniSrc;   // image et partie utile (la carte occupe le haut à gauche de l'image)
+    private Texture2D? _miniTex;
+    private Rectangle _miniSrc;   // image et partie utile (la carte occupe le haut à gauche de l'image)
     private bool _dragMini;
 
     private void LoadMinimap()
     {
-        _miniTex?.Dispose(); _miniTex = null;
+        _miniTex?.Dispose();
+        _miniTex = null;
         string? name = _session.MissionConfig.Get("MISSION", "Minimap")?.Trim('"', ' ');
         if (string.IsNullOrEmpty(name) || _assets.Texture(_mission, name) is not { } bytes || Tex.DecodeColors(bytes) is not { } img)
             return;
@@ -81,7 +83,8 @@ public sealed partial class OpenFDGame
     {
         if (!MiniVisible)
             return null;
-        (float sx, float sy) = Fb(winX, winY); (float x, float y, float w, float h) r = MiniRect();
+        (float sx, float sy) = Fb(winX, winY);
+        (float x, float y, float w, float h) r = MiniRect();
         if (sx < r.x || sy < r.y || sx > r.x + r.w || sy > r.y + r.h)
             return null;
         return new((sx - r.x) / r.w * _gridW, (1 - (sy - r.y) / r.h) * _gridH);
@@ -91,7 +94,8 @@ public sealed partial class OpenFDGame
     {
         if (!MiniVisible)
             return;
-        (float x, float y, float w, float h) r = MiniRect(); float px = MathF.Max(1, _scale), b = 3 * _scale;
+        (float x, float y, float w, float h) r = MiniRect();
+        float px = MathF.Max(1, _scale), b = 3 * _scale;
         _ui.Begin();
         _ui.Rect(r.x - b, r.y - b, r.w + 2 * b, r.h + 2 * b, new SN.Vector4(0.09f, 0.09f, 0.11f, 0.9f));
         _ui.End();
@@ -114,14 +118,16 @@ public sealed partial class OpenFDGame
         // civils : inconscients en rouge, conscients en blanc
         foreach (Civilian c in _session.Units.Civilians.Where(c => !c.Hidden && (c.State == CivilianState.Conscious || c.State == CivilianState.Unconscious)))
         {
-            SN.Vector2 p = MiniPos(c.Position.X, c.Position.Y); float s = 2.5f * px;
+            SN.Vector2 p = MiniPos(c.Position.X, c.Position.Y);
+            float s = 2.5f * px;
             _ui.Rect(p.X - s, p.Y - s, 2 * s, 2 * s, new SN.Vector4(0, 0, 0, 0.8f));
             _ui.Rect(p.X - s + px, p.Y - s + px, 2 * s - 2 * px, 2 * s - 2 * px, c.State == CivilianState.Unconscious ? new SN.Vector4(1, 0.2f, 0.2f, 1) : new SN.Vector4(0.95f, 0.95f, 0.95f, 1));   // conscients en blanc (le vert est aux pompiers au repos)
         }
         // bouches d'incendie : carrés bleus
         foreach (SupplyPoint sp in _session.Units.Supplies)
         {
-            SN.Vector2 p = MiniPos(sp.Position.X, sp.Position.Y); float s = 2f * px;
+            SN.Vector2 p = MiniPos(sp.Position.X, sp.Position.Y);
+            float s = 2f * px;
             _ui.Rect(p.X - s - px, p.Y - s - px, 2 * s + 2 * px, 2 * s + 2 * px, new SN.Vector4(0, 0, 0, 0.8f));
             _ui.Rect(p.X - s, p.Y - s, 2 * s, 2 * s, new SN.Vector4(0.2f, 0.5f, 1f, 1));
         }
@@ -129,7 +135,8 @@ public sealed partial class OpenFDGame
         // pompiers en carré, véhicules en rectangle (deux carrés côte à côte) ; celles choisies entourées de blanc
         foreach (Unit u in _session.Units.Active)
         {
-            SN.Vector2 p = MiniPos(u.Position.X, u.Position.Y); float s = 2.5f * px, hw = u.IsVehicle ? 2 * s : s, hh = s;
+            SN.Vector2 p = MiniPos(u.Position.X, u.Position.Y);
+            float s = 2.5f * px, hw = u.IsVehicle ? 2 * s : s, hh = s;
             if (_sel.Contains(u))
                 _ui.Rect(p.X - hw - px, p.Y - hh - px, 2 * hw + 2 * px, 2 * hh + 2 * px, new SN.Vector4(1, 1, 1, 1));
             else
@@ -144,7 +151,8 @@ public sealed partial class OpenFDGame
             foreach (MissionHost.Objective o in host.Objectives.Where(o => o.Status == 1))
                 foreach ((float ox, float oy) in o.Positions)
                 {
-                    SN.Vector2 p = MiniPos(ox, oy); float rr = 7 * px;
+                    SN.Vector2 p = MiniPos(ox, oy);
+                    float rr = 7 * px;
                     _ui.Disc(p.X, p.Y, rr + px, new SN.Vector4(0, 0, 0, 0.8f));
                     _ui.Disc(p.X, p.Y, rr, new SN.Vector4(0.95f, 0.95f, 0.95f, 0.95f));
                     _ui.Text(p.X - _ui.Measure("i") / 2, p.Y - _ui.LineHeight / 2, "i", new SN.Vector4(0.1f, 0.1f, 0.1f, 1));
@@ -154,7 +162,8 @@ public sealed partial class OpenFDGame
         SN.Vector4 yellow = new SN.Vector4(1f, 0.92f, 0.2f, 0.95f);
         for (int i = 0; i < 4; i++)
         {
-            SN.Vector2 a = MiniPos(corners[i].X, corners[i].Y); SN.Vector2 c = MiniPos(corners[(i + 1) % 4].X, corners[(i + 1) % 4].Y);
+            SN.Vector2 a = MiniPos(corners[i].X, corners[i].Y);
+            SN.Vector2 c = MiniPos(corners[(i + 1) % 4].X, corners[(i + 1) % 4].Y);
             _ui.Line(a.X, a.Y, c.X, c.Y, yellow, 1.5f * px);
         }
         _ui.End();
@@ -174,7 +183,8 @@ public sealed partial class OpenFDGame
 
     private (float x, float y, float s) ObjButton()
     {
-        (float x, float y, float w, float h) r = MiniRect(); float s = 32 * _scale;
+        (float x, float y, float w, float h) r = MiniRect();
+        float s = 32 * _scale;
         return (r.x, r.y - s - 8 * _scale, s);
     }
 
@@ -199,7 +209,8 @@ public sealed partial class OpenFDGame
     {
         if (!MiniVisible || Host is not { } h || h.Objectives.Count == 0)
             return false;
-        (float sx, float sy) = Fb(winX, winY); (float x, float y, float s) = ObjButton();
+        (float sx, float sy) = Fb(winX, winY);
+        (float x, float y, float s) = ObjButton();
         if (sx < x || sy < y || sx > x + s * IconW / IconH || sy > y + s)
             return false;
         _showObjectives = !_showObjectives;
@@ -213,8 +224,10 @@ public sealed partial class OpenFDGame
         if (!SN.Matrix4x4.Invert(_viewProj, out SN.Matrix4x4 inv))
             return new(_target.X, _target.Y);
         float nx = sx / _fbW * 2 - 1, ny = 1 - sy / _fbH * 2;
-        SN.Vector4 a = SN.Vector4.Transform(new SN.Vector4(nx, ny, 0, 1), inv); SN.Vector4 b = SN.Vector4.Transform(new SN.Vector4(nx, ny, 1, 1), inv);
-        SN.Vector3 o = new SN.Vector3(a.X, a.Y, a.Z) / a.W; SN.Vector3 d = new SN.Vector3(b.X, b.Y, b.Z) / b.W - o;
+        SN.Vector4 a = SN.Vector4.Transform(new SN.Vector4(nx, ny, 0, 1), inv);
+        SN.Vector4 b = SN.Vector4.Transform(new SN.Vector4(nx, ny, 1, 1), inv);
+        SN.Vector3 o = new SN.Vector3(a.X, a.Y, a.Z) / a.W;
+        SN.Vector3 d = new SN.Vector3(b.X, b.Y, b.Z) / b.W - o;
         float far = 4 * MathF.Max(_gridW, _gridH);
         if (d.Z < -1e-6f)
         {
@@ -245,7 +258,11 @@ public sealed partial class OpenFDGame
         return true;
     }
 
-    private void MiniLook(SN.Vector2 w) { _target.X = w.X; _target.Y = w.Y; }
+    private void MiniLook(SN.Vector2 w)
+    {
+        _target.X = w.X;
+        _target.Y = w.Y;
+    }
 
     // ---- bouton « flairer » du maître-chien (ActionIcons.png, case x 128, y 64, 32×32), à droite de la mini-carte ----
     private float SenseButtonSize => 40 * _scale;
@@ -286,7 +303,8 @@ public sealed partial class OpenFDGame
     {
         if (!SenseButtonShown)
             return false;
-        (float sx, float sy) = Fb(winX, winY); (float x, float y, float s) = SenseButton();
+        (float sx, float sy) = Fb(winX, winY);
+        (float x, float y, float s) = SenseButton();
         if (sx < x || sy < y || sx > x + s || sy > y + s)
             return false;
         foreach (Unit u in _sel.Where(u => u.IsDog && !u.Unconscious && !u.OnBoard).ToList())

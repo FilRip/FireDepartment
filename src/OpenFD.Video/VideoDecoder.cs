@@ -24,9 +24,14 @@ public sealed class VideoDecoder : IDisposable
 
     private VideoDecoder(IntPtr h, string path)
     {
-        _h = h; _path = path;
-        Width = Native.fv_width(h); Height = Native.fv_height(h); Fps = Native.fv_fps(h); Duration = Native.fv_duration(h);
-        AudioRate = Native.fv_audio_rate(h); AudioChannels = Native.fv_audio_channels(h);
+        _h = h;
+        _path = path;
+        Width = Native.fv_width(h);
+        Height = Native.fv_height(h);
+        Fps = Native.fv_fps(h);
+        Duration = Native.fv_duration(h);
+        AudioRate = Native.fv_audio_rate(h);
+        AudioChannels = Native.fv_audio_channels(h);
     }
 
     public static VideoDecoder? Open(string path)
@@ -53,7 +58,12 @@ public sealed class VideoDecoder : IDisposable
         }
     }
 
-    private static byte[] Utf8(string s) { byte[] b = Encoding.UTF8.GetBytes(s); Array.Resize(ref b, b.Length + 1); return b; }
+    private static byte[] Utf8(string s)
+    {
+        byte[] b = Encoding.UTF8.GetBytes(s);
+        Array.Resize(ref b, b.Length + 1);
+        return b;
+    }
 
     public enum Item { End = 0, Image = 1, Sound = 2 }
 
@@ -63,14 +73,17 @@ public sealed class VideoDecoder : IDisposable
     /// </summary>
     public unsafe Item Next(byte[] rgba, short[] audio, out double pts, out int samples)
     {
-        pts = 0; samples = 0;
+        pts = 0;
+        samples = 0;
         if (_h == IntPtr.Zero)
             return Item.End;
         fixed (byte* p = rgba) fixed (short* a = audio)
         {
-            double t; int n;
+            double t;
+            int n;
             int r = Native.fv_next(_h, p, &t, a, audio.Length, &n);
-            pts = t; samples = n;
+            pts = t;
+            samples = n;
             return r == 1 ? Item.Image : r == 2 ? Item.Sound : Item.End;
         }
     }

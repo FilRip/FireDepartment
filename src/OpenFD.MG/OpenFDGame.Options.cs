@@ -43,7 +43,8 @@ public sealed partial class OpenFDGame
             throw new FileNotFoundException("Police du jeu introuvable : Data\\Fonte\\font18.fnt");
         }
         _font?.Texture?.Dispose();
-        _font = f; _ui.Font = f;
+        _font = f;
+        _ui.Font = f;
     }
     private string? _fontLang = "?";
 
@@ -112,7 +113,8 @@ public sealed partial class OpenFDGame
         if (down && !_altEnterDown)
         {
             _settings.Fullscreen = !_settings.Fullscreen;
-            ApplyResolution(); _settings.Save();
+            ApplyResolution();
+            _settings.Save();
         }
         _altEnterDown = down;
         if (down)
@@ -151,14 +153,19 @@ public sealed partial class OpenFDGame
     /// <summary>Réglages de jeu (Gameplay) : ceux du joueur, ou ceux du serveur pendant une partie en réseau.</summary>
     private void ApplyGameplay(GameplaySettings gp)
     {
-        UnitManager.HeatFactor = gp.HeatFactor; UnitManager.SmokeFactor = gp.SmokeFactor; UnitManager.AmbulanceHeal = gp.AmbulanceHeal;
-        UnitManager.ReviveStamina = Math.Clamp(gp.ReviveStamina, 0.05f, 1f); UnitManager.VehicleFireFactor = gp.VehicleFireFactor;
-        UnitManager.AutoAttackRange = Math.Clamp(gp.AutoAttackRange, 1f, 10f); UnitManager.AttackBackOff = Math.Clamp(gp.AttackBackOff, 0.1f, 1f);
+        UnitManager.HeatFactor = gp.HeatFactor;
+        UnitManager.SmokeFactor = gp.SmokeFactor;
+        UnitManager.AmbulanceHeal = gp.AmbulanceHeal;
+        UnitManager.ReviveStamina = Math.Clamp(gp.ReviveStamina, 0.05f, 1f);
+        UnitManager.VehicleFireFactor = gp.VehicleFireFactor;
+        UnitManager.AutoAttackRange = Math.Clamp(gp.AutoAttackRange, 1f, 10f);
+        UnitManager.AttackBackOff = Math.Clamp(gp.AttackBackOff, 0.1f, 1f);
         UnitManager.StaminaLoss = Math.Clamp(gp.StaminaLoss, 0f, 5f);
         ExplosionSystem.ObjectiveTimeFactor = Math.Clamp(gp.ObjectiveTimeFactor, 0.1f, 20f);
         UnitManager.CarrySpeed = Math.Clamp(gp.CarrySpeed, 0.2f, 1f);
         _arrowShift = Math.Clamp(gp.ArrowShiftSpeed, 1f, 5f);
-        _flameFps = Math.Clamp(gp.FlameSpeed, 0.5f, 60f); _flameFpsVar = Math.Clamp(gp.FlameSpeedVariation, 0f, 60f);
+        _flameFps = Math.Clamp(gp.FlameSpeed, 0.5f, 60f);
+        _flameFpsVar = Math.Clamp(gp.FlameSpeedVariation, 0f, 60f);
     }
 
     // ---- textes des menus : ceux du jeu (Data\Localize\Lang_XXX\Interface_XXX.loc), sinon le texte français donné ----
@@ -250,13 +257,20 @@ public sealed partial class OpenFDGame
             OpenMenu();
             return;
         }
-        _menu = true; _inGame = true; _screen = 3; _pauseIndex = 0; _savedNote = false;
+        _menu = true;
+        _inGame = true;
+        _screen = 3;
+        _pauseIndex = 0;
+        _savedNote = false;
         _audio?.PauseAll(true);
     }
 
     private void ClosePause()
     {
-        _menu = false; _inGame = false; _paused = false; _settings.Save();
+        _menu = false;
+        _inGame = false;
+        _paused = false;
+        _settings.Save();
         _audio?.PauseAll(false);
     }
 
@@ -345,10 +359,20 @@ public sealed partial class OpenFDGame
     private List<Row> MainRows() => new()
     {
         new(L("&Campaign", "Campagne"), null, true, _ => OpenCampaign()),
-        new("Autres missions", null, true, _ => { EnsureMissionList(); _screen = 5; _menuNote = null; }),
+        new("Autres missions", null, true, _ =>
+        {
+            EnsureMissionList();
+            _screen = 5;
+            _menuNote = null;
+        }),
         new(L("&Multiplayer", "Multijoueur"), null, true, _ => OpenMultiplayer()),
         new(L("&LoadSavedGame", "Charger une sauvegarde"), null, true, _ => OpenLoadScreen(0)),
-        new(L("&Options", "Options"), null, true, _ => { _optionsFrom = 0; _screen = 2; _optIndex = 0; }),
+        new(L("&Options", "Options"), null, true, _ =>
+        {
+            _optionsFrom = 0;
+            _screen = 2;
+            _optIndex = 0;
+        }),
         new(L("&Credits", "Générique"), null, VideoPath("credits.bik") != null, _ => StartCredits()),
         new(L("&Exit", "Quitter"), null, true, _ => Exit()),
     };
@@ -358,9 +382,24 @@ public sealed partial class OpenFDGame
         new(L("&ResumeGame", "Reprendre"), null, true, _ => ClosePause()),
         new(_savedNote ? L("&Save", "Sauver") + " - OK" : L("&Save", "Sauver"), null, !_ended, _ => { _savedNote = SaveGame() != null; }),
         new(L("&Load", "Charger"), null, true, _ => OpenLoadScreen(3)),
-        new(L("&Options", "Options"), null, true, _ => { _optionsFrom = 3; _screen = 2; _optIndex = 0; }),
-        new(L("&RestartMission", "Recommencer la mission"), null, true, _ => { _inGame = false; _audio?.PauseAll(false); LoadMission(_mission, _difficulty); }),
-        new(L("&AbortMission", "Abandonner la mission"), null, true, _ => { _inGame = false; _audio?.PauseAll(false); OpenMenu(); }),
+        new(L("&Options", "Options"), null, true, _ =>
+        {
+            _optionsFrom = 3;
+            _screen = 2;
+            _optIndex = 0;
+        }),
+        new(L("&RestartMission", "Recommencer la mission"), null, true, _ =>
+        {
+            _inGame = false;
+            _audio?.PauseAll(false);
+            LoadMission(_mission, _difficulty);
+        }),
+        new(L("&AbortMission", "Abandonner la mission"), null, true, _ =>
+        {
+            _inGame = false;
+            _audio?.PauseAll(false);
+            OpenMenu();
+        }),
         new(L("&ExitGame", "Quitter le jeu"), null, true, _ => Exit()),
     };
 
@@ -369,14 +408,24 @@ public sealed partial class OpenFDGame
     {
         new(L("&ResumeGame", "Reprendre"), null, true, _ => ClosePause()),
         new(_savedNote ? L("&Save", "Sauver") + " - OK" : L("&Save", "Sauver"), null, !_ended, _ => { _savedNote = SaveGame() != null; }),
-        new(L("&Options", "Options"), null, true, _ => { _optionsFrom = 3; _screen = 2; _optIndex = 0; }),
+        new(L("&Options", "Options"), null, true, _ =>
+        {
+            _optionsFrom = 3;
+            _screen = 2;
+            _optIndex = 0;
+        }),
         new(L("&AbortMission", "Abandonner la mission"), null, true, _ => LeaveNetGame()),
-        new(L("&ExitGame", "Quitter le jeu"), null, true, _ => { LeaveNetwork(); Exit(); }),
+        new(L("&ExitGame", "Quitter le jeu"), null, true, _ =>
+        {
+            LeaveNetwork();
+            Exit();
+        }),
     };
 
     private List<Row> OptionRows()
     {
-        List<string> langs = new List<string> { "" }; langs.AddRange(Localization.Available(_files.DataDir));
+        List<string> langs = new List<string> { "" };
+        langs.AddRange(Localization.Available(_files.DataDir));
         string LangName(string c) => c == "" ? O("Auto") : LangNames.TryGetValue(c, out string? n) ? $"{n} ({c})" : c;
         T Cycle<T>(T[] arr, T cur, int d)
         {
@@ -385,24 +434,84 @@ public sealed partial class OpenFDGame
                 i = 0;
             return arr[((i + d) % arr.Length + arr.Length) % arr.Length];
         }
-        void Changed() { ApplySettings(); _settings.Save(); }
+        void Changed()
+        {
+            ApplySettings();
+            _settings.Save();
+        }
         string YN(bool b) => b ? O("Yes") : O("No");
         string[] texNames = new[] { O("High"), O("Medium"), O("Low") };
         return new()
         {
-            new(O("InvertX"), YN(_settings.InvertX), true, _ => { _settings.InvertX = !_settings.InvertX; Changed(); }),
-            new(O("InvertY"), YN(_settings.InvertY), true, _ => { _settings.InvertY = !_settings.InvertY; Changed(); }),
-            new(L("&VolumeMaster", "Volume général"), $"{_settings.Volume} %", true, d => { _settings.Volume = Math.Clamp(_settings.Volume + 10 * d, 0, 100); Changed(); _audio?.Play("VOCAL_SELECTION1"); }),
-            new(L("&VolumeInterface", "Volume interface et voix"), $"{_settings.VolumeVoice} %", true, d => { _settings.VolumeVoice = Math.Clamp(_settings.VolumeVoice + 10 * d, 0, 100); Changed(); _audio?.Play("VOCAL_SELECTION1"); }),
-            new(L("&VolumeEffects", "Volume des effets"), $"{_settings.VolumeEffects} %", true, d => { _settings.VolumeEffects = Math.Clamp(_settings.VolumeEffects + 10 * d, 0, 100); Changed(); _audio?.PlayAny(new[] { "EXPLOSION_GAS_TANK_01_01", "SC_USE_GENERIC" }); }),
-            new(L("&VolumeAmbiance", "Volume d'ambiance"), $"{_settings.VolumeMusic} %", true, d => { _settings.VolumeMusic = Math.Clamp(_settings.VolumeMusic + 10 * d, 0, 100); Changed(); }),
-            new(O("Brightness"), $"{_settings.Brightness} %", true, d => { _settings.Brightness = Math.Clamp(_settings.Brightness + 10 * d, 40, 200); Changed(); }),
-            new(O("Resolution"), _settings.Resolution == "" ? O("Auto").Split('(')[0].Trim() : _settings.Resolution.Replace("x", " × "), true, d => { List<string> rs = Resolutions(); _settings.Resolution = rs[((rs.IndexOf(_settings.Resolution) + d) % rs.Count + rs.Count) % rs.Count]; Changed(); }),
-            new(O("Fullscreen"), YN(_settings.Fullscreen), true, _ => { _settings.Fullscreen = !_settings.Fullscreen; Changed(); }),
-            new(O("Textures"), texNames[Math.Max(0, Array.IndexOf(TexQ, _settings.Textures))], true, d => { _settings.Textures = Cycle(TexQ, _settings.Textures, d); Changed(); }),
-            new(O("Language"), LangName(_settings.Language), true, d => { _settings.Language = Cycle(langs.ToArray(), _settings.Language, d); Changed(); }),
-            new(O("Nationality"), O(NatKeys[Math.Max(0, Array.IndexOf(Nats, _settings.Nationality))]), true, d => { _settings.Nationality = Cycle(Nats, _settings.Nationality, d); Changed(); }),
-            new(L("&Back", "Retour"), null, true, _ => { _screen = _optionsFrom; _settings.Save(); }),
+            new(O("InvertX"), YN(_settings.InvertX), true, _ =>
+            {
+                _settings.InvertX = !_settings.InvertX;
+                Changed();
+            }),
+            new(O("InvertY"), YN(_settings.InvertY), true, _ =>
+            {
+                _settings.InvertY = !_settings.InvertY;
+                Changed();
+            }),
+            new(L("&VolumeMaster", "Volume général"), $"{_settings.Volume} %", true, d =>
+            {
+                _settings.Volume = Math.Clamp(_settings.Volume + 10 * d, 0, 100);
+                Changed();
+                _audio?.Play("VOCAL_SELECTION1");
+            }),
+            new(L("&VolumeInterface", "Volume interface et voix"), $"{_settings.VolumeVoice} %", true, d =>
+            {
+                _settings.VolumeVoice = Math.Clamp(_settings.VolumeVoice + 10 * d, 0, 100);
+                Changed();
+                _audio?.Play("VOCAL_SELECTION1");
+            }),
+            new(L("&VolumeEffects", "Volume des effets"), $"{_settings.VolumeEffects} %", true, d =>
+            {
+                _settings.VolumeEffects = Math.Clamp(_settings.VolumeEffects + 10 * d, 0, 100);
+                Changed();
+                _audio?.PlayAny(new[] { "EXPLOSION_GAS_TANK_01_01", "SC_USE_GENERIC" });
+            }),
+            new(L("&VolumeAmbiance", "Volume d'ambiance"), $"{_settings.VolumeMusic} %", true, d =>
+            {
+                _settings.VolumeMusic = Math.Clamp(_settings.VolumeMusic + 10 * d, 0, 100);
+                Changed();
+            }),
+            new(O("Brightness"), $"{_settings.Brightness} %", true, d =>
+            {
+                _settings.Brightness = Math.Clamp(_settings.Brightness + 10 * d, 40, 200);
+                Changed();
+            }),
+            new(O("Resolution"), _settings.Resolution == "" ? O("Auto").Split('(')[0].Trim() : _settings.Resolution.Replace("x", " × "), true, d =>
+            {
+                List<string> rs = Resolutions();
+                _settings.Resolution = rs[((rs.IndexOf(_settings.Resolution) + d) % rs.Count + rs.Count) % rs.Count];
+                Changed();
+            }),
+            new(O("Fullscreen"), YN(_settings.Fullscreen), true, _ =>
+            {
+                _settings.Fullscreen = !_settings.Fullscreen;
+                Changed();
+            }),
+            new(O("Textures"), texNames[Math.Max(0, Array.IndexOf(TexQ, _settings.Textures))], true, d =>
+            {
+                _settings.Textures = Cycle(TexQ, _settings.Textures, d);
+                Changed();
+            }),
+            new(O("Language"), LangName(_settings.Language), true, d =>
+            {
+                _settings.Language = Cycle(langs.ToArray(), _settings.Language, d);
+                Changed();
+            }),
+            new(O("Nationality"), O(NatKeys[Math.Max(0, Array.IndexOf(Nats, _settings.Nationality))]), true, d =>
+            {
+                _settings.Nationality = Cycle(Nats, _settings.Nationality, d);
+                Changed();
+            }),
+            new(L("&Back", "Retour"), null, true, _ =>
+            {
+                _screen = _optionsFrom;
+                _settings.Save();
+            }),
         };
     }
 
@@ -472,7 +581,9 @@ public sealed partial class OpenFDGame
         else
             DrawMenuBack();
         (float lx, float ly, float lw, float lh) = ScreenLayout(rows.Count);
-        SN.Vector4 accent = new SN.Vector4(1f, 0.48f, 0.18f, 1); SN.Vector4 txt = new SN.Vector4(0.93f, 0.92f, 0.9f, 1); SN.Vector4 muted = new SN.Vector4(0.5f, 0.5f, 0.5f, 1);
+        SN.Vector4 accent = new SN.Vector4(1f, 0.48f, 0.18f, 1);
+        SN.Vector4 txt = new SN.Vector4(0.93f, 0.92f, 0.9f, 1);
+        SN.Vector4 muted = new SN.Vector4(0.5f, 0.5f, 0.5f, 1);
         string title = _screen == 0 ? "Open Fire Department" : _screen == 3 ? L("&GameInPause", "Jeu en pause") : L("&Options", "Options");
         float ts = _scale * 2f;
         if (_screen != 0)   // le titre du jeu est déjà sur l'image de fond
@@ -484,7 +595,8 @@ public sealed partial class OpenFDGame
         _ui.Rect(lx - 12 * _scale, ly - 8 * _scale, lw + 24 * _scale, rows.Count * lh + 16 * _scale, new SN.Vector4(0.07f, 0.07f, 0.09f, 0.78f));
         for (int i = 0; i < rows.Count; i++)
         {
-            Row r = rows[i]; float y = ly + i * lh, ty = y + (lh - _ui.LineHeight) / 2 - 2 * _scale;
+            Row r = rows[i];
+            float y = ly + i * lh, ty = y + (lh - _ui.LineHeight) / 2 - 2 * _scale;
             if (i == idx && r.Enabled)
                 _ui.Rect(lx, y, lw, lh - 4 * _scale, new SN.Vector4(0.85f, 0.35f, 0.1f, 0.55f));
             if (r.Value == null)

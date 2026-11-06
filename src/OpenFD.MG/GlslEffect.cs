@@ -17,9 +17,12 @@ public static class GlslEffect
     public static Effect Create(GraphicsDevice gd, string vs, string ps, Param[] parameters, string[] textures,
         (string name, VertexElementUsage usage, int index)[] attributes)
     {
-        MemoryStream ms = new MemoryStream(); BinaryWriter w = new BinaryWriter(ms);
+        MemoryStream ms = new MemoryStream();
+        BinaryWriter w = new BinaryWriter(ms);
         const int Signature = 0x5846474D;   // « MGFX »
-        w.Write(Signature); w.Write((byte)10); w.Write((byte)0);
+        w.Write(Signature);
+        w.Write((byte)10);
+        w.Write((byte)0);
         w.Write((vs + ps).GetHashCode() ^ 0x0FD3);
 
         // tampons de constantes : 0 = sommets, 1 = pixels
@@ -28,7 +31,9 @@ public static class GlslEffect
         w.Write(2);
         foreach ((string? name, List<(Param p, int i)>? list) in new[] { ("vs_uniforms_vec4", vsParams), ("ps_uniforms_vec4", psParams) })
         {
-            w.Write(name); w.Write((short)(16 * Math.Max(1, list.Sum(x => x.p.Vec4Count)))); w.Write(list.Count);
+            w.Write(name);
+            w.Write((short)(16 * Math.Max(1, list.Sum(x => x.p.Vec4Count))));
+            w.Write(list.Count);
             int off = 0;
             foreach ((Param? p, int i) in list)
             {
@@ -48,19 +53,42 @@ public static class GlslEffect
         foreach (Param p in parameters)
         {
             bool m = p.Vec4Count == 4;
-            w.Write((byte)(m ? 2 : 1)); w.Write((byte)3); w.Write(p.Name); w.Write(""); w.Write(0);
-            w.Write((byte)(m ? 4 : 1)); w.Write((byte)4); w.Write(0); w.Write(0);
+            w.Write((byte)(m ? 2 : 1));
+            w.Write((byte)3);
+            w.Write(p.Name);
+            w.Write("");
+            w.Write(0);
+            w.Write((byte)(m ? 4 : 1));
+            w.Write((byte)4);
+            w.Write(0);
+            w.Write(0);
             for (int i = 0; i < 4 * p.Vec4Count; i++)
                 w.Write(0f);
         }
         foreach (string t in textures)
         {
-            w.Write((byte)3); w.Write((byte)6); w.Write(t); w.Write(""); w.Write(0);
-            w.Write((byte)0); w.Write((byte)0); w.Write(0); w.Write(0);
+            w.Write((byte)3);
+            w.Write((byte)6);
+            w.Write(t);
+            w.Write("");
+            w.Write(0);
+            w.Write((byte)0);
+            w.Write((byte)0);
+            w.Write(0);
+            w.Write(0);
         }
 
-        w.Write(1); w.Write("T0"); w.Write(0);
-        w.Write(1); w.Write("P0"); w.Write(0); w.Write(0); w.Write(1); w.Write(false); w.Write(false); w.Write(false);
+        w.Write(1);
+        w.Write("T0");
+        w.Write(0);
+        w.Write(1);
+        w.Write("P0");
+        w.Write(0);
+        w.Write(0);
+        w.Write(1);
+        w.Write(false);
+        w.Write(false);
+        w.Write(false);
         w.Write(Signature);
         return new Effect(gd, ms.ToArray());
     }
@@ -70,7 +98,8 @@ public static class GlslEffect
     {
         w.Write(vertex);
         byte[] code = Encoding.ASCII.GetBytes(glsl);
-        w.Write(code.Length); w.Write(code);
+        w.Write(code.Length);
+        w.Write(code);
         w.Write((byte)samplers.Length);
         foreach ((string? name, int slot, int param) in samplers)
         {
@@ -81,7 +110,8 @@ public static class GlslEffect
             w.Write(name);
             w.Write((byte)param);
         }
-        w.Write((byte)1); w.Write(cbuffer);
+        w.Write((byte)1);
+        w.Write(cbuffer);
         w.Write((byte)attributes.Length);
         foreach ((string? name, VertexElementUsage usage, int index) in attributes)
         {

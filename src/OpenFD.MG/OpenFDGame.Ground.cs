@@ -79,10 +79,12 @@ public sealed partial class OpenFDGame
         if (_session.Grid is not { } g)
             return;
         int n = g.Width * g.Height;
-        float[] surf = new float[n]; Array.Fill(surf, float.NaN);
+        float[] surf = new float[n];
+        Array.Fill(surf, float.NaN);
         // plancher le plus bas des autres maillages (pièces des bâtiments) : sert là où aucun maillage du sol ne passe
         // (Eurotunnel : le sol des bâtiments est 4 m au-dessus de la hauteur de la grille)
-        float[] low = new float[n]; Array.Fill(low, float.NaN);
+        float[] low = new float[n];
+        Array.Fill(low, float.NaN);
         HashSet<int> wallCells = new HashSet<int>();   // cases traversées par un mur du décor à hauteur d'homme (cloisons)
         const float Cell = OpenFD.Formats.Grid.CellSize;
         string? dbg = Environment.GetEnvironmentVariable("FD3_SOL");
@@ -96,22 +98,27 @@ public sealed partial class OpenFDGame
             for (int t = 0; t + 2 < idx.Length; t += 3)
             {
                 SN.Vector3 P(int i) => SN.Vector3.Transform(new SN.Vector3(m.Positions[3 * i], m.Positions[3 * i + 1], m.Positions[3 * i + 2]), node.World);
-                SN.Vector3 a = P((int)idx[t]); SN.Vector3 b = P((int)idx[t + 1]); SN.Vector3 c = P((int)idx[t + 2]);
+                SN.Vector3 a = P((int)idx[t]);
+                SN.Vector3 b = P((int)idx[t + 1]);
+                SN.Vector3 c = P((int)idx[t + 2]);
                 SN.Vector3 nrm = SN.Vector3.Cross(b - a, c - a);
                 float len = nrm.Length();
                 if (len < 1e-3f)
                     continue;
                 if (!isGround && MathF.Abs(nrm.Z) / len < 0.25f)
                 {
-                    int before = wallCells.Count; string? probe = Environment.GetEnvironmentVariable("FD3_MUR");
+                    int before = wallCells.Count;
+                    string? probe = Environment.GetEnvironmentVariable("FD3_MUR");
                     if (probe != null)
                     {
-                        int[] pc = probe.Split(',').Select(int.Parse).ToArray(); HashSet<int> tmp = new HashSet<int>();
+                        int[] pc = probe.Split(',').Select(int.Parse).ToArray();
+                        HashSet<int> tmp = new HashSet<int>();
                         WallFace(g, a, b, c, tmp);
                         if (tmp.Contains(g.Index(pc[0], pc[1])))
                             Console.WriteLine($"mur case {pc[0]},{pc[1]} : {node.Mesh} ({a.X:0},{a.Y:0},{a.Z:0}) ({b.X:0},{b.Y:0},{b.Z:0}) ({c.X:0},{c.Y:0},{c.Z:0})");
                     }
-                    WallFace(g, a, b, c, wallCells); continue;   // mur : à hauteur d'homme ?
+                    WallFace(g, a, b, c, wallCells);
+                    continue;   // mur : à hauteur d'homme ?
                 }
                 if (MathF.Abs(nrm.Z) / len < 0.8f)
                     continue;   // seulement les faces presque horizontales
@@ -161,7 +168,10 @@ public sealed partial class OpenFDGame
         _session.Units.SetSurface(surf);
         if (Environment.GetEnvironmentVariable("FD3_SANS_CLOISONS") == null)
             _session.Units.AddWallCells(wallCells);
-        int raised = 0; for (int k = 0; k < n; k++) if (!float.IsNaN(surf[k]) && surf[k] > g.GroundHeight[k] + 20) raised++;
+        int raised = 0;
+        for (int k = 0; k < n; k++)
+            if (!float.IsNaN(surf[k]) && surf[k] > g.GroundHeight[k] + 20)
+                raised++;
         if (raised > 0)
             Console.WriteLine($"Sol : {raised} case(s) plus haute(s) que la grille (bitume, dalles)");
     }

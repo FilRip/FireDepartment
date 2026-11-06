@@ -22,7 +22,8 @@ public sealed partial class UnitManager
     /// <summary>Camion le plus proche de ce point, à portée de liaison ; null s'il n'y en a pas.</summary>
     private Unit? NearestTruck(Vector2 p, float range)
     {
-        Unit? best = null; float bd = range;
+        Unit? best = null;
+        float bd = range;
         foreach (Unit v in FeedTrucks())
         {
             float d = Vector2.Distance(p, new(v.Position.X, v.Position.Y));
@@ -54,7 +55,8 @@ public sealed partial class UnitManager
     /// <summary>Ordre d'arroser un feu donné à un canon : il arrose d'où il est si le feu est à portée, sinon il s'en approche.</summary>
     private void CanonAttack(Unit u, HotPoint h)
     {
-        Vector2 me = new Vector2(u.Position.X, u.Position.Y); Vector2 f = new Vector2(h.Position.X, h.Position.Y);
+        Vector2 me = new Vector2(u.Position.X, u.Position.Y);
+        Vector2 f = new Vector2(h.Position.X, h.Position.Y);
         float d = Vector2.Distance(me, f);
         if (d <= u.Nozzle!.RangeMax && d >= u.Nozzle.RangeMin)
         {

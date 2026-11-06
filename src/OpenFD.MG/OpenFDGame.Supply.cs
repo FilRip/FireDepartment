@@ -20,7 +20,8 @@ public sealed partial class OpenFDGame
         float px = MathF.Max(1, _scale);
         void Circle(SN.Vector3 c, float r, SN.Vector4 col)
         {
-            SN.Vector2? prev = null; const int N = 48;
+            SN.Vector2? prev = null;
+            const int N = 48;
             for (int i = 0; i <= N; i++)
             {
                 float a = i * MathF.Tau / N;
@@ -76,7 +77,8 @@ public sealed partial class OpenFDGame
     {
         if (_map || _session == null)
             return;
-        SN.Vector4 green = new SN.Vector4(0.25f, 1f, 0.35f, 0.95f); SN.Vector4 greenShade = new SN.Vector4(0, 0.15f, 0, 0.6f);
+        SN.Vector4 green = new SN.Vector4(0.25f, 1f, 0.35f, 0.95f);
+        SN.Vector4 greenShade = new SN.Vector4(0, 0.15f, 0, 0.6f);
         foreach (Unit v in _session.Units.Active.Where(u => u.IsVehicle && u.Nozzle is { InfiniteReserve: false } && !u.Moving))
         {
             SN.Vector2 vp = new SN.Vector2(v.Position.X, v.Position.Y);
@@ -92,7 +94,8 @@ public sealed partial class OpenFDGame
             }
         }
         // pompier « canon » : flèches bleues du camion qui l'alimente jusqu'à lui
-        SN.Vector4 blue = new SN.Vector4(0.3f, 0.6f, 1f, 0.95f); SN.Vector4 blueShade = new SN.Vector4(0, 0.05f, 0.2f, 0.6f);
+        SN.Vector4 blue = new SN.Vector4(0.3f, 0.6f, 1f, 0.95f);
+        SN.Vector4 blueShade = new SN.Vector4(0, 0.05f, 0.2f, 0.6f);
         foreach (Unit u in _session.Units.Active.Where(u => u.IsCanon && u.FeedTruck != null))
         {
             SN.Vector2 tp = new SN.Vector2(u.FeedTruck!.Position.X, u.FeedTruck.Position.Y), up = new SN.Vector2(u.Position.X, u.Position.Y);
@@ -127,11 +130,15 @@ public sealed partial class OpenFDGame
             }
             float z = zg + 15;
             // chevron : pointe vers l'arrivée
-            SN.Vector2 tip = c + dir * 30; SN.Vector2 side = new SN.Vector2(-dir.Y, dir.X) * 22; SN.Vector2 back = c - dir * 10;
+            SN.Vector2 tip = c + dir * 30;
+            SN.Vector2 side = new SN.Vector2(-dir.Y, dir.X) * 22;
+            SN.Vector2 back = c - dir * 10;
             if (Project(new(tip, z)) is not { } a || Project(new(back + side, z)) is not { } b || Project(new(back - side, z)) is not { } e)
                 continue;
-            _ui.Line(b.X, b.Y, a.X, a.Y, shade, 4 * px); _ui.Line(e.X, e.Y, a.X, a.Y, shade, 4 * px);
-            _ui.Line(b.X, b.Y, a.X, a.Y, color, 2.2f * px); _ui.Line(e.X, e.Y, a.X, a.Y, color, 2.2f * px);
+            _ui.Line(b.X, b.Y, a.X, a.Y, shade, 4 * px);
+            _ui.Line(e.X, e.Y, a.X, a.Y, shade, 4 * px);
+            _ui.Line(b.X, b.Y, a.X, a.Y, color, 2.2f * px);
+            _ui.Line(e.X, e.Y, a.X, a.Y, color, 2.2f * px);
         }
     }
 
@@ -145,7 +152,9 @@ public sealed partial class OpenFDGame
         if (_map || _session == null || _cineOn || _sel.Count == 0)
             return;
         _ringFx ??= new BasicEffect(GraphicsDevice) { LightingEnabled = false, VertexColorEnabled = true, TextureEnabled = false };
-        _ringFx.World = Matrix.Identity; _ringFx.View = Matrix.Identity; _ringFx.Projection = viewProj;
+        _ringFx.World = Matrix.Identity;
+        _ringFx.View = Matrix.Identity;
+        _ringFx.Projection = viewProj;
         const int N = 48;
         List<VertexPositionColor> v = new List<VertexPositionColor>();
         foreach (Unit u in _sel.Where(u => !u.OnBoard && !u.Hidden))
@@ -166,8 +175,12 @@ public sealed partial class OpenFDGame
                     float a0 = i * MathF.Tau / N, a1 = (i + 1) * MathF.Tau / N;
                     Vector3 i0 = new Vector3(c.X + MathF.Cos(a0) * r0, c.Y + MathF.Sin(a0) * r0, c.Z + dz), o0 = new Vector3(c.X + MathF.Cos(a0) * r1, c.Y + MathF.Sin(a0) * r1, c.Z + dz);
                     Vector3 i1 = new Vector3(c.X + MathF.Cos(a1) * r0, c.Y + MathF.Sin(a1) * r0, c.Z + dz), o1 = new Vector3(c.X + MathF.Cos(a1) * r1, c.Y + MathF.Sin(a1) * r1, c.Z + dz);
-                    v.Add(new(i0, col)); v.Add(new(o0, col)); v.Add(new(o1, col));
-                    v.Add(new(i0, col)); v.Add(new(o1, col)); v.Add(new(i1, col));
+                    v.Add(new(i0, col));
+                    v.Add(new(o0, col));
+                    v.Add(new(o1, col));
+                    v.Add(new(i0, col));
+                    v.Add(new(o1, col));
+                    v.Add(new(i1, col));
                 }
             }
             Band(r - 2.75f * px, r + 2.75f * px, 0, new Color(0, 0, 0, 120));
@@ -176,13 +189,16 @@ public sealed partial class OpenFDGame
         if (v.Count == 0)
             return;
         GraphicsDevice gd = GraphicsDevice;
-        gd.DepthStencilState = DepthStencilState.DepthRead; gd.BlendState = BlendState.NonPremultiplied; gd.RasterizerState = RasterizerState.CullNone;
+        gd.DepthStencilState = DepthStencilState.DepthRead;
+        gd.BlendState = BlendState.NonPremultiplied;
+        gd.RasterizerState = RasterizerState.CullNone;
         foreach (EffectPass pass in _ringFx.CurrentTechnique.Passes)
         {
             pass.Apply();
             gd.DrawUserPrimitives(PrimitiveType.TriangleList, v.ToArray(), 0, v.Count / 3);
         }
-        gd.DepthStencilState = DepthStencilState.Default; gd.BlendState = BlendState.Opaque;
+        gd.DepthStencilState = DepthStencilState.Default;
+        gd.BlendState = BlendState.Opaque;
     }
 
     // rayon du cercle d'un véhicule : un peu plus que la moitié de sa longueur (d'après son modèle)
@@ -203,7 +219,8 @@ public sealed partial class OpenFDGame
                 for (int i = 0; i < m.VertexCount; i++)
                 {
                     SN.Vector3 v = SN.Vector3.Transform(new SN.Vector3(m.Positions[3 * i], m.Positions[3 * i + 1], m.Positions[3 * i + 2]), part.World);
-                    mn = SN.Vector2.Min(mn, new(v.X, v.Y)); mx = SN.Vector2.Max(mx, new(v.X, v.Y));
+                    mn = SN.Vector2.Min(mn, new(v.X, v.Y));
+                    mx = SN.Vector2.Max(mx, new(v.X, v.Y));
                 }
             }
             if (mn.X < mx.X)

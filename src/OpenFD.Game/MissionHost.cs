@@ -64,14 +64,20 @@ public sealed class MissionHost : IScriptHost
     public List<(string key, bool success)> ObjectiveEvents { get; } = new();
 
     /// <summary>Fin forcée de la cinématique (le joueur la passe).</summary>
-    public void EndCinematic() { Cinematic = false; Subtitle = null; CameraOrders.Clear(); }
+    public void EndCinematic()
+    {
+        Cinematic = false;
+        Subtitle = null;
+        CameraOrders.Clear();
+    }
     public Dictionary<uint, bool> SwitchedStates { get; } = new();
     /// <summary>Objets du décor déplacés par le script (ENT_SetPosition : le train de l'Eurotunnel…).</summary>
     public Dictionary<uint, System.Numerics.Vector2> MovedObjects { get; } = new();
 
     public MissionHost(Level level, FireWorld fire)
     {
-        _level = level; _fire = fire;
+        _level = level;
+        _fire = fire;
         _byId = level.Objects.ToDictionary(o => o.Id);
         _byName = new(StringComparer.OrdinalIgnoreCase);
         foreach (LevelObject o in level.Objects)
@@ -212,7 +218,8 @@ public sealed class MissionHost : IScriptHost
             case "ENT_GETTYPE": return Value.I(_byId.TryGetValue((uint)V(0).AsInt, out LevelObject? t) ? (int)t.Kind : 0);
             case "ENT_GETNAME":
                 if (a.Count > 1)
-                    a[1].Set(Value.T(NameOf(V(0).AsInt))); return Value.T(NameOf(V(0).AsInt));
+                    a[1].Set(Value.T(NameOf(V(0).AsInt)));
+                return Value.T(NameOf(V(0).AsInt));
             case "ENT_GROUPGETNBENTITIES":
                 if (_groups.TryGetValue(V(0).AsInt, out List<long>? cg))
                     return Value.I(cg.Count);
@@ -242,7 +249,9 @@ public sealed class MissionHost : IScriptHost
                 // porte ou portail (interrupteurs de Jail : SW1_open → ENT_SwitchState(porte)) : ouverte ↔ fermée
                 if (Units?.Openings.FirstOrDefault(d => d.Id == (uint)V(0).AsInt) is { } sd && sd.State != OpeningState.Broken)
                     Units.SetOpeningState(sd, sd.State == OpeningState.Open ? OpeningState.Closed : OpeningState.Open);
-                SwitchedStates[(uint)V(0).AsInt] = !SwitchedStates.TryGetValue((uint)V(0).AsInt, out bool was) || !was; FireLog.Add($"{GameTime,6:0.0} ENT_SwitchState {NameOf(V(0).AsInt)}"); return Value.Zero;
+                SwitchedStates[(uint)V(0).AsInt] = !SwitchedStates.TryGetValue((uint)V(0).AsInt, out bool was) || !was;
+                FireLog.Add($"{GameTime,6:0.0} ENT_SwitchState {NameOf(V(0).AsInt)}");
+                return Value.Zero;
 
             // ---------- feu ----------
             case "FIR_HPENABLE":
@@ -292,16 +301,25 @@ public sealed class MissionHost : IScriptHost
                 foreach (HotPoint h in HotPointsOf(V(0).AsInt))
                     h.GrowthMultiplier = h.Class.GrowthRate == 0 ? 1 : (float)V(1).AsNum / h.Class.GrowthRate;
                 return Value.Zero;
-            case "FIR_HPGETGROWTHRATE": { List<HotPoint> hs = HotPointsOf(V(0).AsInt); return Value.F(hs.Count > 0 ? hs[0].Class.GrowthRate * hs[0].GrowthMultiplier : 0); }
+            case "FIR_HPGETGROWTHRATE":
+            {
+                List<HotPoint> hs = HotPointsOf(V(0).AsInt);
+                return Value.F(hs.Count > 0 ? hs[0].Class.GrowthRate * hs[0].GrowthMultiplier : 0);
+            }
             case "FIR_SPGETINTENSITY": case "FIR_SPADDINTENSITY": return Value.F(0); // fumée : pas encore simulée
 
             // ---------- caméra, sous-titres, sons ----------
-            case "CAM_CINEMATIC": Cinematic = V(0).AsInt != 0;
+            case "CAM_CINEMATIC":
+                Cinematic = V(0).AsInt != 0;
                 if (Cinematic)
                     CinematicFromTrigger();
                 else
-                    Subtitle = null; return Value.Zero;
-            case "CAM_MODECINEMATIC": Cinematic = true; CinematicFromTrigger(); return Value.Zero;
+                    Subtitle = null;
+                return Value.Zero;
+            case "CAM_MODECINEMATIC":
+                Cinematic = true;
+                CinematicFromTrigger();
+                return Value.Zero;
             // ENT_Destroy : le script supprime une entité (London : la zone qui lance la cinématique du civil se détruit
             // elle-même, pour ne servir qu'une fois)
             case "ENT_DESTROY":
@@ -320,8 +338,13 @@ public sealed class MissionHost : IScriptHost
                     Visibility[(uint)id] = false;
                 return Value.Zero;
             }
-            case "CAM_MODEPLAY": Cinematic = false; Subtitle = null; return Value.Zero;   // fin de cinématique : son dernier sous-titre disparaît
-            case "CAM_SETINERTIA": CameraInertia = (float)V(0).AsNum; return Value.Zero;
+            case "CAM_MODEPLAY":
+                Cinematic = false;
+                Subtitle = null;
+                return Value.Zero;   // fin de cinématique : son dernier sous-titre disparaît
+            case "CAM_SETINERTIA":
+                CameraInertia = (float)V(0).AsNum;
+                return Value.Zero;
             case "CAM_GETINERTIA": return Value.F(CameraInertia);
             case "CAM_TELEPORTTOWAYPOINT":
                 if (_byId.TryGetValue((uint)V(0).AsInt, out LevelObject? wt))
@@ -334,7 +357,9 @@ public sealed class MissionHost : IScriptHost
             case "LEV_ADDOBJECTIVEBOOLEAN":
             {
                 Objective ob = new Objective { Id = Objectives.Count, Text = V(0).AsText };
-                Objectives.Add(ob); ObjectiveEvents.Add((ob.Text, true)); return Value.I(ob.Id);
+                Objectives.Add(ob);
+                ObjectiveEvents.Add((ob.Text, true));
+                return Value.I(ob.Id);
             }
             case "LEV_ADDOBJECTIVEPROGRESS": case "LEV_ADDOBJECTIVEITERATE":
             {
@@ -345,7 +370,9 @@ public sealed class MissionHost : IScriptHost
                     op2.Max = (float)V(1).AsNum;
                     op2.Value = 0;
                 }
-                Objectives.Add(op2); ObjectiveEvents.Add((op2.Text, true)); return Value.I(op2.Id);
+                Objectives.Add(op2);
+                ObjectiveEvents.Add((op2.Text, true));
+                return Value.I(op2.Id);
             }
             case "LEV_UPDATEOBJECTIVE":
                 if (Obj(V(0).AsInt) is { } ou)
@@ -368,12 +395,24 @@ public sealed class MissionHost : IScriptHost
                     op.Positions.Add(((float)V(1).AsNum, (float)V(2).AsNum));
                 }
                 return Value.I(0);
-            case "LEV_CLEARALLOBJECTIVES": Objectives.Clear(); return Value.Zero;
-            case "LEV_ACTIVATEOBJECTIVESPANEL": ObjectivesVisible = V(0).AsInt != 0; return Value.Zero;
-            case "LEV_TRIGGERVICTORY": Outcome ??= true; return Value.Zero;
-            case "LEV_TRIGGERDEFEAT": Outcome ??= false; return Value.Zero;
-            case "LEV_SETDEBRIEFTEXT": DebriefText = V(0).AsText; return Value.Zero;
-            case "LEV_ADDSCORINGLINE": Scoring.Add((V(0).AsText, V(1).AsNum, (int)V(2).AsInt)); return Value.Zero;
+            case "LEV_CLEARALLOBJECTIVES":
+                Objectives.Clear();
+                return Value.Zero;
+            case "LEV_ACTIVATEOBJECTIVESPANEL":
+                ObjectivesVisible = V(0).AsInt != 0;
+                return Value.Zero;
+            case "LEV_TRIGGERVICTORY":
+                Outcome ??= true;
+                return Value.Zero;
+            case "LEV_TRIGGERDEFEAT":
+                Outcome ??= false;
+                return Value.Zero;
+            case "LEV_SETDEBRIEFTEXT":
+                DebriefText = V(0).AsText;
+                return Value.Zero;
+            case "LEV_ADDSCORINGLINE":
+                Scoring.Add((V(0).AsText, V(1).AsNum, (int)V(2).AsInt));
+                return Value.Zero;
             case "LEV_GETNUMVICTIMS": return Value.I(Units?.Victims ?? 0);
             case "LEV_GETNUMKILLEDFIREMEN": case "LEV_GETNUMKILLEDVEHICLES": return Value.I(0);
             case "LEV_GETFIREMENWOUNDS": return Value.I(Units?.Units.Sum(u => u.Wounds) ?? 0);
@@ -381,17 +420,27 @@ public sealed class MissionHost : IScriptHost
             case "LEV_GETNUMFIREMEN": return Value.I(Units?.FiremenCount ?? 0);
             case "LEV_ISHEALVEHICLEREMAINING": return Value.I(Units?.HealVehicleRemaining != false ? 1 : 0);
             case "LEV_ISFIREMANSUPPLIERREMAINING": return Value.I(Units?.SupplierRemaining != false ? 1 : 0);
-            case "PNL_PRINTSUBTITLE": Subtitle = V(0).AsText; return Value.Zero;
-            case "PNL_CLEARSUBTITLE": Subtitle = null; return Value.Zero;
-            case "PNL_ADDMESSAGE": Messages.Add((V(0).AsText, V(1).AsText, (float)V(2).AsNum, (float)V(3).AsNum)); return Value.Zero;
+            case "PNL_PRINTSUBTITLE":
+                Subtitle = V(0).AsText;
+                return Value.Zero;
+            case "PNL_CLEARSUBTITLE":
+                Subtitle = null;
+                return Value.Zero;
+            case "PNL_ADDMESSAGE":
+                Messages.Add((V(0).AsText, V(1).AsText, (float)V(2).AsNum, (float)V(3).AsNum));
+                return Value.Zero;
             case "PNL_CLEARALLMESSAGES":
                 Messages.Clear();
                 MessagesCleared = true;
                 return Value.Zero;
             case "ENT_SETSTAMINA": return Value.Zero;
-            case "SND_PLAYSOUND2D": Sounds2D.Add(V(0).AsText); return Value.Zero;
+            case "SND_PLAYSOUND2D":
+                Sounds2D.Add(V(0).AsText);
+                return Value.Zero;
             // LEV_RoofVisibility(maillage, 0) : retire le toit (London : « Hide_Roof_Kino ») ; 1 : le remet
-            case "LEV_ROOFVISIBILITY": RoofRequests.Add((V(0).AsText, V(1).AsInt == 0)); return Value.Zero;
+            case "LEV_ROOFVISIBILITY":
+                RoofRequests.Add((V(0).AsText, V(1).AsInt == 0));
+                return Value.Zero;
             case "ENT_SETVISIBILITY":
                 foreach (long id in Members(V(0).AsInt))
                     if (Units?.ById(id) is { } vu)
@@ -449,10 +498,12 @@ public sealed class MissionHost : IScriptHost
             }
             case "ENT_GROUPADDENTITY":
                 if (_groups.TryGetValue(V(0).AsInt, out List<long>? gl))
-                    gl.Add(V(1).AsInt); return Value.Zero;
+                    gl.Add(V(1).AsInt);
+                return Value.Zero;
             case "ENT_GROUPREMOVEENTITY":
                 if (_groups.TryGetValue(V(0).AsInt, out List<long>? gr2))
-                    gr2.Remove(V(1).AsInt); return Value.Zero;
+                    gr2.Remove(V(1).AsInt);
+                return Value.Zero;
             case "IA_CMDMOVETO":
                 foreach (long id in Members(V(0).AsInt))
                     if (Units?.ById(id) is { } mu)
@@ -488,22 +539,35 @@ public sealed class MissionHost : IScriptHost
                     if (Units?.ById(id) is { } uu)
                         Units.ScriptUse(uu, (uint)V(1).AsInt);
                 return Value.Zero;
-            case "ENT_SETPROPERTYVALUESTRING": SetProperty(V(0).AsInt, V(1).AsText, V(2).AsText, V(3)); return Value.Zero;
-            case "ENT_SETPROPERTYVALUES32": case "ENT_SETPROPERTYVALUEF32": SetProperty(V(0).AsInt, V(1).AsText, V(2).AsText, V(3)); return Value.Zero;
+            case "ENT_SETPROPERTYVALUESTRING":
+                SetProperty(V(0).AsInt, V(1).AsText, V(2).AsText, V(3));
+                return Value.Zero;
+            case "ENT_SETPROPERTYVALUES32": case "ENT_SETPROPERTYVALUEF32":
+                SetProperty(V(0).AsInt, V(1).AsText, V(2).AsText, V(3));
+                return Value.Zero;
             case "ENT_GETPROPERTYVALUESTRING": return Value.T(GetProperty(V(0).AsInt, V(1).AsText, V(2).AsText)?.AsText ?? "");
             case "ENT_GETPROPERTYVALUEF32": case "ENT_GETPROPERTYVALUES32": return GetProperty(V(0).AsInt, V(1).AsText, V(2).AsText) ?? Value.Zero;
             case "ENT_GETCAPACITYTARGET": return Value.I(Units?.GetCapacity((uint)V(0).AsInt, V(1).AsText) == true ? 1 : 0);
             case "PNL_REMOVEALLFOCUS": return Value.Zero;
-            case "ENT_SETCAPACITYTARGET": Units?.SetCapacity((uint)V(0).AsInt, V(1).AsText, V(2).AsInt != 0); return Value.Zero;
-            case "LEV_MASKVISIBILITY": RoofRequests.Add((V(0).AsText, V(1).AsInt == 0)); return Value.Zero;
-            case "LEV_GRANTREINFORCEMENT": Units?.GrantReinforcement(); return Value.Zero;
-            case "LEV_CALLINITIALDISPATCH": Units?.CallInitialDispatch(); return Value.Zero;
+            case "ENT_SETCAPACITYTARGET":
+                Units?.SetCapacity((uint)V(0).AsInt, V(1).AsText, V(2).AsInt != 0);
+                return Value.Zero;
+            case "LEV_MASKVISIBILITY":
+                RoofRequests.Add((V(0).AsText, V(1).AsInt == 0));
+                return Value.Zero;
+            case "LEV_GRANTREINFORCEMENT":
+                Units?.GrantReinforcement();
+                return Value.Zero;
+            case "LEV_CALLINITIALDISPATCH":
+                Units?.CallInitialDispatch();
+                return Value.Zero;
 
             // ---------- niveau et utilitaires ----------
             case "LEV_GETDIFFICULTYLEVEL": return Value.I(Difficulty);
             case "LEV_GETFIRESIZEPERCENT":
             {
-                List<HotPoint> all = _fire.HotPoints; double max = all.Sum(h => (double)h.Class.IntensityMax);
+                List<HotPoint> all = _fire.HotPoints;
+                double max = all.Sum(h => (double)h.Class.IntensityMax);
                 return Value.F(max <= 0 ? 0 : 100 * all.Where(h => h.IsBurning).Sum(h => (double)h.Intensity) / max);
             }
             case "UTL_GETRANDOM": return Value.F(_rng.NextDouble());
@@ -527,7 +591,8 @@ public sealed class MissionHost : IScriptHost
             // ENT_AddDamage(entité, valeur) : ajoute à ses points (négatif : l'abîme) ; véhicule : sa vie, pompier : son endurance
             case "ENT_ADDDAMAGE":
             {
-                long id = V(0).AsInt; float v = (float)V(1).AsNum;
+                long id = V(0).AsInt;
+                float v = (float)V(1).AsNum;
                 if (Units?.ById(id) is { } du)
                 {
                     if (du.IsVehicle)
@@ -567,27 +632,36 @@ public sealed class MissionHost : IScriptHost
                     return Value.T(st.State switch { OpeningState.Open => "Open", OpeningState.Broken => "Broken", _ => "Close" });
                 return Value.T(SwitchedStates.TryGetValue((uint)V(0).AsInt, out bool sw) && sw ? "Open" : "Close");
             // LEV_CallReinforcement(n) / LEV_GrantReinforcementSet(n) : envoie le renfort n (1, 2, 3…)
-            case "LEV_CALLREINFORCEMENT": case "LEV_GRANTREINFORCEMENTSET": Units?.CallReinforcement((int)V(0).AsInt); return Value.Zero;
+            case "LEV_CALLREINFORCEMENT": case "LEV_GRANTREINFORCEMENTSET":
+                Units?.CallReinforcement((int)V(0).AsInt);
+                return Value.Zero;
             // PANEL_SetInterfaceMode(« SCORING ») : écran des scores de fin (affiché par le jeu à la fin de mission)
-            case "PANEL_SETINTERFACEMODE": InterfaceMode = V(0).AsText; return Value.Zero;
+            case "PANEL_SETINTERFACEMODE":
+                InterfaceMode = V(0).AsText;
+                return Value.Zero;
             case "FIR_HPSETGROWTHTIME":
                 // durée de croissance (s) jusqu'à l'intensité maximale
                 foreach (HotPoint h in HotPointsOf(V(0).AsInt))
                     if (V(1).AsNum > 0 && h.Class.GrowthRate > 0)
                         h.GrowthMultiplier = (float)(h.Class.IntensityMax / V(1).AsNum / h.Class.GrowthRate);
                 return Value.Zero;
-            case "SND_PLAYSTATICSOUND": Sounds2D.Add(V(0).AsText); return Value.Zero;
+            case "SND_PLAYSTATICSOUND":
+                Sounds2D.Add(V(0).AsText);
+                return Value.Zero;
             case "SND_STOPSTATICSOUND": return Value.Zero;
             case "ENT_GETORIENTATIONTOENTITY":
             {
-                System.Numerics.Vector3? p0 = PositionOf(V(0).AsInt); System.Numerics.Vector3? p1 = PositionOf(V(1).AsInt);
+                System.Numerics.Vector3? p0 = PositionOf(V(0).AsInt);
+                System.Numerics.Vector3? p1 = PositionOf(V(1).AsInt);
                 double deg = p0 is { } q0 && p1 is { } q1 ? Math.Atan2(q1.Y - q0.Y, q1.X - q0.X) * 180 / Math.PI : 0;
                 if (a.Count > 2)
                     a[2].Set(Value.F(deg));
                 return Value.F(deg);
             }
             // aide aérienne (bombardier d'eau) : pas encore simulée, l'appel est accepté
-            case "LEV_GRANTAIRSUPPORT": FireLog.Add($"{GameTime,6:0.0} LEV_GrantAirSupport (non simulé)"); return Value.Zero;
+            case "LEV_GRANTAIRSUPPORT":
+                FireLog.Add($"{GameTime,6:0.0} LEV_GrantAirSupport (non simulé)");
+                return Value.Zero;
         }
         return null;
     }

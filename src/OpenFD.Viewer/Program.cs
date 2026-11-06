@@ -30,30 +30,41 @@ public static class Program
         builder.WebHost.UseUrls(Url);
         WebApplication app = builder.Build();
         // jamais de copie en cache dans le navigateur : on voit toujours la dernière version
-        app.Use(async (ctx, next) => { ctx.Response.Headers.CacheControl = "no-store"; await next(); });
+        app.Use(async (ctx, next) =>
+        {
+            ctx.Response.Headers.CacheControl = "no-store";
+            await next();
+        });
         app.UseDefaultFiles();
         app.UseStaticFiles();
 
         object gate = new object();
         Session? session = null;
-        float speed = 1f; bool paused = true;
+        float speed = 1f;
+        bool paused = true;
         string status = "";
 
         Session Start(string mission, string diff)
         {
             Session s = new Session(files, mission, diff);
-            lock (gate) { session = s; paused = true; }
+            lock (gate)
+            {
+                session = s;
+                paused = true;
+            }
             return s;
         }
 
         // boucle de simulation : 10 pas de 0,1 s par seconde réelle × vitesse
         _ = Task.Run(async () =>
         {
-            Stopwatch clock = Stopwatch.StartNew(); double owed = 0;
+            Stopwatch clock = Stopwatch.StartNew();
+            double owed = 0;
             while (true)
             {
                 await Task.Delay(20);
-                double el = clock.Elapsed.TotalSeconds; clock.Restart();
+                double el = clock.Elapsed.TotalSeconds;
+                clock.Restart();
                 lock (gate)
                 {
                     if (session == null || paused)
@@ -62,9 +73,18 @@ public static class Program
                         continue;
                     }
                     owed += el * speed / Session.Dt;
-                    int n = (int)Math.Min(owed, 400); owed -= n;
-                    try { for (int i = 0; i < n; i++) session.Step(); }
-                    catch (Exception e) { status = "Erreur : " + e.Message; paused = true; }
+                    int n = (int)Math.Min(owed, 400);
+                    owed -= n;
+                    try
+                    {
+                        for (int i = 0; i < n; i++)
+                            session.Step();
+                    }
+                    catch (Exception e)
+                    {
+                        status = "Erreur : " + e.Message;
+                        paused = true;
+                    }
                 }
             }
         });
@@ -77,27 +97,34 @@ public static class Program
 
         app.MapPost("/api/start", (string mission, string diff) =>
         {
-            try { Start(mission, diff); return Results.Ok(); }
+            try
+            {
+                Start(mission, diff);
+                return Results.Ok();
+            }
             catch (Exception e) { return Results.Problem(e.Message); }
         });
 
         app.MapGet("/api/map", () =>
         {
-            Session? s; lock (gate) s = session;
+            Session? s;
+            lock (gate) s = session;
             if (s == null)
                 return Results.NotFound();
             Grid? g = s.Grid;
             string? walls = null, ground = null;
             if (g != null)
             {
-                byte[] w = new byte[g.Width * g.Height]; byte[] h = new byte[g.Width * g.Height];
+                byte[] w = new byte[g.Width * g.Height];
+                byte[] h = new byte[g.Width * g.Height];
                 float gmin = g.GroundHeight.DefaultIfEmpty(0).Min(), gmax = g.GroundHeight.DefaultIfEmpty(1).Max();
                 for (int i = 0; i < w.Length; i++)
                 {
                     w[i] = (byte)(i < g.ZoneA.Length && g.ZoneA[i] == 0 ? 1 : 0);
                     h[i] = i < g.GroundHeight.Length && gmax > gmin ? (byte)(255 * (g.GroundHeight[i] - gmin) / (gmax - gmin)) : (byte)0;
                 }
-                walls = Convert.ToBase64String(w); ground = Convert.ToBase64String(h);
+                walls = Convert.ToBase64String(w);
+                ground = Convert.ToBase64String(h);
             }
             return Results.Json(new
             {
@@ -165,14 +192,16 @@ public static class Program
 
         app.MapGet("/api/placeables", () =>
         {
-            Session? s; lock (gate) s = session;
+            Session? s;
+            lock (gate) s = session;
             return s == null ? Results.NotFound()
                 : Results.Json(assets.Placeables(s.Level).Select(p => new { model = p.Model, name = p.Name, civil = p.Civilian, m = Arr(p.World) }));
         });
 
         app.MapGet("/api/trees", () =>
         {
-            Session? s; lock (gate) s = session;
+            Session? s;
+            lock (gate) s = session;
             return s == null ? Results.NotFound()
                 : Results.Json(assets.Trees(s.Level).Select(t => new { model = t.Model, name = t.Name, height = t.Height, seed = t.Seed, bark = t.Bark, leaves = t.Leaves, m = Arr(t.World) }));
         });
@@ -184,12 +213,21 @@ public static class Program
         System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> meshBytes = new System.Collections.Concurrent.ConcurrentDictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         app.MapGet("/api/mesh", (string mission, string name, string? src) => Results.Bytes(meshBytes.GetOrAdd((src ?? mission) + "/" + name, _ =>
         {
-            SceneAssets.MeshAsset a = assets.LoadMesh(mission, name, src); Mesh m = a.Mesh;
+            SceneAssets.MeshAsset a = assets.LoadMesh(mission, name, src);
+            Mesh m = a.Mesh;
             var groups = a.Groups.Select(g => new { start = g.Start, count = g.Count, material = g.Material, diffuse = g.Diffuse, alpha = g.Alpha });
             byte[] json = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new { m.VertexCount, indexCount = m.Indices.Length, groups, m.Shader, uv1 = a.Uv1 != null, lightmap = a.Lightmap });
-            using MemoryStream ms = new MemoryStream(); using BinaryWriter bw = new BinaryWriter(ms);
-            bw.Write(json.Length); bw.Write(json); while (ms.Length % 4 != 0) bw.Write((byte)0);
-            void W(float[] x) { foreach (float v in x) bw.Write(v); }
+            using MemoryStream ms = new MemoryStream();
+            using BinaryWriter bw = new BinaryWriter(ms);
+            bw.Write(json.Length);
+            bw.Write(json);
+            while (ms.Length % 4 != 0)
+                bw.Write((byte)0);
+            void W(float[] x)
+            {
+                foreach (float v in x)
+                    bw.Write(v);
+            }
             W(m.Positions);
             W(m.Normals);
             W(a.Uv0);

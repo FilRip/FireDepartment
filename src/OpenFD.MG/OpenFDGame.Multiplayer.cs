@@ -956,7 +956,11 @@ public sealed partial class OpenFDGame
         if (_net.IsServer)
         {
             if (step >= 5)
-                Once("serveur passe la cinématique", () => { if (_cineOn) NetSubmit("skipcine"); });
+                Once("serveur passe la cinématique", () =>
+                {
+                    if (_cineOn)
+                        NetSubmit("skipcine");
+                });
             if (step >= 300 && men.Count > 0)
                 Once("serveur déplace " + men[0].Name, () => DoOrder(men[0], new SN.Vector2(men[0].Position.X + 500, men[0].Position.Y + 200)));
             if (step >= 320 && _session.Fire.HotPoints.FirstOrDefault(h => h.IsBurning) is { } fire && men.Count > 1)

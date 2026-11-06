@@ -8,8 +8,14 @@ public sealed class Parser
     public static readonly HashSet<string> Types = new(StringComparer.Ordinal)
         { "void", "s32", "f32", "mcString", "mcBool", "EntityID", "u32", "s16", "u16", "u8", "s8", "bool", "int", "float" };
 
-    private readonly List<Token> _t; private int _p; private readonly string _file;
-    private Parser(List<Token> t, string file) { _t = t; _file = file; }
+    private readonly List<Token> _t;
+    private int _p;
+    private readonly string _file;
+    private Parser(List<Token> t, string file)
+    {
+        _t = t;
+        _file = file;
+    }
 
     public static List<Function> ParseFile(string src, string file)
     {
@@ -65,13 +71,18 @@ public sealed class Parser
                 _p++;
         }
         Expect(")");
-        if (IsOp(";")) { _p++; return new Function(ret, name, ps, new Block(Peek.Line, new()), _file); } // prototype
+        if (IsOp(";"))
+        {
+            _p++;
+            return new Function(ret, name, ps, new Block(Peek.Line, new()), _file);
+        } // prototype
         return new Function(ret, name, ps, ParseBlock(), _file);
     }
 
     private Block ParseBlock()
     {
-        int line = Peek.Line; Expect("{");
+        int line = Peek.Line;
+        Expect("{");
         List<Stmt> body = new List<Stmt>();
         while (!IsOp("}"))
         {
@@ -95,7 +106,10 @@ public sealed class Parser
         }
         if (IsIdent("if"))
         {
-            _p++; Expect("("); Expr c = ParseExpr(); Expect(")");
+            _p++;
+            Expect("(");
+            Expr c = ParseExpr();
+            Expect(")");
             Stmt th = ParseStmt();
             Stmt? el = null;
             if (IsIdent("else"))
@@ -107,13 +121,16 @@ public sealed class Parser
         }
         if (IsIdent("for"))
         {
-            _p++; Expect("(");
+            _p++;
+            Expect("(");
             Stmt? init = null;
             if (!IsOp(";"))
                 init = AtType ? ParseDecl() : new ExprStmt(line, ParseExpr());
             Expect(";");
-            Expr? cond = IsOp(";") ? null : ParseExpr(); Expect(";");
-            Expr? step = IsOp(")") ? null : ParseExpr(); Expect(")");
+            Expr? cond = IsOp(";") ? null : ParseExpr();
+            Expect(";");
+            Expr? step = IsOp(")") ? null : ParseExpr();
+            Expect(")");
             return new For(line, init, cond, step, ParseStmt());
         }
         if (IsIdent("while"))
@@ -128,7 +145,8 @@ public sealed class Parser
         {
             _p++;
             Expr? v = IsOp(";") ? null : ParseExpr();
-            Expect(";"); return new Return(line, v);
+            Expect(";");
+            return new Return(line, v);
         }
         if (AtType)
         {
@@ -143,7 +161,8 @@ public sealed class Parser
 
     private Decl ParseDecl()
     {
-        int line = Peek.Line; string ty = ExpectIdent();
+        int line = Peek.Line;
+        string ty = ExpectIdent();
         List<(string, Expr?)> vars = new List<(string, Expr?)>();
         do
         {
@@ -169,19 +188,74 @@ public sealed class Parser
         Expr left = ParseOr();
         if (Peek.Kind == Tok.Op && Peek.Text is "=" or "+=" or "-=" or "*=" or "/=")
         {
-            int line = Peek.Line; string op = Next().Text;
+            int line = Peek.Line;
+            string op = Next().Text;
             if (left is not Var v)
                 throw new ParseError($"{_file}:{line} affectation impossible");
             return new Assign(line, op, v.Name, ParseAssign());
         }
         return left;
     }
-    private Expr ParseOr() { Expr l = ParseAnd(); while (IsOp("||")) { int ln = Next().Line; l = new Binary(ln, "||", l, ParseAnd()); } return l; }
-    private Expr ParseAnd() { Expr l = ParseEq(); while (IsOp("&&")) { int ln = Next().Line; l = new Binary(ln, "&&", l, ParseEq()); } return l; }
-    private Expr ParseEq() { Expr l = ParseRel(); while (IsOp("==") || IsOp("!=")) { Token t = Next(); l = new Binary(t.Line, t.Text, l, ParseRel()); } return l; }
-    private Expr ParseRel() { Expr l = ParseAdd(); while (IsOp("<") || IsOp(">") || IsOp("<=") || IsOp(">=")) { Token t = Next(); l = new Binary(t.Line, t.Text, l, ParseAdd()); } return l; }
-    private Expr ParseAdd() { Expr l = ParseMul(); while (IsOp("+") || IsOp("-")) { Token t = Next(); l = new Binary(t.Line, t.Text, l, ParseMul()); } return l; }
-    private Expr ParseMul() { Expr l = ParseUnary(); while (IsOp("*") || IsOp("/") || IsOp("%")) { Token t = Next(); l = new Binary(t.Line, t.Text, l, ParseUnary()); } return l; }
+    private Expr ParseOr()
+    {
+        Expr l = ParseAnd();
+        while (IsOp("||"))
+        {
+            int ln = Next().Line;
+            l = new Binary(ln, "||", l, ParseAnd());
+        }
+        return l;
+    }
+    private Expr ParseAnd()
+    {
+        Expr l = ParseEq();
+        while (IsOp("&&"))
+        {
+            int ln = Next().Line;
+            l = new Binary(ln, "&&", l, ParseEq());
+        }
+        return l;
+    }
+    private Expr ParseEq()
+    {
+        Expr l = ParseRel();
+        while (IsOp("==") || IsOp("!="))
+        {
+            Token t = Next();
+            l = new Binary(t.Line, t.Text, l, ParseRel());
+        }
+        return l;
+    }
+    private Expr ParseRel()
+    {
+        Expr l = ParseAdd();
+        while (IsOp("<") || IsOp(">") || IsOp("<=") || IsOp(">="))
+        {
+            Token t = Next();
+            l = new Binary(t.Line, t.Text, l, ParseAdd());
+        }
+        return l;
+    }
+    private Expr ParseAdd()
+    {
+        Expr l = ParseMul();
+        while (IsOp("+") || IsOp("-"))
+        {
+            Token t = Next();
+            l = new Binary(t.Line, t.Text, l, ParseMul());
+        }
+        return l;
+    }
+    private Expr ParseMul()
+    {
+        Expr l = ParseUnary();
+        while (IsOp("*") || IsOp("/") || IsOp("%"))
+        {
+            Token t = Next();
+            l = new Binary(t.Line, t.Text, l, ParseUnary());
+        }
+        return l;
+    }
     private Expr ParseUnary()
     {
         if (IsOp("-") || IsOp("!") || IsOp("+"))
@@ -191,13 +265,17 @@ public sealed class Parser
         }
         if (IsOp("++") || IsOp("--"))
         {
-            Token t = Next(); string name = ExpectIdent();
+            Token t = Next();
+            string name = ExpectIdent();
             return new Assign(t.Line, t.Text == "++" ? "+=" : "-=", name, new Num(t.Line, 1, true));
         }
         // conversion de type : (f32) x
         if (IsOp("(") && _t[_p + 1].Kind == Tok.Ident && Types.Contains(_t[_p + 1].Text) && _t[_p + 2].Kind == Tok.Op && _t[_p + 2].Text == ")")
         {
-            int line = Peek.Line; _p++; string ty = Next().Text; _p++;
+            int line = Peek.Line;
+            _p++;
+            string ty = Next().Text;
+            _p++;
             return new Cast(line, ty, ParseUnary());
         }
         return ParsePostfix();
@@ -207,7 +285,8 @@ public sealed class Parser
         Expr e = ParsePrimary();
         if ((IsOp("++") || IsOp("--")) && e is Var v)
         {
-            Token t = Next(); return new Assign(t.Line, t.Text == "++" ? "+=" : "-=", v.Name, new Num(t.Line, 1, true));
+            Token t = Next();
+            return new Assign(t.Line, t.Text == "++" ? "+=" : "-=", v.Name, new Num(t.Line, 1, true));
         }
         return e;
     }
@@ -237,7 +316,9 @@ public sealed class Parser
                 }
                 return new Var(t.Line, t.Text);
             case Tok.Op when t.Text == "(":
-                Expr e = ParseExpr(); Expect(")"); return e;
+                Expr e = ParseExpr();
+                Expect(")");
+                return e;
         }
         throw new ParseError($"{_file}:{t.Line} expression attendue, trouvé « {t.Text} »");
     }

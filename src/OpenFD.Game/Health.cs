@@ -98,8 +98,13 @@ public sealed partial class UnitManager
                 u.Status = "attend les ordres";
             if (u.Stamina <= 0 && !u.Unconscious)
             {
-                u.Unconscious = true; u.Wounds++;
-                u.Path.Clear(); u.Target = null; u.Opening = null; u.GoTo = null; u.GoToVehicle = null;
+                u.Unconscious = true;
+                u.Wounds++;
+                u.Path.Clear();
+                u.Target = null;
+                u.Opening = null;
+                u.GoTo = null;
+                u.GoToVehicle = null;
                 Sounds.Add(("VOCAL_FIREMAN_CRITICAL", u.Position));
                 Log.Add($"{_s.Time,6:0} s : un pompier s'évanouit (chaleur) — un collègue doit le ranimer");
             }
@@ -115,7 +120,9 @@ public sealed partial class UnitManager
         if (v.Life > 0)
             return;
         v.Destroyed = true;
-        v.Path.Clear(); v.Target = null; v.Status = "hors service (détruit)";
+        v.Path.Clear();
+        v.Target = null;
+        v.Status = "hors service (détruit)";
         if (v.Passengers.Count > 0)
         {
             List<Unit> saved = v.Passengers.ToList();

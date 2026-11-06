@@ -9,7 +9,9 @@ namespace OpenFD.MG;
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct VertexDual : IVertexType
 {
-    public Vector3 Position; public Vector2 Uv0; public Vector2 Uv1;
+    public Vector3 Position;
+    public Vector2 Uv0;
+    public Vector2 Uv1;
     public static readonly VertexDeclaration Decl = new(
         new VertexElement(0, VertexElementFormat.Vector3, VertexElementUsage.Position, 0),
         new VertexElement(12, VertexElementFormat.Vector2, VertexElementUsage.TextureCoordinate, 0),

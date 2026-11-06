@@ -12,36 +12,73 @@ public sealed class TreeGenerator
 {
     public sealed class Options
     {
-        public int Seed; public string Type = "deciduous";
-        public string BarkType = "oak"; public Vector3 BarkTint = Vector3.One; public Vector2 BarkScale = Vector2.One;
+        public int Seed;
+        public string Type = "deciduous";
+        public string BarkType = "oak";
+        public Vector3 BarkTint = Vector3.One;
+        public Vector2 BarkScale = Vector2.One;
         public int Levels;
         public float[] Angle = new float[4], Gnarliness = new float[4], Length = new float[4], Radius = new float[4], Start = new float[4], Taper = new float[4], Twist = new float[4];
         public int[] Children = new int[4], Sections = new int[4], Segments = new int[4];
-        public Vector3 ForceDir = Vector3.UnitY; public float ForceStrength;
-        public string LeafType = "oak"; public bool LeafDouble = true; public float LeafAngle, LeafStart, LeafSize, LeafSizeVariance, LeafAlphaTest = 0.5f;
-        public int LeafCount; public Vector3 LeafTint = Vector3.One;
+        public Vector3 ForceDir = Vector3.UnitY;
+        public float ForceStrength;
+        public string LeafType = "oak";
+        public bool LeafDouble = true;
+        public float LeafAngle, LeafStart, LeafSize, LeafSizeVariance, LeafAlphaTest = 0.5f;
+        public int LeafCount;
+        public Vector3 LeafTint = Vector3.One;
 
         public static Options FromJson(string json)
         {
-            Options o = new Options(); JsonElement r = JsonDocument.Parse(json).RootElement;
-            float[] Arr(JsonElement e) { float[] a = new float[4]; foreach (JsonProperty p in e.EnumerateObject()) a[int.Parse(p.Name)] = p.Value.GetSingle(); return a; }
-            int[] IArr(JsonElement e) { int[] a = new int[4]; foreach (JsonProperty p in e.EnumerateObject()) a[int.Parse(p.Name)] = p.Value.GetInt32(); return a; }
+            Options o = new Options();
+            JsonElement r = JsonDocument.Parse(json).RootElement;
+            float[] Arr(JsonElement e)
+            {
+                float[] a = new float[4];
+                foreach (JsonProperty p in e.EnumerateObject())
+                    a[int.Parse(p.Name)] = p.Value.GetSingle();
+                return a;
+            }
+            int[] IArr(JsonElement e)
+            {
+                int[] a = new int[4];
+                foreach (JsonProperty p in e.EnumerateObject())
+                    a[int.Parse(p.Name)] = p.Value.GetInt32();
+                return a;
+            }
             Vector3 Col(int c) => new(((c >> 16) & 255) / 255f, ((c >> 8) & 255) / 255f, (c & 255) / 255f);
-            o.Seed = r.GetProperty("seed").GetInt32(); o.Type = r.GetProperty("type").GetString()!;
-            JsonElement b = r.GetProperty("bark"); o.BarkType = b.GetProperty("type").GetString()!; o.BarkTint = Col(b.GetProperty("tint").GetInt32());
+            o.Seed = r.GetProperty("seed").GetInt32();
+            o.Type = r.GetProperty("type").GetString()!;
+            JsonElement b = r.GetProperty("bark");
+            o.BarkType = b.GetProperty("type").GetString()!;
+            o.BarkTint = Col(b.GetProperty("tint").GetInt32());
             o.BarkScale = new(b.GetProperty("textureScale").GetProperty("x").GetSingle(), b.GetProperty("textureScale").GetProperty("y").GetSingle());
             JsonElement br = r.GetProperty("branch");
             o.Levels = br.GetProperty("levels").GetInt32();
-            o.Angle = Arr(br.GetProperty("angle")); o.Children = IArr(br.GetProperty("children")); o.Gnarliness = Arr(br.GetProperty("gnarliness"));
-            o.Length = Arr(br.GetProperty("length")); o.Radius = Arr(br.GetProperty("radius")); o.Sections = IArr(br.GetProperty("sections"));
-            o.Segments = IArr(br.GetProperty("segments")); o.Start = Arr(br.GetProperty("start")); o.Taper = Arr(br.GetProperty("taper")); o.Twist = Arr(br.GetProperty("twist"));
-            JsonElement f = br.GetProperty("force"); JsonElement d = f.GetProperty("direction");
-            o.ForceDir = new(d.GetProperty("x").GetSingle(), d.GetProperty("y").GetSingle(), d.GetProperty("z").GetSingle()); o.ForceStrength = f.GetProperty("strength").GetSingle();
+            o.Angle = Arr(br.GetProperty("angle"));
+            o.Children = IArr(br.GetProperty("children"));
+            o.Gnarliness = Arr(br.GetProperty("gnarliness"));
+            o.Length = Arr(br.GetProperty("length"));
+            o.Radius = Arr(br.GetProperty("radius"));
+            o.Sections = IArr(br.GetProperty("sections"));
+            o.Segments = IArr(br.GetProperty("segments"));
+            o.Start = Arr(br.GetProperty("start"));
+            o.Taper = Arr(br.GetProperty("taper"));
+            o.Twist = Arr(br.GetProperty("twist"));
+            JsonElement f = br.GetProperty("force");
+            JsonElement d = f.GetProperty("direction");
+            o.ForceDir = new(d.GetProperty("x").GetSingle(), d.GetProperty("y").GetSingle(), d.GetProperty("z").GetSingle());
+            o.ForceStrength = f.GetProperty("strength").GetSingle();
             JsonElement l = r.GetProperty("leaves");
-            o.LeafType = l.GetProperty("type").GetString()!; o.LeafDouble = l.GetProperty("billboard").GetString() == "double";
-            o.LeafAngle = l.GetProperty("angle").GetSingle(); o.LeafCount = l.GetProperty("count").GetInt32(); o.LeafStart = l.GetProperty("start").GetSingle();
-            o.LeafSize = l.GetProperty("size").GetSingle(); o.LeafSizeVariance = l.GetProperty("sizeVariance").GetSingle();
-            o.LeafTint = Col(l.GetProperty("tint").GetInt32()); o.LeafAlphaTest = l.GetProperty("alphaTest").GetSingle();
+            o.LeafType = l.GetProperty("type").GetString()!;
+            o.LeafDouble = l.GetProperty("billboard").GetString() == "double";
+            o.LeafAngle = l.GetProperty("angle").GetSingle();
+            o.LeafCount = l.GetProperty("count").GetInt32();
+            o.LeafStart = l.GetProperty("start").GetSingle();
+            o.LeafSize = l.GetProperty("size").GetSingle();
+            o.LeafSizeVariance = l.GetProperty("sizeVariance").GetSingle();
+            o.LeafTint = Col(l.GetProperty("tint").GetInt32());
+            o.LeafAlphaTest = l.GetProperty("alphaTest").GetSingle();
             return o;
         }
     }
@@ -50,7 +87,11 @@ public sealed class TreeGenerator
     private sealed class Rng
     {
         private uint _w, _z;
-        public Rng(int seed) { _w = (uint)(123456789 + seed); _z = (uint)(987654321 - seed); }
+        public Rng(int seed)
+        {
+            _w = (uint)(123456789 + seed);
+            _z = (uint)(987654321 - seed);
+        }
         public float Random(float max = 1, float min = 0)
         {
             _z = 36969 * (_z & 65535) + (uint)((int)_z >> 16);
@@ -86,7 +127,8 @@ public sealed class TreeGenerator
     private static Vector3 Rot(Vector3 v, Vector3 euler) => Vector3.Transform(v, FromEuler(euler));
     private static Quaternion FromUnitVectors(Vector3 a, Vector3 b)
     {
-        float r = Vector3.Dot(a, b) + 1; Quaternion q;
+        float r = Vector3.Dot(a, b) + 1;
+        Quaternion q;
         if (r < 1e-6f)
         {
             r = 0;
@@ -156,7 +198,8 @@ public sealed class TreeGenerator
     private void GenerateBranch(Branch b)
     {
         uint indexOffset = (uint)(BranchPos.Count / 3);
-        Vector3 orient = b.Orientation; Vector3 origin = b.Origin;
+        Vector3 orient = b.Orientation;
+        Vector3 origin = b.Origin;
         float sectionLength = b.Length / b.SectionCount;   // (le cas « Deciduous » avec majuscule ne se produit jamais dans l'original)
         List<Section> sections = new List<Section>();
         for (int i = 0; i <= b.SectionCount; i++)
@@ -169,7 +212,8 @@ public sealed class TreeGenerator
             else if (O.Type == "evergreen")
                 r *= 1 - (float)i / b.SectionCount;
 
-            Vector3 fv = default, fn = default; float fuy = 0;
+            Vector3 fv = default, fn = default;
+            float fuy = 0;
             for (int j = 0; j < b.SegmentCount; j++)
             {
                 float a = 2f * MathF.PI * j / b.SegmentCount;
@@ -177,7 +221,10 @@ public sealed class TreeGenerator
                 Vector3 v = Rot(dir * r, orient) + origin;
                 Vector3 n = Vector3.Normalize(Rot(dir, orient));
                 float uy = i % 2 == 0 ? 0 : 1;
-                BranchPos.AddRange(new[] { v.X, v.Y, v.Z }); BranchNrm.AddRange(new[] { n.X, n.Y, n.Z }); BranchUv.Add((float)j / b.SegmentCount); BranchUv.Add(uy);
+                BranchPos.AddRange(new[] { v.X, v.Y, v.Z });
+                BranchNrm.AddRange(new[] { n.X, n.Y, n.Z });
+                BranchUv.Add((float)j / b.SegmentCount);
+                BranchUv.Add(uy);
                 if (j == 0)
                 {
                     fv = v;
@@ -185,7 +232,10 @@ public sealed class TreeGenerator
                     fuy = uy;
                 }
             }
-            BranchPos.AddRange(new[] { fv.X, fv.Y, fv.Z }); BranchNrm.AddRange(new[] { fn.X, fn.Y, fn.Z }); BranchUv.Add(1); BranchUv.Add(fuy);
+            BranchPos.AddRange(new[] { fv.X, fv.Y, fv.Z });
+            BranchNrm.AddRange(new[] { fn.X, fn.Y, fn.Z });
+            BranchUv.Add(1);
+            BranchUv.Add(fuy);
             sections.Add(new Section(origin, orient, r));
 
             origin += Rot(new Vector3(0, sectionLength, 0), orient);
@@ -229,7 +279,8 @@ public sealed class TreeGenerator
     private (Vector3 origin, Vector3 orient, float alpha, Section a, Section b) Along(List<Section> s, float start)
     {
         int idx = (int)MathF.Floor(start * (s.Count - 1));
-        Section A = s[idx]; Section B = idx == s.Count - 1 ? A : s[idx + 1];
+        Section A = s[idx];
+        Section B = idx == s.Count - 1 ? A : s[idx + 1];
         float alpha = (start - (float)idx / (s.Count - 1)) / (1f / (s.Count - 1));
         Vector3 o = Vector3.Lerp(A.Origin, B.Origin, alpha);
         Quaternion q = Slerp3(FromEuler(B.Orientation), FromEuler(A.Orientation), alpha);
@@ -297,7 +348,9 @@ public sealed class TreeGenerator
             int a = (int)LeafIdx[k], b = (int)LeafIdx[k + 1], c = (int)LeafIdx[k + 2];
             Vector3 P(int i) => new(LeafPos[i * 3], LeafPos[i * 3 + 1], LeafPos[i * 3 + 2]);
             Vector3 f = Vector3.Cross(P(c) - P(b), P(a) - P(b));
-            n[a] += f; n[b] += f; n[c] += f;
+            n[a] += f;
+            n[b] += f;
+            n[c] += f;
         }
         foreach (Vector3 v in n)
         {

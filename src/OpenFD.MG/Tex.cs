@@ -13,8 +13,10 @@ public static class Tex
 
     public static void Init(GraphicsDevice gd)
     {
-        White = new Texture2D(gd, 1, 1); White.SetData(new[] { Color.White });
-        const int S = 64; Color[] px = new Color[S * S];
+        White = new Texture2D(gd, 1, 1);
+        White.SetData(new[] { Color.White });
+        const int S = 64;
+        Color[] px = new Color[S * S];
         for (int y = 0; y < S; y++)
             for (int x = 0; x < S; x++)
             {
@@ -22,7 +24,8 @@ public static class Tex
                 float a = r > 1 ? 0 : (1 - r) * (1 - r);
                 px[y * S + x] = new Color(1f, 1f, 1f, a);
             }
-        Soft = new Texture2D(gd, S, S); Soft.SetData(px);
+        Soft = new Texture2D(gd, S, S);
+        Soft.SetData(px);
     }
 
     public static Texture2D? Dds(GraphicsDevice gd, byte[] d)
@@ -34,13 +37,23 @@ public static class Tex
         int bits = BitConverter.ToInt32(d, 88), off = 128;
         if ((pfFlags & 4) != 0)
         {
-            SurfaceFormat fmt; int block;
+            SurfaceFormat fmt;
+            int block;
             switch (fourcc)
             {
                 // textures lues telles quelles (luminosité proche du jeu d'origine) ; FD3_SRGB=1 : lues en sRGB, plus sombres
-                case 0x31545844: fmt = Srgb ? SurfaceFormat.Dxt1SRgb : SurfaceFormat.Dxt1; block = 8; break;
-                case 0x33545844: fmt = Srgb ? SurfaceFormat.Dxt3SRgb : SurfaceFormat.Dxt3; block = 16; break;
-                case 0x35545844: fmt = Srgb ? SurfaceFormat.Dxt5SRgb : SurfaceFormat.Dxt5; block = 16; break;
+                case 0x31545844:
+                    fmt = Srgb ? SurfaceFormat.Dxt1SRgb : SurfaceFormat.Dxt1;
+                    block = 8;
+                    break;
+                case 0x33545844:
+                    fmt = Srgb ? SurfaceFormat.Dxt3SRgb : SurfaceFormat.Dxt3;
+                    block = 16;
+                    break;
+                case 0x35545844:
+                    fmt = Srgb ? SurfaceFormat.Dxt5SRgb : SurfaceFormat.Dxt5;
+                    block = 16;
+                    break;
                 default: return null;
             }
             // niveaux présents dans le fichier (le plus petit niveau compressé fait 4 × 4)
@@ -51,10 +64,12 @@ public static class Tex
                 int size = ((Math.Max(1, lw) + 3) / 4) * ((Math.Max(1, lh) + 3) / 4) * block;
                 if (off + size > d.Length)
                     break;
-                levels.Add((off, size)); off += size;
+                levels.Add((off, size));
+                off += size;
                 if (lw == 1 && lh == 1)
                     break;
-                lw = Math.Max(1, lw / 2); lh = Math.Max(1, lh / 2);
+                lw = Math.Max(1, lw / 2);
+                lh = Math.Max(1, lh / 2);
             }
             // DXT1 avec pixels transparents (détourage)
             if (block == 8 && Dxt1HasAlpha(d, levels[0].off, levels[0].size))
@@ -64,7 +79,9 @@ public static class Tex
                 else
                     return FromColors(gd, w, h, DecodeDxt1(d, levels[0].off, w, h), true, SurfaceFormat.ColorSRgb);   // le DXT1 sRGB n'a pas d'alpha
             }
-            int full = 1; for (int x = Math.Max(w, h); x > 1; x /= 2) full++;
+            int full = 1;
+            for (int x = Math.Max(w, h); x > 1; x /= 2)
+                full++;
             bool mip = levels.Count == full;
             Texture2D t = new Texture2D(gd, w, h, mip, fmt);
             for (int i = 0; i < (mip ? levels.Count : 1); i++)
@@ -110,7 +127,8 @@ public static class Tex
             {
                 int b = off + (by * bw + bx) * 8;
                 ushort c0 = BitConverter.ToUInt16(d, b), c1 = BitConverter.ToUInt16(d, b + 2);
-                pal[0] = DxtColor(c0); pal[1] = DxtColor(c1);
+                pal[0] = DxtColor(c0);
+                pal[1] = DxtColor(c1);
                 if (c0 > c1)
                 {
                     pal[2] = Color.Lerp(pal[0], pal[1], 1 / 3f);
@@ -139,7 +157,8 @@ public static class Tex
         if (mip)
         {
             // niveaux réduits calculés ici (moyenne 2 × 2)
-            Color[] cur = px; int cw = w, ch = h, level = 1;
+            Color[] cur = px;
+            int cw = w, ch = h, level = 1;
             while (cw > 1 || ch > 1)
             {
                 int nw = Math.Max(1, cw / 2), nh = Math.Max(1, ch / 2);
@@ -151,13 +170,20 @@ public static class Tex
                         for (int dy = 0; dy < 2; dy++)
                             for (int dx = 0; dx < 2; dx++)
                             {
-                                int sx = Math.Min(cw - 1, x * 2 + dx), sy = Math.Min(ch - 1, y * 2 + dy); Color c = cur[sy * cw + sx];
-                                r += c.R; g += c.G; b += c.B; a += c.A; n++;
+                                int sx = Math.Min(cw - 1, x * 2 + dx), sy = Math.Min(ch - 1, y * 2 + dy);
+                                Color c = cur[sy * cw + sx];
+                                r += c.R;
+                                g += c.G;
+                                b += c.B;
+                                a += c.A;
+                                n++;
                             }
                         next[y * nw + x] = new Color(r / n, g / n, b / n, a / n);
                     }
                 t.SetData(level++, null, next, 0, next.Length);
-                cur = next; cw = nw; ch = nh;
+                cur = next;
+                cw = nw;
+                ch = nh;
             }
         }
         return t;
@@ -214,8 +240,17 @@ public static class Tex
         bool top = (d[17] & 0x20) != 0;
         if ((type != 2 && type != 10) || (bpp != 3 && bpp != 4))
             return null;
-        int p = 18 + idLen; byte[] px = new byte[w * h * 4]; int n = 0;
-        void Put(int s) { px[n * 4] = d[s + 2]; px[n * 4 + 1] = d[s + 1]; px[n * 4 + 2] = d[s]; px[n * 4 + 3] = bpp == 4 ? d[s + 3] : (byte)255; n++; }
+        int p = 18 + idLen;
+        byte[] px = new byte[w * h * 4];
+        int n = 0;
+        void Put(int s)
+        {
+            px[n * 4] = d[s + 2];
+            px[n * 4 + 1] = d[s + 1];
+            px[n * 4 + 2] = d[s];
+            px[n * 4 + 3] = bpp == 4 ? d[s + 3] : (byte)255;
+            n++;
+        }
         if (type == 2)
             while (n < w * h && p + bpp <= d.Length)
             {
@@ -242,7 +277,8 @@ public static class Tex
             }
         if (!top)
         {
-            byte[] flip = new byte[px.Length]; int row = w * 4;
+            byte[] flip = new byte[px.Length];
+            int row = w * 4;
             for (int y = 0; y < h; y++)
                 Buffer.BlockCopy(px, y * row, flip, (h - 1 - y) * row, row);
             px = flip;

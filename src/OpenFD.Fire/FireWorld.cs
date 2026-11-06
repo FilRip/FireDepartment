@@ -40,7 +40,9 @@ public sealed class FireWorld
             if (inst is { } st)
             {
                 // [confirmé par une sauvegarde] état initial stocké dans FE00 : allumé, intensité, temps de combustion
-                hp.Lit = st.lit; hp.Intensity = st.current; hp.BurnTime = st.burnTime;
+                hp.Lit = st.lit;
+                hp.Intensity = st.current;
+                hp.BurnTime = st.burnTime;
                 hp.State = hp.Lit ? HotPointState.Growing : HotPointState.Idle;
             }
             else
@@ -164,7 +166,8 @@ public sealed class FireWorld
                 // pièces : la chaleur ne traverse pas directement d'une pièce à l'autre (seulement par les liens)
                 if (rooms != null && (rooms.TryGetValue(src.Id, out string? ra) ? ra : "") != (rooms.TryGetValue(dst.Id, out string? rb) ? rb : ""))
                     continue;
-                float dx = dst.Position.X - src.Position.X; float dy = dst.Position.Y - src.Position.Y;
+                float dx = dst.Position.X - src.Position.X;
+                float dy = dst.Position.Y - src.Position.Y;
                 float dz = Proximity3D ? dst.Position.Z - src.Position.Z : 0f;
                 if (dx * dx + dy * dy + dz * dz > r2)
                     continue;
@@ -177,7 +180,8 @@ public sealed class FireWorld
 
     public static bool WallBetween(Grid g, Vector3 a, Vector3 b)
     {
-        (int ax, int ay) = g.CellOf(a); (int bx, int by) = g.CellOf(b);
+        (int ax, int ay) = g.CellOf(a);
+        (int bx, int by) = g.CellOf(b);
         int n = Math.Max(Math.Abs(bx - ax), Math.Abs(by - ay));
         for (int i = 1; i < n; i++)
         {
@@ -229,7 +233,10 @@ public sealed class FireWorld
 
     public void Ignite(HotPoint hp, float intensity)
     {
-        hp.Lit = true; hp.State = HotPointState.Growing; hp.BurnTime = 0; hp.HeatingTime = 0;
+        hp.Lit = true;
+        hp.State = HotPointState.Growing;
+        hp.BurnTime = 0;
+        hp.HeatingTime = 0;
         hp.SetIntensity(Math.Max(intensity, 1f));
     }
 
@@ -348,7 +355,8 @@ public sealed class FireWorld
 
     private void ApplyAttack(HotPoint hp)
     {
-        float a = hp.PendingAttack; hp.PendingAttack = 0;
+        float a = hp.PendingAttack;
+        hp.PendingAttack = 0;
         if (hp.Lit)
         {
             // [mesuré, sauvegardes Eau0–3] le feu continue de croître pendant l'arrosage :
@@ -359,7 +367,10 @@ public sealed class FireWorld
             {
                 // [mesuré] éteint : intensité 0 (pas négative), le foyer redevient « en chauffe » et peut
                 // se rallumer après Tempo × difficulté si ses voisins brûlent encore.
-                hp.Lit = false; hp.Intensity = 0f; hp.State = HotPointState.Idle; hp.HeatingTime = 0f;
+                hp.Lit = false;
+                hp.Intensity = 0f;
+                hp.State = HotPointState.Idle;
+                hp.HeatingTime = 0f;
                 ExtinguishLog.Add($"{Time,6:0.0} {hp.Name} éteint");
             }
         }
@@ -387,7 +398,9 @@ public sealed class FireWorld
             if (hp.Intensity == 0f)
                 hp.SetIntensity(1f);
             // [mesuré, Eau4] un foyer rallumé repart de 1 mais garde son temps de combustion (non remis à zéro)
-            hp.Lit = true; hp.State = HotPointState.Growing; hp.HeatingTime = 0f;
+            hp.Lit = true;
+            hp.State = HotPointState.Growing;
+            hp.HeatingTime = 0f;
         }
     }
 
@@ -415,7 +428,8 @@ public sealed class FireWorld
         float v = Math.Min(hp.Intensity + c.DeathRate * dt, c.IntensityMax);
         if (v < 0f)
         {
-            hp.Lit = false; hp.State = HotPointState.Consumed;
+            hp.Lit = false;
+            hp.State = HotPointState.Consumed;
             hp.SetIntensity(v);
             return;
         }

@@ -10,7 +10,11 @@ public static class Program
     public static int Main(string[] args)
     {
         List<string> argList = args.ToList();
-        string? Opt(string name) { int i = argList.IndexOf(name); return i >= 0 && i + 1 < argList.Count ? argList[i + 1] : null; }
+        string? Opt(string name)
+        {
+            int i = argList.IndexOf(name);
+            return i >= 0 && i + 1 < argList.Count ? argList[i + 1] : null;
+        }
         string dataDir = args.FirstOrDefault(a => !a.StartsWith("--") && Directory.Exists(a)) ?? Environment.GetEnvironmentVariable("FD3_DATA") ?? "";
         if (Directory.Exists(Path.Combine(dataDir, "Data")))
             dataDir = Path.Combine(dataDir, "Data");

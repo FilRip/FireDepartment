@@ -61,25 +61,31 @@ public sealed class Skin
             return null;
         p += 4;
         s.Start = new int[n + 1];
-        List<int> bone = new List<int>(n * 3); List<float> w = new List<float>(n * 3);
+        List<int> bone = new List<int>(n * 3);
+        List<float> w = new List<float>(n * 3);
         for (int v = 0; v < n; v++)
         {
             if (p + 4 > d.Length)
                 return null;
-            int c = BitConverter.ToInt32(d, p); p += 4;
+            int c = BitConverter.ToInt32(d, p);
+            p += 4;
             if (c < 0 || c > 16 || p + 20 * c > d.Length)
                 return null;
             s.Start[v] = bone.Count;
             for (int i = 0; i < c; i++)
             {
-                int b = BitConverter.ToInt32(d, p); float wt = BitConverter.ToSingle(d, p + 4); p += 20;
+                int b = BitConverter.ToInt32(d, p);
+                float wt = BitConverter.ToSingle(d, p + 4);
+                p += 20;
                 if (b < 0 || b >= count)
                     return null;
-                bone.Add(b); w.Add(wt);
+                bone.Add(b);
+                w.Add(wt);
             }
         }
         s.Start[n] = bone.Count;
-        s.Bone = bone.ToArray(); s.Weight = w.ToArray();
+        s.Bone = bone.ToArray();
+        s.Weight = w.ToArray();
         return s;
     }
 }

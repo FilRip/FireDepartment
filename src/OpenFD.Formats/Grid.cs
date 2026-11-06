@@ -20,14 +20,17 @@ public sealed class Grid
         int p = 0;
         if (Chunks.ReadString(d, ref p) != "GRD")
             throw new InvalidDataException("Pas un fichier .grid");
-        Chunks.ReadString(d, ref p); Chunks.ReadString(d, ref p);
+        Chunks.ReadString(d, ref p);
+        Chunks.ReadString(d, ref p);
         Grid g = new Grid { Width = BitConverter.ToUInt16(d, p), Height = BitConverter.ToUInt16(d, p + 2) };
         p += 4 + 5 + 4;
         if (!Chunks.IsBegin(d, p))
             throw new InvalidDataException("Grille inattendue");
         p += 5;
         int n = g.Width * g.Height;
-        g.GroundHeight = new float[n]; g.ZoneA = new ushort[n]; g.ZoneB = new ushort[n];
+        g.GroundHeight = new float[n];
+        g.ZoneA = new ushort[n];
+        g.ZoneB = new ushort[n];
         for (int i = 0; i < n; i++)
         {
             int e = Chunks.NodeEnd(d, p);
