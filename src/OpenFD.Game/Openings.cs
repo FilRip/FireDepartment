@@ -395,8 +395,9 @@ public sealed partial class UnitManager
                 Vector2 p = new Vector2((x + 0.5f) * Grid.CellSize, (y + 0.5f) * Grid.CellSize);
                 if (ReachDist(p, d) > ActionReach * 0.9f)
                     continue;
-                List<Vector2> path = FindPath(me, p);
-                if (path.Count == 0 && Vector2.Distance(me, p) > 1)
+                // chemin partiel (case de l'autre côté de la porte fermée, inatteignable) : on ne la retient pas
+                List<Vector2> path = FindPath(me, p, out bool partial);
+                if (partial || (path.Count == 0 && Vector2.Distance(me, p) > 1))
                     continue;
                 float len = 0; Vector2 prev = me; foreach (Vector2 q in path) { len += Vector2.Distance(prev, q); prev = q; }
                 if (len < bestLen)

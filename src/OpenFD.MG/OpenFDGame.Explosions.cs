@@ -45,8 +45,16 @@ public sealed partial class OpenFDGame
         if (!_objects)
             return;
         foreach ((ExplosiveItem? it, string? model, SN.Matrix4x4 world) in _explosives)
+        {
+            // véhicule que le script cache, montre ou déplace (Mriya : le camion de la cinématique, l'avion)
+            if (Host?.Visibility.TryGetValue(it.Id, out bool shown) == true && !shown)
+                continue;
+            SN.Matrix4x4 w = world;
+            if (ScriptPos(it.Id) is { } mv)
+                w.Translation += new SN.Vector3(mv.X - it.Position.X, mv.Y - it.Position.Y, 0);
             foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in StateModel(model, it.State))
-                DrawMesh(mesh, (part * world).X());
+                DrawMesh(mesh, (part * w).X());
+        }
     }
 
     /// <summary>À chaque image : explosions survenues pendant la simulation → effet, son, secousse, journal.</summary>

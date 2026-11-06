@@ -33,7 +33,8 @@ public sealed class LevelObject
 
     /// <summary>
     /// Visible au départ : dans le composant A001, après la transformation, le bloc « AA AA FF FF 0A » commence par un
-    /// entier puis un octet de visibilité (Paris : 0 pour les victimes enterrées sous les décombres, que le chien révèle).
+    /// entier, un octet (autre chose), puis l'octet de visibilité (Paris : 0 pour les victimes enterrées sous les décombres,
+    /// que le chien révèle ; Mriya : 0 pour les civils que le script montre plus tard, 1 pour les victimes de House_01).
     /// </summary>
     public bool StartVisible
     {
@@ -44,7 +45,7 @@ public sealed class LevelObject
             ReadOnlySpan<byte> b = ComponentBytes(c);
             ReadOnlySpan<byte> mark = stackalloc byte[] { 0xAA, 0xAA, 0xFF, 0xFF, 0x0A };
             int i = b.LastIndexOf(mark);
-            return i < 0 || i + 9 >= b.Length || b[i + 9] != 0;
+            return i < 0 || i + 10 >= b.Length || b[i + 10] != 0;
         }
     }
     public ReadOnlySpan<byte> ComponentBytes(Component c) => Raw.AsSpan(c.Offset, c.Size);

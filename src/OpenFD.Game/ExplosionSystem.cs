@@ -21,7 +21,7 @@ public sealed class ExplosionSystem
     // part du souffle (LP_Explode_Power) reçue par les autres objets explosifs : limite les réactions en chaîne
     public static float BlastOnItems = float.TryParse(Environment.GetEnvironmentVariable("FD3_SOUFFLE"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float b) ? b : 0.5f;   // taille d'une voiture autour de son centre
 
-    public static ExplosionSystem Load(Level level, GameFiles files, FireWorld fire)
+    public static ExplosionSystem Load(Level level, GameFiles files, FireWorld fire, IReadOnlySet<uint>? watched = null)
     {
         ExplosionSystem sys = new ExplosionSystem();
         Dictionary<string, ClassFile> cache = new Dictionary<string, ClassFile>(StringComparer.OrdinalIgnoreCase);
@@ -33,7 +33,9 @@ public sealed class ExplosionSystem
             byte[]? expl = Data(o, 0xA029);
             if (expl != null && expl.Length >= 25)
                 can = expl[0] != 0;
-            if (!can)
+            // objet qui ne fait que s'abîmer au feu, quand un script suit sa vie (Mriya : le générateur, objectif 1)
+            bool watchedOnly = !can && watched != null && watched.Contains(o.Id) && c.GetBool("DAMAGE", "UseDamage", false);
+            if (!can && !watchedOnly)
                 continue;
             ExplosiveItem it = new ExplosiveItem
             {
@@ -44,6 +46,7 @@ public sealed class ExplosionSystem
                 HpPower = c.GetFloat("EXPLOSION", "HP_Explode_Power", 20), HpRadius = c.GetFloat("EXPLOSION", "HP_Explode_Radius", 800),
                 StaminaPower = c.GetFloat("EXPLOSION", "Stamina_Explode_Power", 20), StaminaRadius = c.GetFloat("EXPLOSION", "Stamina_Explode_Radius", 1100),
                 Sound = c.Get("SOUND_EXPLOSION", "Label")?.Trim('"', ' '),
+                CanExplode = can,
             };
             int n = c.GetInt("DAMAGE", "NbDamageSteps", 0);
             it.Thresholds = Enumerable.Range(0, Math.Max(n, 0)).Select(i => c.GetFloat("DAMAGE", $"DamageTresholdStep{i}", 0)).ToArray();
@@ -98,7 +101,7 @@ public sealed class ExplosionSystem
             return;
         foreach (ExplosiveItem it in Items)
         {
-            if (it.Exploded)
+            if (it.Exploded || (!it.CanExplode && it.Life <= 0))
                 continue;
             // le foyer le plus fort compte en entier, les autres un peu (sinon un objet au milieu d'un grand feu fond en 2 s)
             float sum = 0, max = 0;
@@ -108,12 +111,16 @@ public sealed class ExplosionSystem
                     float d = h.Class.UnitLifeDamage * Math.Min(1, h.Intensity / Math.Max(1, h.Class.IntensityMax));
                     sum += d; max = MathF.Max(max, d);
                 }
-            float dmg = (max + OtherFiresShare * (sum - max)) * FireDamageFactor;
+            // (objet qui ne fait que s'abîmer, suivi par un script : la formule du jeu sans le facteur des explosifs —
+            // Mriya : 260 points de vie, UnitLifeDamage 2 × FireDamageCoef 0,43 en facile → environ 5 minutes)
+            float dmg = (max + OtherFiresShare * (sum - max)) * (it.CanExplode ? FireDamageFactor : 1f);
             if (dmg > 0)
                 it.Life -= dmg * it.FireDamageCoef * dt;
+            if (!it.CanExplode)
+                it.Life = MathF.Max(0, it.Life);   // détruit sans explosion
         }
         // explosions (en chaîne : une explosion abîme les objets voisins, qui peuvent exploser au pas suivant)
-        foreach (ExplosiveItem it in Items.Where(i => !i.Exploded && i.Life <= 0).ToList())
+        foreach (ExplosiveItem it in Items.Where(i => i.CanExplode && !i.Exploded && i.Life <= 0).ToList())
             Explode(it, fire, time);
     }
 
@@ -163,8 +170,8 @@ public sealed class ExplosionSystem
     {
         if (!ById.TryGetValue(id, out ExplosiveItem? it))
             return false;
-        it.Life = life;
-        if (life <= 0)
+        it.Life = MathF.Max(0, life);
+        if (life <= 0 && it.CanExplode)
             Explode(it, fire, time);
         return true;
     }

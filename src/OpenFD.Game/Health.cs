@@ -51,6 +51,7 @@ public sealed partial class UnitManager
         }
         foreach (Unit u in Units)
         {
+            u.InFire = false;
             if (u.OnBoard || u.Hidden || (u.IsVehicle && u.Destroyed))
                 continue;
             float heat = 0, burn = 0;
@@ -69,6 +70,7 @@ public sealed partial class UnitManager
                 heat += h.Class.UnitHeatDamage * f;
                 burn += h.Class.UnitLifeDamage * f;
             }
+            u.InFire = heat > 0 || burn > 0;   // icône du feu sur son image (panneau des unités)
             if (u.IsVehicle)
             {
                 if (burn > 0)

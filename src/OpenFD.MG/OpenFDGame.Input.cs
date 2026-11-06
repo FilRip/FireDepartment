@@ -551,25 +551,34 @@ public sealed partial class OpenFDGame
     private UsableObject? UsableAt(double x, double y)
     {
         (float sx, float sy) = Fb(x, y); SN.Vector2 m = new SN.Vector2(sx, sy);
-        UsableObject? best = null; float bd = Tol(30);
+        // objets sous la souris : près du pied de leur repère (pivot), ou souris sur l'emprise du modèle (le pivot peut être
+        // à un bout de l'objet : générateur de Mriya) ; rang : 0 près du pivot, puis la taille de l'emprise
+        List<(UsableObject o, float rank)> hits = new List<(UsableObject o, float rank)>();
+        float tol = Tol(30);
         foreach (UsableObject o in _session.Units.Usables.Where(o => o.Enabled))
         {
             if (Project(o.Position) is not { } a || Project(o.Position + new SN.Vector3(0, 0, 160)) is not { } b)
                 continue;
             SN.Vector2 ab = b - a; float t = ab.LengthSquared() > 1e-3f ? Math.Clamp(SN.Vector2.Dot(m - a, ab) / ab.LengthSquared(), 0, 1) : 0;
-            if (SN.Vector2.Distance(m, a + ab * t) is float d && d < bd)
-            {
-                bd = d;
-                best = o;
-            }
+            float d = SN.Vector2.Distance(m, a + ab * t);
+            if (d < tol)
+                hits.Add((o, d / tol));
         }
-        if (best != null)
-            return best;
-        // sinon : la souris sur l'emprise du modèle (le pivot peut être à un bout de l'objet : générateur de Mriya)
+        // (pas sur un feu : le feu posé sur le générateur de Mriya doit pouvoir être arrosé avant la réparation)
+        if (hits.Count == 0 && FireAt(x, y) != null)
+            return null;
         if (Ground(x, y) is { } gp)
-            best = _session.Units.Usables.Where(o => o.Enabled && Inside(gp, o.BoxMin, o.BoxMax, 40) && o.BoxMax.X - o.BoxMin.X < 3000 && o.BoxMax.Y - o.BoxMin.Y < 3000)
-                .OrderBy(o => (o.BoxMax.X - o.BoxMin.X) * (o.BoxMax.Y - o.BoxMin.Y)).FirstOrDefault();
-        return best;
+            foreach (UsableObject o in _session.Units.Usables.Where(o => o.Enabled && Inside(gp, o.BoxMin, o.BoxMax, 40) && o.BoxMax.X - o.BoxMin.X < 3000 && o.BoxMax.Y - o.BoxMin.Y < 3000))
+                if (!hits.Any(h => h.o == o))
+                    hits.Add((o, 1 + (o.BoxMax.X - o.BoxMin.X) * (o.BoxMax.Y - o.BoxMin.Y) / 1e7f));
+        if (hits.Count <= 1)
+            return hits.Count == 1 ? hits[0].o : null;
+        // plusieurs objets (Mriya : le calendrier posé sur le transformateur du hangar) : d'abord celui que les pompiers
+        // choisis peuvent travailler, une réparation en premier si un technicien est choisi
+        List<Unit> walkers = _sel.Where(u => !u.IsVehicle).ToList();
+        bool repairer = walkers.Any(u => u.CanRepair);
+        int Pref(UsableObject o) => repairer && o.CanBeRepaired && !o.Repaired ? 0 : walkers.Any(u => _session.Units.CanWorkOn(u, o)) ? 1 : 2;
+        return hits.OrderBy(h => Pref(h.o)).ThenBy(h => h.rank).First().o;
     }
 
     // flèche du grappin visée : près du repère en haut du mur, ou de sa base

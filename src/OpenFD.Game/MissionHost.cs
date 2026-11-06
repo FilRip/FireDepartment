@@ -360,8 +360,13 @@ public sealed class MissionHost : IScriptHost
                 return Value.Zero;
             case "LEV_GETOBJECTIVESTATUS": return Value.I(Obj(V(0).AsInt)?.Status ?? -1);
             case "LEV_SETOBJECTIVEPOS":
+                // un seul repère par objectif : un nouvel appel le déplace (Mriya : True_Change le promène toutes les 1,5 s
+                // entre les endroits où des civils attendent encore)
                 if (Obj(V(0).AsInt) is { } op)
+                {
+                    op.Positions.Clear();
                     op.Positions.Add(((float)V(1).AsNum, (float)V(2).AsNum));
+                }
                 return Value.I(0);
             case "LEV_CLEARALLOBJECTIVES": Objectives.Clear(); return Value.Zero;
             case "LEV_ACTIVATEOBJECTIVESPANEL": ObjectivesVisible = V(0).AsInt != 0; return Value.Zero;
@@ -502,7 +507,7 @@ public sealed class MissionHost : IScriptHost
                 return Value.F(max <= 0 ? 0 : 100 * all.Where(h => h.IsBurning).Sum(h => (double)h.Intensity) / max);
             }
             case "UTL_GETRANDOM": return Value.F(_rng.NextDouble());
-            case "UTL_GETDELTAGAMETIME": return Value.F(0.1);
+            case "UTL_GETDELTAGAMETIME": return Value.F(Session.MainLoopPeriod);
 
             // ---------- fonctions ajoutées après l'essai de toutes les missions (OpenFD.Tools toutesmissions) ----------
             // ENT_GetVisibility(entité) : 1 visible, 0 cachée (ENT_SetVisibility)

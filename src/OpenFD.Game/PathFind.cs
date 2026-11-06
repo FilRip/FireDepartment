@@ -436,14 +436,40 @@ public sealed class PathFind
         return set.Select(k => new Vector2((k.Item1 + 0.5f) * Step, (k.Item2 + 0.5f) * Step)).ToList();
     }
 
-    // passer dans un feu coûte cher : le chemin le contourne quand il peut
+    // passer dans un feu coûte cher : le chemin le contourne quand il peut. Les cases « en feu » (à moins de 160 unités
+    // d'un foyer allumé, en x et en y) sont relevées une fois par pas de simulation, et non à chaque case examinée :
+    // Mriya a plus de mille foyers, et une recherche peut examiner 200 000 cases
+    private bool[] _fireCells = Array.Empty<bool>();
+    private int _fireCellsStep = -1;
     public float FireCost(int cx, int cy)
     {
-        Vector3 p = new Vector3((cx + 0.5f) * Grid.CellSize, (cy + 0.5f) * Grid.CellSize, 0);
+        if (_s.Grid is not { } g || !g.Inside(cx, cy))
+            return 0f;
+        if (_fireCellsStep != _s.Steps || _fireCells.Length != g.Width * g.Height)
+            BuildFireCells(g);
+        return _fireCells[g.Index(cx, cy)] ? 6f : 0f;
+    }
+
+    private void BuildFireCells(Grid g)
+    {
+        if (_fireCells.Length != g.Width * g.Height)
+            _fireCells = new bool[g.Width * g.Height];
+        else
+            Array.Clear(_fireCells);
+        _fireCellsStep = _s.Steps;
+        const float R = 160, C = Grid.CellSize;
         foreach (HotPoint h in _s.Fire.HotPoints)
-            if (h.IsBurning && MathF.Abs(h.Position.X - p.X) < 160 && MathF.Abs(h.Position.Y - p.Y) < 160)
-                return 6f;
-        return 0f;
+        {
+            if (!h.IsBurning)
+                continue;
+            // cases dont le centre est à moins de R du foyer, en x et en y (comme avant)
+            int x0 = (int)MathF.Ceiling((h.Position.X - R) / C - 0.5f), x1 = (int)MathF.Floor((h.Position.X + R) / C - 0.5f);
+            int y0 = (int)MathF.Ceiling((h.Position.Y - R) / C - 0.5f), y1 = (int)MathF.Floor((h.Position.Y + R) / C - 0.5f);
+            for (int y = Math.Max(0, y0); y <= Math.Min(g.Height - 1, y1); y++)
+                for (int x = Math.Max(0, x0); x <= Math.Min(g.Width - 1, x1); x++)
+                    if (MathF.Abs(h.Position.X - (x + 0.5f) * C) < R && MathF.Abs(h.Position.Y - (y + 0.5f) * C) < R)
+                        _fireCells[g.Index(x, y)] = true;
+        }
     }
 
     public Vector2 Walkable(Vector2 p)
@@ -462,6 +488,10 @@ public sealed class PathFind
     }
 
     public List<Vector2> FindPath(Vector2 from, Vector2 to) => FindPath(from, to, out _);
+
+    private float[] _cost = Array.Empty<float>();
+    private int[] _prev = Array.Empty<int>(), _gen = Array.Empty<int>();
+    private int _curGen;
 
     public List<Vector2> FindPath(Vector2 from, Vector2 to, out bool partial)
     {
@@ -485,9 +515,27 @@ public sealed class PathFind
         if (sx == tx && sy == ty)
             return new() { to };
         PriorityQueue<(int x, int y), float> open = new PriorityQueue<(int x, int y), float>();
-        Dictionary<int, float> cost = new Dictionary<int, float>(); Dictionary<int, int> prev = new Dictionary<int, int>();
+        // coûts et prédécesseurs dans des tableaux réutilisés (une « génération » par recherche, sans tout remettre à zéro)
+        int n = g.Width * g.Height;
+        if (_cost.Length != n)
+        {
+            _cost = new float[n]; _prev = new int[n]; _gen = new int[n]; _curGen = 0;
+        }
+        if (++_curGen == int.MaxValue)
+        {
+            Array.Clear(_gen); _curGen = 1;
+        }
+        int gen = _curGen;
+        List<int> seen = new List<int>();
+        bool Has(int k) => _gen[k] == gen;
+        void Set(int k, float c, int p)
+        {
+            if (_gen[k] != gen)
+                seen.Add(k);
+            _gen[k] = gen; _cost[k] = c; _prev[k] = p;
+        }
         int Key(int x, int y) => y * g.Width + x;
-        open.Enqueue((sx, sy), 0); cost[Key(sx, sy)] = 0;
+        open.Enqueue((sx, sy), 0); Set(Key(sx, sy), 0, -1);
         int found = -1, guard = 0;
         while (open.Count > 0 && guard++ < 200000)
         {
@@ -497,7 +545,7 @@ public sealed class PathFind
                 found = Key(x, y);
                 break;
             }
-            float c0 = cost[Key(x, y)];
+            float c0 = _cost[Key(x, y)];
             for (int dx = -1; dx <= 1; dx++)
                 for (int dy = -1; dy <= 1; dy++)
                 {
@@ -513,17 +561,19 @@ public sealed class PathFind
                         continue;
                     float c = c0 + (dx != 0 && dy != 0 ? 1.414f : 1f) + FireCost(nx, ny) + (IsGrappleCell(Key(nx, ny)) ? 15 : 0);   // grimper prend du temps
                     int k = Key(nx, ny);
-                    if (cost.TryGetValue(k, out float old) && old <= c)
+                    if (Has(k) && _cost[k] <= c)
                         continue;
-                    cost[k] = c; prev[k] = Key(x, y);
+                    Set(k, c, Key(x, y));
                     open.Enqueue((nx, ny), c + MathF.Sqrt((tx - nx) * (tx - nx) + (ty - ny) * (ty - ny)));
                 }
         }
+        if (Environment.GetEnvironmentVariable("FD3_DEBUG_CHEMIN") != null)
+            Console.WriteLine($"recherche ({sx},{sy}) → ({tx},{ty}) : {guard} cases examinées, {(found >= 0 ? "trouvé" : "non trouvé")}, grille {g.Width}×{g.Height}");
         if (found < 0)
         {
             // point inatteignable : on s'arrête à la case explorée la plus proche du point demandé
             int best = -1; float bd = float.MaxValue;
-            foreach (int k in cost.Keys)
+            foreach (int k in seen)
             {
                 int x = k % g.Width, y = k / g.Width; float d = (x - tx) * (x - tx) + (y - ty) * (y - ty);
                 if (d < bd && Free(x, y))
@@ -541,7 +591,7 @@ public sealed class PathFind
             to = new(((best % g.Width) + 0.5f) * Grid.CellSize, ((best / g.Width) + 0.5f) * Grid.CellSize);
         }
         List<Vector2> cells = new List<Vector2>();
-        for (int k = found; prev.ContainsKey(k); k = prev[k])
+        for (int k = found; Has(k) && _prev[k] >= 0; k = _prev[k])
             cells.Add(new(((k % g.Width) + 0.5f) * Grid.CellSize, ((k / g.Width) + 0.5f) * Grid.CellSize));
         cells.Reverse();
         if (cells.Count > 0)

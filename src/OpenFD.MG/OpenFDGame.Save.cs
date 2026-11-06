@@ -419,7 +419,9 @@ public sealed partial class OpenFDGame
         foreach (Civilian cv in _session.Units.Civilians)
             d += cv.Position.X * 0.001 + cv.Position.Y * 0.0007 + (int)cv.State;
         int open = _session.Units.Openings.Count(o => o.State != OpeningState.Closed);
-        return $"t={_session.Time:0.0} unités={a:0.0000} eau={b:0.00} feu={c:0.0000} civils={d:0.0000} ouvertures={open} fumée={_session.Smoke.Total:0.00}";
+        // agent de chaque unité (eau, mousse, anti-métal…) : il change quand un pompier se recharge à un autre camion
+        string agents = string.Join(",", _session.Units.Units.Where(u => u.Nozzle != null).Select(u => (u.Nozzle!.Agent + "?")[..1]));
+        return $"t={_session.Time:0.0} unités={a:0.0000} eau={b:0.00} agents={agents} feu={c:0.0000} civils={d:0.0000} ouvertures={open} fumée={_session.Smoke.Total:0.00}";
     }
 
     /// <summary>Essai FD3_SAUVE_TEST : ordres à différents moments, sauvegarde, rechargement, comparaison.</summary>
@@ -439,10 +441,18 @@ public sealed partial class OpenFDGame
         foreach (Opening d in um.Openings.Where(o => !o.IsWindow).Take(3))
             if (men.Count > 2)
                 DoOpening(men[2], d);
+        // changement d'agent : un pompier va se recharger à un camion d'un autre agent (s'il y en a un)
+        if (um.Active.FirstOrDefault(v => v.IsVehicle && v.ResupplyPower > 0 && men.Count > 4 && men[4].Nozzle != null && UnitManager.SupplyAgentOf(v) != men[4].Nozzle!.Agent) is { } other)
+        {
+            DoGoToVehicle(men[4], other);
+            Console.WriteLine($"SAUVE {men[4].Name} ({men[4].Nozzle?.Agent}) va se recharger à {other.Name} ({UnitManager.SupplyAgentOf(other)}) : {men[4].Status}");
+        }
         Civilian? civ = um.Civilians.FirstOrDefault(c => !c.Hidden);
         if (civ != null && men.Count > 3)
             DoFetch(men[3], civ);
         Run(int.TryParse(Environment.GetEnvironmentVariable("FD3_SAUVE_TEST"), out int extra) && extra > 1 ? extra : 400);
+        if (men.Count > 4 && men[4].Nozzle is { } n4)
+            Console.WriteLine($"SAUVE agent de {men[4].Name} : {n4.Agent}");
         string before = StateHash();
         string? path = SaveGame();
         Run(100);   // la partie continue un peu avant le rechargement
