@@ -9,6 +9,28 @@ namespace OpenFD.MG;
 public sealed partial class OpenFDGame
 {
     private VideoScreen? _intro, _menuVideo;
+
+    /// <summary>
+    /// Musique du moment (Data\Sound\Music) : Menu en boucle dans les menus hors partie (principal, options, choix de la
+    /// mission…), Briefing en boucle pendant la vidéo de présentation de la mission, Victory ou Defeat une fois à la fin
+    /// d'une mission ; rien pendant la partie ni pendant les vidéos d'introduction et le générique.
+    /// </summary>
+    private void UpdateMusic()
+    {
+        if (_music == null)
+            return;
+        if (_intro != null)
+            _music.Want(null, false);
+        else if (_briefing != null)
+            _music.Want("Briefing", true);
+        else if (_ended && !_menu && Host?.Outcome is bool won)
+            _music.Want(won ? "Victory" : "Defeat", false);
+        else if (_menu && !_inGame)
+            _music.Want("Menu", true);
+        else
+            _music.Want(null, false);
+        _music.Update();
+    }
     private bool _introDone;
 
     private string? VideoPath(string name)

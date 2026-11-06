@@ -18,6 +18,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     private readonly GameFiles _files;
     private readonly SceneAssets _assets;
     private Audio? _audio;
+    private MusicPlayer? _music;
     private string _mission, _difficulty;
     public bool TestAttack, NoRoofs, NoHelp;
     public string? TestDoors;   // essai : « porteA,porteB » : un pompier s'occupe de chaque porte à 3 s
@@ -155,7 +156,16 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _part = new BasicEffect(gd) { TextureEnabled = true, VertexColorEnabled = true, LightingEnabled = false, Texture = Tex.Soft };
         _scene = new SceneEffect(gd);
         _depth = new DepthEffect(gd);
-        try { _audio = new Audio(SoundDb.Load(_files.DataDir)); } catch (Exception e) { Console.WriteLine("Son : " + e.Message); }
+        try
+        {
+            _audio = new Audio(SoundDb.Load(_files.DataDir));
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("Son : " + e.Message);
+        }
+        if (_audio?.Enabled == true)
+            _music = new MusicPlayer(_files.DataDir);
         LoadCursors();
         _settings = Settings.Load(_files.DataDir);
         ApplySettings();
@@ -266,6 +276,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             RefreshScale();
         NetUpdate();
         NetTestHooks();
+        UpdateMusic();
         if (UpdateIntro(dt))
         {
             base.Update(gameTime);

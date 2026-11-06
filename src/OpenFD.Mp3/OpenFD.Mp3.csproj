@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Lecture des musiques du jeu (Data\Sound\Music\*.mp3) : décodeur MP3 entièrement en C#, NLayer
+    (https://github.com/naudio/NLayer, licence MIT : voir LICENSE-NLayer.txt), repris tel quel.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <NoWarn>$(NoWarn);CS1591;CS0618;CS8632</NoWarn>
+  </PropertyGroup>
+</Project>

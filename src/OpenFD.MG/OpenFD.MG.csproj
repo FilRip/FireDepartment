@@ -9,6 +9,7 @@
     <ProjectReference Include="..\OpenFD.EzTree\OpenFD.EzTree.csproj" />
     <ProjectReference Include="..\OpenFD.Video\OpenFD.Video.csproj" />
     <ProjectReference Include="..\OpenFD.Multiplayer\OpenFD.Multiplayer.csproj" />
+    <ProjectReference Include="..\OpenFD.Mp3\OpenFD.Mp3.csproj" />
   </ItemGroup>
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
