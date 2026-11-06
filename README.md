@@ -6,6 +6,7 @@ No game data is included in this repository.
 ## The game
 
 Launch exe with in argument the path where Fire Department 2 or 3 is installed, like that :
+
 OpenFD.exe "C:\Games\Fire Department 3"
 
 
