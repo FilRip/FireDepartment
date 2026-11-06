@@ -22,6 +22,9 @@ public sealed class Audio : IDisposable
     private float _clock;
     public System.Numerics.Vector3 Listener; public System.Numerics.Vector3 Right = System.Numerics.Vector3.UnitX; public float ExtraDistance;
     public float Master = 0.8f;
+    /// <summary>Volumes par famille (0 à 1), en plus du volume général : interface et voix, effets, ambiance (musiques).</summary>
+    public float VoiceVolume = 1, EffectsVolume = 1, MusicVolume = 1;
+    private float GroupVolume(SoundDb.Entry e) => e.Group switch { "voice" => VoiceVolume, "music" => MusicVolume, _ => EffectsVolume };
     public bool Enabled { get; private set; }
     public int Count => _db.Entries.Count;
 
@@ -84,7 +87,7 @@ public sealed class Audio : IDisposable
         try
         {
             Microsoft.Xna.Framework.Audio.SoundEffectInstance inst = fx.CreateInstance();
-            inst.Volume = Math.Clamp(g * e.Volume * volume * Master, 0, 1); inst.Pan = pan; inst.IsLooped = false;
+            inst.Volume = Math.Clamp(g * e.Volume * volume * Master * GroupVolume(e), 0, 1); inst.Pan = pan; inst.IsLooped = false;
             inst.Play(); _oneShots.Add(inst);
         }
         catch (Exception ex) { Console.WriteLine("Son : " + ex.Message); }
@@ -122,7 +125,7 @@ public sealed class Audio : IDisposable
             }
             catch { return; }
         }
-        l.Target = g * e.Volume * volume * Master;
+        l.Target = g * e.Volume * volume * Master * GroupVolume(e);
         l.Inst.Pan = pan;
     }
 

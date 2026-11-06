@@ -12,7 +12,10 @@ public sealed class Settings
 {
     public bool InvertX { get; set; }
     public bool InvertY { get; set; }
-    public int Volume { get; set; } = 100;          // %
+    public int Volume { get; set; } = 100;          // % (volume général)
+    public int VolumeVoice { get; set; } = 100;     // % interface et voix (VOCAL_…)
+    public int VolumeEffects { get; set; } = 100;   // % effets (tout le reste)
+    public int VolumeMusic { get; set; } = 100;     // % ambiance (musiques)
     public int Brightness { get; set; } = 150;      // % (150 : réglage habituel)
     public string Resolution { get; set; } = "";    // « 1920x1080 » ; vide : fenêtre à la taille de l'écran
     public bool Fullscreen { get; set; }

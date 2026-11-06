@@ -298,24 +298,35 @@ public sealed partial class OpenFDGame
         if (Host is not { } h || h.Objectives.Count == 0 || _loc == null || !_showObjectives)
             return;
         float m = 12 * _scale, pad = 12 * _scale, lh = _ui.LineHeight + 4 * _scale, maxW = MathF.Min(520 * _scale, _fbW * 0.36f);
-        float box = _ui.LineHeight * 1.05f, gap = box + 8 * _scale;
-        List<(string s, SN.Vector4 c, int status, bool first)> rows = new List<(string s, SN.Vector4 c, int status, bool first)>();
+        float box = _ui.LineHeight * 1.05f;
+        // objectif chiffré en cours (chrono de Fireworks, vie du générateur de Mriya, victimes à sauver…) : une barre
+        // rouge dans un cadre bleu à la place de la case, au lieu du nombre entre parenthèses
+        bool anyBar = h.Objectives.Any(o => o.Progress && o.Status == 1);
+        float barW = box * 2.4f, gap = (anyBar ? barW : box) + 8 * _scale;
+        List<(string s, SN.Vector4 c, int status, bool first, float? frac)> rows = new List<(string s, SN.Vector4 c, int status, bool first, float? frac)>();
         foreach (MissionHost.Objective o in h.Objectives)
         {
             SN.Vector4 col = o.Status == 2 ? new SN.Vector4(0.45f, 0.95f, 0.45f, 1) : o.Status == 0 ? new SN.Vector4(1f, 0.4f, 0.35f, 1) : new SN.Vector4(0.98f, 0.92f, 0.45f, 1);
-            string text = _loc.Get(o.Text) + (o.Progress && o.Status == 1 ? $" ({o.Value:0})" : "");
-            List<string> lines = Wrap(text, maxW - 2 * pad - gap, _scale);
+            float? frac = o.Progress && o.Status == 1 ? Math.Clamp((o.Value - o.Min) / MathF.Max(1e-3f, o.Max - o.Min), 0, 1) : null;
+            List<string> lines = Wrap(_loc.Get(o.Text), maxW - 2 * pad - gap, _scale);
             for (int k = 0; k < lines.Count; k++)
-                rows.Add((lines[k], col, o.Status, k == 0));
+                rows.Add((lines[k], col, o.Status, k == 0, frac));
         }
         float w = MathF.Min(maxW, rows.Max(r => _ui.Measure(r.s)) + 2 * pad + gap), hgt = rows.Count * lh + 16 * _scale + lh;
         float x = m;
         _ui.Rect(x, m, w, hgt, new SN.Vector4(0.09f, 0.09f, 0.11f, 0.88f));
         _ui.Text(x + pad, m + 6 * _scale, L("&Objectives", "Objectifs"), new SN.Vector4(1f, 0.48f, 0.18f, 1));
         float y = m + 6 * _scale + lh;
-        foreach ((string? s, SN.Vector4 c, int st, bool first) in rows)
+        foreach ((string? s, SN.Vector4 c, int st, bool first, float? frac) in rows)
         {
-            if (first)
+            if (first && frac is { } f)
+            {
+                float bh = box * 0.72f, by = y + (_ui.LineHeight - bh) / 2, t = MathF.Max(1, 1.5f * _scale);
+                _ui.Rect(x + pad, by, barW, bh, new SN.Vector4(0.05f, 0.05f, 0.08f, 1));                               // fond
+                _ui.Rect(x + pad + t, by + t, (barW - 2 * t) * f, bh - 2 * t, new SN.Vector4(0.72f, 0.1f, 0.08f, 1));   // rouge
+                _ui.Frame(x + pad, by, barW, bh, new SN.Vector4(0.3f, 0.5f, 1f, 1), t);                                 // cadre bleu
+            }
+            else if (first)
             {
                 Texture2D? icon = st == 1 ? OverlayTexture("currentaction.png") : OverlayTexture(st == 2 ? "WID_CHECK_SUCCESS.png" : "WID_CHECK_FAIL.png", cropFrame: true);
                 float by = y + (_ui.LineHeight - box) / 2;

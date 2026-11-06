@@ -9,7 +9,8 @@ namespace OpenFD.MG;
 /// </summary>
 public sealed class SoundDb
 {
-    public sealed record Entry(string Label, string File, float Volume, bool Loop, bool Use3D, float MinDist, float MaxDist, int Priority, float StartDelay);
+    /// <summary>Group : « voice » (SoundDB_Vocal et SoundDB_Interface : voix et interface), « music » (…_MUSIC), « fx » (le reste).</summary>
+    public sealed record Entry(string Label, string File, float Volume, bool Loop, bool Use3D, float MinDist, float MaxDist, int Priority, float StartDelay, string Group = "fx");
     public Dictionary<string, Entry> Entries { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     private Dictionary<string, Entry> _orig = new(StringComparer.OrdinalIgnoreCase);
@@ -112,8 +113,12 @@ public sealed class SoundDb
                 {
                     float F(string k, float d) => keys.TryGetValue(k, out string? s) && float.TryParse(s.TrimEnd('f', 'F', ';'), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float x) ? x : d;
                     string full = Resolve(root, fn);
+                    string iniName = Path.GetFileName(path);
+                    string group = section.EndsWith("MUSIC", StringComparison.OrdinalIgnoreCase) ? "music"
+                        : iniName.Contains("Vocal", StringComparison.OrdinalIgnoreCase) || iniName.Contains("Interface", StringComparison.OrdinalIgnoreCase) || section.StartsWith("VOCAL", StringComparison.OrdinalIgnoreCase) ? "voice"
+                        : "fx";
                     db.Entries[section] = new Entry(section, full, F("VOLUME", 100) / 100f, F("LOOP", 0) != 0, F("USE_3D", 0) != 0,
-                        F("3D_MIN_DISTANCE", 700), F("3D_MAX_DISTANCE", 4500), (int)F("PRIORITY", 50), F("START_DELAY", -1));
+                        F("3D_MIN_DISTANCE", 700), F("3D_MAX_DISTANCE", 4500), (int)F("PRIORITY", 50), F("START_DELAY", -1), group);
                 }
                 keys.Clear();
             }

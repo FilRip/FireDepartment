@@ -585,7 +585,8 @@ public sealed partial class UnitManager
         float near = want * Math.Clamp(AttackBackOff, 0.1f, 1f);
         if (d < want)
             want = near;
-        if (MathF.Abs(d - want) < 80 || (d >= near && d <= want + 80))
+        // il arrose d'où il est s'il est à bonne distance et qu'aucun mur (ou porte fermée) ne le sépare du feu
+        if ((MathF.Abs(d - want) < 80 || (d >= near && d <= want + 80)) && !WallBetween(me, f))
         {
             u.Path.Clear();
             u.Target = h;
@@ -595,7 +596,61 @@ public sealed partial class UnitManager
         // chaque unité se place un peu à côté des autres, autour du feu
         Vector2 dir = d > 1 ? Vector2.Normalize(me - f) : Vector2.UnitX; float spread = ((u.Id * 7) % 9 - 4) * 0.18f;
         dir = new(dir.X * MathF.Cos(spread) - dir.Y * MathF.Sin(spread), dir.X * MathF.Sin(spread) + dir.Y * MathF.Cos(spread));
+        // feu à l'intérieur : la place doit voir le feu sans mur entre les deux (sinon il arroserait à travers une
+        // cloison, depuis dehors) ; on cherche autour du feu, de plus en plus près, la place libre la plus proche de lui
+        foreach (Vector2 spot in SprayPlaces(f, dir, want, near, me).Take(6))
+            if (Order(u, spot, h))
+                return;
         Order(u, f + dir * want, h);
+    }
+
+    /// <summary>
+    /// Places d'où arroser le feu f : cases libres à la distance voulue (puis plus près), d'où l'on voit le feu sans mur
+    /// ni porte fermée entre les deux ; les plus proches de l'unité d'abord (la direction de l'unité en premier).
+    /// </summary>
+    private IEnumerable<Vector2> SprayPlaces(Vector2 f, Vector2 dir, float want, float near, Vector2 me)
+    {
+        if (_s.Grid is not { } g)
+            yield break;
+        float baseA = MathF.Atan2(dir.Y, dir.X);
+        foreach (float dist in new[] { want, (want + near) / 2, near, MathF.Max(150, near * 0.6f) })
+        {
+            List<(Vector2 p, float score)> found = new List<(Vector2 p, float score)>();
+            for (int k = 0; k < 24; k++)
+            {
+                float a = baseA + (k % 2 == 0 ? 1 : -1) * ((k + 1) / 2) * MathF.Tau / 24;
+                Vector2 p = f + new Vector2(MathF.Cos(a), MathF.Sin(a)) * dist;
+                (int cx, int cy) = g.CellOf(new Vector3(p, 0));
+                if (!Free(cx, cy) || WallBetween(p, f))
+                    continue;
+                found.Add((p, Vector2.Distance(me, p)));
+            }
+            foreach ((Vector2 p, float score) in found.OrderBy(x => x.score))
+                yield return p;
+        }
+    }
+
+    /// <summary>Mur, cloison ou porte fermée entre a et le feu b (les derniers 120 unités, autour du foyer, ne comptent pas :
+    /// meubles, foyer posé contre un mur).</summary>
+    public bool WallBetween(Vector2 a, Vector2 b)
+    {
+        if (_s.Grid is not { } g)
+            return false;
+        float len = Vector2.Distance(a, b);
+        if (len < 130)
+            return false;
+        int n = (int)((len - 120) / 30);
+        for (int i = 1; i <= n; i++)
+        {
+            Vector2 p = a + (b - a) * (i * 30 / len);
+            (int cx, int cy) = g.CellOf(new Vector3(p, 0));
+            if (!g.Inside(cx, cy))
+                return true;
+            int k = g.Index(cx, cy);
+            if (Paths.IsBlocked(k) || Paths.IsClosedDoor(k))
+                return true;
+        }
+        return false;
     }
 
     /// <summary>Clic droit sur un véhicule : remplir la réserve (camion) ou y déposer les civils qui suivent (ambulance).</summary>
