@@ -3,7 +3,7 @@
 A new engine that reads files from an original installation of Fire Department 2 and 3.
 No game data is included in this repository.
 
-## The game²
+## The game
 
 Launch exe with in argument the path where Fire Department 2 or 3 is installed, like that :
 OpenFD.exe "C:\Games\Fire Department 3"
