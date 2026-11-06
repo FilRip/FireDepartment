@@ -1359,6 +1359,33 @@ public static class Program
                 }
                 return 0;
             }
+            case "arroser":
+            {
+                // arroser <Data> <Mission> : un pompier reçoit l'ordre d'arroser des feux d'intérieur ; d'où arrosera-t-il ?
+                Session ses = new Session(files, args[2], "EASY");
+                for (int i = 0; i < 400; i++)
+                {
+                    ses.Step();
+                    if (i % 50 == 0)
+                        ses.Host?.EndCinematic();
+                }
+                Unit? u = ses.Units.Units.FirstOrDefault(x => !x.IsVehicle && !x.OnBoard && x.Nozzle != null && !x.IsCanon);
+                if (u == null)
+                    return 1;
+                System.Numerics.Vector3 start = u.Position;
+                foreach (OpenFD.Fire.HotPoint h in ses.Fire.HotPoints.Where(h => h.IsBurning && ses.RoomOf.ContainsKey(h.Id)).Take(6))
+                {
+                    u.Position = start; u.Path.Clear(); u.Target = null;
+                    ses.Units.Attack(u, h);
+                    System.Numerics.Vector2 end = u.Path.Count > 0 ? u.Path.Last() : new(u.Position.X, u.Position.Y);
+                    bool wall = ses.Units.WallBetween(end, new(h.Position.X, h.Position.Y));
+                    System.Numerics.Vector2 f2 = new(h.Position.X, h.Position.Y), s2 = new(start.X, start.Y);
+                    System.Numerics.Vector2 old = f2 + System.Numerics.Vector2.Normalize(s2 - f2) * System.Numerics.Vector2.Distance(end, f2);
+                    Console.Write($"  (ancienne place ({old.X:0},{old.Y:0}) : mur entre {ses.Units.WallBetween(old, f2)})  ");
+                    Console.WriteLine($"{h.Name,-22} pièce {ses.RoomOf[h.Id],-22} → arrose depuis ({end.X:0},{end.Y:0}) à {System.Numerics.Vector2.Distance(end, new(h.Position.X, h.Position.Y)):0} · mur entre : {wall} · {u.Status}");
+                }
+                return 0;
+            }
             case "vieobjet":
             {
                 // vieobjet <Data> <Mission> <numéro> [durée] : vie de l'objet (ENT_GetDamage) et objectifs, toutes les 10 s

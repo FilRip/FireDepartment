@@ -138,7 +138,10 @@ public sealed partial class OpenFDGame
         // état avant l'ordre (y compris la fin du chemin : un nouvel ordre en cours de route garde « en route »)
         static SN.Vector2? End(Unit u) => u.Path.Count > 0 ? u.Path.Last() : null;
         Dictionary<Unit, (string Status, SN.Vector2?, HotPoint? Target, Opening? Opening, Civilian? GoTo, Unit? GoToVehicle, UsableObject? UseTarget)> before = _sel.ToDictionary(u => u, u => (u.Status, End(u), u.Target, u.Opening, u.GoTo, u.GoToVehicle, u.UseTarget));
+        _ignoredOrder = false;
         Command(x, y);
+        if (_ignoredOrder)
+            return;   // ordre déjà en cours (même feu) : ni repère, ni voix
         bool accepted = _sel.Any(u => before.TryGetValue(u, out (string Status, SN.Vector2?, HotPoint? Target, Opening? Opening, Civilian? GoTo, Unit? GoToVehicle, UsableObject? UseTarget) b)
             && (b.Status != u.Status || b.Item2 != End(u) || b.Target != u.Target || b.Opening != u.Opening || b.GoTo != u.GoTo || b.GoToVehicle != u.GoToVehicle || b.UseTarget != u.UseTarget)
             && !RefusedStatus(u.Status));
@@ -149,6 +152,8 @@ public sealed partial class OpenFDGame
     }
 
     private static bool RefusedStatus(string s) => s.StartsWith("impossible") || s.StartsWith("ne peut") || s.Contains("hors service") || s.Contains("hors d'atteinte") || s.StartsWith("ce véhicule");
+
+    private bool _ignoredOrder;
 
     private void Acknowledge() => _audio?.PlayAny(Enumerable.Range(1, 6).Select(i => $"VOCAL_ACKNOWLEDGE{i}"));
 

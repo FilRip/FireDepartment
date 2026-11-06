@@ -18,6 +18,13 @@ public sealed class ExplosionSystem
     public static float FireDamageFactor = float.TryParse(Environment.GetEnvironmentVariable("FD3_DEGATS"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float f) ? f : 6f;
     public static float OtherFiresShare = float.TryParse(Environment.GetEnvironmentVariable("FD3_PART"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float p) ? p : 0.25f;
     public const float ItemRadius = 180f;
+    /// <summary>
+    /// Objet qui ne fait que s'abîmer, suivi par un script (Mriya : le générateur de l'objectif 1) : la formule du jeu ×
+    /// WatchedDamageFactor (réglé pour 2 minutes en facile, chronométré sur le jeu d'origine), divisé par
+    /// ObjectiveTimeFactor (réglage « Gameplay » du fichier d'options, 2 par défaut : 4 minutes).
+    /// </summary>
+    public const float WatchedDamageFactor = 2.53f;
+    public static float ObjectiveTimeFactor = 2f;
     // part du souffle (LP_Explode_Power) reçue par les autres objets explosifs : limite les réactions en chaîne
     public static float BlastOnItems = float.TryParse(Environment.GetEnvironmentVariable("FD3_SOUFFLE"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float b) ? b : 0.5f;   // taille d'une voiture autour de son centre
 
@@ -111,9 +118,8 @@ public sealed class ExplosionSystem
                     float d = h.Class.UnitLifeDamage * Math.Min(1, h.Intensity / Math.Max(1, h.Class.IntensityMax));
                     sum += d; max = MathF.Max(max, d);
                 }
-            // (objet qui ne fait que s'abîmer, suivi par un script : la formule du jeu sans le facteur des explosifs —
-            // Mriya : 260 points de vie, UnitLifeDamage 2 × FireDamageCoef 0,43 en facile → environ 5 minutes)
-            float dmg = (max + OtherFiresShare * (sum - max)) * (it.CanExplode ? FireDamageFactor : 1f);
+            // (objet qui ne fait que s'abîmer, suivi par un script : voir WatchedDamageFactor et ObjectiveTimeFactor)
+            float dmg = (max + OtherFiresShare * (sum - max)) * (it.CanExplode ? FireDamageFactor : WatchedDamageFactor / MathF.Max(0.1f, ObjectiveTimeFactor));
             if (dmg > 0)
                 it.Life -= dmg * it.FireDamageCoef * dt;
             if (!it.CanExplode)

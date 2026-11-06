@@ -140,7 +140,12 @@ public sealed partial class OpenFDGame
         _bright = Math.Clamp(_settings.Brightness, 40, 200) / 100f;
         ApplyGameplay(_settings.Gameplay ?? new GameplaySettings());
         if (_audio != null)
+        {
             _audio.Master = 0.8f * Math.Clamp(_settings.Volume, 0, 100) / 100f;
+            _audio.VoiceVolume = Math.Clamp(_settings.VolumeVoice, 0, 100) / 100f;
+            _audio.EffectsVolume = Math.Clamp(_settings.VolumeEffects, 0, 100) / 100f;
+            _audio.MusicVolume = Math.Clamp(_settings.VolumeMusic, 0, 100) / 100f;
+        }
     }
 
     /// <summary>Réglages de jeu (Gameplay) : ceux du joueur, ou ceux du serveur pendant une partie en réseau.</summary>
@@ -150,6 +155,7 @@ public sealed partial class OpenFDGame
         UnitManager.ReviveStamina = Math.Clamp(gp.ReviveStamina, 0.05f, 1f); UnitManager.VehicleFireFactor = gp.VehicleFireFactor;
         UnitManager.AutoAttackRange = Math.Clamp(gp.AutoAttackRange, 1f, 10f); UnitManager.AttackBackOff = Math.Clamp(gp.AttackBackOff, 0.1f, 1f);
         UnitManager.StaminaLoss = Math.Clamp(gp.StaminaLoss, 0f, 5f);
+        ExplosionSystem.ObjectiveTimeFactor = Math.Clamp(gp.ObjectiveTimeFactor, 0.1f, 20f);
         UnitManager.CarrySpeed = Math.Clamp(gp.CarrySpeed, 0.2f, 1f);
         _arrowShift = Math.Clamp(gp.ArrowShiftSpeed, 1f, 5f);
         _flameFps = Math.Clamp(gp.FlameSpeed, 0.5f, 60f); _flameFpsVar = Math.Clamp(gp.FlameSpeedVariation, 0f, 60f);
@@ -387,6 +393,9 @@ public sealed partial class OpenFDGame
             new(O("InvertX"), YN(_settings.InvertX), true, _ => { _settings.InvertX = !_settings.InvertX; Changed(); }),
             new(O("InvertY"), YN(_settings.InvertY), true, _ => { _settings.InvertY = !_settings.InvertY; Changed(); }),
             new(L("&VolumeMaster", "Volume général"), $"{_settings.Volume} %", true, d => { _settings.Volume = Math.Clamp(_settings.Volume + 10 * d, 0, 100); Changed(); _audio?.Play("VOCAL_SELECTION1"); }),
+            new(L("&VolumeInterface", "Volume interface et voix"), $"{_settings.VolumeVoice} %", true, d => { _settings.VolumeVoice = Math.Clamp(_settings.VolumeVoice + 10 * d, 0, 100); Changed(); _audio?.Play("VOCAL_SELECTION1"); }),
+            new(L("&VolumeEffects", "Volume des effets"), $"{_settings.VolumeEffects} %", true, d => { _settings.VolumeEffects = Math.Clamp(_settings.VolumeEffects + 10 * d, 0, 100); Changed(); _audio?.PlayAny(new[] { "EXPLOSION_GAS_TANK_01_01", "SC_USE_GENERIC" }); }),
+            new(L("&VolumeAmbiance", "Volume d'ambiance"), $"{_settings.VolumeMusic} %", true, d => { _settings.VolumeMusic = Math.Clamp(_settings.VolumeMusic + 10 * d, 0, 100); Changed(); }),
             new(O("Brightness"), $"{_settings.Brightness} %", true, d => { _settings.Brightness = Math.Clamp(_settings.Brightness + 10 * d, 40, 200); Changed(); }),
             new(O("Resolution"), _settings.Resolution == "" ? O("Auto").Split('(')[0].Trim() : _settings.Resolution.Replace("x", " × "), true, d => { List<string> rs = Resolutions(); _settings.Resolution = rs[((rs.IndexOf(_settings.Resolution) + d) % rs.Count + rs.Count) % rs.Count]; Changed(); }),
             new(O("Fullscreen"), YN(_settings.Fullscreen), true, _ => { _settings.Fullscreen = !_settings.Fullscreen; Changed(); }),
@@ -401,8 +410,24 @@ public sealed partial class OpenFDGame
     {
         // boutons étroits (menu principal, pause) ; les options gardent la place pour le réglage et sa valeur
         float lh = _ui.LineHeight * (_screen == 2 ? 2.35f : 1.7f) + 8 * _scale, w = _screen == 2 ? MathF.Min(_fbW * 0.4f, 560 * _scale) : MathF.Min(_fbW * 0.35f, 480 * _scale);
+        if (_screen == 2)
+        {
+            // options : titre près du haut, liste juste dessous, aide en bas ; tout tient dans l'écran (1080p compris) —
+            // les lignes se resserrent si besoin (deux lignes de texte au moins par réglage)
+            float avail = _fbH - OptionsTop - TitleBlock - TitleGap - OptionsHelpBlock - OptionsTop;
+            lh = MathF.Max(_ui.LineHeight * 2.05f, MathF.Min(lh, avail / Math.Max(1, n)));
+            float total = TitleBlock + TitleGap + n * lh + OptionsHelpBlock;
+            float top = MathF.Max(OptionsTop, (_fbH - total) / 2);
+            return ((_fbW - w) / 2, top + TitleBlock + TitleGap, w, lh);
+        }
         return ((_fbW - w) / 2, MathF.Max(_fbH * 0.3f, (_fbH - n * lh) / 2), w, lh);
     }
+
+    // écran des options : marge du haut, hauteur du bandeau du titre, écart titre-liste, aide sous la liste
+    private float OptionsTop => 10 * _scale;
+    private float TitleBlock => _font.LineHeight * _scale * 2f + 16 * _scale;
+    private float TitleGap => 14 * _scale;
+    private float OptionsHelpBlock => 16 * _scale + _ui.LineHeight * 3f;
 
     private void RenderScreen()
     {
@@ -452,8 +477,9 @@ public sealed partial class OpenFDGame
         float ts = _scale * 2f;
         if (_screen != 0)   // le titre du jeu est déjà sur l'image de fond
         {
-            _ui.Rect(0, ly - lh * 2.4f, _fbW, _font.LineHeight * ts + 16 * _scale, new SN.Vector4(0, 0, 0, 0.55f));
-            _ui.Text((_fbW - _font.Measure(title) * ts) / 2, ly - lh * 2.4f + 8 * _scale, title, accent, ts);
+            float tyTop = _screen == 2 ? ly - TitleGap - TitleBlock : ly - lh * 2.4f;   // options : juste au-dessus de la liste
+            _ui.Rect(0, tyTop, _fbW, _font.LineHeight * ts + 16 * _scale, new SN.Vector4(0, 0, 0, 0.55f));
+            _ui.Text((_fbW - _font.Measure(title) * ts) / 2, tyTop + 8 * _scale, title, accent, ts);
         }
         _ui.Rect(lx - 12 * _scale, ly - 8 * _scale, lw + 24 * _scale, rows.Count * lh + 16 * _scale, new SN.Vector4(0.07f, 0.07f, 0.09f, 0.78f));
         for (int i = 0; i < rows.Count; i++)

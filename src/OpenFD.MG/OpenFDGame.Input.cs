@@ -421,7 +421,14 @@ public sealed partial class OpenFDGame
         if (fire != null)
         {
             int n = 0;
-            foreach (Unit u in _sel.Where(u => u.Nozzle != null))
+            // ceux qui arrosent déjà ce feu ne font rien (ni déplacement, ni voix) ; si ce sont tous, l'ordre est ignoré
+            List<Unit> already = _sel.Where(u => u.Nozzle != null && u.Target == fire && !u.Moving && u.Path.Count == 0).ToList();
+            if (already.Count > 0 && already.Count == _sel.Count(u => u.Nozzle != null))
+            {
+                _ignoredOrder = true;
+                return;
+            }
+            foreach (Unit u in _sel.Where(u => u.Nozzle != null && !already.Contains(u)))
             {
                 DoAttack(u, fire);
                 n++;
