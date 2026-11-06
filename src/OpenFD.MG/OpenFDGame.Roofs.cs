@@ -1,3 +1,5 @@
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using OpenFD.Game;
 using SN = System.Numerics;
 
@@ -9,13 +11,260 @@ namespace OpenFD.MG;
 // (London : « Bank_fasad », « Bank_fasad_ROOF », « Bank_ROOM… », « roof_bank_glass » forment la banque).
 public sealed partial class OpenFDGame
 {
-    private sealed class Building { public SN.Vector2 Min, Max; public float MinZ = float.MaxValue; public readonly List<string> Nodes = new(); public bool Open; }
+    private sealed class Building { public SN.Vector2 Min, Max; public float MinZ = float.MaxValue; public readonly List<string> Nodes = new(); public bool Open; public bool HasRooms; }
     private readonly List<Building> _buildings = new();
     private readonly Dictionary<string, int> _nodeBuilding = new(StringComparer.OrdinalIgnoreCase);
     private int _curBuilding = -1;
     private float _roofCheck;
 
     private bool RoofShown(int bld) => _roofs && !(bld >= 0 && bld < _buildings.Count && _buildings[bld].Open);
+
+    /// <summary>Bâtiment dont le toit s'efface pièce par pièce (carte des pièces) plutôt que d'un coup.</summary>
+    private bool RoofByRoom(int bld) => false;   // (ancien essai : toit effacé pièce par pièce ; remplacé par les couvercles noirs)
+
+    // ---- couvercles noirs des pièces (« …_ROOMn_MASK » du décor), comme le jeu d'origine -----------------------------
+    // Le toit part d'un bloc (script ou pompier qui entre) ; chaque pièce que l'on ne peut pas encore atteindre reste
+    // couverte de son couvercle noir. Pièces : zones de cases libres de la grille séparées par les murs et les ouvertures.
+    // Une pièce est atteinte quand on y arrive depuis un pompier en passant par des portes ouvertes ou cassées, ou par
+    // des gravats (même intacts) ; une porte fermée arrête. London, cinéma : la porte d'entrée découvre le couloir, la
+    // porte de gauche les pièces de gauche, la troisième la salle.
+    private int[] _roomOf = Array.Empty<int>();       // case → pièce (−1 : mur, ouverture, ou dehors)
+    private bool[] _roomOpen = Array.Empty<bool>();
+    private int[] _openingAt = Array.Empty<int>();    // case → indice de l'ouverture qui l'occupe (−1 : aucune)
+
+    private void FindRooms()
+    {
+        if (_session.Grid is not { } g)
+            return;
+        int w = g.Width, h = g.Height, n = w * h;
+        _openingAt = Enumerable.Repeat(-1, n).ToArray();
+        IReadOnlyList<Opening> ops = _session.Units.Openings;
+        for (int k = 0; k < ops.Count; k++)
+            if (!ops[k].IsWindow && ops[k].OnGround)
+                foreach (int c in ops[k].Cells)
+                    if (c >= 0 && c < n)
+                        _openingAt[c] = k;
+        _roomOf = Enumerable.Repeat(-1, n).ToArray();
+        List<List<int>> comps = new List<List<int>>();
+        Queue<int> q = new Queue<int>();
+        for (int s0 = 0; s0 < n; s0++)
+        {
+            if (_roomOf[s0] != -1 || _session.Units.IsBlocked(s0) || _openingAt[s0] >= 0 || g.ZoneA[s0] == 0)
+                continue;
+            List<int> comp = new List<int>();
+            int id = comps.Count;
+            _roomOf[s0] = id; q.Enqueue(s0);
+            while (q.Count > 0)
+            {
+                int c = q.Dequeue(); comp.Add(c);
+                int cx = c % w, cy = c / w;
+                foreach ((int dx, int dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+                {
+                    int nx = cx + dx, ny = cy + dy;
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h)
+                        continue;
+                    int k2 = ny * w + nx;
+                    if (_roomOf[k2] != -1 || _session.Units.IsBlocked(k2) || _openingAt[k2] >= 0 || g.ZoneA[k2] == 0)
+                        continue;
+                    _roomOf[k2] = id; q.Enqueue(k2);
+                }
+            }
+            comps.Add(comp);
+        }
+        // une pièce : petite zone fermée, posée dans un bâtiment du décor (le dehors, lui, touche le bord ou est immense)
+        const float Cell = OpenFD.Formats.Grid.CellSize;
+        int rooms = 0;
+        for (int id = 0; id < comps.Count; id++)
+        {
+            List<int> comp = comps[id];
+            bool border = comp.Any(c => c % w == 0 || c / w == 0 || c % w == w - 1 || c / w == h - 1);
+            SN.Vector2 centre = new SN.Vector2((float)comp.Average(c => c % w + 0.5) * Cell, (float)comp.Average(c => c / w + 0.5) * Cell);
+            Building? b = border || comp.Count > n / 20 ? null
+                : _buildings.Where(b => b.Nodes.Count > 1 && Inside(centre, b.Min, b.Max, 0)).OrderBy(b => (b.Max.X - b.Min.X) * (b.Max.Y - b.Min.Y)).FirstOrDefault();
+            if (b == null)
+            {
+                foreach (int c in comp)
+                    _roomOf[c] = -1;
+                continue;
+            }
+            // le bâtiment, et tout toit posé au-dessus (« …_ROOF » seul, parapet…), s'effacent pièce par pièce
+            foreach (Building over in _buildings.Where(o => Inside(centre, o.Min, o.Max, 0)))
+                over.HasRooms = true;
+            rooms++;
+        }
+        _roomOpen = new bool[comps.Count];
+        // essais (captures) : FD3_OUVRIR_PORTES=nom1,nom2 ouvre ces portes au départ
+        if (Environment.GetEnvironmentVariable("FD3_OUVRIR_PORTES") is { } names)
+            foreach (Opening o in ops.Where(o => names.Split(',').Contains(o.Name, StringComparer.OrdinalIgnoreCase)))
+                o.State = OpeningState.Open;
+        if (rooms == 0)
+            return;
+        Console.WriteLine($"Pièces : {rooms} dans {_buildings.Count(b => b.HasRooms)} bâtiment(s)");
+    }
+
+    /// <summary>Pièces que les pompiers peuvent atteindre : portes fermées = arrêt ; portes ouvertes, cassées et gravats = passage.</summary>
+    private void UpdateRoomRoofs()
+    {
+        if (_roomOf.Length == 0 || _session.Grid is not { } g)
+            return;
+        int w = g.Width, h = g.Height, n = w * h;
+        IReadOnlyList<Opening> ops = _session.Units.Openings;
+        bool[] seen = new bool[n];
+        Queue<int> q = new Queue<int>();
+        foreach (Unit u in _session.Units.Active.Where(u => !u.IsVehicle))
+        {
+            (int cx, int cy) = g.CellOf(u.Position);
+            if (g.Inside(cx, cy) && !seen[g.Index(cx, cy)])
+            {
+                seen[g.Index(cx, cy)] = true;
+                q.Enqueue(g.Index(cx, cy));
+            }
+        }
+        bool changed = false;
+        while (q.Count > 0)
+        {
+            int c = q.Dequeue();
+            if (_roomOf[c] >= 0 && !_roomOpen[_roomOf[c]])
+            {
+                _roomOpen[_roomOf[c]] = true;
+                changed = true;
+            }
+            int cx = c % w, cy = c / w;
+            foreach ((int dx, int dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+            {
+                int nx = cx + dx, ny = cy + dy;
+                if (nx < 0 || ny < 0 || nx >= w || ny >= h)
+                    continue;
+                int k = ny * w + nx;
+                if (seen[k] || g.ZoneA[k] == 0)
+                    continue;
+                int o = _openingAt[k];
+                if (o >= 0)
+                {
+                    // gravats : on découvre ce qu'il y a derrière avant de les dégager ; porte : seulement ouverte ou cassée
+                    if (!ops[o].IsObstacle && ops[o].State == OpeningState.Closed)
+                        continue;
+                }
+                else if (_session.Units.IsBlocked(k))
+                    continue;
+                seen[k] = true;
+                q.Enqueue(k);
+            }
+        }
+        if (changed)
+            foreach (RoomLid lid in _lids.Where(l => l.Shown && l.Rooms.Count > 0 && l.Rooms.Any(r => _roomOpen[r])))
+                lid.Shown = false;   // une de ses pièces atteinte (la grille coupe parfois une pièce en deux) : le couvercle part
+        // couvercle sans pièce reconnue : il part quand un pompier passe dessous
+        foreach (RoomLid lid in _lids.Where(l => l.Shown && l.Rooms.Count == 0))
+            if (_session.Units.Active.Any(u => !u.IsVehicle && Inside(new(u.Position.X, u.Position.Y), lid.Min, lid.Max, -50)))
+                lid.Shown = false;
+    }
+
+    private sealed class RoomLid
+    {
+        public required string Name;
+        public required VertexBuffer Vb;
+        public required int Tris;
+        public SN.Vector2 Min, Max;
+        public readonly List<int> Rooms = new();
+        public bool Shown = true;
+    }
+    private readonly List<RoomLid> _lids = new();
+    private BasicEffect? _lidFx;
+
+    /// <summary>Charge les couvercles noirs et repère les pièces que chacun recouvre (cases dont le centre est sous lui).</summary>
+    private void LoadLids(string mission)
+    {
+        foreach (RoomLid l in _lids)
+            l.Vb.Dispose();
+        _lids.Clear();
+        _lidFx ??= new BasicEffect(GraphicsDevice) { LightingEnabled = false, VertexColorEnabled = false, TextureEnabled = false, DiffuseColor = Vector3.Zero };
+        Formats.Grid? g = _session.Grid;
+        const float Cell = OpenFD.Formats.Grid.CellSize;
+        foreach (SceneAssets.Node node in _assets.Masks(mission))
+        {
+            Formats.Mesh m;
+            try
+            {
+                m = _assets.LoadMesh(mission, node.Mesh, null).Mesh;
+            }
+            catch
+            {
+                continue;
+            }
+            if (m.Indices.Length < 3)
+                continue;
+            VertexPosition[] v = new VertexPosition[m.Indices.Length];
+            SN.Vector2 mn = new(float.MaxValue), mx = new(float.MinValue);
+            for (int k = 0; k < m.Indices.Length; k++)
+            {
+                int i = (int)m.Indices[k];
+                SN.Vector3 p = SN.Vector3.Transform(new SN.Vector3(m.Positions[3 * i], m.Positions[3 * i + 1], m.Positions[3 * i + 2]), node.World);
+                v[k] = new VertexPosition(new Vector3(p.X, p.Y, p.Z + 2));
+                mn = SN.Vector2.Min(mn, new(p.X, p.Y)); mx = SN.Vector2.Max(mx, new(p.X, p.Y));
+            }
+            VertexBuffer vb = new VertexBuffer(GraphicsDevice, VertexPosition.VertexDeclaration, v.Length, BufferUsage.WriteOnly);
+            vb.SetData(v);
+            RoomLid lid = new RoomLid { Name = node.Mesh, Vb = vb, Tris = v.Length / 3, Min = mn, Max = mx };
+            // pièces dont au moins un tiers des cases est sous le couvercle (vu de dessus)
+            if (g != null && _roomOf.Length == g.Width * g.Height)
+            {
+                Dictionary<int, int> under = new Dictionary<int, int>(), total = new Dictionary<int, int>();
+                for (int c = 0; c < _roomOf.Length; c++)
+                {
+                    int r = _roomOf[c];
+                    if (r < 0)
+                        continue;
+                    total[r] = total.GetValueOrDefault(r) + 1;
+                    SN.Vector2 cp = new SN.Vector2((c % g.Width + 0.5f) * Cell, (c / g.Width + 0.5f) * Cell);
+                    if (!Inside(cp, mn, mx, 0))
+                        continue;
+                    for (int t = 0; t + 2 < v.Length; t += 3)
+                        if (InTri(cp, v[t].Position, v[t + 1].Position, v[t + 2].Position))
+                        {
+                            under[r] = under.GetValueOrDefault(r) + 1;
+                            break;
+                        }
+                }
+                foreach ((int r, int cnt) in under)
+                    if (cnt * 3 >= total[r])
+                        lid.Rooms.Add(r);
+            }
+            _lids.Add(lid);
+            if (Environment.GetEnvironmentVariable("FD3_DEBUG_COUVERCLES") != null)
+                Console.WriteLine($"  couvercle {lid.Name} ({mn.X:0},{mn.Y:0})-({mx.X:0},{mx.Y:0}) pièces [{string.Join(", ", lid.Rooms)}]");
+        }
+        if (_lids.Count > 0)
+            Console.WriteLine($"Couvercles des pièces : {_lids.Count} ({_lids.Count(l => l.Rooms.Count > 0)} liés à une pièce de la grille)");
+    }
+
+    private static bool InTri(SN.Vector2 p, Vector3 a, Vector3 b, Vector3 c)
+    {
+        float d1 = (p.X - b.X) * (a.Y - b.Y) - (a.X - b.X) * (p.Y - b.Y);
+        float d2 = (p.X - c.X) * (b.Y - c.Y) - (b.X - c.X) * (p.Y - c.Y);
+        float d3 = (p.X - a.X) * (c.Y - a.Y) - (c.X - a.X) * (p.Y - a.Y);
+        bool neg = d1 < 0 || d2 < 0 || d3 < 0, pos = d1 > 0 || d2 > 0 || d3 > 0;
+        return !(neg && pos);
+    }
+
+    /// <summary>Couvercles noirs encore en place (sous le toit tant qu'il est là).</summary>
+    private void RenderLids(Matrix viewProj)
+    {
+        if (_lidFx == null || _lids.Count == 0 || _map)
+            return;
+        GraphicsDevice gd = GraphicsDevice;
+        _lidFx.World = Matrix.Identity; _lidFx.View = Matrix.Identity; _lidFx.Projection = viewProj;
+        gd.DepthStencilState = DepthStencilState.Default; gd.BlendState = BlendState.Opaque; gd.RasterizerState = RasterizerState.CullNone;
+        foreach (RoomLid lid in _lids.Where(l => l.Shown))
+        {
+            gd.SetVertexBuffer(lid.Vb);
+            foreach (EffectPass pass in _lidFx.CurrentTechnique.Passes)
+            {
+                pass.Apply();
+                gd.DrawPrimitives(PrimitiveType.TriangleList, 0, lid.Tris);
+            }
+        }
+    }
 
     private void FindBuildings(string mission, IReadOnlyList<SceneAssets.Node> scenery)
     {
@@ -109,17 +358,23 @@ public sealed partial class OpenFDGame
         // demandes des scripts (cinématiques : « montrer l'intérieur du hangar »)
         if (Host is { } h)
         {
+            // LEV_RoofVisibility / LEV_MaskVisibility : toit d'un bâtiment, ou couvercle noir nommé
             foreach ((string? mesh, bool hidden) in h.RoofRequests)
+            {
+                foreach (RoomLid lid in _lids.Where(l => l.Name.Equals(mesh, StringComparison.OrdinalIgnoreCase)))
+                    lid.Shown = !hidden;
                 if (_nodeBuilding.TryGetValue(mesh, out int id))
                     _buildings[id].Open = hidden;
                 else
                     foreach (Building b0 in _buildings.Where(b0 => b0.Nodes.Any(n => n.Contains(mesh, StringComparison.OrdinalIgnoreCase))))
                         b0.Open = hidden;
+            }
             h.RoofRequests.Clear();
         }
         if ((_roofCheck -= dt) > 0 || _buildings.Count == 0)
             return;
         _roofCheck = 0.25f;
+        UpdateRoomRoofs();
         List<SN.Vector2> men = _session.Units.Active.Where(u => !u.IsVehicle).Select(u => new SN.Vector2(u.Position.X, u.Position.Y)).ToList();
         if (men.Count == 0)
             return;

@@ -17,7 +17,7 @@ public sealed class SceneEffect
 {
     public const int ModePlain = 0, ModeGround = 1, ModeBuilding = 2;
     public Effect Fx { get; }
-    private readonly EffectParameter _wvp, _world, _eye, _fog, _shadowVp, _params, _fogColor, _shadow, _sun, _tint, _diff, _dirt, _light, _shadowMap;
+    private readonly EffectParameter _wvp, _world, _eye, _fog, _shadowVp, _params, _fogColor, _shadow, _sun, _tint, _diff, _dirt, _light, _shadowMap, _roofMask, _roofMaskTex;
 
     private const string Vs = @"
 uniform vec4 vs_uniforms_vec4[14];
@@ -31,6 +31,7 @@ varying vec4 vTex0;
 varying vec4 vTex1;
 varying vec4 vShadow;
 varying vec4 vNormal;
+varying vec4 vWorld;
 void main()
 {
     vec4 p = vec4(vs_v0.xyz, 1.0);
@@ -41,22 +42,28 @@ void main()
     vShadow = vec4(dot(w, vs_uniforms_vec4[10]), dot(w, vs_uniforms_vec4[11]), dot(w, vs_uniforms_vec4[12]), dot(w, vs_uniforms_vec4[13]));
     vTex0 = vec4(vs_v1.xy, vs_v2.xy);
     vTex1 = vec4(vs_v3.xy, fog, 0.0);
+    vWorld = w;
     vNormal = vec4(dot(vs_v4.xyz, vs_uniforms_vec4[4].xyz), dot(vs_v4.xyz, vs_uniforms_vec4[5].xyz), dot(vs_v4.xyz, vs_uniforms_vec4[6].xyz), 0.0);" + GlslEffect.PosFixup + @"
 }
 ";
 
     private const string Ps = @"
-uniform vec4 ps_uniforms_vec4[5];
+uniform vec4 ps_uniforms_vec4[6];
 uniform sampler2D ps_s0;
 uniform sampler2D ps_s1;
 uniform sampler2D ps_s2;
 uniform sampler2D ps_s3;
+uniform sampler2D ps_s4;
 varying vec4 vTex0;
 varying vec4 vTex1;
 varying vec4 vShadow;
 varying vec4 vNormal;
+varying vec4 vWorld;
 void main()
 {
+    // toit par pièce : la carte des pièces découvertes (une case de grille par texel) efface le toit au-dessus
+    vec4 rm = ps_uniforms_vec4[5];
+    if (rm.z > 0.5 && texture2D(ps_s4, vWorld.xy * rm.xy).r > 0.5) discard;
     vec4 diff = texture2D(ps_s0, vTex0.xy);
     if (diff.a < ps_uniforms_vec4[0].y) discard;
     vec3 c = diff.rgb;
@@ -103,13 +110,26 @@ void main()
                 new GlslEffect.Param("WorldViewProj", 4, true), new GlslEffect.Param("World", 4, true), new GlslEffect.Param("Eye", 1, true),
                 new GlslEffect.Param("Fog", 1, true), new GlslEffect.Param("ShadowViewProj", 4, true),
                 new GlslEffect.Param("Params", 1, false), new GlslEffect.Param("FogColor", 1, false), new GlslEffect.Param("Shadow", 1, false), new GlslEffect.Param("SunDir", 1, false), new GlslEffect.Param("Tint", 1, false),
+                new GlslEffect.Param("RoofMask", 1, false),
             },
-            new[] { "DiffTex", "DirtTex", "LightTex", "ShadowMap" },
+            new[] { "DiffTex", "DirtTex", "LightTex", "ShadowMap", "RoofMaskTex" },
             new[] { ("vs_v0", VertexElementUsage.Position, 0), ("vs_v1", VertexElementUsage.TextureCoordinate, 0), ("vs_v2", VertexElementUsage.TextureCoordinate, 1), ("vs_v3", VertexElementUsage.TextureCoordinate, 2), ("vs_v4", VertexElementUsage.Normal, 0) });
         EffectParameterCollection p = Fx.Parameters;
         _wvp = p["WorldViewProj"]; _world = p["World"]; _eye = p["Eye"]; _fog = p["Fog"]; _shadowVp = p["ShadowViewProj"];
         _params = p["Params"]; _fogColor = p["FogColor"]; _shadow = p["Shadow"]; _sun = p["SunDir"]; _tint = p["Tint"];
         _diff = p["DiffTex"]; _dirt = p["DirtTex"]; _light = p["LightTex"]; _shadowMap = p["ShadowMap"];
+        _roofMask = p["RoofMask"]; _roofMaskTex = p["RoofMaskTex"];
+        _roofMaskTex.SetValue(Tex.White);
+    }
+
+    /// <summary>
+    /// Carte des pièces découvertes (un texel par case de grille, rouge = toit effacé) appliquée aux toits ;
+    /// null : pas de masque. cell : taille d'une case de grille ; w, h : taille de la grille.
+    /// </summary>
+    public void SetRoofMask(Texture2D? mask, float cell, int w, int h)
+    {
+        _roofMaskTex.SetValue(mask ?? Tex.White);
+        _roofMask.SetValue(mask != null ? new Vector4(1f / (cell * w), 1f / (cell * h), 1, 0) : Vector4.Zero);
     }
 
     private Matrix _vp;
