@@ -29,7 +29,8 @@ public sealed partial class UnitManager
             // ouvertures de la pièce : sur ses murs (boîte de la pièce élargie)
             foreach (Opening o in Openings)
             {
-                Vector3 c = o.Center; const float m = 160;
+                Vector3 c = o.Center;
+                const float m = 160;
                 if (c.X >= box.Min.X - m && c.X <= box.Max.X + m && c.Y >= box.Min.Y - m && c.Y <= box.Max.Y + m
                     && c.Z >= box.Min.Z - 200 && c.Z <= box.Max.Z + 200)
                     room.Openings.Add(o);
@@ -43,7 +44,8 @@ public sealed partial class UnitManager
         List<HotPoint> loose = _s.Fire.HotPoints.Where(h => h.MakeBackdraft && !BackdraftRooms.Any(r => r.Sleepers.Contains(h))).ToList();
         while (loose.Count > 0)
         {
-            List<HotPoint> grp = new List<HotPoint> { loose[0] }; loose.RemoveAt(0);
+            List<HotPoint> grp = new List<HotPoint> { loose[0] };
+            loose.RemoveAt(0);
             for (bool grew = true; grew;)
             {
                 grew = false;
@@ -132,8 +134,14 @@ public sealed partial class UnitManager
         foreach (Unit u in Units.Where(u => !u.IsVehicle && Vector3.Distance(u.Position, door.Center) < BackdraftInjuryRange))
         {
             // il ne perd pas de vie : il tombe inconscient, un collègue doit venir le ranimer
-            u.Unconscious = true; u.Wounds++; hurt++;
-            u.Path.Clear(); u.Target = null; u.Opening = null; u.GoTo = null; u.GoToVehicle = null;
+            u.Unconscious = true;
+            u.Wounds++;
+            hurt++;
+            u.Path.Clear();
+            u.Target = null;
+            u.Opening = null;
+            u.GoTo = null;
+            u.GoToVehicle = null;
             // projeté en arrière, loin de la porte
             Vector2 away = new Vector2(u.Position.X - door.Center.X, u.Position.Y - door.Center.Y);
             if (away.LengthSquared() > 1)

@@ -115,13 +115,15 @@ public static class Rooms
             if (files.TryRead(prefix + k + ".mesh") is not { } mesh || MeshBox(mesh) is not { } box)
                 continue;
             Matrix4x4 w = World(nodes, k);
-            Vector3 lo = new Vector3(float.MaxValue); Vector3 hi = new Vector3(float.MinValue);
+            Vector3 lo = new Vector3(float.MaxValue);
+            Vector3 hi = new Vector3(float.MinValue);
             foreach (float x in new[] { box.min.X, box.max.X })
                 foreach (float y in new[] { box.min.Y, box.max.Y })
                     foreach (float z in new[] { box.min.Z, box.max.Z })
                     {
                         Vector3 c = Vector3.Transform(new Vector3(x, y, z), w);
-                        lo = Vector3.Min(lo, c); hi = Vector3.Max(hi, c);
+                        lo = Vector3.Min(lo, c);
+                        hi = Vector3.Max(hi, c);
                     }
             rooms.Add(new Room(k, lo, hi));
         }

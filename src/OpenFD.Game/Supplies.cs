@@ -9,7 +9,8 @@ public sealed partial class UnitManager
     public List<SupplyPoint> Supplies { get; } = new();
     public List<TriggerZone> Triggers { get; } = new();
     /// <summary>Dernière zone déclenchée et quand (une cinématique qu'elle lance la désactive).</summary>
-    public TriggerZone? LastTrigger; public double LastTriggerTime = -99;
+    public TriggerZone? LastTrigger;
+    public double LastTriggerTime = -99;
     private string? _saveCivilianScript;
 
     private void LoadSupplies(Level level)
@@ -122,7 +123,8 @@ public sealed partial class UnitManager
                 }
                 if (!t.Inside.Add(u.Id))
                     continue;
-                LastTrigger = t; LastTriggerTime = _s.Time;
+                LastTrigger = t;
+                LastTriggerTime = _s.Time;
                 scripts.TryRun(t.Script, Value.I(u.Id), Value.I(t.Id));
             }
     }
@@ -130,7 +132,8 @@ public sealed partial class UnitManager
     /// <summary>Civil mis à l'abri : le script de la mission est prévenu ([COMMAND_CALLBACKS] CmdSaveCivilian).</summary>
     private void Save(Civilian c)
     {
-        c.State = CivilianState.Rescued; c.Leader = null;
+        c.State = CivilianState.Rescued;
+        c.Leader = null;
         string fn = string.IsNullOrEmpty(_saveCivilianScript) ? "OnCivilianSaved" : _saveCivilianScript;
         _s.Scripts?.TryRun(fn, Value.I(c.Id));
     }

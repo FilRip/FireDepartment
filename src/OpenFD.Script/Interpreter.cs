@@ -60,8 +60,16 @@ public sealed class Interpreter
 
     public Value? TryRun(string fn, params Value[] args)
     {
-        try { _steps = 0; return Invoke(fn, args, 0); }
-        catch (ScriptError e) { Log.Add($"[{Host.GameTime:0.0}] {fn} : {e.Message}"); return null; }
+        try
+        {
+            _steps = 0;
+            return Invoke(fn, args, 0);
+        }
+        catch (ScriptError e)
+        {
+            Log.Add($"[{Host.GameTime:0.0}] {fn} : {e.Message}");
+            return null;
+        }
     }
 
     // ---------- exécution ----------
@@ -136,12 +144,17 @@ public sealed class Interpreter
         Tick();
         switch (s)
         {
-            case Block b: foreach (Stmt x in b.Body) ExecSafe(x, fr, depth); break;
+            case Block b:
+                foreach (Stmt x in b.Body)
+                    ExecSafe(x, fr, depth);
+                break;
             case Decl d:
                 foreach ((string? n, Expr? init) in d.Vars)
                     fr.Vars[n] = (d.Type, Value.Convert(d.Type, init == null ? (d.Type == "mcString" ? Value.T("") : Value.Zero) : Eval(init, fr, depth)));
                 break;
-            case ExprStmt e: Eval(e.E, fr, depth); break;
+            case ExprStmt e:
+                Eval(e.E, fr, depth);
+                break;
             case If i:
                 if (Eval(i.Cond, fr, depth).Truthy)
                     Exec(i.Then, fr, depth);
@@ -252,7 +265,11 @@ public sealed class Interpreter
             if (ae is Var v && fr.Vars.ContainsKey(v.Name))
             {
                 string name = v.Name;
-                a.Setter = nv => { string t = fr.Vars[name].type; fr.Vars[name] = (t, Value.Convert(t, nv)); };
+                a.Setter = nv =>
+                {
+                    string t = fr.Vars[name].type;
+                    fr.Vars[name] = (t, Value.Convert(t, nv));
+                };
             }
             args.Add(a);
         }
@@ -276,9 +293,15 @@ public sealed class Interpreter
         Value V(int i) => i < a.Count ? a[i].Value : Value.Zero;
         switch (name.ToUpperInvariant())
         {
-            case "SCR_SETVARS32": Globals[N(0)] = Value.I(V(1).AsInt); return Value.Zero;
-            case "SCR_SETVARF32": Globals[N(0)] = Value.F(V(1).AsNum); return Value.Zero;
-            case "SCR_SETVARSTRING": Globals[N(0)] = Value.T(V(1).AsText); return Value.Zero;
+            case "SCR_SETVARS32":
+                Globals[N(0)] = Value.I(V(1).AsInt);
+                return Value.Zero;
+            case "SCR_SETVARF32":
+                Globals[N(0)] = Value.F(V(1).AsNum);
+                return Value.Zero;
+            case "SCR_SETVARSTRING":
+                Globals[N(0)] = Value.T(V(1).AsText);
+                return Value.Zero;
             case "SCR_GETVARS32": return Value.I(Globals.TryGetValue(N(0), out Value g1) ? g1.AsInt : 0);
             case "SCR_GETVARF32": return Value.F(Globals.TryGetValue(N(0), out Value g2) ? g2.AsNum : 0);
             case "SCR_GETVARSTRING": return Value.T(Globals.TryGetValue(N(0), out Value g3) ? g3.AsText : "");
@@ -290,9 +313,15 @@ public sealed class Interpreter
                     return Value.Zero;
                 Schedule(N(0), V(1).AsNum);
                 return Value.Zero;
-            case "SCR_RUNDELAYEDENTITY": Schedule(N(0), V(1).AsNum, V(2)); return Value.Zero;
-            case "SCR_RUNDELAYEDARGS": Schedule(N(0), V(1).AsNum, V(2), V(3), V(4)); return Value.Zero;
-            case "SCR_RUNDELAYEDMULTIARGS": Schedule(N(0), V(1).AsNum, a.Skip(2).Select(x => x.Value).ToArray()); return Value.Zero;
+            case "SCR_RUNDELAYEDENTITY":
+                Schedule(N(0), V(1).AsNum, V(2));
+                return Value.Zero;
+            case "SCR_RUNDELAYEDARGS":
+                Schedule(N(0), V(1).AsNum, V(2), V(3), V(4));
+                return Value.Zero;
+            case "SCR_RUNDELAYEDMULTIARGS":
+                Schedule(N(0), V(1).AsNum, a.Skip(2).Select(x => x.Value).ToArray());
+                return Value.Zero;
             case "SCR_ISRUNNING": return Value.I(_queue.UnorderedItems.Any(q => q.Element.fn.Equals(N(0), StringComparison.OrdinalIgnoreCase)) ? 1 : 0);
             case "UTL_GETGAMETIME": return Value.F(Host.GameTime);
             case "COS": return Value.F(Math.Cos(V(0).AsNum));

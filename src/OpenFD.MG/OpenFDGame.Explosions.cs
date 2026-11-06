@@ -23,7 +23,10 @@ public sealed partial class OpenFDGame
         foreach (List<(MeshGpu mesh, SN.Matrix4x4 part)> l in _stateModels.Values)
             foreach ((MeshGpu? m, _) in l)
                 m.Dispose();
-        _stateModels.Clear(); _explosives.Clear(); _blastFx.Clear(); _shake = 0;
+        _stateModels.Clear();
+        _explosives.Clear();
+        _blastFx.Clear();
+        _shake = 0;
         Dictionary<string, ExplosiveItem> byName = _session.Explosions.Items.ToDictionary(i => i.Name, StringComparer.OrdinalIgnoreCase);
         foreach (SceneAssets.Placed p in placed)
             if (byName.TryGetValue(p.Name, out ExplosiveItem? it))
@@ -35,7 +38,11 @@ public sealed partial class OpenFDGame
         if (_stateModels.TryGetValue((model, state), out List<(MeshGpu mesh, SN.Matrix4x4 part)>? l))
             return l;
         l = new();
-        try { foreach (SceneAssets.Node part in _assets.ModelParts(model, state)) l.Add((Upload(_assets.LoadMesh(_mission, part.Mesh, "gfx")), part.World)); }
+        try
+        {
+            foreach (SceneAssets.Node part in _assets.ModelParts(model, state))
+                l.Add((Upload(_assets.LoadMesh(_mission, part.Mesh, "gfx")), part.World));
+        }
         catch (Exception e) { Console.WriteLine($"{model} ({state}) : {e.Message}"); }
         return _stateModels[(model, state)] = l;
     }

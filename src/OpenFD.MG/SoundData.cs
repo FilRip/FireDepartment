@@ -21,7 +21,8 @@ public sealed class SoundData
             int p = 12, fmt = 0, ch = 1, rate = 22050, bits = 16;
             while (p + 8 <= d.Length)
             {
-                string id = System.Text.Encoding.ASCII.GetString(d, p, 4); int sz = BitConverter.ToInt32(d, p + 4);
+                string id = System.Text.Encoding.ASCII.GetString(d, p, 4);
+                int sz = BitConverter.ToInt32(d, p + 4);
                 if (id == "fmt ")
                 {
                     fmt = BitConverter.ToUInt16(d, p + 8);

@@ -20,6 +20,7 @@ public sealed class Civilian
     public readonly Queue<Vector2> Path = new();
     /// <summary>Chemin vers son guide (calculé sur la grille), but visé et délai avant de le recalculer.</summary>
     public readonly Queue<Vector2> FollowPath = new();
-    public Vector2 FollowGoal; public float Replan;
+    public Vector2 FollowGoal;
+    public float Replan;
     public float RunSpeed = 280f;                         // vitesse d'un trajet commandé par le script
 }

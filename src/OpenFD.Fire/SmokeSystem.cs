@@ -33,7 +33,8 @@ public sealed class SmokeSystem
         for (int i = 0; i < Points.Count; i++)
             for (int j = i + 1; j < Points.Count; j++)
             {
-                SmokePoint a = Points[i]; SmokePoint b = Points[j];
+                SmokePoint a = Points[i];
+                SmokePoint b = Points[j];
                 if (a.Room != b.Room)
                     continue;
                 float r = a.Class.InfluenceRange + b.Class.InfluenceRange;
@@ -74,7 +75,8 @@ public sealed class SmokeSystem
             }
             if (rooms != null && rooms.TryGetValue(o.Id, out string? r))
                 sp.Room = r;
-            sys.Points.Add(sp); sys.ById[sp.Id] = sp;
+            sys.Points.Add(sp);
+            sys.ById[sp.Id] = sp;
         }
         foreach ((uint a, uint b, byte[]? data) in level.HotPointLinks)
         {
@@ -117,11 +119,13 @@ public sealed class SmokeSystem
         Array.Clear(_delta);
         foreach ((int i, int j, float w) in _pairs!)
         {
-            SmokePoint a = Points[i]; SmokePoint b = Points[j];
+            SmokePoint a = Points[i];
+            SmokePoint b = Points[j];
             if (!a.Active && !b.Active)
                 continue;   // un point vide reçoit de la fumée d'un voisin actif
             float f = DiffusionRate * w * (b.Intensity - a.Intensity) * dt;
-            _delta[i] += f; _delta[j] -= f;
+            _delta[i] += f;
+            _delta[j] -= f;
         }
         for (int i = 0; i < Points.Count; i++)
             if (_delta[i] != 0)
@@ -195,7 +199,8 @@ public sealed class SmokeSystem
             List<(int idx, float w)> near = new List<(int idx, float w)>();
             for (int k = 0; k < Points.Count; k++)
             {
-                SmokePoint p = Points[k]; float r = p.Class.InfluenceRange;
+                SmokePoint p = Points[k];
+                float r = p.Class.InfluenceRange;
                 float d = Vector2.Distance(new(p.Position.X, p.Position.Y), new(o.X, o.Y));
                 if (d < r && MathF.Abs(p.Position.Z - o.Z) < 400)
                     near.Add((k, 1 - d / r));
@@ -205,7 +210,8 @@ public sealed class SmokeSystem
             if (near.Count > 0 && near.Select(n => Points[n.idx].Room).Distinct().Count() == 1)
             {
                 string room = Points[near[0].idx].Room;
-                int best = -1; float bd = 1500;
+                int best = -1;
+                float bd = 1500;
                 for (int k = 0; k < Points.Count; k++)
                     if (Points[k].Room != room && MathF.Abs(Points[k].Position.Z - o.Z) < 400
                         && Vector2.Distance(new(Points[k].Position.X, Points[k].Position.Y), new(o.X, o.Y)) is float d && d < bd)

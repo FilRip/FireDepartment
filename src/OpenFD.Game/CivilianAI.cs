@@ -67,7 +67,8 @@ public sealed partial class UnitManager
                         StartCarry(u, c);
                     return;
                 }
-                u.HealTimer += dt; u.Status = $"réanime {c.Name} ({u.HealTimer / HealSeconds:P0})";
+                u.HealTimer += dt;
+                u.Status = $"réanime {c.Name} ({u.HealTimer / HealSeconds:P0})";
                 if (u.HealTimer >= HealSeconds)
                 {
                     c.State = CivilianState.Conscious;
@@ -92,9 +93,13 @@ public sealed partial class UnitManager
 
     private void StartCarry(Unit u, Civilian c)
     {
-        u.Path.Clear(); u.Target = null;
-        u.Carrying = c; u.Carry = CarryPhase.Lifting; u.CarryTimer = 0;
-        c.Carrier = u; c.Leader = null;
+        u.Path.Clear();
+        u.Target = null;
+        u.Carrying = c;
+        u.Carry = CarryPhase.Lifting;
+        u.CarryTimer = 0;
+        c.Carrier = u;
+        c.Leader = null;
         u.Heading = MathF.Atan2(c.Position.Y - u.Position.Y, c.Position.X - u.Position.X);
         u.Status = $"soulève {c.Name}";
     }
@@ -107,7 +112,9 @@ public sealed partial class UnitManager
             c.Carrier = null;
             c.Position = new Vector3(u.Position.X, u.Position.Y, Ground(new(u.Position.X, u.Position.Y)));
         }
-        u.Carrying = null; u.Carry = CarryPhase.None; u.CarryTimer = 0;
+        u.Carrying = null;
+        u.Carry = CarryPhase.None;
+        u.CarryTimer = 0;
     }
 
     /// <summary>Ambulance la plus proche à laquelle on peut aller : le porteur s'y rend de lui-même.</summary>
@@ -143,7 +150,8 @@ public sealed partial class UnitManager
             case CarryPhase.Lifting:
                 u.Path.Clear();
                 u.CarryTimer += dt;
-                c.Position = u.Position; c.Heading = u.Heading;
+                c.Position = u.Position;
+                c.Heading = u.Heading;
                 if (u.CarryTimer >= LiftSeconds)
                 {
                     u.Carry = CarryPhase.Walking;
@@ -152,13 +160,15 @@ public sealed partial class UnitManager
                 }
                 break;
             case CarryPhase.Walking:
-                c.Position = u.Position; c.Heading = u.Heading;
+                c.Position = u.Position;
+                c.Heading = u.Heading;
                 if (u.Moving)
                     break;
                 Unit? amb = Units.Where(v => v.IsAmbulance && !v.Destroyed && !v.Hidden).OrderBy(v => Vector3.Distance(v.Position, u.Position)).FirstOrDefault();
                 if (amb != null && Vector3.Distance(amb.Position, u.Position) < VehicleReach * 1.5f)
                 {
-                    u.Carry = CarryPhase.Dropping; u.CarryTimer = 0;
+                    u.Carry = CarryPhase.Dropping;
+                    u.CarryTimer = 0;
                     u.Heading = MathF.Atan2(amb.Position.Y - u.Position.Y, amb.Position.X - u.Position.X);
                     u.Status = $"dépose {c.Name} à l'ambulance";
                 }
@@ -168,10 +178,14 @@ public sealed partial class UnitManager
             case CarryPhase.Dropping:
                 u.Path.Clear();
                 u.CarryTimer += dt;
-                c.Position = u.Position; c.Heading = u.Heading;
+                c.Position = u.Position;
+                c.Heading = u.Heading;
                 if (u.CarryTimer < DropSeconds)
                     break;
-                c.Carrier = null; u.Carrying = null; u.Carry = CarryPhase.None; u.CarryTimer = 0;
+                c.Carrier = null;
+                u.Carrying = null;
+                u.Carry = CarryPhase.None;
+                u.CarryTimer = 0;
                 Save(c);
                 Log.Add($"{_s.Time,6:0} s : {c.Name} déposé dans l'ambulance ({Rescued} sauvé(s))");
                 Sounds.Add(("VOCAL_CIVILIAN_SAVED", null));
@@ -189,8 +203,10 @@ public sealed partial class UnitManager
             float st = c.RunSpeed * dt;
             while (st > 0 && c.Path.Count > 0)
             {
-                Vector2 p0 = new Vector2(c.Position.X, c.Position.Y); Vector2 t = c.Path.Peek();
-                Vector2 dv = t - p0; float len = dv.Length();
+                Vector2 p0 = new Vector2(c.Position.X, c.Position.Y);
+                Vector2 t = c.Path.Peek();
+                Vector2 dv = t - p0;
+                float len = dv.Length();
                 if (len > 1e-3f)
                     c.Heading = MathF.Atan2(dv.Y, dv.X);
                 if (len <= st)
@@ -228,7 +244,8 @@ public sealed partial class UnitManager
     /// </summary>
     private void FollowLeader(Civilian c, Unit l, float dt)
     {
-        Vector2 me = new Vector2(c.Position.X, c.Position.Y); Vector2 to = new Vector2(l.Position.X, l.Position.Y);
+        Vector2 me = new Vector2(c.Position.X, c.Position.Y);
+        Vector2 to = new Vector2(l.Position.X, l.Position.Y);
         float d = Vector2.Distance(me, to);
         if (d < FollowDistance)
         {
@@ -239,7 +256,9 @@ public sealed partial class UnitManager
         c.Replan -= dt;
         if (c.FollowPath.Count == 0 || Vector2.Distance(c.FollowGoal, to) > 150 || c.Replan <= 0)
         {
-            c.Replan = 0.6f; c.FollowGoal = to; c.FollowPath.Clear();
+            c.Replan = 0.6f;
+            c.FollowGoal = to;
+            c.FollowPath.Clear();
             List<Vector2> path = FindPath(me, to, out _);
             foreach (Vector2 p in path)
                 c.FollowPath.Enqueue(p);
@@ -259,7 +278,8 @@ public sealed partial class UnitManager
                 Vector2 away = me - to;
                 t = to + (away.LengthSquared() > 1 ? Vector2.Normalize(away) : Vector2.UnitX) * (FollowDistance - 20);
             }
-            Vector2 dv = t - me; float len = dv.Length();
+            Vector2 dv = t - me;
+            float len = dv.Length();
             if (len > 1e-3f)
                 c.Heading = MathF.Atan2(dv.Y, dv.X);
             if (len <= st)
@@ -275,7 +295,12 @@ public sealed partial class UnitManager
             }
         }
         c.Position = new Vector3(me, Ground(me));
-        if (d > 3500) { Vector2 back = to - Vector2.Normalize(to - me) * 150; c.Position = new Vector3(back, Ground(back)); c.FollowPath.Clear(); }   // perdu : il rejoint son guide
+        if (d > 3500)
+        {
+            Vector2 back = to - Vector2.Normalize(to - me) * 150;
+            c.Position = new Vector3(back, Ground(back));
+            c.FollowPath.Clear();
+        }   // perdu : il rejoint son guide
     }
 
     public const float FollowDistance = 140f;
@@ -312,5 +337,9 @@ public sealed partial class UnitManager
         return sb.ToString();
     }
 
-    public bool CanReach(Vector2 from, Vector2 to) { List<Vector2> p = FindPath(from, to, out bool partial); return !partial && (p.Count > 0 || Vector2.Distance(from, to) < 100); }
+    public bool CanReach(Vector2 from, Vector2 to)
+    {
+        List<Vector2> p = FindPath(from, to, out bool partial);
+        return !partial && (p.Count > 0 || Vector2.Distance(from, to) < 100);
+    }
 }

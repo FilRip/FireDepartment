@@ -39,7 +39,13 @@ public sealed class Ui
         _sb.Draw(Tex.White, new Vector2(x0, y0), null, c.C(), MathF.Atan2(dy, dx), new Vector2(0, 0.5f), new Vector2(len / Tex.White.Width, t / Tex.White.Height), SpriteEffects.None, 0);
     }
     public void Frame(float x, float y, float w, float h, SN.Vector4 c, float t = 1)
-    { Rect(x, y, w, t, c); Rect(x, y + h - t, w, t, c); Rect(x, y, t, h, c); Rect(x + w - t, y, t, h, c); }
+
+    {
+        Rect(x, y, w, t, c);
+        Rect(x, y + h - t, w, t, c);
+        Rect(x, y, t, h, c);
+        Rect(x + w - t, y, t, h, c);
+    }
 
     /// <summary>
     /// Disque plein vu en perspective : l'image d'un cercle de rayon 1 par l'application linéaire (a, b) — a et b sont les
@@ -67,7 +73,8 @@ public sealed class Ui
     private static Texture2D Hard => _hard!;
     public static void InitHard(GraphicsDevice gd)
     {
-        const int S = 64; Color[] px = new Color[S * S];
+        const int S = 64;
+        Color[] px = new Color[S * S];
         for (int y = 0; y < S; y++)
             for (int x = 0; x < S; x++)
             {
@@ -75,7 +82,8 @@ public sealed class Ui
                 float a = Math.Clamp(S / 2f / 1.15f - r + 0.5f, 0, 1);
                 px[y * S + x] = new Color(1f, 1f, 1f, a);
             }
-        _hard = new Texture2D(gd, S, S); _hard.SetData(px);
+        _hard = new Texture2D(gd, S, S);
+        _hard.SetData(px);
     }
 
     /// <summary>
@@ -113,7 +121,8 @@ public sealed class Ui
     {
         if (scale <= 0)
             scale = Scale;
-        float x0 = x; Color col = c.C();
+        float x0 = x;
+        Color col = c.C();
         foreach (char ch in Font.Fit(s))
         {
             if (!Font.Glyphs.TryGetValue(ch, out Font.Glyph g))

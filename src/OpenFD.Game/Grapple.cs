@@ -15,10 +15,12 @@ public sealed partial class UnitManager
         foreach (LevelObject o in level.Objects.Where(o => o.HasTransform && o.ClassPath.EndsWith("koshka_symbol", StringComparison.OrdinalIgnoreCase)))
         {
             Matrix4x4 m = o.Matrix;
-            Vector2 axis = new Vector2(m.M11, m.M12); Vector2 perp = new Vector2(m.M21, m.M22);
+            Vector2 axis = new Vector2(m.M11, m.M12);
+            Vector2 perp = new Vector2(m.M21, m.M22);
             if (axis.LengthSquared() < 1e-6f || perp.LengthSquared() < 1e-6f)
                 continue;
-            axis = Vector2.Normalize(axis); perp = Vector2.Normalize(perp);
+            axis = Vector2.Normalize(axis);
+            perp = Vector2.Normalize(perp);
             GrapplePoint gp = new GrapplePoint { Id = o.Id, Top = o.Position, Axis = axis, Perp = perp };
             Vector2 p = new Vector2(o.Position.X, o.Position.Y);
             // cases du mur sous le repère : dans la ligne du mur (à 0,7 m près), sur 2 m de part et d'autre du repère
@@ -43,7 +45,8 @@ public sealed partial class UnitManager
                 }
                 return p + perp * (s * 300);
             }
-            gp.SideA = Side(1); gp.SideB = Side(-1);
+            gp.SideA = Side(1);
+            gp.SideB = Side(-1);
             foreach (int i in gp.Cells)
                 Paths.GrappleCell[i] = true;
             Grapples.Add(gp);
@@ -61,7 +64,8 @@ public sealed partial class UnitManager
             return false;
         // le trajet vers le prochain point traverse-t-il le mur d'un passage ? (le chemin peut l'enjamber d'un seul trait)
         Vector2 from = new Vector2(u.Position.X, u.Position.Y);
-        int hit = -1; float len = Vector2.Distance(from, next);
+        int hit = -1;
+        float len = Vector2.Distance(from, next);
         for (float s = 0; s <= len && hit < 0; s += 40)
         {
             Vector2 q = len > 0 ? Vector2.Lerp(from, next, s / len) : next;
@@ -74,14 +78,16 @@ public sealed partial class UnitManager
         GrapplePoint? gp = Grapples.FirstOrDefault(x => x.Cells.Contains(hit));
         if (gp == null)
             return false;
-        Vector2 me = new Vector2(u.Position.X, u.Position.Y); Vector2 top = new Vector2(gp.Top.X, gp.Top.Y);
+        Vector2 me = new Vector2(u.Position.X, u.Position.Y);
+        Vector2 top = new Vector2(gp.Top.X, gp.Top.Y);
         float side = MathF.Sign(Vector2.Dot(me - top, gp.Perp));
         if (side == 0)
             side = 1;
         // points du chemin dans le mur ou encore de ce côté-ci : passés par la montée
         while (u.Path.Count > 0)
         {
-            Vector2 q = u.Path.Peek(); (int qx, int qy) = g.CellOf(new Vector3(q, 0));
+            Vector2 q = u.Path.Peek();
+            (int qx, int qy) = g.CellOf(new Vector3(q, 0));
             bool inWall = g.Inside(qx, qy) && IsGrappleCell(g.Index(qx, qy));
             bool sameSide = MathF.Sign(Vector2.Dot(q - top, gp.Perp)) == side && Vector2.Distance(q, top) < 400;
             if (!inWall && !sameSide)
@@ -92,7 +98,9 @@ public sealed partial class UnitManager
         // le long du mur : on monte face à soi, pas forcément pile sous le repère
         float along = Math.Clamp(Vector2.Dot(me - top, gp.Axis), -150, 150);
         Vector2 wall = top + gp.Axis * along;
-        u.Climb = ClimbPhase.Launch; u.ClimbTimer = 0; u.ClimbGrapple = gp;
+        u.Climb = ClimbPhase.Launch;
+        u.ClimbTimer = 0;
+        u.ClimbGrapple = gp;
         u.ClimbFrom = new Vector3(me, u.Position.Z);
         // haut du mur : un mètre sous le repère ; le grimpeur s'arrête les mains au sommet (l'animation « get_on_top »
         // le fait passer par-dessus : 1,5 m en avant et 1,56 m plus bas), puis il redescend de l'autre côté, contre le mur
@@ -102,7 +110,8 @@ public sealed partial class UnitManager
         float face = 60;
         for (; face < 900; face += 10)
         {
-            Vector2 q = wall - gp.Perp * (side * face); (int fx, int fy) = g.CellOf(new Vector3(q, 0));
+            Vector2 q = wall - gp.Perp * (side * face);
+            (int fx, int fy) = g.CellOf(new Vector3(q, 0));
             if (g.Inside(fx, fy) && FreeCell(fx, fy) && !IsGrappleCell(g.Index(fx, fy)) && Ground(q) < gp.Top.Z - 250)
                 break;
         }
@@ -124,7 +133,8 @@ public sealed partial class UnitManager
         }
         Vector2 me = new Vector2(u.Position.X, u.Position.Y);
         bool fromA = Vector2.DistanceSquared(me, gp.SideA) <= Vector2.DistanceSquared(me, gp.SideB);
-        Vector2 near = fromA ? gp.SideA : gp.SideB; Vector2 far = fromA ? gp.SideB : gp.SideA;
+        Vector2 near = fromA ? gp.SideA : gp.SideB;
+        Vector2 far = fromA ? gp.SideB : gp.SideA;
         if (!Order(u, near))
             return false;
         u.Path.Enqueue(far);   // en passant de l'autre côté, il grimpe (voir StartClimbIfNeeded)
@@ -155,7 +165,8 @@ public sealed partial class UnitManager
         u.ClimbTimer += dt;
         float speed = MathF.Max(30, u.ClimbSpeed);
         Vector2 wall = new Vector2(u.ClimbAnchor.X, u.ClimbAnchor.Y);
-        Vector2 near = new Vector2(u.ClimbWall.X, u.ClimbWall.Y) - wall; near = near.LengthSquared() > 1 ? Vector2.Normalize(near) : Vector2.UnitX;   // vers le côté de départ
+        Vector2 near = new Vector2(u.ClimbWall.X, u.ClimbWall.Y) - wall;
+        near = near.LengthSquared() > 1 ? Vector2.Normalize(near) : Vector2.UnitX;   // vers le côté de départ
         Vector2 cw = new Vector2(u.ClimbWall.X, u.ClimbWall.Y);
         Vector3 standAt = new Vector3(cw - near * StandForward, u.ClimbWall.Z + StandRise);   // debout sur le mur
         // pendu de l'autre côté, au-dessus du point d'arrivée ; il passe le bord à reculons depuis 1,5 m avant
@@ -190,7 +201,11 @@ public sealed partial class UnitManager
                 break;
             case ClimbPhase.Step:
                 u.Position = Vector3.Lerp(standAt, turnAt, Math.Clamp(u.ClimbTimer / stepTime, 0, 1));
-                if (u.ClimbTimer >= stepTime) { u.Heading += MathF.PI; Next(ClimbPhase.Turn, "se retourne"); }   // dos au vide
+                if (u.ClimbTimer >= stepTime)
+                {
+                    u.Heading += MathF.PI;
+                    Next(ClimbPhase.Turn, "se retourne");
+                }   // dos au vide
                 break;
             case ClimbPhase.Turn:
                 u.Position = turnAt;
@@ -199,7 +214,11 @@ public sealed partial class UnitManager
                 break;
             case ClimbPhase.Top:
                 u.Position = turnAt;
-                if (u.ClimbTimer >= GrappleTopSeconds) { u.Position = hangAt; Next(ClimbPhase.Descend, "redescend"); }   // face au mur, de l'autre côté
+                if (u.ClimbTimer >= GrappleTopSeconds)
+                {
+                    u.Position = hangAt;
+                    Next(ClimbPhase.Descend, "redescend");
+                }   // face au mur, de l'autre côté
                 break;
             case ClimbPhase.Descend:
             {
@@ -213,11 +232,17 @@ public sealed partial class UnitManager
                 u.Position = u.ClimbTo;
                 if (u.ClimbTimer < GrappleLandSeconds)
                     break;
-                u.Climb = ClimbPhase.None; u.ClimbGrapple = null;
+                u.Climb = ClimbPhase.None;
+                u.ClimbGrapple = null;
                 u.Status = u.Path.Count > 0 ? "en route" : "attend les ordres";
                 break;
         }
 
-        void Next(ClimbPhase p, string status) { u.Climb = p; u.ClimbTimer = 0; u.Status = status; }
+        void Next(ClimbPhase p, string status)
+        {
+            u.Climb = p;
+            u.ClimbTimer = 0;
+            u.Status = status;
+        }
     }
 }

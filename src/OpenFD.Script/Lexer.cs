@@ -41,16 +41,21 @@ public static class Lexer
                         line++;
                     i++;
                 }
-                i += 2; continue;
+                i += 2;
+                continue;
             }
             if (char.IsLetter(c) || c == '_')
             {
-                int s = i; while (i < src.Length && (char.IsLetterOrDigit(src[i]) || src[i] == '_')) i++;
-                toks.Add(new Token(Tok.Ident, src[s..i], line)); continue;
+                int s = i;
+                while (i < src.Length && (char.IsLetterOrDigit(src[i]) || src[i] == '_'))
+                    i++;
+                toks.Add(new Token(Tok.Ident, src[s..i], line));
+                continue;
             }
             if (char.IsDigit(c) || (c == '.' && i + 1 < src.Length && char.IsDigit(src[i + 1])))
             {
-                int s = i; bool flt = false;
+                int s = i;
+                bool flt = false;
                 while (i < src.Length && (char.IsDigit(src[i]) || src[i] == '.'))
                 {
                     if (src[i] == '.')
@@ -64,11 +69,13 @@ public static class Lexer
                     toks.Add(new Token(Tok.Float, src[s..(i - 1)], line));
                     continue;
                 }
-                toks.Add(new Token(flt ? Tok.Float : Tok.Int, src[s..i], line)); continue;
+                toks.Add(new Token(flt ? Tok.Float : Tok.Int, src[s..i], line));
+                continue;
             }
             if (c == '"')
             {
-                StringBuilder sb = new StringBuilder(); i++;
+                StringBuilder sb = new StringBuilder();
+                i++;
                 while (i < src.Length && src[i] != '"' && src[i] != '\n')
                 {
                     if (src[i] == '\\' && i + 1 < src.Length)
@@ -79,7 +86,9 @@ public static class Lexer
                     }
                     sb.Append(src[i++]);
                 }
-                i++; toks.Add(new Token(Tok.Str, sb.ToString(), line)); continue;
+                i++;
+                toks.Add(new Token(Tok.Str, sb.ToString(), line));
+                continue;
             }
             if (i + 1 < src.Length && Ops2.Contains(src.Substring(i, 2)))
             {
@@ -87,7 +96,8 @@ public static class Lexer
                 i += 2;
                 continue;
             }
-            toks.Add(new Token(Tok.Op, c.ToString(), line)); i++;
+            toks.Add(new Token(Tok.Op, c.ToString(), line));
+            i++;
         }
         toks.Add(new Token(Tok.End, "", line));
         return toks;

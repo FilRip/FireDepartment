@@ -24,7 +24,9 @@ public sealed partial class OpenFDGame
     // ---------------------------------------------------------------- menu
     private void OpenMenu()
     {
-        _menu = true; _ended = false; _screen = 0;
+        _menu = true;
+        _ended = false;
+        _screen = 0;
         _audio?.StopAll();
         EnsureMissionList();
         _menuIndex = Math.Max(0, _missions.FindIndex(m => m.Dir.Equals(_mission, StringComparison.OrdinalIgnoreCase)));
@@ -87,8 +89,10 @@ public sealed partial class OpenFDGame
         int off = BitConverter.ToInt32(d, 10), w = BitConverter.ToInt32(d, 18), h = BitConverter.ToInt32(d, 22), bpp = BitConverter.ToInt16(d, 28);
         if (bpp != 24 && bpp != 32)
             return null;
-        bool bottomUp = h > 0; h = Math.Abs(h);
-        int stride = (w * bpp / 8 + 3) & ~3; Color[] px = new Color[w * h];
+        bool bottomUp = h > 0;
+        h = Math.Abs(h);
+        int stride = (w * bpp / 8 + 3) & ~3;
+        Color[] px = new Color[w * h];
         for (int y = 0; y < h; y++)
         {
             int row = off + (bottomUp ? h - 1 - y : y) * stride;
@@ -166,7 +170,9 @@ public sealed partial class OpenFDGame
         _ui.Begin();
         DrawMenuBack();
         (float lx, float ly, float lw, float lh) = MenuLayout();
-        SN.Vector4 accent = new SN.Vector4(1f, 0.48f, 0.18f, 1); SN.Vector4 txt = new SN.Vector4(0.93f, 0.92f, 0.9f, 1); SN.Vector4 muted = new SN.Vector4(0.6f, 0.6f, 0.6f, 1);
+        SN.Vector4 accent = new SN.Vector4(1f, 0.48f, 0.18f, 1);
+        SN.Vector4 txt = new SN.Vector4(0.93f, 0.92f, 0.9f, 1);
+        SN.Vector4 muted = new SN.Vector4(0.6f, 0.6f, 0.6f, 1);
         const string title = "Autres missions";
         float ts = _scale * 1.6f;
         _ui.Rect(0, ly - lh * 3.5f, _fbW, _font.LineHeight * ts + 16 * _scale, new SN.Vector4(0, 0, 0, 0.55f));
@@ -182,7 +188,8 @@ public sealed partial class OpenFDGame
         _ui.Rect(lx - 12 * _scale, ly - 8 * _scale, lw + 24 * _scale, _missions.Count * lh + 16 * _scale, new SN.Vector4(0.07f, 0.07f, 0.09f, 0.85f));
         for (int i = 0; i < _missions.Count; i++)
         {
-            MissionEntry e = _missions[i]; float y = ly + i * lh;
+            MissionEntry e = _missions[i];
+            float y = ly + i * lh;
             if (i == _menuIndex)
                 _ui.Rect(lx, y, lw, lh - 4 * _scale, new SN.Vector4(0.85f, 0.35f, 0.1f, 0.55f));
             _ui.Text(lx + 14 * _scale, y + (lh - _ui.LineHeight) / 2 - 2 * _scale, e.Title, e.Playable ? txt : muted);
@@ -267,7 +274,9 @@ public sealed partial class OpenFDGame
         h.ObjectiveEvents.Clear();
         if (h.Outcome != null && !_ended)
         {
-            _ended = true; _paused = true; _sel.Clear();
+            _ended = true;
+            _paused = true;
+            _sel.Clear();
             if (!_endSoundPlayed)
             {
                 _audio?.Play(h.Outcome == true ? "VOCAL_MISSION_SUCCESS" : "VOCAL_MISSION_FAILURE");
@@ -335,7 +344,8 @@ public sealed partial class OpenFDGame
                 else
                     _ui.Frame(x + pad, by, box, box, c, MathF.Max(1, 2 * _scale));   // texture absente : simple case
             }
-            _ui.Text(x + pad + gap, y, s, c); y += lh;
+            _ui.Text(x + pad + gap, y, s, c);
+            y += lh;
         }
     }
 
@@ -380,7 +390,8 @@ public sealed partial class OpenFDGame
         if (v == null)
             return null;
         // juste à droite de la mini-carte, en haut
-        (float x, float y, float w, float h) r = MiniRect(); float s = 44 * _scale;
+        (float x, float y, float w, float h) r = MiniRect();
+        float s = 44 * _scale;
         return (v, r.x + r.w + 12 * _scale, r.y + 4 * _scale, s);
     }
 
@@ -414,7 +425,8 @@ public sealed partial class OpenFDGame
                     int o = ((cy + y) * im.w + cx + x) * 4;
                     px[y * 32 + x] = x + y < 15 ? Color.Transparent : new Color(im.rgba[o], im.rgba[o + 1], im.rgba[o + 2], im.rgba[o + 3]);
                 }
-            _iconExit = new Texture2D(GraphicsDevice, 32, 32); _iconExit.SetData(px);
+            _iconExit = new Texture2D(GraphicsDevice, 32, 32);
+            _iconExit.SetData(px);
         }
         (float sx, float sy) = Fb(Mouse.GetState().X, Mouse.GetState().Y);
         bool over = sx >= ic.x && sx <= ic.x + ic.s && sy >= ic.y && sy <= ic.y + ic.s;

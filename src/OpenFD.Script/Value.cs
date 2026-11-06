@@ -5,8 +5,15 @@ namespace OpenFD.Script;
 /// <summary>Valeur du langage : entier (s32, EntityID, mcBool), flottant (f32) ou texte (mcString).</summary>
 public readonly struct Value
 {
-    public readonly VKind Kind; public readonly double N; public readonly string? S;
-    private Value(VKind k, double n, string? s) { Kind = k; N = n; S = s; }
+    public readonly VKind Kind;
+    public readonly double N;
+    public readonly string? S;
+    private Value(VKind k, double n, string? s)
+    {
+        Kind = k;
+        N = n;
+        S = s;
+    }
     public static Value I(long v) => new(VKind.Int, v, null);
     public static Value F(double v) => new(VKind.Float, v, null);
     public static Value T(string v) => new(VKind.Str, 0, v);

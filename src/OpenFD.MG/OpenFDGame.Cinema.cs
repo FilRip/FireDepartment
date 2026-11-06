@@ -17,7 +17,9 @@ public sealed partial class OpenFDGame
     private Localization? _loc;
     private bool _cineOn;                                  // cinématique en cours (vue du jeu)
     private (SN.Vector3 eye, SN.Vector3 fwd) _cinePose, _cineFrom, _cineTo;
-    private double _cineT0; private float _cineDur; private bool _cineMoving;
+    private double _cineT0;
+    private float _cineDur;
+    private bool _cineMoving;
     private float _cineBars;                               // 0 → 1 : hauteur des bandes noires (apparition en douceur)
     private string? _subtitle;
     private List<Unit>? _selBeforeCine;
@@ -83,7 +85,8 @@ public sealed partial class OpenFDGame
         SN.Vector3 f = SN.Vector3.Normalize(p.fwd);
         float d = f.Z < -0.05f ? (p.eye.Z - GroundAt(p.eye.X + f.X * p.eye.Z / -f.Z, p.eye.Y + f.Y * p.eye.Z / -f.Z)) / -f.Z : 3000f;
         d = Math.Clamp(d, 300, 60000);
-        _target = p.eye + f * d; _dist = d;
+        _target = p.eye + f * d;
+        _dist = d;
         _yaw = MathF.Atan2(-f.Y, -f.X);
         _pitch = MathF.Asin(Math.Clamp(-f.Z, -1, 1));
     }
@@ -149,7 +152,9 @@ public sealed partial class OpenFDGame
         {
             // sélection mise de côté pendant la cinématique, rendue à la fin
             _selBeforeCine = _sel.ToList();
-            _sel.Clear(); _speed = 1; _paused = false;
+            _sel.Clear();
+            _speed = 1;
+            _paused = false;
             // cinématique en cours de partie (pas celle d'introduction, au tout début) : on retient la vue du joueur
             _viewBeforeCine = _session.Time > 3 ? _playerView : null;
         }
@@ -164,7 +169,9 @@ public sealed partial class OpenFDGame
         if (!_cineOn && was && _viewBeforeCine is { } v)
         {
             // fin de la cinématique : la vue revient où elle était
-            (_target, _yaw, _pitch, _dist) = v; _viewBeforeCine = null; _cineMoving = false;
+            (_target, _yaw, _pitch, _dist) = v;
+            _viewBeforeCine = null;
+            _cineMoving = false;
         }
         if (_cineMoving && !free)
         {

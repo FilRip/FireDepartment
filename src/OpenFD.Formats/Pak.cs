@@ -20,7 +20,8 @@ public sealed class Pak
 
     public Pak(byte[] data, string path = "")
     {
-        _data = data; Path = path;
+        _data = data;
+        Path = path;
         // « fin du répertoire central » : 22 octets à la fin de l'archive, suivis d'un commentaire de 65 535 octets au plus.
         // On la cherche donc seulement dans les 22 + 65 535 derniers octets, en partant de la fin : c'est rapide, et une
         // suite d'octets « QL\5\6 » qui se trouverait par hasard au milieu des données compressées n'est jamais prise.

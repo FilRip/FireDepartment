@@ -115,10 +115,22 @@ void main()
             new[] { "DiffTex", "DirtTex", "LightTex", "ShadowMap", "RoofMaskTex" },
             new[] { ("vs_v0", VertexElementUsage.Position, 0), ("vs_v1", VertexElementUsage.TextureCoordinate, 0), ("vs_v2", VertexElementUsage.TextureCoordinate, 1), ("vs_v3", VertexElementUsage.TextureCoordinate, 2), ("vs_v4", VertexElementUsage.Normal, 0) });
         EffectParameterCollection p = Fx.Parameters;
-        _wvp = p["WorldViewProj"]; _world = p["World"]; _eye = p["Eye"]; _fog = p["Fog"]; _shadowVp = p["ShadowViewProj"];
-        _params = p["Params"]; _fogColor = p["FogColor"]; _shadow = p["Shadow"]; _sun = p["SunDir"]; _tint = p["Tint"];
-        _diff = p["DiffTex"]; _dirt = p["DirtTex"]; _light = p["LightTex"]; _shadowMap = p["ShadowMap"];
-        _roofMask = p["RoofMask"]; _roofMaskTex = p["RoofMaskTex"];
+        _wvp = p["WorldViewProj"];
+        _world = p["World"];
+        _eye = p["Eye"];
+        _fog = p["Fog"];
+        _shadowVp = p["ShadowViewProj"];
+        _params = p["Params"];
+        _fogColor = p["FogColor"];
+        _shadow = p["Shadow"];
+        _sun = p["SunDir"];
+        _tint = p["Tint"];
+        _diff = p["DiffTex"];
+        _dirt = p["DirtTex"];
+        _light = p["LightTex"];
+        _shadowMap = p["ShadowMap"];
+        _roofMask = p["RoofMask"];
+        _roofMaskTex = p["RoofMaskTex"];
         _roofMaskTex.SetValue(Tex.White);
     }
 
@@ -138,7 +150,9 @@ void main()
     {
         _tint.SetValue(new Vector4(tint, 1));
         _vp = viewProj;
-        _eye.SetValue(new Vector4(eye, 1)); _fog.SetValue(new Vector4(fogStart, fogEnd, 0, 0)); _fogColor.SetValue(new Vector4(fogColor, 1));
+        _eye.SetValue(new Vector4(eye, 1));
+        _fog.SetValue(new Vector4(fogStart, fogEnd, 0, 0));
+        _fogColor.SetValue(new Vector4(fogColor, 1));
         _shadow.SetValue(Vector4.Zero);
     }
 
@@ -154,8 +168,11 @@ void main()
     /// <param name="lightScale">multiplicateur de l'éclairage précalculé (FD2_LIGHT du soleil : 2 le jour à London, 1,1 la nuit à Fireworks)</param>
     public void Set(Matrix world, Texture2D? diff, Texture2D? dirt, Texture2D? light, int mode, bool alpha, float bright, float lightScale = 2f)
     {
-        _wvp.SetValue(world * _vp); _world.SetValue(world);
-        _diff.SetValue(diff ?? Tex.White); _dirt.SetValue(dirt ?? Tex.White); _light.SetValue(light ?? Tex.White);
+        _wvp.SetValue(world * _vp);
+        _world.SetValue(world);
+        _diff.SetValue(diff ?? Tex.White);
+        _dirt.SetValue(dirt ?? Tex.White);
+        _light.SetValue(light ?? Tex.White);
         _params.SetValue(new Vector4(bright, alpha ? 0.4f : -1f, dirt != null ? mode : ModePlain, light != null ? lightScale : 0));
     }
 }

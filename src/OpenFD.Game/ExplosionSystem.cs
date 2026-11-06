@@ -60,13 +60,19 @@ public sealed class ExplosionSystem
             // valeurs propres à cet objet dans la carte
             if (o.GetComponent(0xA024) is { } dc && o.ComponentBytes(dc) is ReadOnlySpan<byte> db && db.Length >= 21 && db[4] == 0x0C)
             {
-                it.Life = BitConverter.ToSingle(db.Slice(5, 4)); it.MaxLife = BitConverter.ToSingle(db.Slice(9, 4));
+                it.Life = BitConverter.ToSingle(db.Slice(5, 4));
+                it.MaxLife = BitConverter.ToSingle(db.Slice(9, 4));
                 it.FireDamageCoef = BitConverter.ToSingle(db.Slice(17, 4));
             }
             if (expl != null && expl.Length >= 25)
             {
                 float F(int k) => BitConverter.ToSingle(expl, 1 + 4 * k);
-                it.LpPower = F(0); it.LpRadius = F(1); it.HpPower = F(2); it.HpRadius = F(3); it.StaminaPower = F(4); it.StaminaRadius = F(5);
+                it.LpPower = F(0);
+                it.LpRadius = F(1);
+                it.HpPower = F(2);
+                it.HpRadius = F(3);
+                it.StaminaPower = F(4);
+                it.StaminaRadius = F(5);
             }
             if (Data(o, 0xD007) is { Length: > 8 } sd)
             {
@@ -85,7 +91,8 @@ public sealed class ExplosionSystem
             foreach (HotPoint h in fire.HotPoints)
                 if (Vector3.Distance(h.Position, it.Position) < ItemRadius + h.Class.HeatRangeMax + 100)
                     it.NearFires.Add(h);
-            sys.Items.Add(it); sys.ById[it.Id] = it;
+            sys.Items.Add(it);
+            sys.ById[it.Id] = it;
         }
         return sys;
     }
@@ -116,7 +123,8 @@ public sealed class ExplosionSystem
                 if (h.IsBurning && Vector3.Distance(h.Position, it.Position) <= h.Class.LifeDamageRange + ItemRadius)
                 {
                     float d = h.Class.UnitLifeDamage * Math.Min(1, h.Intensity / Math.Max(1, h.Class.IntensityMax));
-                    sum += d; max = MathF.Max(max, d);
+                    sum += d;
+                    max = MathF.Max(max, d);
                 }
             // (objet qui ne fait que s'abîmer, suivi par un script : voir WatchedDamageFactor et ObjectiveTimeFactor)
             float dmg = (max + OtherFiresShare * (sum - max)) * (it.CanExplode ? FireDamageFactor : WatchedDamageFactor / MathF.Max(0.1f, ObjectiveTimeFactor));
@@ -135,7 +143,8 @@ public sealed class ExplosionSystem
     {
         if (it.Exploded)
             return;
-        it.Exploded = true; it.Life = 0;
+        it.Exploded = true;
+        it.Life = 0;
         Happened.Add(new Explosion(it.Position, time, Math.Clamp(it.HpRadius * 0.9f, 500, 1200), it.Sound, it.Name));
         Log.Add($"{time,6:0} s : explosion de {it.Name}");
         int lit = 0;

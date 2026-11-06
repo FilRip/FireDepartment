@@ -11,8 +11,10 @@ namespace OpenFD.MG;
 /// </summary>
 public sealed class MeshGpu : IDisposable
 {
-    public VertexBuffer Vb = null!; public IndexBuffer Ib = null!;
-    public bool Dual; public int VertexCount;
+    public VertexBuffer Vb = null!;
+    public IndexBuffer Ib = null!;
+    public bool Dual;
+    public int VertexCount;
     public List<(int start, int count, Texture2D? tex, Texture2D? lm, bool alpha)> Groups = new();
     private VertexPositionNormalTexture[]? _dyn;
 
@@ -35,16 +37,20 @@ public sealed class MeshGpu : IDisposable
     public static MeshGpu CreateDual(GraphicsDevice gd, VertexDual[] v, int[] idx)
     {
         MeshGpu m = new MeshGpu { VertexCount = v.Length, Dual = true };
-        m.Vb = new VertexBuffer(gd, VertexDual.Decl, v.Length, BufferUsage.WriteOnly); m.Vb.SetData(v);
-        m.Ib = new IndexBuffer(gd, IndexElementSize.ThirtyTwoBits, idx.Length, BufferUsage.WriteOnly); m.Ib.SetData(idx);
+        m.Vb = new VertexBuffer(gd, VertexDual.Decl, v.Length, BufferUsage.WriteOnly);
+        m.Vb.SetData(v);
+        m.Ib = new IndexBuffer(gd, IndexElementSize.ThirtyTwoBits, idx.Length, BufferUsage.WriteOnly);
+        m.Ib.SetData(idx);
         return m;
     }
 
     public static MeshGpu CreateLit(GraphicsDevice gd, VertexPositionNormalTexture[] v, int[] idx)
     {
         MeshGpu m = new MeshGpu { VertexCount = v.Length };
-        m.Vb = new VertexBuffer(gd, typeof(VertexPositionNormalTexture), v.Length, BufferUsage.WriteOnly); m.Vb.SetData(v);
-        m.Ib = new IndexBuffer(gd, IndexElementSize.ThirtyTwoBits, idx.Length, BufferUsage.WriteOnly); m.Ib.SetData(idx);
+        m.Vb = new VertexBuffer(gd, typeof(VertexPositionNormalTexture), v.Length, BufferUsage.WriteOnly);
+        m.Vb.SetData(v);
+        m.Ib = new IndexBuffer(gd, IndexElementSize.ThirtyTwoBits, idx.Length, BufferUsage.WriteOnly);
+        m.Ib.SetData(idx);
         return m;
     }
 
@@ -61,5 +67,9 @@ public sealed class MeshGpu : IDisposable
         ((DynamicVertexBuffer)Vb).SetData(_dyn, 0, _dyn.Length, SetDataOptions.Discard);
     }
 
-    public void Dispose() { Vb?.Dispose(); Ib?.Dispose(); }
+    public void Dispose()
+    {
+        Vb?.Dispose();
+        Ib?.Dispose();
+    }
 }

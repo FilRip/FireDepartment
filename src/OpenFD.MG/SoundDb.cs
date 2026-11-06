@@ -60,7 +60,8 @@ public sealed class SoundDb
         Entries.Clear();
         foreach (KeyValuePair<string, Entry> kv in _orig)
             Entries[kv.Key] = kv.Value;
-        _vocalDirs.Clear(); _vocalDirs.Add(_baseVocal);
+        _vocalDirs.Clear();
+        _vocalDirs.Add(_baseVocal);
         if (string.IsNullOrEmpty(lang))
             return;
         string locRoot = Path.Combine(dataDir, "Localize");
@@ -101,7 +102,8 @@ public sealed class SoundDb
             string? path = FindFile(file);
             if (path == null || !seen.Add(path))
                 return;
-            string? section = null; Dictionary<string, string> keys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            string? section = null;
+            Dictionary<string, string> keys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             void Flush()
             {
                 if (section == null)
@@ -149,7 +151,8 @@ public sealed class SoundDb
         {
             if (File.Exists(p))
                 return p;
-            string? dir = Path.GetDirectoryName(p); string name = Path.GetFileName(p);
+            string? dir = Path.GetDirectoryName(p);
+            string name = Path.GetFileName(p);
             if (dir == null || !Directory.Exists(dir))
                 return null;
             return Directory.EnumerateFiles(dir).FirstOrDefault(f => Path.GetFileName(f).Equals(name, StringComparison.OrdinalIgnoreCase));

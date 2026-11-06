@@ -21,12 +21,17 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     private string _mission, _difficulty;
     public bool TestAttack, NoRoofs, NoHelp;
     public string? TestDoors;   // essai : « porteA,porteB » : un pompier s'occupe de chaque porte à 3 s
-    public string? CapturePath; public int CaptureAfter; public float StartSeconds; public bool StartMap; public string? CameraSpec;
+    public string? CapturePath;
+    public int CaptureAfter;
+    public float StartSeconds;
+    public bool StartMap;
+    public string? CameraSpec;
 
     private Ui _ui = null!;
     private Font _font = null!;
     private BasicEffect _lit = null!, _plain = null!, _part = null!, _ghost = null!, _burnt = null!;
-    private bool _ghostPass; private Vector3 _ghostShift;
+    private bool _ghostPass;
+    private Vector3 _ghostShift;
     private static readonly DepthStencilState GhostDepth = new() { DepthBufferEnable = true, DepthBufferWriteEnable = false, DepthBufferFunction = CompareFunction.Greater };
     private DualTextureEffect _dual = null!;
     private AlphaTestEffect _alphaFx = null!;
@@ -37,19 +42,25 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     private readonly List<(MeshGpu mesh, bool roof, int layer)> _draw = new();   // layer : 0 décor, 1 objets, 2 arbres
     private readonly Dictionary<string, Texture2D?> _texCache = new(StringComparer.OrdinalIgnoreCase);
     private SN.Vector3 _sceneMin, _sceneMax;
-    private Texture2D? _gridTex; private float _gridW, _gridH;
+    private Texture2D? _gridTex;
+    private float _gridW, _gridH;
 
     // vue
     private bool _map, _roofs = true, _objects = true, _smokeOn = true, _help = false;
-    private SN.Vector3 _target; private float _yaw = -1.75f, _pitch = 0.75f, _dist = 9000f;
-    private SN.Vector2 _mapCenter; private float _mapScale = 0.06f;
-    private SN.Matrix4x4 _viewProj, _view, _proj; private SN.Vector3 _eye;
+    private SN.Vector3 _target;
+    private float _yaw = -1.75f, _pitch = 0.75f, _dist = 9000f;
+    private SN.Vector2 _mapCenter;
+    private float _mapScale = 0.06f;
+    private SN.Matrix4x4 _viewProj, _view, _proj;
+    private SN.Vector3 _eye;
     private int _fbW, _fbH, _winW, _winH;
     private float _scale = 1;   // échelle de l'écran (100 % = 1)
     private float _bright = 1.5f;    // luminosité (1 = textures telles quelles)
 
     // temps
-    private float _speed = 1; private bool _paused = true; private double _owed;
+    private float _speed = 1;
+    private bool _paused = true;
+    private double _owed;
     private float _flameFps = 10f, _flameFpsVar = 4f;   // vitesse des flammes (options : Gameplay.FlameSpeed)
     private float _visTime;   // temps des animations (flammes, fumée…) : avance seulement quand la partie tourne
     private bool _altEnterDown;
@@ -66,7 +77,10 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
 
     public OpenFDGame(GameFiles files, string mission, string difficulty)
     {
-        _files = files; _assets = new SceneAssets(files); _mission = mission; _difficulty = difficulty;
+        _files = files;
+        _assets = new SceneAssets(files);
+        _mission = mission;
+        _difficulty = difficulty;
         _gdm = new GraphicsDeviceManager(this)
         {
             GraphicsProfile = GraphicsProfile.HiDef, PreferMultiSampling = true, SynchronizeWithVerticalRetrace = true,
@@ -75,7 +89,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         // FD3_SANS_MSAA : sans anticrénelage (cartes ou pilotes qui le refusent)
         if (Environment.GetEnvironmentVariable("FD3_SANS_MSAA") != null)
             _gdm.PreferMultiSampling = false;
-        IsMouseVisible = true; IsFixedTimeStep = false;
+        IsMouseVisible = true;
+        IsFixedTimeStep = false;
         Window.AllowUserResizing = true;
         Window.Title = "Open Fire Department";
     }
@@ -92,7 +107,9 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             w = 1400;
             h = 860;
         }
-        _gdm.PreferredBackBufferWidth = w; _gdm.PreferredBackBufferHeight = h; _gdm.ApplyChanges();
+        _gdm.PreferredBackBufferWidth = w;
+        _gdm.PreferredBackBufferHeight = h;
+        _gdm.ApplyChanges();
         Window.ClientSizeChanged += (_, _) =>
         {
             Rectangle b = Window.ClientBounds;
@@ -109,7 +126,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     protected override void LoadContent()
     {
         GraphicsDevice gd = GraphicsDevice;
-        Tex.Init(gd); Ui.InitHard(gd);
+        Tex.Init(gd);
+        Ui.InitHard(gd);
         _ui = new Ui(gd) { Scale = _scale };
         UseGameFont(null);   // police du jeu (Data\Fonte\font18.fnt)
         _lit = new BasicEffect(gd) { TextureEnabled = true, LightingEnabled = true, FogEnabled = true };
@@ -121,14 +139,22 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             // éclairage du jeu d'origine : 0,62 + 0,55 × |n · soleil| (les deux faces), d'où deux lumières opposées
             Vector3 sun = Vector3.Normalize(new Vector3(-0.4f, -0.3f, 0.85f));   // remplacé par le soleil de la mission (LoadMission)
             e.AmbientLightColor = new Vector3(0.62f);
-            e.DirectionalLight0.Enabled = true; e.DirectionalLight0.Direction = -sun; e.DirectionalLight0.DiffuseColor = new Vector3(0.55f); e.DirectionalLight0.SpecularColor = Vector3.Zero;
-            e.DirectionalLight1.Enabled = true; e.DirectionalLight1.Direction = sun; e.DirectionalLight1.DiffuseColor = new Vector3(0.55f); e.DirectionalLight1.SpecularColor = Vector3.Zero;
-            e.DirectionalLight2.Enabled = false; e.SpecularPower = 1;
+            e.DirectionalLight0.Enabled = true;
+            e.DirectionalLight0.Direction = -sun;
+            e.DirectionalLight0.DiffuseColor = new Vector3(0.55f);
+            e.DirectionalLight0.SpecularColor = Vector3.Zero;
+            e.DirectionalLight1.Enabled = true;
+            e.DirectionalLight1.Direction = sun;
+            e.DirectionalLight1.DiffuseColor = new Vector3(0.55f);
+            e.DirectionalLight1.SpecularColor = Vector3.Zero;
+            e.DirectionalLight2.Enabled = false;
+            e.SpecularPower = 1;
         }
         _dual = new DualTextureEffect(gd) { FogEnabled = true };
         _alphaFx = new AlphaTestEffect(gd) { AlphaFunction = CompareFunction.Greater, ReferenceAlpha = 102, FogEnabled = true, DiffuseColor = new Vector3(0.95f) };
         _part = new BasicEffect(gd) { TextureEnabled = true, VertexColorEnabled = true, LightingEnabled = false, Texture = Tex.Soft };
-        _scene = new SceneEffect(gd); _depth = new DepthEffect(gd);
+        _scene = new SceneEffect(gd);
+        _depth = new DepthEffect(gd);
         try { _audio = new Audio(SoundDb.Load(_files.DataDir)); } catch (Exception e) { Console.WriteLine("Son : " + e.Message); }
         LoadCursors();
         _settings = Settings.Load(_files.DataDir);
@@ -156,7 +182,10 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         if (CameraSpec != null)
         {
             float[] c = CameraSpec.Split(',').Select(x => float.Parse(x, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
-            _target = new(c[0], c[1], c[2]); _yaw = c[3]; _pitch = c[4]; _dist = c[5];
+            _target = new(c[0], c[1], c[2]);
+            _yaw = c[3];
+            _pitch = c[4];
+            _dist = c[5];
         }
     }
 
@@ -188,20 +217,25 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             {
                 foreach (Unit man in _session.Units.Active.Where(u => !u.IsVehicle).Take(2))
                     _session.Units.BoardNow(man, veh);
-                _sel.Clear(); _sel.Add(veh);
+                _sel.Clear();
+                _sel.Add(veh);
             }
             if (i == 30 && Environment.GetEnvironmentVariable("FD3_BOUCHE") != null && _session.Units.Supplies.FirstOrDefault() is { } hyd
                 && _session.Units.Active.FirstOrDefault(u => u.IsVehicle && u.Nozzle != null) is { } tk)
             {
                 _session.Units.Teleport(tk, new SN.Vector2(hyd.Position.X - 900, hyd.Position.Y - 300));
-                _target = new SN.Vector3(hyd.Position.X - 450, hyd.Position.Y - 150, 0); _dist = 2200; _pitch = 0.9f;
+                _target = new SN.Vector3(hyd.Position.X - 450, hyd.Position.Y - 150, 0);
+                _dist = 2200;
+                _pitch = 0.9f;
             }
             if (i == 400 && Environment.GetEnvironmentVariable("FD3_CASSER") is { } cas
                 && _session.Units.Openings.FirstOrDefault(o => o.Name.Equals(cas, StringComparison.OrdinalIgnoreCase)) is { } ob
                 && _session.Units.Active.Where(u => u.CanBreak).OrderBy(u => SN.Vector3.Distance(u.Position, ob.Position)).FirstOrDefault() is { } axeman)
             {
                 _session.Units.Teleport(axeman, new SN.Vector2(5650, 4250));
-                _session.Units.WorkOnOpening(axeman, ob); _sel.Clear(); _sel.Add(axeman);
+                _session.Units.WorkOnOpening(axeman, ob);
+                _sel.Clear();
+                _sel.Add(axeman);
                 Console.WriteLine($"essai hache : {axeman.Status}");
             }
             if (i > 400 && i % 20 == 0 && Environment.GetEnvironmentVariable("FD3_CASSER") != null)
@@ -224,8 +258,10 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     {
         float dt = (float)Math.Min(0.1, gameTime.ElapsedGameTime.TotalSeconds);
         AltEnter();
-        _fbW = GraphicsDevice.PresentationParameters.BackBufferWidth; _fbH = GraphicsDevice.PresentationParameters.BackBufferHeight;
-        _winW = Math.Max(1, Window.ClientBounds.Width); _winH = Math.Max(1, Window.ClientBounds.Height);
+        _fbW = GraphicsDevice.PresentationParameters.BackBufferWidth;
+        _fbH = GraphicsDevice.PresentationParameters.BackBufferHeight;
+        _winW = Math.Max(1, Window.ClientBounds.Width);
+        _winH = Math.Max(1, Window.ClientBounds.Height);
         if (_frame % 15 == 0)
             RefreshScale();
         NetUpdate();
@@ -262,7 +298,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 UpdateMission();
                 UpdateCinema(dt);
             }
-            base.Update(gameTime); return;
+            base.Update(gameTime);
+            return;
         }
         if (IsActive)
             HandleInput(dt);
@@ -289,7 +326,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
 
     protected override void Draw(GameTime gameTime)
     {
-        _fbW = GraphicsDevice.PresentationParameters.BackBufferWidth; _fbH = GraphicsDevice.PresentationParameters.BackBufferHeight;
+        _fbW = GraphicsDevice.PresentationParameters.BackBufferWidth;
+        _fbH = GraphicsDevice.PresentationParameters.BackBufferHeight;
         if (_fbW == 0 || _fbH == 0)
             return;
         float time = _visTime;   // s'arrête en pause : flammes, fumée et eau figées
@@ -394,7 +432,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             SkipCinematic();
             for (int i = 0; i < 600 && !_session.Units.Active.Any(u => u.IsVehicle && !u.Moving); i++)
                 _session.Step();
-            List<Unit> vs = _session.Units.Active.Where(u => u.IsVehicle).ToList(); string[] fr = vies.Split(',');
+            List<Unit> vs = _session.Units.Active.Where(u => u.IsVehicle).ToList();
+            string[] fr = vies.Split(',');
             for (int i = 0; i < Math.Min(vs.Count, fr.Length); i++)
             {
                 float f = float.Parse(fr[i], System.Globalization.CultureInfo.InvariantCulture);
@@ -424,33 +463,47 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 for (int i = 0; i < 20; i++)
                     _session.Step();
                 SnapshotPoses();
-                _target = man.Position + new SN.Vector3(0, 0, 100); _dist = 450; _pitch = 0.45f; _paused = true;
+                _target = man.Position + new SN.Vector3(0, 0, 100);
+                _dist = 450;
+                _pitch = 0.45f;
+                _paused = true;
                 Console.WriteLine($"lance : {man.Status}");
             }
         }
         // essai : FD3_GRAPPIN=phase,secondes → le scout passe le premier mur au grappin ; la caméra le regarde
         if (_frame == 4 && Environment.GetEnvironmentVariable("FD3_GRAPPIN") is { } grap && _session != null && _session.Units.Grapples.Count > 0)
         {
-            string[] pr = grap.Split(','); ClimbPhase want = Enum.Parse<ClimbPhase>(pr[0]); float extra = pr.Length > 1 ? float.Parse(pr[1], System.Globalization.CultureInfo.InvariantCulture) : 0;
-            UnitManager um = _session.Units; SkipCinematic();
+            string[] pr = grap.Split(',');
+            ClimbPhase want = Enum.Parse<ClimbPhase>(pr[0]);
+            float extra = pr.Length > 1 ? float.Parse(pr[1], System.Globalization.CultureInfo.InvariantCulture) : 0;
+            UnitManager um = _session.Units;
+            SkipCinematic();
             for (int i = 0; i < 600 && !um.Active.Any(u => u.CanGrapple && !u.Moving); i++)
                 _session.Step();
-            Unit? sc = um.Active.FirstOrDefault(u => u.CanGrapple); GrapplePoint gp = um.Grapples[0];
+            Unit? sc = um.Active.FirstOrDefault(u => u.CanGrapple);
+            GrapplePoint gp = um.Grapples[0];
             if (sc != null)
             {
-                sc.Position = new SN.Vector3(gp.SideA, 0); um.GrappleOver(sc, gp);
+                sc.Position = new SN.Vector3(gp.SideA, 0);
+                um.GrappleOver(sc, gp);
                 for (int i = 0; i < 600 && sc.Climb != want; i++)
                     _session.Step();
                 for (int i = 0; i < (int)(extra / Session.Dt); i++)
                     _session.Step();
                 SnapshotPoses();
-                _target = sc.Position; _dist = 1100; _pitch = 0.5f; _yaw = MathF.Atan2(gp.Axis.Y, gp.Axis.X); _paused = true;
+                _target = sc.Position;
+                _dist = 1100;
+                _pitch = 0.5f;
+                _yaw = MathF.Atan2(gp.Axis.Y, gp.Axis.X);
+                _paused = true;
                 Console.WriteLine($"grappin : {sc.Status} {sc.Climb} {sc.Position}");
             }
         }
         if (_frame == 4 && Environment.GetEnvironmentVariable("FD3_PORTER") is { } porter && _session != null)
         {
-            string[] pr = porter.Split(','); CarryPhase want = Enum.Parse<CarryPhase>(pr[0]); float extra = pr.Length > 1 ? float.Parse(pr[1], System.Globalization.CultureInfo.InvariantCulture) : 0;
+            string[] pr = porter.Split(',');
+            CarryPhase want = Enum.Parse<CarryPhase>(pr[0]);
+            float extra = pr.Length > 1 ? float.Parse(pr[1], System.Globalization.CultureInfo.InvariantCulture) : 0;
             UnitManager um = _session.Units;
             SkipCinematic();
             for (int i = 0; i < 600 && !um.Active.Any(u => !u.IsVehicle && !u.CanHeal && !u.Moving); i++)
@@ -467,7 +520,11 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 for (int i = 0; i < (int)(extra / Session.Dt); i++)
                     _session.Step();
                 SnapshotPoses();
-                _target = new SN.Vector3(man.Position.X, man.Position.Y, man.Position.Z); _dist = 900; _paused = true; _roofCheck = 0; UpdateRoofs(0.3f);
+                _target = new SN.Vector3(man.Position.X, man.Position.Y, man.Position.Z);
+                _dist = 900;
+                _paused = true;
+                _roofCheck = 0;
+                UpdateRoofs(0.3f);
                 Console.WriteLine($"porteur : {man.Status} · {man.Carry} · civil {civ.State} · z {man.Position.Z:0}");
                 foreach (Building b in _buildings.Where(b => Inside(new(man.Position.X, man.Position.Y), b.Min, b.Max, 0)))
                     Console.WriteLine($"  sous : {string.Join(",", b.Nodes.Take(5))} ({b.Nodes.Count}) z min {b.MinZ:0} ouvert {b.Open}");
@@ -495,7 +552,9 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         if (_frame == 4 && !_menu && _session != null && Environment.GetEnvironmentVariable("FD3_CLIC") is { } clic)
         {
             double[] xy = clic.Split(',').Select(double.Parse).ToArray();
-            _sel.Clear(); foreach (Unit u0 in _session.Units.Active.Where(u => !u.IsVehicle)) _sel.Add(u0);
+            _sel.Clear();
+            foreach (Unit u0 in _session.Units.Active.Where(u => !u.IsVehicle))
+                _sel.Add(u0);
             SN.Vector2? gp = Ground(xy[0], xy[1]);
             Console.WriteLine($"clic d'essai : sol visé {gp}, {_sel.Count} pompier(s)");
             Command(xy[0], xy[1]);
@@ -511,7 +570,11 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             _frame++;
     }
 
-    protected override void UnloadContent() { _audio?.Dispose(); base.UnloadContent(); }
+    protected override void UnloadContent()
+    {
+        _audio?.Dispose();
+        base.UnloadContent();
+    }
 
     // ------------------------------------------------------------------ chargement
     private Texture2D? TexOf(string? name)
@@ -521,7 +584,11 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         if (_texCache.TryGetValue(name, out Texture2D? t))
             return t;
         byte[]? b = _assets.Texture(_mission, name);
-        try { t = b != null ? Tex.Dds(GraphicsDevice, b) : null; } catch (Exception e) { Console.WriteLine($"{name} : {e.Message}"); t = null; }
+        try { t = b != null ? Tex.Dds(GraphicsDevice, b) : null; } catch (Exception e)
+        {
+            Console.WriteLine($"{name} : {e.Message}");
+            t = null;
+        }
         return _texCache[name] = t;
     }
 
@@ -534,8 +601,10 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     }
 
     // ---- regroupement des maillages fixes : sommets déjà placés dans le monde, un lot par texture ----
-    private sealed class LitBatch { public readonly List<VertexPositionNormalTexture> V = new(); public readonly List<int> I = new(); }
-    private sealed class DualBatch { public readonly List<VertexDual> V = new(); public readonly List<int> I = new(); }
+    private sealed class LitBatch { public readonly List<VertexPositionNormalTexture> V = new();
+        public readonly List<int> I = new(); }
+    private sealed class DualBatch { public readonly List<VertexDual> V = new();
+        public readonly List<int> I = new(); }
     private readonly Dictionary<(Texture2D? tex, bool alpha, bool roof, int layer), LitBatch> _litBatches = new();
     private readonly Dictionary<(Texture2D? tex, Texture2D lm, bool alpha, bool roof), DualBatch> _dualBatches = new();
 
@@ -557,7 +626,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         return best == float.MinValue ? _session.Units.GroundZ(new(x, y)) : best;
     }
 
-    private struct CutV { public SN.Vector3 P, N; public SN.Vector2 T0, TD, TL; }
+    private struct CutV { public SN.Vector3 P, N;
+        public SN.Vector2 T0, TD, TL; }
     private static CutV Lerp(CutV a, CutV b, float t) => new()
     {
         P = SN.Vector3.Lerp(a.P, b.P, t), N = SN.Vector3.Lerp(a.N, b.N, t), T0 = SN.Vector2.Lerp(a.T0, b.T0, t),
@@ -570,7 +640,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         List<CutV> res = new List<CutV>();
         for (int i = 0; i < poly.Count; i++)
         {
-            CutV a = poly[i]; CutV b = poly[(i + 1) % poly.Count];
+            CutV a = poly[i];
+            CutV b = poly[(i + 1) % poly.Count];
             bool ina = below ? a.P.Z <= cut : a.P.Z >= cut, inb = below ? b.P.Z <= cut : b.P.Z >= cut;
             if (ina)
                 res.Add(a);
@@ -581,7 +652,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     }
 
     // ---- décor dessiné avec l'effet « sol / bâtiment » (SceneEffect) ----
-    private sealed class SceneBatch { public readonly List<VertexScene> V = new(); public readonly List<int> I = new(); }
+    private sealed class SceneBatch { public readonly List<VertexScene> V = new();
+        public readonly List<int> I = new(); }
     private readonly Dictionary<(Texture2D? tex, Texture2D? dirt, Texture2D? lm, bool alpha, bool roof, int mode, bool caster, int bld), SceneBatch> _sceneBatches = new();
     private readonly List<(VertexBuffer vb, IndexBuffer ib, int count, Texture2D? tex, Texture2D? dirt, Texture2D? lm, bool alpha, bool roof, int mode, bool caster, int bld)> _sceneDraw = new();
 
@@ -618,7 +690,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         for (int i = 0; i < a.Mesh.VertexCount; i++)
         {
             float z = SN.Vector3.Transform(new SN.Vector3(a.Mesh.Positions[3 * i], a.Mesh.Positions[3 * i + 1], a.Mesh.Positions[3 * i + 2]), world).Z;
-            zmin = MathF.Min(zmin, z); zmax = MathF.Max(zmax, z);
+            zmin = MathF.Min(zmin, z);
+            zmax = MathF.Max(zmax, z);
         }
         return (zmin, zmax);
     }   // partie haute jetée (sol d'un niveau souterrain : le dessus des parois)
@@ -637,7 +710,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         };
         foreach (SceneAssets.Group gr in a.Groups)
         {
-            Texture2D? tex = TexOf(gr.Diffuse); Texture2D? dirt = mode != SceneEffect.ModePlain ? TexOf(gr.Dirt) : null;
+            Texture2D? tex = TexOf(gr.Diffuse);
+            Texture2D? dirt = mode != SceneEffect.ModePlain ? TexOf(gr.Dirt) : null;
             for (int k = gr.Start; k + 2 < gr.Start + gr.Count && k + 2 < m.Indices.Length; k += 3)
             {
                 List<CutV> tri = new List<CutV> { V((int)m.Indices[k]), V((int)m.Indices[k + 1]), V((int)m.Indices[k + 2]) };
@@ -774,13 +848,16 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             g.Groups.Add((0, b.I.Count, k.tex, null, k.alpha));
             _draw.Add((g, k.roof, k.layer));
         }
-        _dualBatches.Clear(); _litBatches.Clear();
+        _dualBatches.Clear();
+        _litBatches.Clear();
         foreach (((Texture2D? tex, Texture2D? dirt, Texture2D? lm, bool alpha, bool roof, int mode, bool caster, int bld) k, SceneBatch? b) in _sceneBatches)
         {
             if (b.I.Count == 0)
                 continue;
-            VertexBuffer vb = new VertexBuffer(GraphicsDevice, VertexScene.Decl, b.V.Count, BufferUsage.WriteOnly); vb.SetData(b.V.ToArray());
-            IndexBuffer ib = new IndexBuffer(GraphicsDevice, IndexElementSize.ThirtyTwoBits, b.I.Count, BufferUsage.WriteOnly); ib.SetData(b.I.ToArray());
+            VertexBuffer vb = new VertexBuffer(GraphicsDevice, VertexScene.Decl, b.V.Count, BufferUsage.WriteOnly);
+            vb.SetData(b.V.ToArray());
+            IndexBuffer ib = new IndexBuffer(GraphicsDevice, IndexElementSize.ThirtyTwoBits, b.I.Count, BufferUsage.WriteOnly);
+            ib.SetData(b.I.ToArray());
             _sceneDraw.Add((vb, ib, b.I.Count, k.tex, k.dirt, k.lm, k.alpha, k.roof, k.mode, k.caster, k.bld));
         }
         _sceneBatches.Clear();
@@ -789,7 +866,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     private void LoadMission(string mission, string difficulty)
     {
         StopMenuVideo();
-        _mission = mission; _difficulty = difficulty;
+        _mission = mission;
+        _difficulty = difficulty;
         if (CapturePath == null && !mission.Equals(_settings.LastMission, StringComparison.OrdinalIgnoreCase))
         {
             _settings.LastMission = mission;   // la campagne s'ouvrira sur cette mission au prochain lancement
@@ -814,17 +892,39 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         foreach (CharAnim c in _chars.Values)
             foreach ((MeshGpu mesh, float[] pos, float[] nrm) s in c.Skinned.Values)
                 s.mesh.Dispose();
-        _draw.Clear(); _fireRoom.Clear(); _texCache.Clear(); _log.Clear(); _unitModels.Clear(); _sel.Clear(); _unitLogSeen = 0; _scriptLogSeen = 0;
-        _chars.Clear(); _rigs.Clear(); _partMeshes.Clear(); _lastAnimTime = -1; _prevPose.Clear(); _shownHeading.Clear();
+        _draw.Clear();
+        _fireRoom.Clear();
+        _texCache.Clear();
+        _log.Clear();
+        _unitModels.Clear();
+        _sel.Clear();
+        _unitLogSeen = 0;
+        _scriptLogSeen = 0;
+        _chars.Clear();
+        _rigs.Clear();
+        _partMeshes.Clear();
+        _lastAnimTime = -1;
+        _prevPose.Clear();
+        _shownHeading.Clear();
         _audio?.StopAll();
-        UnitManager.Nationality = _loadNat ?? _settings.Nationality; _gameNationality = UnitManager.Nationality;
+        UnitManager.Nationality = _loadNat ?? _settings.Nationality;
+        _gameNationality = UnitManager.Nationality;
         _journal = new();
         _session = new Session(_files, mission, difficulty);
         LoadSun();
         // les missions commencent tout de suite (cinématique d'introduction des scripts) ; sans script : en pause
-        _paused = false; _speed = 1; _owed = 0;
-        _cineOn = false; _cineMoving = false; _cineBars = 0; _subtitle = null; _messages.Clear(); _showMessageHistory = false;
-        _ended = false; _endSoundPlayed = false; _menu = false;
+        _paused = false;
+        _speed = 1;
+        _owed = 0;
+        _cineOn = false;
+        _cineMoving = false;
+        _cineBars = 0;
+        _subtitle = null;
+        _messages.Clear();
+        _showMessageHistory = false;
+        _ended = false;
+        _endSoundPlayed = false;
+        _menu = false;
 
         // décor (éclairage précalculé du jeu quand il existe)
         // plafond d'un niveau souterrain (Eurotunnel : « GROUND_ROOF », une dalle au-dessus de toute la carte) : vu de dessus,
@@ -858,7 +958,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                     for (int i = 0; i < asset.Mesh.VertexCount; i++)
                     {
                         float z = SN.Vector3.Transform(new SN.Vector3(asset.Mesh.Positions[3 * i], asset.Mesh.Positions[3 * i + 1], asset.Mesh.Positions[3 * i + 2]), n.World).Z;
-                        zmin = MathF.Min(zmin, z); zmax = MathF.Max(zmax, z);
+                        zmin = MathF.Min(zmin, z);
+                        zmax = MathF.Max(zmax, z);
                     }
                     AddRoofCut(asset, n.World, zmin + 0.8f * MathF.Max(100, zmax - zmin));
                 }
@@ -891,7 +992,9 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         // objets que le script déplace (ENT_SetPosition(numéro, …) : le train de l'Eurotunnel) ou cache / montre
         // (ENT_SetVisibility(numéro, …) : la porte fixe du hangar de Mriya, remplacée par la porte animée) : dessinés à part,
         // à leur place du moment et seulement s'ils sont visibles
-        _scriptMoved.Clear(); _scriptRoofs.Clear(); _glide.Clear();
+        _scriptMoved.Clear();
+        _scriptRoofs.Clear();
+        _glide.Clear();
         string scriptDir = Path.Combine(_files.DataDir, "Script", "Mission", mission);
         if (Directory.Exists(scriptDir))
         {
@@ -921,7 +1024,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         }
         // gravats à dégager : leur morceau cassé (« …_break ») n'apparaît qu'une fois l'obstacle dégagé ; le repère de hache
         // disparaît alors
-        _axeMarks.Clear(); _brokenParts.Clear();
+        _axeMarks.Clear();
+        _brokenParts.Clear();
         List<Opening> obstacles = _session.Units.Openings.Where(o => o.IsObstacle).ToList();
         foreach (SceneAssets.Placed p in allPlaced)
         {
@@ -962,7 +1066,9 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                         if (OverheadBox(a, w) is { } ob)
                         {
                             _curBuilding = _buildings.Count;
-                            Building b = new Building { Min = ob.min, Max = ob.max, MinZ = ob.zmin }; b.Nodes.Add(p.Name); _buildings.Add(b);
+                            Building b = new Building { Min = ob.min, Max = ob.max, MinZ = ob.zmin };
+                            b.Nodes.Add(p.Name);
+                            _buildings.Add(b);
                             AddRoofCut(a, w, allRoof: true);
                             _curBuilding = -1;
                         }
@@ -978,7 +1084,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         Status("Envoi à la carte graphique...", 0.97f);
         FlushStatic();
         // cadrage
-        _sceneMin = new SN.Vector3(float.MaxValue); _sceneMax = new SN.Vector3(float.MinValue);
+        _sceneMin = new SN.Vector3(float.MaxValue);
+        _sceneMax = new SN.Vector3(float.MinValue);
         foreach (HotPoint h in _session.Fire.HotPoints)
         {
             _sceneMin = SN.Vector3.Min(_sceneMin, h.Position);
@@ -989,9 +1096,11 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             _sceneMin = new(0, 0, 0);
             _sceneMax = new(grid.Width * Grid.CellSize, grid.Height * Grid.CellSize, 0);
         }
-        _target = (_sceneMin + _sceneMax) / 2; _target.Z = 0;
+        _target = (_sceneMin + _sceneMax) / 2;
+        _target.Z = 0;
         _dist = MathF.Max(_sceneMax.X - _sceneMin.X, _sceneMax.Y - _sceneMin.Y) * 0.75f;
-        _mapCenter = new(_target.X, _target.Y); _mapScale = 0;
+        _mapCenter = new(_target.X, _target.Y);
+        _mapScale = 0;
         BuildGridTexture();
         LoadMinimap();
         Window.Title = $"Open Fire Department - {mission} ({DiffName})";
@@ -1015,7 +1124,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             {
                 EzTree.TreeGenerator.Options o = OpenFD.EzTree.TreeGenerator.Options.FromJson(File.ReadAllText(Path.Combine(dir, Preset(t.Model) + ".json")));
                 o.Seed = 1000 + t.Seed % 3;
-                EzTree.TreeGenerator tr = new OpenFD.EzTree.TreeGenerator(o); tr.Generate();
+                EzTree.TreeGenerator tr = new OpenFD.EzTree.TreeGenerator(o);
+                tr.Generate();
                 float ymin = float.MaxValue, ymax = float.MinValue;
                 for (int i = 1; i < tr.BranchPos.Count; i += 3)
                 {
@@ -1035,14 +1145,16 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 };
                 SceneAssets.MeshAsset bark = Asset(tr.BranchPos, tr.BranchNrm, barkUv, tr.BranchIdx, "ez:bark_" + o.BarkType, false);
                 SceneAssets.MeshAsset leaves = Asset(tr.LeafPos, tr.LeafNrm, tr.LeafUv.ToArray(), tr.LeafIdx, "ez:leaves_" + o.LeafType, true);
-                TreeTex("bark_" + o.BarkType); TreeTex("leaves_" + o.LeafType);
+                TreeTex("bark_" + o.BarkType);
+                TreeTex("leaves_" + o.LeafType);
                 variants[key] = (bark, leaves, ymax - ymin, ymin);
             }
             (SceneAssets.MeshAsset bark, SceneAssets.MeshAsset leaves, float h, float y0) v = variants[key];
             float s = t.Height / v.h;
             // EZ-Tree pousse vers +Y ; le jeu a Z vers le haut
             SN.Matrix4x4 w = SN.Matrix4x4.CreateTranslation(0, -v.y0, 0) * SN.Matrix4x4.CreateScale(s) * SN.Matrix4x4.CreateRotationX(MathF.PI / 2) * Lift(t.World);
-            AddStatic(v.bark, w, false, 2); AddStatic(v.leaves, w, false, 2);
+            AddStatic(v.bark, w, false, 2);
+            AddStatic(v.leaves, w, false, 2);
         }
     }
 
@@ -1056,7 +1168,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
 
     private void BuildGridTexture()
     {
-        _gridTex?.Dispose(); _gridTex = null;
+        _gridTex?.Dispose();
+        _gridTex = null;
         Grid? g = _session.Grid;
         if (g == null)
             return;
@@ -1067,13 +1180,18 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             {
                 int i = g.Index(cx, cy), o = (g.Height - 1 - cy) * g.Width + cx;   // nord en haut
                 bool wall = i < g.ZoneA.Length && g.ZoneA[i] == 0;
-                if (!wall && _session.Units.IsBlocked(i)) { px[o] = new Color(70, 52, 40); continue; }   // objets qui bloquent le passage
+                if (!wall && _session.Units.IsBlocked(i))
+                {
+                    px[o] = new Color(70, 52, 40);
+                    continue;
+                }   // objets qui bloquent le passage
                 float h = i < g.GroundHeight.Length && gmax > gmin ? (g.GroundHeight[i] - gmin) / (gmax - gmin) : 0;
                 byte v = (byte)(22 + h * 30);
                 px[o] = wall ? new Color(74, 74, 85) : new Color(v, v, (byte)(v + 3));
             }
         _gridTex = Tex.FromColors(GraphicsDevice, g.Width, g.Height, px, false);
-        _gridW = g.Width * Grid.CellSize; _gridH = g.Height * Grid.CellSize;
+        _gridW = g.Width * Grid.CellSize;
+        _gridH = g.Height * Grid.CellSize;
     }
 
     // ------------------------------------------------------------------ simulation
@@ -1090,7 +1208,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             return;
         }
         _owed += dt * _speed / Session.Dt;
-        int n = (int)Math.Min(_owed, 400); _owed -= n;
+        int n = (int)Math.Min(_owed, 400);
+        _owed -= n;
         int before = _session.Fire.ExtinguishLog.Count;
         for (int i = 0; i < n; i++)
         {
@@ -1142,7 +1261,10 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     /// </summary>
     private void LoadSun()
     {
-        _lmScale = 2f; _sunColor = SN.Vector3.One; _shadowOpacity = 0.5f; _tint = SN.Vector3.One;
+        _lmScale = 2f;
+        _sunColor = SN.Vector3.One;
+        _shadowOpacity = 0.5f;
+        _tint = SN.Vector3.One;
         _sunDir = SN.Vector3.Normalize(new SN.Vector3(0.4f, 0.3f, -0.85f));
         foreach (LevelObject o in _session.Level.Objects.Where(o => o.Kind == EntityKind.Light && o.HasTransform))
         {
@@ -1150,7 +1272,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             try { c = ClassFile.Load(_files, "Design\\" + o.ClassPath["design\\".Length..] + ".class"); } catch { }
             if (c?.Get("LIGHT", "LightType")?.Trim('"', ' ').Equals("SUN", StringComparison.OrdinalIgnoreCase) != true)
                 continue;
-            SN.Matrix4x4 m = o.Matrix; SN.Vector3 d = new SN.Vector3(m.M31, m.M32, m.M33);
+            SN.Matrix4x4 m = o.Matrix;
+            SN.Vector3 d = new SN.Vector3(m.M31, m.M32, m.M33);
             if (d.LengthSquared() < 1e-6f)
                 continue;
             _sunDir = SN.Vector3.Normalize(d);
@@ -1172,7 +1295,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         Console.WriteLine($"Soleil : direction {_sunDir}, teinte {_tint}, ombres {_shadowOpacity:0.##}");
         foreach (BasicEffect e in new[] { _lit, _plain })
         {
-            e.DirectionalLight0.Direction = _sunDir.X(); e.DirectionalLight1.Direction = -_sunDir.X();
+            e.DirectionalLight0.Direction = _sunDir.X();
+            e.DirectionalLight1.Direction = -_sunDir.X();
         }
     }
 
@@ -1184,7 +1308,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     /// </summary>
     private void ReadSunComponent(LevelObject o)
     {
-        _lmScale = 2f; _sunColor = SN.Vector3.One;
+        _lmScale = 2f;
+        _sunColor = SN.Vector3.One;
         byte[] tag = System.Text.Encoding.ASCII.GetBytes("FD2_LIGHT\0");
         foreach (Component comp in o.Components)
         {
@@ -1220,7 +1345,11 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         if (_shadowMap == null)
         {
             try { _shadowMap = new RenderTarget2D(gd, ShadowSize, ShadowSize, false, SurfaceFormat.Single, DepthFormat.Depth24); }
-            catch { _shadowsOn = false; return; }
+            catch
+            {
+                _shadowsOn = false;
+                return;
+            }
         }
         SN.Vector3 center = new SN.Vector3(_target.X, _target.Y, GroundAt(_target.X, _target.Y));
         float size = Math.Clamp(_dist * 2.2f, 3000, 40000);
@@ -1230,7 +1359,9 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _lightVp = (view * proj).X();
         gd.SetRenderTarget(_shadowMap);
         gd.Clear(ClearOptions.Target | ClearOptions.DepthBuffer, Color.White, 1, 0);
-        gd.DepthStencilState = DepthStencilState.Default; gd.BlendState = BlendState.Opaque; gd.RasterizerState = RasterizerState.CullNone;
+        gd.DepthStencilState = DepthStencilState.Default;
+        gd.BlendState = BlendState.Opaque;
+        gd.RasterizerState = RasterizerState.CullNone;
         gd.SamplerStates[0] = SamplerState.LinearWrap;
         _shadowPass = true;
         try
@@ -1240,7 +1371,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 if (!d.caster || d.roof && !RoofShown(d.bld))
                     continue;
                 _depth.Set(Matrix.Identity * _lightVp, d.alpha ? d.tex : null);
-                gd.SetVertexBuffer(d.vb); gd.Indices = d.ib;
+                gd.SetVertexBuffer(d.vb);
+                gd.Indices = d.ib;
                 foreach (EffectPass pass in _depth.Fx.CurrentTechnique.Passes)
                 {
                     pass.Apply();
@@ -1252,7 +1384,11 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                     DrawMesh(mesh, Matrix.Identity);   // arbres
             RenderUnits();
         }
-        finally { _shadowPass = false; gd.SetRenderTarget(null); }
+        finally
+        {
+            _shadowPass = false;
+            gd.SetRenderTarget(null);
+        }
     }
 
     // ------------------------------------------------------------------ rendu 3D
@@ -1262,7 +1398,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
 
     private void Render3D(float time)
     {
-        float brightSaved = _bright; _bright *= 1 + 0.6f * _flash;   // éclair d'une explosion
+        float brightSaved = _bright;
+        _bright *= 1 + 0.6f * _flash;   // éclair d'une explosion
         try { Render3DCore(time); } finally { _bright = brightSaved; }
     }
 
@@ -1270,14 +1407,21 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     {
         GraphicsDevice gd = GraphicsDevice;
         gd.Clear(new Color(Sky.X, Sky.Y, Sky.Z));
-        gd.DepthStencilState = DepthStencilState.Default; gd.BlendState = BlendState.Opaque; gd.RasterizerState = RasterizerState.CullNone;
-        gd.SamplerStates[0] = SamplerState.AnisotropicWrap; gd.SamplerStates[1] = SamplerState.AnisotropicWrap; gd.SamplerStates[2] = SamplerState.LinearWrap; gd.SamplerStates[3] = SamplerState.PointClamp;
+        gd.DepthStencilState = DepthStencilState.Default;
+        gd.BlendState = BlendState.Opaque;
+        gd.RasterizerState = RasterizerState.CullNone;
+        gd.SamplerStates[0] = SamplerState.AnisotropicWrap;
+        gd.SamplerStates[1] = SamplerState.AnisotropicWrap;
+        gd.SamplerStates[2] = SamplerState.LinearWrap;
+        gd.SamplerStates[3] = SamplerState.PointClamp;
         _eye = _target + _dist * new SN.Vector3(MathF.Cos(_pitch) * MathF.Cos(_yaw), MathF.Cos(_pitch) * MathF.Sin(_yaw), MathF.Sin(_pitch));
-        SN.Vector3 shake = ShakeOffset(); _eye += shake;
+        SN.Vector3 shake = ShakeOffset();
+        _eye += shake;
         _view = SN.Matrix4x4.CreateLookAt(_eye, _target + shake, SN.Vector3.UnitZ);
         _proj = SN.Matrix4x4.CreatePerspectiveFieldOfView(50f * MathF.PI / 180, (float)_fbW / _fbH, 20f, 80000f);
         _viewProj = _view * _proj;
-        Matrix view = _view.X(); Matrix proj = _proj.X();
+        Matrix view = _view.X();
+        Matrix proj = _proj.X();
         foreach (IEffectMatrices e in new IEffectMatrices[] { _lit, _plain, _dual, _alphaFx, _part, _ghost, _burnt })
         {
             e.View = view;
@@ -1291,7 +1435,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             e.DirectionalLight0.DiffuseColor = (0.55f * _bright * _tint * _sunColor).X();
             e.DirectionalLight1.DiffuseColor = (0.55f * _bright * _tint).X();
         }
-        _dual.DiffuseColor = (_bright * _tint).X(); _alphaFx.DiffuseColor = (0.95f * _bright * _tint).X();
+        _dual.DiffuseColor = (_bright * _tint).X();
+        _alphaFx.DiffuseColor = (0.95f * _bright * _tint).X();
         foreach (IEffectFog f in new IEffectFog[] { _lit, _plain, _dual, _alphaFx })
         {
             f.FogColor = Sky.X();
@@ -1310,7 +1455,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             if (d.roof && !RoofShown(d.bld))
                 continue;
             _scene.Set(Matrix.Identity, d.tex, d.dirt, d.lm, d.mode, d.alpha, _bright, _lmScale);
-            gd.SetVertexBuffer(d.vb); gd.Indices = d.ib;
+            gd.SetVertexBuffer(d.vb);
+            gd.Indices = d.ib;
             foreach (EffectPass pass in _scene.Fx.CurrentTechnique.Passes)
             {
                 pass.Apply();
@@ -1319,7 +1465,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         }
         gd.RasterizerState = RasterizerState.CullNone;
         RenderLids(_viewProj.X());   // couvercles noirs des pièces pas encore atteintes
-        gd.SamplerStates[1] = SamplerState.AnisotropicWrap; gd.SamplerStates[2] = SamplerState.LinearWrap;
+        gd.SamplerStates[1] = SamplerState.AnisotropicWrap;
+        gd.SamplerStates[2] = SamplerState.LinearWrap;
         foreach ((MeshGpu? mesh, bool roof, int layer) in _draw)
         {
             if (roof && !_roofs)
@@ -1339,7 +1486,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     private void DrawMesh(MeshGpu mesh, Matrix world)
     {
         GraphicsDevice gd = GraphicsDevice;
-        gd.SetVertexBuffer(mesh.Vb); gd.Indices = mesh.Ib;
+        gd.SetVertexBuffer(mesh.Vb);
+        gd.Indices = mesh.Ib;
         if (_shadowPass)
         {
             // carte d'ombres : seulement la profondeur vue du soleil (détourage pour les feuillages)
@@ -1421,7 +1569,11 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         if (_unitModels.TryGetValue(model, out List<(MeshGpu mesh, SN.Matrix4x4 part)>? l))
             return l;
         l = new();
-        try { foreach (SceneAssets.Node part in _assets.ModelParts(model)) l.Add((Upload(_assets.LoadMesh(_mission, part.Mesh, "gfx")), part.World)); }
+        try
+        {
+            foreach (SceneAssets.Node part in _assets.ModelParts(model))
+                l.Add((Upload(_assets.LoadMesh(_mission, part.Mesh, "gfx")), part.World));
+        }
         catch (Exception e) { Console.WriteLine($"{model} : {e.Message}"); }
         _unitModels[model] = l;
         return l;
@@ -1443,7 +1595,9 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             if (!Vis(id, true))
                 continue;
             // rouages : un tour toutes les 3 s autour de leur axe ; flèche : va et vient d'environ 20 cm
-            SN.Vector3 t = world.Translation; SN.Matrix4x4 w = world; w.Translation = SN.Vector3.Zero;
+            SN.Vector3 t = world.Translation;
+            SN.Matrix4x4 w = world;
+            w.Translation = SN.Vector3.Zero;
             // flèche du grappin (si_Koshka_sign_01) : va et vient de 55 unités vers l'arrière et le haut, en 1,2 s
             float bob = 0.5f - 0.5f * MathF.Cos(_visTime * MathF.Tau / 1.2f);
             SN.Matrix4x4 anim = arrow ? SN.Matrix4x4.CreateTranslation(0, -55 * bob, 55 * bob) * w * SN.Matrix4x4.CreateTranslation(t)
@@ -1475,7 +1629,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         float t = clip == null ? 0 : Math.Clamp(_visTime - st.since, 0, clip.Duration);
         if (clip != null && reverse)
             t = clip.Duration - t;
-        List<SceneAssets.Node> nodes = _assets.ModelParts(o.Model!); List<(MeshGpu mesh, SN.Matrix4x4 part)> meshes = UnitModel(o.Model!);
+        List<SceneAssets.Node> nodes = _assets.ModelParts(o.Model!);
+        List<(MeshGpu mesh, SN.Matrix4x4 part)> meshes = UnitModel(o.Model!);
         static string Leaf(string n) => n[(n.LastIndexOf('\\') + 1)..];
         // aucune pièce animée par ce clip (portes ordinaires) : la porte pivote de 90° comme avant
         if (clip == null || !nodes.Any(n => clip.Tracks.ContainsKey(Leaf(n.Mesh))))
@@ -1530,16 +1685,26 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     private readonly List<VertexPositionColorTexture> _pv = new();
     private void P(SN.Vector3 p, float size, SN.Vector4 c, SN.Vector3 right, SN.Vector3 up)
     {
-        SN.Vector3 r = right * (size / 2); SN.Vector3 u = up * (size / 2); Color col = c.C();
-        Vector3 a = (p - r - u).X(); Vector3 b = (p + r - u).X(); Vector3 cc = (p + r + u).X(); Vector3 d = (p - r + u).X();
-        _pv.Add(new(a, col, new Vector2(0, 1))); _pv.Add(new(b, col, new Vector2(1, 1))); _pv.Add(new(cc, col, new Vector2(1, 0)));
-        _pv.Add(new(a, col, new Vector2(0, 1))); _pv.Add(new(cc, col, new Vector2(1, 0))); _pv.Add(new(d, col, new Vector2(0, 0)));
+        SN.Vector3 r = right * (size / 2);
+        SN.Vector3 u = up * (size / 2);
+        Color col = c.C();
+        Vector3 a = (p - r - u).X();
+        Vector3 b = (p + r - u).X();
+        Vector3 cc = (p + r + u).X();
+        Vector3 d = (p - r + u).X();
+        _pv.Add(new(a, col, new Vector2(0, 1)));
+        _pv.Add(new(b, col, new Vector2(1, 1)));
+        _pv.Add(new(cc, col, new Vector2(1, 0)));
+        _pv.Add(new(a, col, new Vector2(0, 1)));
+        _pv.Add(new(cc, col, new Vector2(1, 0)));
+        _pv.Add(new(d, col, new Vector2(0, 0)));
     }
 
     private void RenderParticles(float time)
     {
         _pv.Clear();
-        SN.Vector3 right = new SN.Vector3(_view.M11, _view.M21, _view.M31); SN.Vector3 up = new SN.Vector3(_view.M12, _view.M22, _view.M32);
+        SN.Vector3 right = new SN.Vector3(_view.M11, _view.M21, _view.M31);
+        SN.Vector3 up = new SN.Vector3(_view.M12, _view.M22, _view.M32);
         if (_smokeOn)
             foreach (SmokePoint s in _session.Smoke.Points)
             {
@@ -1618,7 +1783,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             {
                 float ph = Frac(q * 0.618f + hpIndex * 0.137f), t = Frac(time * 0.9f + ph);
                 float ox = MathF.Sin(ph * 40) * (40 + 90 * k) * (1 - 0.6f * t), oy = MathF.Cos(ph * 53) * (40 + 90 * k) * (1 - 0.6f * t);
-                ox += MathF.Sin(time * 7 + ph * 20) * 12 * t; oy += MathF.Cos(time * 6 + ph * 13) * 12 * t;
+                ox += MathF.Sin(time * 7 + ph * 20) * 12 * t;
+                oy += MathF.Cos(time * 6 + ph * 13) * 12 * t;
                 SN.Vector4 col = chem
                     ? SN.Vector4.Lerp(new SN.Vector4(0.75f, 1f, 0.5f, 0.9f), new SN.Vector4(0.1f, 0.7f, 0.15f, 0.9f), Math.Clamp((t - 0.1f) / 0.7f, 0, 1))
                     : foam ? SN.Vector4.Lerp(new SN.Vector4(1f, 0.3f, 0.15f, 0.9f), new SN.Vector4(0.8f, 0.02f, 0.02f, 0.9f), Math.Clamp((t - 0.1f) / 0.7f, 0, 1))
@@ -1630,9 +1796,11 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         if (_pv.Count == 0 && _fv.Count == 0)
             return;
         GraphicsDevice gd = GraphicsDevice;
-        gd.DepthStencilState = DepthStencilState.DepthRead; gd.SamplerStates[0] = SamplerState.LinearClamp;
+        gd.DepthStencilState = DepthStencilState.DepthRead;
+        gd.SamplerStates[0] = SamplerState.LinearClamp;
         VertexPositionColorTexture[] arr = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_pv).ToArray();
-        _part.World = Matrix.Identity; _part.Texture = Tex.Soft;
+        _part.World = Matrix.Identity;
+        _part.Texture = Tex.Soft;
         if (smokeCount > 0)
         {
             gd.BlendState = BlendState.NonPremultiplied;
@@ -1671,12 +1839,14 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             }
             _part.Alpha = 1f;
         }
-        gd.DepthStencilState = DepthStencilState.Default; gd.BlendState = BlendState.Opaque;
+        gd.DepthStencilState = DepthStencilState.Default;
+        gd.BlendState = BlendState.Opaque;
     }
 
     // ---- flammes animées ----
     private readonly List<VertexPositionColorTexture> _fv = new();
-    private Texture2D? _flameTex; private bool _flameTried;
+    private Texture2D? _flameTex;
+    private bool _flameTried;
     private const int FlameCols = 4, FlameRows = 8;   // 32 images de 128 × 128 dans une texture de 512 × 1024
 
     private Texture2D? FlameTexture()
@@ -1725,7 +1895,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             float w = size, hgt = size * 1.25f;
             // animation lente (6 à 9 images par seconde) et fondue : l'image suivante apparaît pendant que l'autre s'efface
             float ft = time * (_flameFps + _flameFpsVar * ph) + ph * 32;
-            int f0 = (int)MathF.Floor(ft); float blend = ft - f0;
+            int f0 = (int)MathF.Floor(ft);
+            float blend = ft - f0;
             // teintes variées : jaune vif, orange, rouge profond
             // au centre du foyer : rouge profond ; vers le bord : orange puis jaune (avec un peu de variété)
             float centre = 1 - Math.Clamp(off.Length() / MathF.Max(1, spread), 0, 1);
@@ -1746,8 +1917,12 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             SN.Vector3 tintRgb = SN.Vector3.Lerp(edge, core, centre * centre * 0.9f + 0.1f * ph2);
             float sway = MathF.Sin(time * 1.6f + ph * 17) * 0.1f;
             SN.Vector3 bottom = centre0 + off + new SN.Vector3(0, 0, -10);
-            SN.Vector3 r = flat * (w / 2); SN.Vector3 up = new SN.Vector3(flat.Y * sway, -flat.X * sway, 1) * hgt;
-            Vector3 a = (bottom - r).X(); Vector3 b = (bottom + r).X(); Vector3 c = (bottom + r + up).X(); Vector3 d = (bottom - r + up).X();
+            SN.Vector3 r = flat * (w / 2);
+            SN.Vector3 up = new SN.Vector3(flat.Y * sway, -flat.X * sway, 1) * hgt;
+            Vector3 a = (bottom - r).X();
+            Vector3 b = (bottom + r).X();
+            Vector3 c = (bottom + r + up).X();
+            Vector3 d = (bottom - r + up).X();
             for (int layer = 0; layer < 2; layer++)
             {
                 int frame = ((f0 + layer) % (FlameCols * FlameRows) + FlameCols * FlameRows) % (FlameCols * FlameRows);
@@ -1757,8 +1932,12 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 float u0 = (frame % FlameCols) / (float)FlameCols, v0 = (frame / FlameCols) / (float)FlameRows;
                 float u1 = u0 + 1f / FlameCols, v1 = v0 + 1f / FlameRows;
                 Color tint = new Color(tintRgb.X, tintRgb.Y, tintRgb.Z, alpha);
-                _fv.Add(new(a, tint, new Vector2(u0, v1))); _fv.Add(new(b, tint, new Vector2(u1, v1))); _fv.Add(new(c, tint, new Vector2(u1, v0)));
-                _fv.Add(new(a, tint, new Vector2(u0, v1))); _fv.Add(new(c, tint, new Vector2(u1, v0))); _fv.Add(new(d, tint, new Vector2(u0, v0)));
+                _fv.Add(new(a, tint, new Vector2(u0, v1)));
+                _fv.Add(new(b, tint, new Vector2(u1, v1)));
+                _fv.Add(new(c, tint, new Vector2(u1, v0)));
+                _fv.Add(new(a, tint, new Vector2(u0, v1)));
+                _fv.Add(new(c, tint, new Vector2(u1, v0)));
+                _fv.Add(new(d, tint, new Vector2(u0, v0)));
             }
         }
     }
@@ -1777,7 +1956,9 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             const float Cell = OpenFD.Formats.Grid.CellSize;
             if (g.Inside(cx, cy) && g.ZoneA[g.Index(cx, cy)] != 0)   // foyer posé dans une case ouverte (sinon : toit, hors de la grille…)
             {
-                SN.Vector2 hp = new SN.Vector2(h.Position.X, h.Position.Y); float best = 1000f; SN.Vector2 push = SN.Vector2.Zero;
+                SN.Vector2 hp = new SN.Vector2(h.Position.X, h.Position.Y);
+                float best = 1000f;
+                SN.Vector2 push = SN.Vector2.Zero;
                 for (int oy = -6; oy <= 6; oy++)
                     for (int ox = -6; ox <= 6; ox++)
                     {
@@ -1846,7 +2027,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         }
         foreach (Opening o in _session.Units.Openings.Where(o => o.OnGround || _objects))
         {
-            SN.Vector2 p = MapToScreen(o.Center.X, o.Center.Y); float r = MathF.Max(2.5f * px, 45 * _mapScale);
+            SN.Vector2 p = MapToScreen(o.Center.X, o.Center.Y);
+            float r = MathF.Max(2.5f * px, 45 * _mapScale);
             SN.Vector4 col = o.State == OpeningState.Broken ? new SN.Vector4(0.45f, 0.45f, 0.48f, 1) : o.State == OpeningState.Open ? new SN.Vector4(0.4f, 0.85f, 0.4f, 1)
                 : o.IsWindow ? new SN.Vector4(0.55f, 0.8f, 1f, 1) : new SN.Vector4(0.95f, 0.6f, 0.2f, 1);
             _ui.Rect(p.X - r, p.Y - r, 2 * r, 2 * r, col);
@@ -1894,20 +2076,39 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             RenderCinema();
             return;
         }
-        _ui.Begin(); RenderSupplyLinks((float)_session.Time); RenderRopes(); RenderElectricArcs(); RenderFireHover(); RenderDebugCircles(); _ui.End();
+        _ui.Begin();
+        RenderSupplyLinks((float)_session.Time);
+        RenderRopes();
+        RenderElectricArcs();
+        RenderFireHover();
+        RenderDebugCircles();
+        _ui.End();
         _uiClock += 1f / 60f;
-        _ui.Begin(); RenderFireBars(); RenderClickMarks(); _ui.End();
+        _ui.Begin();
+        RenderFireBars();
+        RenderClickMarks();
+        _ui.End();
         RenderHudPanels();
-        _ui.Begin(); RenderSelectionPanel(); _ui.End();
-        _ui.Begin(); RenderObjectives(); RenderMessages(); RenderExitIcon(); _ui.End();
+        _ui.Begin();
+        RenderSelectionPanel();
+        _ui.End();
+        _ui.Begin();
+        RenderObjectives();
+        RenderMessages();
+        RenderExitIcon();
+        _ui.End();
         RenderCinema();   // sous-titres hors cinématique
-        _ui.Begin(); RenderEndScreen(); _ui.End();
+        _ui.Begin();
+        RenderEndScreen();
+        _ui.End();
     }
 
     private void RenderHudPanels()
     {
         _ui.Begin();
-        SN.Vector4 panel = new SN.Vector4(0.09f, 0.09f, 0.11f, 0.88f); SN.Vector4 txt = new SN.Vector4(0.91f, 0.9f, 0.89f, 1); SN.Vector4 muted = new SN.Vector4(0.6f, 0.59f, 0.56f, 1);
+        SN.Vector4 panel = new SN.Vector4(0.09f, 0.09f, 0.11f, 0.88f);
+        SN.Vector4 txt = new SN.Vector4(0.91f, 0.9f, 0.89f, 1);
+        SN.Vector4 muted = new SN.Vector4(0.6f, 0.59f, 0.56f, 1);
         SN.Vector4 accent = new SN.Vector4(1f, 0.48f, 0.18f, 1);
         int t = (int)_session.Time;
         List<(string s, SN.Vector4 c)> lines = new List<(string s, SN.Vector4 c)>
@@ -1994,7 +2195,12 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         Color[] px = new Color[_fbW * _fbH];
         GraphicsDevice.GetBackBufferData(px);
         using FileStream f = File.Create(path);
-        byte[] hdr = new byte[18]; hdr[2] = 2; BitConverter.GetBytes((ushort)_fbW).CopyTo(hdr, 12); BitConverter.GetBytes((ushort)_fbH).CopyTo(hdr, 14); hdr[16] = 32; hdr[17] = 8 | 0x20;
+        byte[] hdr = new byte[18];
+        hdr[2] = 2;
+        BitConverter.GetBytes((ushort)_fbW).CopyTo(hdr, 12);
+        BitConverter.GetBytes((ushort)_fbH).CopyTo(hdr, 14);
+        hdr[16] = 32;
+        hdr[17] = 8 | 0x20;
         f.Write(hdr);
         byte[] row = new byte[_fbW * 4];
         for (int y = 0; y < _fbH; y++)

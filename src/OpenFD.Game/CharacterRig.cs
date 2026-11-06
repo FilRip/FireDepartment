@@ -37,7 +37,8 @@ public sealed class CharacterRig
         Dictionary<string, int> index = rig.Names.Select((n, i) => (n, i)).ToDictionary(x => x.n, x => x.i, StringComparer.OrdinalIgnoreCase);
         rig.Parent = rig.Names.Select(n => nodes[n].parent is string p && p != "" && p != n && index.TryGetValue(p, out int pi) ? pi : -1).ToArray();
         rig.BindLocal = rig.Names.Select(n => nodes[n].m).ToArray();
-        List<int> order = new List<int>(); bool[] seen = new bool[rig.Names.Length];
+        List<int> order = new List<int>();
+        bool[] seen = new bool[rig.Names.Length];
         void Visit(int i, int depth)
         {
             if (seen[i] || depth > 64)
@@ -65,7 +66,8 @@ public sealed class CharacterRig
                 p.Skin = skin;
                 p.BoneNode = skin.Bones.Select(b => index[b]).ToArray();
                 p.InvBind = skin.Bind.Select(m => Matrix4x4.Invert(m, out Matrix4x4 inv) ? inv : Matrix4x4.Identity).ToArray();
-                p.BasePos = asset.Mesh.Positions; p.BaseNrm = asset.Mesh.Normals;
+                p.BasePos = asset.Mesh.Positions;
+                p.BaseNrm = asset.Mesh.Normals;
             }
             rig.Parts.Add(p);
         }
@@ -99,16 +101,22 @@ public sealed class CharacterRig
             Vector3 op = Vector3.Zero, on = Vector3.Zero;
             for (int k = s.Start[v]; k < s.Start[v + 1]; k++)
             {
-                Matrix4x4 m = mats[s.Bone[k]]; float wt = s.Weight[k];
-                op += Vector3.Transform(bp, m) * wt; on += Vector3.TransformNormal(bn, m) * wt;
+                Matrix4x4 m = mats[s.Bone[k]];
+                float wt = s.Weight[k];
+                op += Vector3.Transform(bp, m) * wt;
+                on += Vector3.TransformNormal(bn, m) * wt;
             }
             if (s.Start[v + 1] == s.Start[v])
             {
                 op = bp;
                 on = bn;
             }
-            pos[3 * v] = op.X; pos[3 * v + 1] = op.Y; pos[3 * v + 2] = op.Z;
-            nrm[3 * v] = on.X; nrm[3 * v + 1] = on.Y; nrm[3 * v + 2] = on.Z;
+            pos[3 * v] = op.X;
+            pos[3 * v + 1] = op.Y;
+            pos[3 * v + 2] = op.Z;
+            nrm[3 * v] = on.X;
+            nrm[3 * v + 1] = on.Y;
+            nrm[3 * v + 2] = on.Z;
         }
     }
 

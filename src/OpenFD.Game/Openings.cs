@@ -96,7 +96,8 @@ public sealed partial class UnitManager
                 {
                     Vector2 mid = pts.Aggregate(Vector2.Zero, (a, p) => a + p) / pts.Count;
                     d.Center = Vector3.Transform(new Vector3(mid, 100), o.Matrix);
-                    d.BoxMin = new(float.MaxValue); d.BoxMax = new(float.MinValue);
+                    d.BoxMin = new(float.MaxValue);
+                    d.BoxMax = new(float.MinValue);
                     foreach (Vector2 q in pts)
                     {
                         Vector3 wq = Vector3.Transform(new Vector3(q, 0), o.Matrix);
@@ -139,7 +140,8 @@ public sealed partial class UnitManager
                                 Vector3 pos = tr.Pos.Length > 0 ? tr.Pos[^1].v : w.Translation;
                                 if (tr.Rot.Length > 0)
                                     w = Matrix4x4.CreateFromQuaternion(tr.Rot[^1].v);
-                                w.Translation = pos; return w;
+                                w.Translation = pos;
+                                return w;
                             }
                             if (slides && PathFind.Footprint(assets, model, 0, 260, Opened) is { Count: > 0 } open)
                                 foreach (Vector2 p in open)
@@ -155,7 +157,8 @@ public sealed partial class UnitManager
                                 float bx0 = all.Min(q => q.X), bx1 = all.Max(q => q.X), by0 = all.Min(q => q.Y), by1 = all.Max(q => q.Y);
                                 List<Vector3> loc = d.Cells.Where(i => !d.OpenBlocked.Contains(i)).DefaultIfEmpty(d.Cells.First()).Select(i => Vector3.Transform(new Vector3(((i % g.Width) + 0.5f) * Grid.CellSize, ((i / g.Width) + 0.5f) * Grid.CellSize, d.Position.Z), inv)).ToList();
                                 float px0 = loc.Min(q => q.X), px1 = loc.Max(q => q.X);
-                                (int ax, int ay) = g.CellOf(new Vector3(d.BoxMin, 0)); (int bx, int by) = g.CellOf(new Vector3(d.BoxMax, 0));
+                                (int ax, int ay) = g.CellOf(new Vector3(d.BoxMin, 0));
+                                (int bx, int by) = g.CellOf(new Vector3(d.BoxMax, 0));
                                 for (int cy = ay - 1; cy <= by + 1; cy++)
                                     for (int cx = ax - 1; cx <= bx + 1; cx++)
                                     {
@@ -334,7 +337,9 @@ public sealed partial class UnitManager
         Vector2 spot = useIt && d.Lever is { } lv ? Walkable(lv) : ApproachPoint(u, d);
         if (!Order(u, spot))
             return;
-        u.Opening = d; u.OpeningBreak = breakIt; u.ActionTimer = 0;
+        u.Opening = d;
+        u.OpeningBreak = breakIt;
+        u.ActionTimer = 0;
         u.Status = breakIt ? $"va casser {d.Name}" : d.State == OpeningState.Closed ? $"va ouvrir {d.Name}" : $"va fermer {d.Name}";
     }
 
@@ -358,7 +363,8 @@ public sealed partial class UnitManager
             return c;
         Vector2 me = new Vector2(u.Position.X, u.Position.Y);
         (int cx, int cy) = g.CellOf(d.Center);
-        Vector2 best = Walkable(c); float bestLen = float.MaxValue;
+        Vector2 best = Walkable(c);
+        float bestLen = float.MaxValue;
         int r = d.IsObstacle ? 5 : 2;   // gravats : plusieurs cases, on frappe au bord
         // gravats : d'abord les cases qui les touchent (les marches juste en dessous ou au-dessus), sinon un peu plus loin
         if (d.IsObstacle)
@@ -376,7 +382,13 @@ public sealed partial class UnitManager
                         List<Vector2> path = FindPath(me, p, out bool partial);
                         if (partial || (path.Count == 0 && Vector2.Distance(me, p) > 1))
                             continue;
-                        float len = 0; Vector2 prev = me; foreach (Vector2 q in path) { len += Vector2.Distance(prev, q); prev = q; }
+                        float len = 0;
+                        Vector2 prev = me;
+                        foreach (Vector2 q in path)
+                        {
+                            len += Vector2.Distance(prev, q);
+                            prev = q;
+                        }
                         if (len < bestLen)
                         {
                             bestLen = len;
@@ -399,7 +411,13 @@ public sealed partial class UnitManager
                 List<Vector2> path = FindPath(me, p, out bool partial);
                 if (partial || (path.Count == 0 && Vector2.Distance(me, p) > 1))
                     continue;
-                float len = 0; Vector2 prev = me; foreach (Vector2 q in path) { len += Vector2.Distance(prev, q); prev = q; }
+                float len = 0;
+                Vector2 prev = me;
+                foreach (Vector2 q in path)
+                {
+                    len += Vector2.Distance(prev, q);
+                    prev = q;
+                }
                 if (len < bestLen)
                 {
                     bestLen = len;
@@ -428,7 +446,8 @@ public sealed partial class UnitManager
                 .OrderBy(p => Vector2.DistanceSquared(p, me)).FirstOrDefault();
             if (near != default)
             {
-                Vector2 dir = near - me; float dist = dir.Length();
+                Vector2 dir = near - me;
+                float dist = dir.Length();
                 const float Contact = 85f;   // distance au centre de la case de gravats la plus proche (bord à ~35 cm)
                 if (dist > Contact + 5)
                 {
@@ -463,7 +482,10 @@ public sealed partial class UnitManager
             u.Blows++;
             if (d.Life <= 0)
             {
-                d.Life = 0; d.State = OpeningState.Broken; u.Opening = null; u.Status = "attend les ordres";
+                d.Life = 0;
+                d.State = OpeningState.Broken;
+                u.Opening = null;
+                u.Status = "attend les ordres";
                 Log.Add($"{_s.Time,6:0} s : {d.Name} cassée");
                 if (!string.IsNullOrEmpty(d.SoundLabel))
                     Sounds.Add((d.SoundLabel!, d.Center));
@@ -480,7 +502,8 @@ public sealed partial class UnitManager
             string want = d.State == OpeningState.Open ? "open" : "close";
             foreach ((string? action, string? script) in d.Actions.Where(a => a.action.Equals(want, StringComparison.OrdinalIgnoreCase)).Take(1))
                 _s.Scripts?.TryRun(script, Script.Value.I(u.Id), Script.Value.I(d.Id), Script.Value.T(action));
-            u.Opening = null; u.Status = "attend les ordres";
+            u.Opening = null;
+            u.Status = "attend les ordres";
             RefreshDoorCells();
         }
     }

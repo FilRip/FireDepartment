@@ -13,14 +13,18 @@ public sealed class Audio : IDisposable
     private readonly SoundDb _db;
     public SoundDb Db => _db;
     private readonly Dictionary<string, Microsoft.Xna.Framework.Audio.SoundEffect?> _cache = new(StringComparer.OrdinalIgnoreCase);
-    private sealed class Loop { public required Microsoft.Xna.Framework.Audio.SoundEffectInstance Inst; public required string File; public float Gain, Target; }
+    private sealed class Loop { public required Microsoft.Xna.Framework.Audio.SoundEffectInstance Inst;
+        public required string File;
+        public float Gain, Target; }
     private readonly Dictionary<object, Loop> _loops = new();
     private readonly HashSet<object> _touched = new();
     private readonly List<Microsoft.Xna.Framework.Audio.SoundEffectInstance> _oneShots = new();
     private readonly List<(float at, string label, System.Numerics.Vector3? pos, float vol)> _delayed = new();
     private readonly Random _rng = new();
     private float _clock;
-    public System.Numerics.Vector3 Listener; public System.Numerics.Vector3 Right = System.Numerics.Vector3.UnitX; public float ExtraDistance;
+    public System.Numerics.Vector3 Listener;
+    public System.Numerics.Vector3 Right = System.Numerics.Vector3.UnitX;
+    public float ExtraDistance;
     public float Master = 0.8f;
     /// <summary>Volumes par famille (0 à 1), en plus du volume général : interface et voix, effets, ambiance (musiques).</summary>
     public float VoiceVolume = 1, EffectsVolume = 1, MusicVolume = 1;
@@ -31,8 +35,16 @@ public sealed class Audio : IDisposable
     public Audio(SoundDb db)
     {
         _db = db;
-        try { Microsoft.Xna.Framework.Audio.SoundEffect.MasterVolume = 1f; Enabled = db.Entries.Count > 0; }
-        catch (Exception e) { Console.WriteLine("Son indisponible : " + e.Message); Enabled = false; }
+        try
+        {
+            Microsoft.Xna.Framework.Audio.SoundEffect.MasterVolume = 1f;
+            Enabled = db.Entries.Count > 0;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("Son indisponible : " + e.Message);
+            Enabled = false;
+        }
     }
 
     private Microsoft.Xna.Framework.Audio.SoundEffect? Effect(SoundDb.Entry e)
@@ -49,7 +61,11 @@ public sealed class Audio : IDisposable
                 fx = new Microsoft.Xna.Framework.Audio.SoundEffect(bytes, d.Rate, d.Channels == 2 ? Microsoft.Xna.Framework.Audio.AudioChannels.Stereo : Microsoft.Xna.Framework.Audio.AudioChannels.Mono);
             }
         }
-        catch (Exception ex) { Console.WriteLine($"Son {e.Label} : {ex.Message}"); Enabled = !(ex is Microsoft.Xna.Framework.Audio.NoAudioHardwareException) && Enabled; }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Son {e.Label} : {ex.Message}");
+            Enabled = !(ex is Microsoft.Xna.Framework.Audio.NoAudioHardwareException) && Enabled;
+        }
         return _cache[e.File] = fx;
     }
 
@@ -58,7 +74,8 @@ public sealed class Audio : IDisposable
     {
         if (pos is not { } p || !e.Use3D)
             return (1, 0);
-        Vector3 dv = p - Listener; float d = MathF.Sqrt(dv.X * dv.X + dv.Y * dv.Y + ExtraDistance * ExtraDistance);
+        Vector3 dv = p - Listener;
+        float d = MathF.Sqrt(dv.X * dv.X + dv.Y * dv.Y + ExtraDistance * ExtraDistance);
         float g = d <= e.MinDist ? 1 : d >= e.MaxDist ? 0 : 1 - (d - e.MinDist) / (e.MaxDist - e.MinDist);
         float pan = d > 1 ? Math.Clamp(System.Numerics.Vector3.Dot(dv, Right) / d, -1, 1) * 0.6f : 0;
         return (g, pan);
@@ -87,8 +104,11 @@ public sealed class Audio : IDisposable
         try
         {
             Microsoft.Xna.Framework.Audio.SoundEffectInstance inst = fx.CreateInstance();
-            inst.Volume = Math.Clamp(g * e.Volume * volume * Master * GroupVolume(e), 0, 1); inst.Pan = pan; inst.IsLooped = false;
-            inst.Play(); _oneShots.Add(inst);
+            inst.Volume = Math.Clamp(g * e.Volume * volume * Master * GroupVolume(e), 0, 1);
+            inst.Pan = pan;
+            inst.IsLooped = false;
+            inst.Play();
+            _oneShots.Add(inst);
         }
         catch (Exception ex) { Console.WriteLine("Son : " + ex.Message); }
     }
@@ -120,7 +140,10 @@ public sealed class Audio : IDisposable
                 return;
             try
             {
-                Microsoft.Xna.Framework.Audio.SoundEffectInstance inst = fx.CreateInstance(); inst.IsLooped = true; inst.Volume = 0; inst.Play();
+                Microsoft.Xna.Framework.Audio.SoundEffectInstance inst = fx.CreateInstance();
+                inst.IsLooped = true;
+                inst.Volume = 0;
+                inst.Play();
                 _loops[key] = l = new Loop { Inst = inst, File = e.File };
             }
             catch { return; }
@@ -154,7 +177,15 @@ public sealed class Audio : IDisposable
             l.Inst.Volume = Math.Clamp(l.Gain, 0, 1);
         }
         _touched.Clear();
-        _oneShots.RemoveAll(s => { if (s.State == Microsoft.Xna.Framework.Audio.SoundState.Stopped) { s.Dispose(); return true; } return false; });
+        _oneShots.RemoveAll(s =>
+        {
+            if (s.State == Microsoft.Xna.Framework.Audio.SoundState.Stopped)
+            {
+                s.Dispose();
+                return true;
+            }
+            return false;
+        });
     }
 
     /// <summary>Pause du jeu : sons en cours suspendus (true), puis repris (false).</summary>
@@ -189,8 +220,15 @@ public sealed class Audio : IDisposable
             s.Stop();
             s.Dispose();
         }
-        _oneShots.Clear(); _delayed.Clear();
+        _oneShots.Clear();
+        _delayed.Clear();
     }
 
-    public void Dispose() { StopAll(); foreach (Microsoft.Xna.Framework.Audio.SoundEffect? fx in _cache.Values) fx?.Dispose(); _cache.Clear(); }
+    public void Dispose()
+    {
+        StopAll();
+        foreach (Microsoft.Xna.Framework.Audio.SoundEffect? fx in _cache.Values)
+            fx?.Dispose();
+        _cache.Clear();
+    }
 }

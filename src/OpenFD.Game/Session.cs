@@ -44,7 +44,8 @@ public sealed class Session
     public Session(GameFiles files, string mission, string difficulty = "EASY", bool runScripts = true)
     {
         _files = files;
-        Mission = mission; Difficulty = difficulty.ToUpperInvariant();
+        Mission = mission;
+        Difficulty = difficulty.ToUpperInvariant();
         string lvPath = files.List("Design\\Mission\\" + mission + "\\").First(p => p.EndsWith(".level", StringComparison.OrdinalIgnoreCase));
         Level = Level.Parse(files.Read(lvPath));
         Grid = files.TryRead(lvPath[..^".level".Length] + ".grid") is { } gb ? Grid.Parse(gb) : null;

@@ -65,11 +65,15 @@ public sealed partial class UnitManager
     /// <summary>Véhicule à lance : s'il est trop loin, il roule jusqu'à portée (aux 2/3), l'avant tourné vers le feu.</summary>
     private void VehicleAttack(Unit v, HotPoint h)
     {
-        Vector2 me = new Vector2(v.Position.X, v.Position.Y); Vector2 f = new Vector2(h.Position.X, h.Position.Y);
+        Vector2 me = new Vector2(v.Position.X, v.Position.Y);
+        Vector2 f = new Vector2(h.Position.X, h.Position.Y);
         float d = Vector2.Distance(me, f), range = v.Nozzle!.RangeMax;
         if (d <= range * 0.95f && d >= v.Nozzle.RangeMin)
         {
-            v.Path.Clear(); v.Target = h; v.Status = $"arrose {h.Name}"; return;
+            v.Path.Clear();
+            v.Target = h;
+            v.Status = $"arrose {h.Name}";
+            return;
         }
         Vector2 dir = d > 1 ? Vector2.Normalize(me - f) : Vector2.UnitX;
         float want = Math.Clamp(range * 0.65f, v.Nozzle.RangeMin + 200, range * 0.9f);
@@ -78,7 +82,8 @@ public sealed partial class UnitManager
             v.Target = null;
             return;
         }
-        v.Target = h; v.Status = $"va arroser {h.Name}";
+        v.Target = h;
+        v.Status = $"va arroser {h.Name}";
     }
 
     // ---- conduite des véhicules : pas de demi-tour sur place ; ils tournent en avançant (rayon de braquage), et quand il
@@ -91,18 +96,23 @@ public sealed partial class UnitManager
         if (_s.Grid is not { } g)
             return true;
         Vector2 fwd = new Vector2(MathF.Cos(heading), MathF.Sin(heading));
-        int saved = Paths.SelfId; bool savedPv = Paths.PathingVehicle; Paths.SelfId = v.Id; Paths.PathingVehicle = false;
+        int saved = Paths.SelfId;
+        bool savedPv = Paths.PathingVehicle;
+        Paths.SelfId = v.Id;
+        Paths.PathingVehicle = false;
         bool ok = true;
         foreach (float k in new[] { -280f, 0f, 280f })
         {
-            Vector2 q = p + fwd * k; (int cx, int cy) = g.CellOf(new Vector3(q, 0));
+            Vector2 q = p + fwd * k;
+            (int cx, int cy) = g.CellOf(new Vector3(q, 0));
             if (!FreeCell(cx, cy))
             {
                 ok = false;
                 break;
             }
         }
-        Paths.SelfId = saved; Paths.PathingVehicle = savedPv;
+        Paths.SelfId = saved;
+        Paths.PathingVehicle = savedPv;
         return ok;
     }
 
@@ -114,7 +124,8 @@ public sealed partial class UnitManager
         Vector2 np = p + new Vector2(MathF.Cos(h), MathF.Sin(h)) * s * dir;
         if (!VehicleFits(v, np, h))
             return false;
-        v.Heading = h; v.Position = new Vector3(np, Ground(np));
+        v.Heading = h;
+        v.Position = new Vector3(np, Ground(np));
         return true;
     }
 
@@ -124,8 +135,10 @@ public sealed partial class UnitManager
         int guard = 0;
         while (step > 0.5f && v.Path.Count > 0 && guard++ < 8)
         {
-            Vector2 p = new Vector2(v.Position.X, v.Position.Y); Vector2 t = v.Path.Peek();
-            Vector2 d = t - p; float len = d.Length();
+            Vector2 p = new Vector2(v.Position.X, v.Position.Y);
+            Vector2 t = v.Path.Peek();
+            Vector2 d = t - p;
+            float len = d.Length();
             if (len < 40)
             {
                 v.Path.Dequeue();

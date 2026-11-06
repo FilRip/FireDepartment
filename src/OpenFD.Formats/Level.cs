@@ -22,7 +22,8 @@ public sealed class Level
             throw new InvalidDataException("Pas un fichier .level");
         L.Version = Chunks.ReadString(d, ref p);
         L.Build = Chunks.ReadString(d, ref p);
-        L.LoadSteps = BitConverter.ToUInt32(d, p); p += 4;
+        L.LoadSteps = BitConverter.ToUInt32(d, p);
+        p += 4;
         L.MissionPath = Chunks.ReadString(d, ref p);
         if (!Chunks.IsBegin(d, p) || !Chunks.IsBegin(d, p + 9) || !Chunks.IsBegin(d, p + 14))
             throw new InvalidDataException("Structure de niveau inattendue");
@@ -33,7 +34,8 @@ public sealed class Level
         List<(string cls, ushort type, uint id, int extra, int list)> entries = new List<(string cls, ushort type, uint id, int extra, int list)>();
         for (int list = 0; list < 2; list++)
         {
-            int n = BitConverter.ToInt32(d, p); p += 4;
+            int n = BitConverter.ToInt32(d, p);
+            p += 4;
             for (int i = 0; i < n; i++)
             {
                 string cls = Chunks.ReadString(d, ref p);
@@ -86,7 +88,8 @@ public sealed class Level
                 p += 4;
             if (!Chunks.IsEnd(d, p))
                 throw new InvalidDataException($"Fin d'objet inattendue en 0x{p:x}");
-            p += 4; depth--;
+            p += 4;
+            depth--;
         }
         return p;
     }
@@ -101,12 +104,14 @@ public sealed class Level
         string name = Chunks.ReadString(raw, ref p);
         p += 5;
         p = Chunks.NodeEnd(raw, p);
-        int nc = BitConverter.ToInt32(raw, p); p += 4;
+        int nc = BitConverter.ToInt32(raw, p);
+        p += 4;
         List<Component> comps = new List<Component>(nc);
         int tOff = -1;
         for (int i = 0; i < nc; i++)
         {
-            ushort cid = BitConverter.ToUInt16(raw, p); int sz = BitConverter.ToInt32(raw, p + 2);
+            ushort cid = BitConverter.ToUInt16(raw, p);
+            int sz = BitConverter.ToInt32(raw, p + 2);
             comps.Add(new Component(cid, p + 6, sz));
             if (cid == 0xA001 && Chunks.IsBegin(raw, p + 6 + 17) && raw[p + 6 + 17 + 4] == 7)
                 tOff = p + 6 + 17 + 5;
@@ -135,10 +140,12 @@ public sealed class Level
                     return res;
                 p += 5;
             }
-            int n = BitConverter.ToInt32(s, p + 4); p += 8;
+            int n = BitConverter.ToInt32(s, p + 4);
+            p += 8;
             for (int i = 0; i < n; i++)
             {
-                uint a = BitConverter.ToUInt32(s, p), b = BitConverter.ToUInt32(s, p + 4); p += 8;
+                uint a = BitConverter.ToUInt32(s, p), b = BitConverter.ToUInt32(s, p + 4);
+                p += 8;
                 int e = Chunks.NodeEnd(s, p);
                 res.Add((a, b, s[(p + 5)..(e - 4)]));
                 p = e;
@@ -161,7 +168,8 @@ public sealed class Level
             foreach (LevelObject o in objs)
             {
                 ms.Write(BitConverter.GetBytes(o.ClassPath.Length + 1));
-                ms.Write(Encoding.Latin1.GetBytes(o.ClassPath)); ms.WriteByte(0);
+                ms.Write(Encoding.Latin1.GetBytes(o.ClassPath));
+                ms.WriteByte(0);
                 ms.Write(BitConverter.GetBytes((ushort)o.Kind));
                 ms.Write(BitConverter.GetBytes(o.Id));
                 ms.Write(BitConverter.GetBytes(o.Extra));

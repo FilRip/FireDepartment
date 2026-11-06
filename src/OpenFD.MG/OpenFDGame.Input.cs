@@ -10,15 +10,18 @@ namespace OpenFD.MG;
 // clavier, souris, choix des unités, ordres, curseurs
 public sealed partial class OpenFDGame
 {
-    private KeyboardState _kPrev; private MouseState _mPrev;
+    private KeyboardState _kPrev;
+    private MouseState _mPrev;
     // gauche : choisir (clic) ou encadrer (glisser) ; milieu : tourner la vue ; droit : ordre (clic) ou déplacer la vue (glisser)
-    private bool _dragL, _dragR, _dragM, _moved; private double _mx, _my, _downX, _downY;
+    private bool _dragL, _dragR, _dragM, _moved;
+    private double _mx, _my, _downX, _downY;
 
     private bool Pressed(KeyboardState k, Keys key) => k.IsKeyDown(key) && !_kPrev.IsKeyDown(key);
 
     private void HandleInput(float dt)
     {
-        KeyboardState k = Keyboard.GetState(); MouseState m = Mouse.GetState();
+        KeyboardState k = Keyboard.GetState();
+        MouseState m = Mouse.GetState();
         _sel.RemoveWhere(u => u.OnBoard || u.Unconscious);   // pompiers montés dans un véhicule, ou tombés inconscients
         // cinématique : le joueur regarde (Échap, Entrée ou Espace la passent)
         if (CinemaKeys(k))
@@ -140,7 +143,9 @@ public sealed partial class OpenFDGame
         }
         if (_dragL || _dragR || _dragM)
         {
-            float dx = (float)(m.X - _mx), dyy = (float)(m.Y - _my); _mx = m.X; _my = m.Y;
+            float dx = (float)(m.X - _mx), dyy = (float)(m.Y - _my);
+            _mx = m.X;
+            _my = m.Y;
             if (Math.Abs(m.X - _downX) + Math.Abs(m.Y - _downY) > 4 * _scale)
                 _moved = true;
             if (_moved && !_dragL)
@@ -162,7 +167,8 @@ public sealed partial class OpenFDGame
                 CommandWithFeedback(m.X, m.Y);
             _dragR = false;
         }
-        _kPrev = k; _mPrev = m;
+        _kPrev = k;
+        _mPrev = m;
     }
 
     // lettres : reçues comme caractères tapés, donc justes quel que soit le clavier (AZERTY, QWERTY…)
@@ -174,16 +180,35 @@ public sealed partial class OpenFDGame
             return;
         switch (char.ToLowerInvariant(ch))
         {
-            case 't': _roofs = !_roofs; break;
-            case 'o': _objects = !_objects; break;
-            case 'f': _smokeOn = !_smokeOn; break;
-            case 'b': _shadowsOn = !_shadowsOn; Log(_shadowsOn ? "Ombres : oui" : "Ombres : non"); break;
-            case 'h': _help = !_help; break;
-            case 'a': _sel.Clear(); foreach (Unit u in _session.Units.Active.Where(u => !u.IsVehicle && !u.Unconscious)) _sel.Add(u); break;
+            case 't':
+                _roofs = !_roofs;
+                break;
+            case 'o':
+                _objects = !_objects;
+                break;
+            case 'f':
+                _smokeOn = !_smokeOn;
+                break;
+            case 'b':
+                _shadowsOn = !_shadowsOn;
+                Log(_shadowsOn ? "Ombres : oui" : "Ombres : non");
+                break;
+            case 'h':
+                _help = !_help;
+                break;
+            case 'a':
+                _sel.Clear();
+                foreach (Unit u in _session.Units.Active.Where(u => !u.IsVehicle && !u.Unconscious))
+                    _sel.Add(u);
+                break;
             case 'u':
                 _unitClass = _unitClass.EndsWith("medic") ? "Unit\\Fireman\\fireman_sp" : "Unit\\Fireman\\fireman_medic";
-                Log("Unité qui arrose : " + (_unitClass.EndsWith("medic") ? "médecin" : "pompier")); break;
-            case 'd': _debugAi = !_debugAi; Log(_debugAi ? "Débogage : portée des pompiers (vert) et propagation des feux (orange)" : "Débogage : non"); break;
+                Log("Unité qui arrose : " + (_unitClass.EndsWith("medic") ? "médecin" : "pompier"));
+                break;
+            case 'd':
+                _debugAi = !_debugAi;
+                Log(_debugAi ? "Débogage : portée des pompiers (vert) et propagation des feux (orange)" : "Débogage : non");
+                break;
         }
     }
 
@@ -211,7 +236,8 @@ public sealed partial class OpenFDGame
             _mapCenter += new SN.Vector2(x, y) * (600 * _scale / _mapScale) * dt;
             return;
         }
-        SN.Vector3 back = new SN.Vector3(MathF.Cos(_yaw), MathF.Sin(_yaw), 0); SN.Vector3 right = new SN.Vector3(-back.Y, back.X, 0);
+        SN.Vector3 back = new SN.Vector3(MathF.Cos(_yaw), MathF.Sin(_yaw), 0);
+        SN.Vector3 right = new SN.Vector3(-back.Y, back.X, 0);
         _target += (right * x - back * y) * (_dist * 0.8f) * dt;
     }
 
@@ -230,7 +256,8 @@ public sealed partial class OpenFDGame
         }
         else
         {
-            SN.Vector3 fwd = SN.Vector3.Normalize(new SN.Vector3(MathF.Cos(_yaw), MathF.Sin(_yaw), 0)); SN.Vector3 right = new SN.Vector3(-fwd.Y, fwd.X, 0);
+            SN.Vector3 fwd = SN.Vector3.Normalize(new SN.Vector3(MathF.Cos(_yaw), MathF.Sin(_yaw), 0));
+            SN.Vector3 right = new SN.Vector3(-fwd.Y, fwd.X, 0);
             float s = _dist * 0.0012f;
             _target += -right * dx * s - fwd * dy * s;   // bouton droit : souris à droite → la vue part à gauche
         }
@@ -239,7 +266,8 @@ public sealed partial class OpenFDGame
     // rectangle de sélection (bouton gauche glissé) : toutes les unités et véhicules dedans
     private void SelectBox(double x0, double y0, double x1, double y1, bool add)
     {
-        (float ax, float ay) = Fb(Math.Min(x0, x1), Math.Min(y0, y1)); (float bx, float by) = Fb(Math.Max(x0, x1), Math.Max(y0, y1));
+        (float ax, float ay) = Fb(Math.Min(x0, x1), Math.Min(y0, y1));
+        (float bx, float by) = Fb(Math.Max(x0, x1), Math.Max(y0, y1));
         if (!add)
             _sel.Clear();
         int n = 0;
@@ -259,7 +287,8 @@ public sealed partial class OpenFDGame
         if (!_dragL || !_moved)
             return null;
         MouseState m = Mouse.GetState();
-        (float ax, float ay) = Fb(Math.Min(_downX, m.X), Math.Min(_downY, m.Y)); (float bx, float by) = Fb(Math.Max(_downX, m.X), Math.Max(_downY, m.Y));
+        (float ax, float ay) = Fb(Math.Min(_downX, m.X), Math.Min(_downY, m.Y));
+        (float bx, float by) = Fb(Math.Max(_downX, m.X), Math.Max(_downY, m.Y));
         return (ax, ay, bx - ax, by - ay);
     }
 
@@ -286,8 +315,10 @@ public sealed partial class OpenFDGame
         if (!SN.Matrix4x4.Invert(_viewProj, out SN.Matrix4x4 inv))
             return null;
         float nx = sx / _fbW * 2 - 1, ny = 1 - sy / _fbH * 2;
-        SN.Vector4 a = SN.Vector4.Transform(new SN.Vector4(nx, ny, 0, 1), inv); SN.Vector4 b = SN.Vector4.Transform(new SN.Vector4(nx, ny, 1, 1), inv);
-        SN.Vector3 o = new SN.Vector3(a.X, a.Y, a.Z) / a.W; SN.Vector3 d = new SN.Vector3(b.X, b.Y, b.Z) / b.W - o;
+        SN.Vector4 a = SN.Vector4.Transform(new SN.Vector4(nx, ny, 0, 1), inv);
+        SN.Vector4 b = SN.Vector4.Transform(new SN.Vector4(nx, ny, 1, 1), inv);
+        SN.Vector3 o = new SN.Vector3(a.X, a.Y, a.Z) / a.W;
+        SN.Vector3 d = new SN.Vector3(b.X, b.Y, b.Z) / b.W - o;
         if (MathF.Abs(d.Z) < 1e-6f)
             return null;
         // le sol n'est pas toujours à la hauteur 0 (Eurotunnel : -4 m, en sous-sol) : on suit sa hauteur pas à pas
@@ -389,7 +420,8 @@ public sealed partial class OpenFDGame
                 _audio?.Play("VOCAL_NO_SKILLS_FOR_THIS_ACTION");
                 return;
             }
-            DoGrapple(who, gp); Log($"{UnitLabel(who)} : {who.Status}");
+            DoGrapple(who, gp);
+            Log($"{UnitLabel(who)} : {who.Status}");
             return;
         }
         if (UsableAt(x, y) is { } obj)
@@ -402,7 +434,8 @@ public sealed partial class OpenFDGame
                 Log(obj.CanBeRepaired && !obj.CanBeUsed ? "Il faut un technicien pour réparer cela" : "Aucun pompier choisi ne peut utiliser cet objet");
                 return;
             }
-            DoUse(who, obj); Log($"{UnitLabel(who)} : {who.Status}");
+            DoUse(who, obj);
+            Log($"{UnitLabel(who)} : {who.Status}");
             return;
         }
         if (OpeningAt(x, y) is { } door)
@@ -457,7 +490,8 @@ public sealed partial class OpenFDGame
         foreach (Unit v in _sel.Where(u => u.IsVehicle))
         {
             float a = j * 2.39996f, r = j == 0 ? 0 : 450 * MathF.Sqrt(j);
-            DoDrive(v, g + new SN.Vector2(MathF.Cos(a), MathF.Sin(a)) * r); j++;
+            DoDrive(v, g + new SN.Vector2(MathF.Cos(a), MathF.Sin(a)) * r);
+            j++;
             if (v.Status != "en route")
                 Log($"{UnitLabel(v)} : {v.Status}");
         }
@@ -467,12 +501,15 @@ public sealed partial class OpenFDGame
     private Civilian? CivilianAt(double x, double y)
     {
         (float csx, float csy) = Fb(x, y);
-        Civilian? civ = null; SN.Vector2 mouse = new SN.Vector2(csx, csy); float cd = Tol(30) * 1.4f;
+        Civilian? civ = null;
+        SN.Vector2 mouse = new SN.Vector2(csx, csy);
+        float cd = Tol(30) * 1.4f;
         foreach (Civilian c in _session.Units.Civilians.Where(c => !c.Hidden && (c.State == CivilianState.Conscious || c.State == CivilianState.Unconscious)))
         {
             if (Project(c.Position) is not { } a || Project(c.Position + new SN.Vector3(0, 0, 240)) is not { } b)
                 continue;
-            SN.Vector2 ab = b - a; float t = ab.LengthSquared() > 1e-3f ? Math.Clamp(SN.Vector2.Dot(mouse - a, ab) / ab.LengthSquared(), 0, 1) : 0;
+            SN.Vector2 ab = b - a;
+            float t = ab.LengthSquared() > 1e-3f ? Math.Clamp(SN.Vector2.Dot(mouse - a, ab) / ab.LengthSquared(), 0, 1) : 0;
             if (SN.Vector2.Distance(mouse, a + ab * t) is float d && d < cd)
             {
                 cd = d;
@@ -495,7 +532,8 @@ public sealed partial class OpenFDGame
     // véhicule visé : n'importe où sur sa carrosserie (le rayon de la souris traverse son gabarit entre le sol et le toit)
     private Unit? VehicleAt(double x, double y)
     {
-        (float csx, float csy) = Fb(x, y); float vd = Tol(48);
+        (float csx, float csy) = Fb(x, y);
+        float vd = Tol(48);
         Unit? veh = null;
         foreach (Unit v in _session.Units.Active.Where(v => v.IsVehicle))
             if (Project(v.Position + new SN.Vector3(0, 0, 150)) is { } p && SN.Vector2.Distance(p, new(csx, csy)) is float d && d < vd)
@@ -530,8 +568,10 @@ public sealed partial class OpenFDGame
         if (!SN.Matrix4x4.Invert(_viewProj, out SN.Matrix4x4 inv))
             return null;
         float nx = sx / _fbW * 2 - 1, ny = 1 - sy / _fbH * 2;
-        SN.Vector4 a = SN.Vector4.Transform(new SN.Vector4(nx, ny, 0, 1), inv); SN.Vector4 b = SN.Vector4.Transform(new SN.Vector4(nx, ny, 1, 1), inv);
-        SN.Vector3 o = new SN.Vector3(a.X, a.Y, a.Z) / a.W; SN.Vector3 d = new SN.Vector3(b.X, b.Y, b.Z) / b.W - o;
+        SN.Vector4 a = SN.Vector4.Transform(new SN.Vector4(nx, ny, 0, 1), inv);
+        SN.Vector4 b = SN.Vector4.Transform(new SN.Vector4(nx, ny, 1, 1), inv);
+        SN.Vector3 o = new SN.Vector3(a.X, a.Y, a.Z) / a.W;
+        SN.Vector3 d = new SN.Vector3(b.X, b.Y, b.Z) / b.W - o;
         if (MathF.Abs(d.Z) < 1e-6f)
             return null;
         float t = (z - o.Z) / d.Z;
@@ -541,7 +581,8 @@ public sealed partial class OpenFDGame
     private Unit? UnitAt(double x, double y)
     {
         (float sx, float sy) = Fb(x, y);
-        Unit? best = null; float bd = Tol(28);
+        Unit? best = null;
+        float bd = Tol(28);
         foreach (Unit u in _session.Units.Active)
             // allongé (inconscient) : visé au sol, là où il est couché
             if (Project(u.Position + new SN.Vector3(0, 0, u.IsVehicle ? 150 : u.Unconscious ? 25 : 90)) is { } p && SN.Vector2.Distance(p, new(sx, sy)) is float d && d < bd * (u.Unconscious ? 1.4f : 1f))
@@ -557,7 +598,8 @@ public sealed partial class OpenFDGame
     // objet utilisable sous la souris : près de son pied ou de sa hauteur d'homme à l'écran
     private UsableObject? UsableAt(double x, double y)
     {
-        (float sx, float sy) = Fb(x, y); SN.Vector2 m = new SN.Vector2(sx, sy);
+        (float sx, float sy) = Fb(x, y);
+        SN.Vector2 m = new SN.Vector2(sx, sy);
         // objets sous la souris : près du pied de leur repère (pivot), ou souris sur l'emprise du modèle (le pivot peut être
         // à un bout de l'objet : générateur de Mriya) ; rang : 0 près du pivot, puis la taille de l'emprise
         List<(UsableObject o, float rank)> hits = new List<(UsableObject o, float rank)>();
@@ -566,7 +608,8 @@ public sealed partial class OpenFDGame
         {
             if (Project(o.Position) is not { } a || Project(o.Position + new SN.Vector3(0, 0, 160)) is not { } b)
                 continue;
-            SN.Vector2 ab = b - a; float t = ab.LengthSquared() > 1e-3f ? Math.Clamp(SN.Vector2.Dot(m - a, ab) / ab.LengthSquared(), 0, 1) : 0;
+            SN.Vector2 ab = b - a;
+            float t = ab.LengthSquared() > 1e-3f ? Math.Clamp(SN.Vector2.Dot(m - a, ab) / ab.LengthSquared(), 0, 1) : 0;
             float d = SN.Vector2.Distance(m, a + ab * t);
             if (d < tol)
                 hits.Add((o, d / tol));
@@ -591,13 +634,16 @@ public sealed partial class OpenFDGame
     // flèche du grappin visée : près du repère en haut du mur, ou de sa base
     private GrapplePoint? GrappleAt(double x, double y)
     {
-        (float sx, float sy) = Fb(x, y); SN.Vector2 m = new SN.Vector2(sx, sy);
-        GrapplePoint? best = null; float bd = Tol(34);
+        (float sx, float sy) = Fb(x, y);
+        SN.Vector2 m = new SN.Vector2(sx, sy);
+        GrapplePoint? best = null;
+        float bd = Tol(34);
         foreach (GrapplePoint gp in _session.Units.Grapples)
         {
             if (Project(gp.Top + new SN.Vector3(0, 0, 60)) is not { } a || Project(gp.Top - new SN.Vector3(0, 0, 120)) is not { } b)
                 continue;
-            SN.Vector2 ab = b - a; float t = ab.LengthSquared() > 1e-3f ? Math.Clamp(SN.Vector2.Dot(m - a, ab) / ab.LengthSquared(), 0, 1) : 0;
+            SN.Vector2 ab = b - a;
+            float t = ab.LengthSquared() > 1e-3f ? Math.Clamp(SN.Vector2.Dot(m - a, ab) / ab.LengthSquared(), 0, 1) : 0;
             if (SN.Vector2.Distance(m, a + ab * t) is float d && d < bd)
             {
                 bd = d;
@@ -609,13 +655,16 @@ public sealed partial class OpenFDGame
 
     private Opening? OpeningAt(double x, double y)
     {
-        (float sx, float sy) = Fb(x, y); SN.Vector2 m = new SN.Vector2(sx, sy);
-        Opening? best = null; float bd = Tol(26);
+        (float sx, float sy) = Fb(x, y);
+        SN.Vector2 m = new SN.Vector2(sx, sy);
+        Opening? best = null;
+        float bd = Tol(26);
         foreach (Opening o in _session.Units.Openings.Where(o => o.State != OpeningState.Broken && (o.OnGround || o.IsWindow)))
         {
             if (Project(o.Center - new SN.Vector3(0, 0, 90)) is not { } a || Project(o.Center + new SN.Vector3(0, 0, 90)) is not { } b)
                 continue;
-            SN.Vector2 ab = b - a; float t = ab.LengthSquared() > 1e-3f ? Math.Clamp(SN.Vector2.Dot(m - a, ab) / ab.LengthSquared(), 0, 1) : 0;
+            SN.Vector2 ab = b - a;
+            float t = ab.LengthSquared() > 1e-3f ? Math.Clamp(SN.Vector2.Dot(m - a, ab) / ab.LengthSquared(), 0, 1) : 0;
             if (SN.Vector2.Distance(m, a + ab * t) is float d && d < bd)
             {
                 bd = d;
@@ -625,7 +674,8 @@ public sealed partial class OpenFDGame
         // portail à mécanisme (Jail) : un petit cercle au sol, sous les rouages
         foreach (Opening o in _session.Units.Openings.Where(o => o.Lever != null && o.State != OpeningState.Broken))
         {
-            SN.Vector2 lv = o.Lever!.Value; SN.Vector3 lp = new SN.Vector3(lv, _session.Units.GroundZ(lv) + 10);
+            SN.Vector2 lv = o.Lever!.Value;
+            SN.Vector3 lp = new SN.Vector3(lv, _session.Units.GroundZ(lv) + 10);
             if (Project(lp) is not { } c || Project(lp + new SN.Vector3(110, 0, 0)) is not { } e)
                 continue;
             float rr = MathF.Max(Tol(14), SN.Vector2.Distance(c, e));
@@ -669,14 +719,17 @@ public sealed partial class OpenFDGame
     // feu visé : on vise n'importe où sur la hauteur des flammes, ou au sol tout près du feu
     private HotPoint? FireAt(double x, double y)
     {
-        (float sx, float sy) = Fb(x, y); SN.Vector2 m = new SN.Vector2(sx, sy);
-        HotPoint? best = null; float bd = Tol(45);
+        (float sx, float sy) = Fb(x, y);
+        SN.Vector2 m = new SN.Vector2(sx, sy);
+        HotPoint? best = null;
+        float bd = Tol(45);
         foreach (HotPoint h in _session.Fire.HotPoints.Where(h => h.IsBurning))
         {
             float k = Math.Min(1, h.Intensity / h.Class.IntensityMax), top = 120 + 380 * k;
             if (Project(h.Position) is not { } a || Project(h.Position + new SN.Vector3(0, 0, top)) is not { } b)
                 continue;
-            SN.Vector2 ab = b - a; float t = ab.LengthSquared() > 1e-3f ? Math.Clamp(SN.Vector2.Dot(m - a, ab) / ab.LengthSquared(), 0, 1) : 0;
+            SN.Vector2 ab = b - a;
+            float t = ab.LengthSquared() > 1e-3f ? Math.Clamp(SN.Vector2.Dot(m - a, ab) / ab.LengthSquared(), 0, 1) : 0;
             float d = SN.Vector2.Distance(m, a + ab * t);
             if (d < bd)
             {
@@ -701,7 +754,8 @@ public sealed partial class OpenFDGame
     private void Pick(double x, double y)
     {
         (float sx, float sy) = Fb(x, y);
-        HotPoint? best = null; float bd = float.MaxValue;
+        HotPoint? best = null;
+        float bd = float.MaxValue;
         if (_map)
         {
             SN.Vector2 m = ScreenToMap(sx, sy);
@@ -722,11 +776,14 @@ public sealed partial class OpenFDGame
             if (!SN.Matrix4x4.Invert(_viewProj, out SN.Matrix4x4 inv))
                 return;
             float nx = sx / _fbW * 2 - 1, ny = 1 - sy / _fbH * 2;
-            SN.Vector4 a = SN.Vector4.Transform(new SN.Vector4(nx, ny, 0, 1), inv); SN.Vector4 b = SN.Vector4.Transform(new SN.Vector4(nx, ny, 1, 1), inv);
-            SN.Vector3 o = new SN.Vector3(a.X, a.Y, a.Z) / a.W; SN.Vector3 dir = SN.Vector3.Normalize(new SN.Vector3(b.X, b.Y, b.Z) / b.W - o);
+            SN.Vector4 a = SN.Vector4.Transform(new SN.Vector4(nx, ny, 0, 1), inv);
+            SN.Vector4 b = SN.Vector4.Transform(new SN.Vector4(nx, ny, 1, 1), inv);
+            SN.Vector3 o = new SN.Vector3(a.X, a.Y, a.Z) / a.W;
+            SN.Vector3 dir = SN.Vector3.Normalize(new SN.Vector3(b.X, b.Y, b.Z) / b.W - o);
             foreach (HotPoint h in _session.Fire.HotPoints.Where(h => h.IsBurning))
             {
-                SN.Vector3 v = h.Position + new SN.Vector3(0, 0, 100) - o; float t = SN.Vector3.Dot(v, dir);
+                SN.Vector3 v = h.Position + new SN.Vector3(0, 0, 100) - o;
+                float t = SN.Vector3.Dot(v, dir);
                 if (t < 0)
                     continue;
                 float d = (v - dir * t).Length();
@@ -765,7 +822,9 @@ public sealed partial class OpenFDGame
             c.Dispose();
         foreach (Texture2D t in _cursorTex)
             t.Dispose();
-        _cursors.Clear(); _cursorTex.Clear(); _cur = (Cur)(-1);
+        _cursors.Clear();
+        _cursorTex.Clear();
+        _cur = (Cur)(-1);
         foreach (Cur c in Enum.GetValues<Cur>())
         {
             int cell = (int)c, cx = cell % 8 * 32, cy = cell / 8 * 32;
@@ -778,7 +837,9 @@ public sealed partial class OpenFDGame
                 }
             try
             {
-                Texture2D tex = new Texture2D(GraphicsDevice, size, size); tex.SetData(px); _cursorTex.Add(tex);
+                Texture2D tex = new Texture2D(GraphicsDevice, size, size);
+                tex.SetData(px);
+                _cursorTex.Add(tex);
                 _cursors[c] = MouseCursor.FromTexture2D(tex, 0, 0);
             }
             catch (Exception e) { Console.WriteLine("Curseur : " + e.Message); }
@@ -791,7 +852,8 @@ public sealed partial class OpenFDGame
     {
         if (_arrowShown)
             return;
-        _arrowShown = true; _cur = (Cur)(-1);
+        _arrowShown = true;
+        _cur = (Cur)(-1);
         try { Mouse.SetCursor(MouseCursor.Arrow); } catch { }
     }
     private bool _arrowShown;
@@ -815,7 +877,8 @@ public sealed partial class OpenFDGame
         _arrowShown = false;
         if (_cursors.Count == 0 || _session == null)
             return;
-        MouseState ms = Mouse.GetState(); double x = ms.X, y = ms.Y;
+        MouseState ms = Mouse.GetState();
+        double x = ms.X, y = ms.Y;
         List<Unit> walkers = _sel.Where(u => !u.IsVehicle).ToList();
         Cur want = Cur.Normal;
         walkers = walkers.Where(u => !u.Unconscious).ToList();

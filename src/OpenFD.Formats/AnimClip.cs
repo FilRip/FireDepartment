@@ -36,9 +36,14 @@ public sealed class AnimClip
             p += 44;
         }
         float F(int o) => BitConverter.ToSingle(d, o);
-        int np = BitConverter.ToInt32(d, p); int P = p + 4; p = P + 16 * np;
-        int nr = BitConverter.ToInt32(d, p); int R = p + 4; p = R + 20 * nr;
-        int ns = p + 4 <= d.Length ? BitConverter.ToInt32(d, p) : 0; int S = p + 4;
+        int np = BitConverter.ToInt32(d, p);
+        int P = p + 4;
+        p = P + 16 * np;
+        int nr = BitConverter.ToInt32(d, p);
+        int R = p + 4;
+        p = R + 20 * nr;
+        int ns = p + 4 <= d.Length ? BitConverter.ToInt32(d, p) : 0;
+        int S = p + 4;
         if (S + 16L * ns > d.Length)
             ns = 0;
         float maxT = 0;
@@ -46,11 +51,23 @@ public sealed class AnimClip
         {
             Track t = new Track();
             if (h.ps >= 0 && h.ps + h.pc <= np)
-                t.Pos = Enumerable.Range(h.ps, h.pc).Select(i => { int o = P + 16 * i; return (F(o) / TicksPerSecond, new Vector3(F(o + 4), F(o + 8), F(o + 12))); }).ToArray();
+                t.Pos = Enumerable.Range(h.ps, h.pc).Select(i =>
+                {
+                    int o = P + 16 * i;
+                    return (F(o) / TicksPerSecond, new Vector3(F(o + 4), F(o + 8), F(o + 12)));
+                }).ToArray();
             if (h.rs >= 0 && h.rs + h.rc <= nr)
-                t.Rot = Enumerable.Range(h.rs, h.rc).Select(i => { int o = R + 20 * i; return (F(o) / TicksPerSecond, new Quaternion(F(o + 4), F(o + 8), F(o + 12), F(o + 16))); }).ToArray();
+                t.Rot = Enumerable.Range(h.rs, h.rc).Select(i =>
+                {
+                    int o = R + 20 * i;
+                    return (F(o) / TicksPerSecond, new Quaternion(F(o + 4), F(o + 8), F(o + 12), F(o + 16)));
+                }).ToArray();
             if (h.ss >= 0 && h.ss + h.sc <= ns)
-                t.Scale = Enumerable.Range(h.ss, h.sc).Select(i => { int o = S + 16 * i; return (F(o) / TicksPerSecond, new Vector3(F(o + 4), F(o + 8), F(o + 12))); }).ToArray();
+                t.Scale = Enumerable.Range(h.ss, h.sc).Select(i =>
+                {
+                    int o = S + 16 * i;
+                    return (F(o) / TicksPerSecond, new Vector3(F(o + 4), F(o + 8), F(o + 12)));
+                }).ToArray();
             foreach ((float t, Vector3 v) k in t.Pos)
                 maxT = MathF.Max(maxT, k.t);
             foreach ((float t, Quaternion v) k in t.Rot)
@@ -102,7 +119,8 @@ public sealed class AnimClip
                 q = Quaternion.Slerp(tr.Rot[i].v, tr.Rot[i + 1].v, Math.Clamp(f, 0, 1));
             }
         }
-        Vector3 s = Lerp(tr.Scale, Vector3.One); Vector3 pos = Lerp(tr.Pos, Vector3.Zero);
+        Vector3 s = Lerp(tr.Scale, Vector3.One);
+        Vector3 pos = Lerp(tr.Pos, Vector3.Zero);
         return Matrix4x4.CreateScale(s) * Matrix4x4.CreateFromQuaternion(Quaternion.Normalize(q)) * Matrix4x4.CreateTranslation(pos);
     }
 }

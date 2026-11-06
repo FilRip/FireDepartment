@@ -100,12 +100,16 @@ public sealed class PathFind
         int n = g.Width * g.Height, reopened = 0;
         int[] Label(Func<int, bool> free)
         {
-            int[] lab = new int[n]; Array.Fill(lab, -1); int next = 0; Queue<int> q = new Queue<int>();
+            int[] lab = new int[n];
+            Array.Fill(lab, -1);
+            int next = 0;
+            Queue<int> q = new Queue<int>();
             for (int s0 = 0; s0 < n; s0++)
             {
                 if (lab[s0] >= 0 || !free(s0))
                     continue;
-                lab[s0] = next; q.Enqueue(s0);
+                lab[s0] = next;
+                q.Enqueue(s0);
                 while (q.Count > 0)
                 {
                     int c = q.Dequeue(), x = c % g.Width, y = c / g.Width;
@@ -134,13 +138,19 @@ public sealed class PathFind
         int[] before = Label(i => g.ZoneA[i] != 0 && (!Blocked[i] || rule.Contains(i)));
         int[] after = Label(After);
         // par ensemble d'un seul tenant avant : le plus grand morceau après sert de base
-        Dictionary<int, int> size = new Dictionary<int, int>(); for (int i = 0; i < n; i++) if (after[i] >= 0) size[after[i]] = size.GetValueOrDefault(after[i]) + 1;
+        Dictionary<int, int> size = new Dictionary<int, int>();
+        for (int i = 0; i < n; i++)
+            if (after[i] >= 0)
+                size[after[i]] = size.GetValueOrDefault(after[i]) + 1;
         Dictionary<int, int> mainOf = new Dictionary<int, int>();
         for (int i = 0; i < n; i++)
             if (after[i] >= 0 && before[i] >= 0 && (!mainOf.TryGetValue(before[i], out int mm) || size[after[i]] > size[mm]))
                 mainOf[before[i]] = after[i];
         // 0-1 : parcours depuis les bases, à travers les murs fermés (coût 1) ; chaque morceau isolé est relié par le chemin le moins coûteux
-        int[] dist = new int[n]; Array.Fill(dist, int.MaxValue); int[] prev = new int[n]; Array.Fill(prev, -1);
+        int[] dist = new int[n];
+        Array.Fill(dist, int.MaxValue);
+        int[] prev = new int[n];
+        Array.Fill(prev, -1);
         LinkedList<int> dq = new LinkedList<int>();
         for (int i = 0; i < n; i++)
             if (after[i] >= 0 && before[i] >= 0 && mainOf[before[i]] == after[i])
@@ -150,7 +160,8 @@ public sealed class PathFind
             }
         while (dq.Count > 0)
         {
-            int c = dq.First!.Value; dq.RemoveFirst();
+            int c = dq.First!.Value;
+            dq.RemoveFirst();
             int x = c % g.Width, y = c / g.Width;
             foreach (int k in new[] { x > 0 ? c - 1 : -1, x < g.Width - 1 ? c + 1 : -1, y > 0 ? c - g.Width : -1, y < g.Height - 1 ? c + g.Width : -1 })
             {
@@ -159,7 +170,8 @@ public sealed class PathFind
                 int w = rule.Contains(k) && Blocked[k] ? 1 : 0, nd = dist[c] + w;
                 if (nd >= dist[k])
                     continue;
-                dist[k] = nd; prev[k] = c;
+                dist[k] = nd;
+                prev[k] = c;
                 if (w == 0)
                     dq.AddFirst(k);
                 else
@@ -244,8 +256,17 @@ public sealed class PathFind
                 nearDoor.Add(g.Index(cx, cy));
         }
         bool Z(int x, int y) => g.Inside(x, y) && g.ZoneA[g.Index(x, y)] != 0 && g.ZoneB[g.Index(x, y)] == 0;
-        int Run(int x, int y, int dx, int dy) { int r = 1; for (int k = 1; k < 6 && Z(x + dx * k, y + dy * k); k++) r++; for (int k = 1; k < 6 && Z(x - dx * k, y - dy * k); k++) r++; return r; }
-        int m = 0; HashSet<int> rule = new HashSet<int>();
+        int Run(int x, int y, int dx, int dy)
+        {
+            int r = 1;
+            for (int k = 1; k < 6 && Z(x + dx * k, y + dy * k); k++)
+                r++;
+            for (int k = 1; k < 6 && Z(x - dx * k, y - dy * k); k++)
+                r++;
+            return r;
+        }
+        int m = 0;
+        HashSet<int> rule = new HashSet<int>();
         if (Environment.GetEnvironmentVariable("FD3_SANS_MURSPIECES") == null)
         for (int y = 0; y < g.Height; y++)
             for (int x = 0; x < g.Width; x++)
@@ -256,7 +277,10 @@ public sealed class PathFind
                 // une bande mince (3 cases au plus en travers) : un mur ; une grande étendue en zone B 0 reste praticable
                 if (Math.Min(Run(x, y, 1, 0), Run(x, y, 0, 1)) > 3)
                     continue;
-                Blocked[i] = true; BlockedBy[i] = "mur de pièce"; m++; rule.Add(i);
+                Blocked[i] = true;
+                BlockedBy[i] = "mur de pièce";
+                m++;
+                rule.Add(i);
             }
         int reopened = ReconnectRooms(g, rule);
         if (m > 0)
@@ -302,7 +326,9 @@ public sealed class PathFind
         {
             if (i < 0 || i >= Blocked.Length || g.ZoneA[i] == 0 || Blocked[i] || keep.Contains(i))
                 continue;
-            Blocked[i] = true; BlockedBy[i] = "mur"; n++;
+            Blocked[i] = true;
+            BlockedBy[i] = "mur";
+            n++;
         }
         if (n > 0)
             _log.Add($"Murs du décor ajoutés à la grille : {n} case(s)");
@@ -316,7 +342,8 @@ public sealed class PathFind
         Blocked = new bool[g.Width * g.Height];
         SceneAssets assets = _assets;
         Dictionary<string, List<Vector2>> shapes = new Dictionary<string, List<Vector2>>(StringComparer.OrdinalIgnoreCase);
-        Dictionary<int, int> cover = new Dictionary<int, int>(); Dictionary<int, string> names = new Dictionary<int, string>();
+        Dictionary<int, int> cover = new Dictionary<int, int>();
+        Dictionary<int, string> names = new Dictionary<int, string>();
         foreach (LevelObject o in level.Objects.Where(o => o.Kind == EntityKind.Placeable && o.HasTransform))
         {
             ClassFile? c = _class("Design\\" + o.ClassPath["design\\".Length..] + ".class");
@@ -368,7 +395,8 @@ public sealed class PathFind
                 if (!g.Inside(cx, cy))
                     continue;
                 int i = g.Index(cx, cy);
-                cover[i] = cover.GetValueOrDefault(i) + 1; names.TryAdd(i, o.Name + " " + model);
+                cover[i] = cover.GetValueOrDefault(i) + 1;
+                names.TryAdd(i, o.Name + " " + model);
             }
         }
     }
@@ -390,7 +418,9 @@ public sealed class PathFind
                     v[i] = Vector3.Transform(new Vector3(m.Positions[i * 3], m.Positions[i * 3 + 1], m.Positions[i * 3 + 2]), pw);
                 for (int t = 0; t + 2 < m.Indices.Length; t += 3)
                 {
-                    Vector3 a = v[m.Indices[t]]; Vector3 b = v[m.Indices[t + 1]]; Vector3 cc = v[m.Indices[t + 2]];
+                    Vector3 a = v[m.Indices[t]];
+                    Vector3 b = v[m.Indices[t + 1]];
+                    Vector3 cc = v[m.Indices[t + 2]];
                     float zmin = MathF.Min(a.Z, MathF.Min(b.Z, cc.Z)), zmax = MathF.Max(a.Z, MathF.Max(b.Z, cc.Z));
                     if (zmin > High || zmax < Low)
                         continue;
@@ -417,7 +447,10 @@ public sealed class PathFind
         int fw = x1 - x0 + 1, fh = y1 - y0 + 1;
         if ((long)fw * fh < 4_000_000)
         {
-            bool[] outside = new bool[fw * fh]; Stack<(int, int)> stack = new Stack<(int, int)>(); stack.Push((0, 0)); outside[0] = true;
+            bool[] outside = new bool[fw * fh];
+            Stack<(int, int)> stack = new Stack<(int, int)>();
+            stack.Push((0, 0));
+            outside[0] = true;
             while (stack.Count > 0)
             {
                 (int x, int y) = stack.Pop();
@@ -499,7 +532,8 @@ public sealed class PathFind
         Grid? g = _s.Grid;
         if (g == null)
             return new() { to };
-        (int sx, int sy) = g.CellOf(new Vector3(from, 0)); (int tx, int ty) = g.CellOf(new Vector3(to, 0));
+        (int sx, int sy) = g.CellOf(new Vector3(from, 0));
+        (int tx, int ty) = g.CellOf(new Vector3(to, 0));
         if (!g.Inside(tx, ty))
             return new();
         // départ dans un obstacle (un camion s'est garé sur le pompier) : il en sort d'abord par la case libre la plus proche
@@ -519,11 +553,15 @@ public sealed class PathFind
         int n = g.Width * g.Height;
         if (_cost.Length != n)
         {
-            _cost = new float[n]; _prev = new int[n]; _gen = new int[n]; _curGen = 0;
+            _cost = new float[n];
+            _prev = new int[n];
+            _gen = new int[n];
+            _curGen = 0;
         }
         if (++_curGen == int.MaxValue)
         {
-            Array.Clear(_gen); _curGen = 1;
+            Array.Clear(_gen);
+            _curGen = 1;
         }
         int gen = _curGen;
         List<int> seen = new List<int>();
@@ -532,10 +570,13 @@ public sealed class PathFind
         {
             if (_gen[k] != gen)
                 seen.Add(k);
-            _gen[k] = gen; _cost[k] = c; _prev[k] = p;
+            _gen[k] = gen;
+            _cost[k] = c;
+            _prev[k] = p;
         }
         int Key(int x, int y) => y * g.Width + x;
-        open.Enqueue((sx, sy), 0); Set(Key(sx, sy), 0, -1);
+        open.Enqueue((sx, sy), 0);
+        Set(Key(sx, sy), 0, -1);
         int found = -1, guard = 0;
         while (open.Count > 0 && guard++ < 200000)
         {
@@ -572,10 +613,12 @@ public sealed class PathFind
         if (found < 0)
         {
             // point inatteignable : on s'arrête à la case explorée la plus proche du point demandé
-            int best = -1; float bd = float.MaxValue;
+            int best = -1;
+            float bd = float.MaxValue;
             foreach (int k in seen)
             {
-                int x = k % g.Width, y = k / g.Width; float d = (x - tx) * (x - tx) + (y - ty) * (y - ty);
+                int x = k % g.Width, y = k / g.Width;
+                float d = (x - tx) * (x - tx) + (y - ty) * (y - ty);
                 if (d < bd && Free(x, y))
                 {
                     bd = d;
@@ -587,7 +630,8 @@ public sealed class PathFind
                 partial = best >= 0;
                 return new();
             }
-            found = best; partial = true;
+            found = best;
+            partial = true;
             to = new(((best % g.Width) + 0.5f) * Grid.CellSize, ((best / g.Width) + 0.5f) * Grid.CellSize);
         }
         List<Vector2> cells = new List<Vector2>();
@@ -597,13 +641,17 @@ public sealed class PathFind
         if (cells.Count > 0)
             cells[^1] = to;
         // lissage : on saute les points intermédiaires quand la ligne droite est libre
-        List<Vector2> smooth = new List<Vector2>(); Vector2 cur = from; int i = 0;
+        List<Vector2> smooth = new List<Vector2>();
+        Vector2 cur = from;
+        int i = 0;
         while (i < cells.Count)
         {
             int j = cells.Count - 1;
             while (j > i && !LineFree(cur, cells[j]))
                 j--;
-            smooth.Add(cells[j]); cur = cells[j]; i = j + 1;
+            smooth.Add(cells[j]);
+            cur = cells[j];
+            i = j + 1;
         }
         return smooth;
     }
@@ -615,7 +663,8 @@ public sealed class PathFind
         int n = (int)(Vector2.Distance(a, b) / 40) + 1;
         for (int i = 1; i < n; i++)
         {
-            Vector2 p = Vector2.Lerp(a, b, (float)i / n); (int cx, int cy) = g.CellOf(new Vector3(p, 0));
+            Vector2 p = Vector2.Lerp(a, b, (float)i / n);
+            (int cx, int cy) = g.CellOf(new Vector3(p, 0));
             if (!Free(cx, cy) || (!ignoreFire && FireCost(cx, cy) > 0))
                 return false;
         }

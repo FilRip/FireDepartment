@@ -43,8 +43,10 @@ public sealed partial class UnitManager
             Log.Add($"Unité du script introuvable : {classPath}");
             return null;
         }
-        u.ScriptName = name; u.Status = "attend les ordres";
-        _scriptNames[name] = u; _byId[u.Id] = u;
+        u.ScriptName = name;
+        u.Status = "attend les ordres";
+        _scriptNames[name] = u;
+        _byId[u.Id] = u;
         return u;
     }
 
@@ -61,10 +63,15 @@ public sealed partial class UnitManager
     {
         if (u.OnBoard)
             return;
-        u.Target = null; u.Opening = null; u.GoTo = null; u.GoToVehicle = null; u.Boarding = false;
+        u.Target = null;
+        u.Opening = null;
+        u.GoTo = null;
+        u.GoToVehicle = null;
+        u.Boarding = false;
         if (!Order(u, dest, null, drive: u.IsVehicle, refuseUnreachable: false))
         {
-            u.Path.Clear(); u.Path.Enqueue(dest);
+            u.Path.Clear();
+            u.Path.Enqueue(dest);
         }
         u.Status = u.IsVehicle ? "roule" : "se déplace";
     }
@@ -101,7 +108,9 @@ public sealed partial class UnitManager
         if (initialByScript && _initial is { } ini && !_initialCalled)
         {
             _deferredCrew = Units.Count(u => !u.IsVehicle) + Units.Sum(v => v.Crew.Count);   // équipe de départ seulement (les renforts sont comptés à part)
-            Units.Clear(); _byId.Clear(); _initialDeferred = true;
+            Units.Clear();
+            _byId.Clear();
+            _initialDeferred = true;
         }
         if (reinforcementsByScript)
         {
@@ -127,7 +136,9 @@ public sealed partial class UnitManager
     {
         if (_toGrant.Count == 0)
             return;
-        (float eta, string cfg, int spawn) r = _toGrant[0]; _toGrant.RemoveAt(0); _granted.Add(r);
+        (float eta, string cfg, int spawn) r = _toGrant[0];
+        _toGrant.RemoveAt(0);
+        _granted.Add(r);
         _pending.Add((_s.Time + r.eta, r.cfg, r.spawn));
         Log.Add($"{_s.Time,6:0} s : renfort accordé ({r.cfg}, dans {r.eta:0} s)");
     }
@@ -149,7 +160,8 @@ public sealed partial class UnitManager
         int i = _toGrant.IndexOf(r);
         if (i < 0)
             return;   // déjà envoyé
-        _toGrant.RemoveAt(i); _granted.Add(r);
+        _toGrant.RemoveAt(i);
+        _granted.Add(r);
         _pending.Add((_s.Time + r.eta, r.cfg, r.spawn));
         Log.Add($"{_s.Time,6:0} s : renfort {n} appelé ({r.cfg}, dans {r.eta:0} s)");
     }
@@ -160,7 +172,8 @@ public sealed partial class UnitManager
         if (u.Passengers.Count > 0)
             UnloadPassengers(u);
         u.InVehicle?.Passengers.Remove(u);
-        Units.Remove(u); _byId.Remove(u.Id);
+        Units.Remove(u);
+        _byId.Remove(u.Id);
         if (u.ScriptName != null)
             _scriptNames.Remove(u.ScriptName);
     }
@@ -170,7 +183,8 @@ public sealed partial class UnitManager
     /// <summary>IA_CmdMoveTo sur un civil (cinématique : des personnages traversent la scène) ; run : au pas de course.</summary>
     public void ScriptMoveCivilian(Civilian c, Vector2 dest, bool run)
     {
-        c.Leader = null; c.Path.Clear();
+        c.Leader = null;
+        c.Path.Clear();
         c.RunSpeed = run ? 450f : 280f;
         Vector2 from = new Vector2(c.Position.X, c.Position.Y);
         List<Vector2> path = FindPath(from, dest, out _);

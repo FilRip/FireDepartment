@@ -47,10 +47,12 @@ public sealed partial class OpenFDGame
     {
         if (_intro == null)
             return false;
-        KeyboardState k = Keyboard.GetState(); MouseState m = Mouse.GetState();
+        KeyboardState k = Keyboard.GetState();
+        MouseState m = Mouse.GetState();
         bool skip = IsActive && (Pressed(k, Keys.Escape) || Pressed(k, Keys.Enter) || Pressed(k, Keys.Space)
             || (m.LeftButton == ButtonState.Pressed && _mPrev.LeftButton == ButtonState.Released));
-        _kPrev = k; _mPrev = m;
+        _kPrev = k;
+        _mPrev = m;
         _intro.Update(dt);
         if (skip || _intro.Finished)
         {
@@ -96,5 +98,10 @@ public sealed partial class OpenFDGame
     private bool _menuVideoTried;
 
     /// <summary>Le menu se ferme (mission lancée) : la vidéo de fond s'arrête.</summary>
-    private void StopMenuVideo() { _menuVideo?.Dispose(); _menuVideo = null; _menuVideoTried = false; }
+    private void StopMenuVideo()
+    {
+        _menuVideo?.Dispose();
+        _menuVideo = null;
+        _menuVideoTried = false;
+    }
 }
