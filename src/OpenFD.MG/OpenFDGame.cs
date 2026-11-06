@@ -199,6 +199,42 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         }
     }
 
+    /// <summary>Essais (captures) du camion échelle et du bulldozer ; appelé à chaque image et à chaque pas de --avance.</summary>
+    private void TestVehicleHooks()
+    {
+        // essai (captures) : FD3_ECHELLE=fenêtre,x,y → un camion échelle garé vers (x, y) la dresse devant la fenêtre, puis le
+        // pompier à hache le plus proche y monte ; FD3_BULLDO=débris,x,y → un bulldozer vient de (x, y) les dégager
+        if (!_menu && _session != null && !_testSpawned && _session.Time > 30)
+        {
+            _testSpawned = true;
+            if (Environment.GetEnvironmentVariable("FD3_ECHELLE") is { Length: > 0 } ech && ech.Split(',') is { Length: >= 3 } ea
+                && _session.Units.Openings.FirstOrDefault(o => o.Name.Equals(ea[0], StringComparison.OrdinalIgnoreCase)) is { } ew)
+            {
+                SN.Vector3 at = new SN.Vector3(float.Parse(ea[1]), float.Parse(ea[2]), 0);
+                Unit? truck = _session.Units.Units.FirstOrDefault(u => u.IsAerial && !u.OnBoard) ?? _session.Units.SpawnScripted("Data/Design/Unit/Firevehicle/Veh_P_aerial_ua.class", "echelle", at);
+                if (truck != null)
+                    DoLadder(truck, ew);
+                _testLadder = ew;
+            }
+            if (Environment.GetEnvironmentVariable("FD3_BULLDO") is { Length: > 0 } bul && bul.Split(',') is { Length: >= 3 } ba
+                && _session.Units.Openings.FirstOrDefault(o => o.Name.Equals(ba[0], StringComparison.OrdinalIgnoreCase)) is { } bd)
+            {
+                SN.Vector3 at = new SN.Vector3(float.Parse(ba[1]), float.Parse(ba[2]), 0);
+                Unit? dozer = _session.Units.Units.FirstOrDefault(u => u.CanDemolish && !u.OnBoard) ?? _session.Units.SpawnScripted("Data/Design/Unit/Firevehicle/Veh_P_bulldozer.class", "bulldo", at);
+                if (dozer != null)
+                    DoOpening(dozer, bd);
+            }
+        }
+        if (_testLadder is { } tw && _session?.Units.LadderAt(tw) is { Ready: true } && _session.Units.Units.Where(u => u.CanLadder && u.CanBreak && !u.OnBoard && !u.IsVehicle)
+                .OrderBy(u => SN.Vector3.Distance(u.Position, tw.Center)).FirstOrDefault() is { } climber)
+        {
+            _testLadder = null;
+            if (Environment.GetEnvironmentVariable("FD3_ECHELLE")!.Split(',') is { Length: >= 5 } ep)
+                _session.Units.Teleport(climber, new SN.Vector2(float.Parse(ep[3]), float.Parse(ep[4])));
+            DoOpening(climber, tw);
+        }
+    }
+
     // essais automatiques (--avance, --envoyer, --portes)
     private void Advance(float seconds)
     {
@@ -207,6 +243,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         for (int i = 0; i < n; i++)
         {
             _session.Step();
+            TestVehicleHooks();
             if (camTest && i % 50 == 0 && _session.Scripts is { } sct)
                 foreach (string k in new[] { "OnCameraMove", "OnCameraRotate", "OnCameraZoom" })
                     if (_session.MissionConfig.Get("INTERFACE_SCRIPT", k)?.Trim('"', ' ') is { Length: > 0 } fn)
@@ -555,6 +592,10 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 Console.WriteLine(_session.Units.AsciiMap(z[0], z[1], z[2], z[3]));
             }
         }
+        // essai (captures) : FD3_RENFORT=équipe → ce renfort est choisi dès qu'il est accordé
+        if (!_menu && _session != null && _session.Units.GrantsAvailable > 0 && Environment.GetEnvironmentVariable("FD3_RENFORT") is { Length: > 0 } rf)
+            DoChooseReinforcement(rf);
+        TestVehicleHooks();
         // essai (captures) : FD3_CHOISIR → toutes les unités sur le terrain sont choisies
         if (!_menu && _session != null && _sel.Count == 0 && Environment.GetEnvironmentVariable("FD3_CHOISIR") != null)
             foreach (Unit u0 in _session.Units.Active.Where(u => !u.OnBoard))
@@ -990,6 +1031,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _curBuilding = -1;
         // objets posés (sans les portes et fenêtres, dessinées à part suivant leur état)
         HashSet<string> openingNames = _session.Units.Openings.Select(o => o.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        openingNames.UnionWith(_session.Units.HiddenOpenings);   // cachées pour tout le jeu : pas dessinées non plus
         // objets explosifs (voitures…) : dessinés à part, selon leur état (intact, abîmé, épave)
         HashSet<string> explosiveNames = ExplosiveNames();
         List<SceneAssets.Placed> allPlaced = _assets.Placeables(_session.Level).Where(p => !p.Civilian && !openingNames.Contains(p.Name)).Select(p => p with { World = Lift(p.World) }).ToList();
@@ -1574,20 +1616,55 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     }
 
     private bool _charred;   // DrawMesh : dessin d'une carcasse calcinée
+    private bool _testSpawned;      // essais FD3_ECHELLE, FD3_BULLDO : une seule fois
+    private Opening? _testLadder;
 
     private List<(MeshGpu mesh, SN.Matrix4x4 part)> UnitModel(string model)
     {
         if (_unitModels.TryGetValue(model, out List<(MeshGpu mesh, SN.Matrix4x4 part)>? l))
             return l;
         l = new();
+        List<string> names = new List<string>();
         try
         {
             foreach (SceneAssets.Node part in _assets.ModelParts(model))
+            {
                 l.Add((Upload(_assets.LoadMesh(_mission, part.Mesh, "gfx")), part.World));
+                names.Add(part.Mesh.ToUpperInvariant());
+            }
         }
         catch (Exception e) { Console.WriteLine($"{model} : {e.Message}"); }
         _unitModels[model] = l;
+        _unitPartNames[model] = names;
         return l;
+    }
+
+    // noms des pièces des modèles (en majuscules), dans l'ordre de UnitModel : échelle et tourelle, pelle du bulldozer
+    private readonly Dictionary<string, List<string>> _unitPartNames = new();
+
+    /// <summary>
+    /// Pièce mobile d'un véhicule, dans le repère du modèle : tourelle (ROTZ) et échelle (LADDER1 à 3, qui coulissent)
+    /// du camion échelle ; bras et pelle du bulldozer, levés pendant un coup de pelle.
+    /// </summary>
+    private static SN.Matrix4x4 VehiclePartPose(Unit u, string name)
+    {
+        if (u.Ladder is { } l && (name.Contains("LADDER") || name.Contains("ROTZ") || name.Contains("CYNO")))
+        {
+            float raise = l.Raise * l.Raise * (3 - 2 * l.Raise);   // départ et arrivée en douceur
+            SN.Matrix4x4 turn = SN.Matrix4x4.CreateTranslation(-u.LadderPivot) * SN.Matrix4x4.CreateRotationZ(l.Yaw * raise) * SN.Matrix4x4.CreateTranslation(u.LadderPivot);
+            if (!name.Contains("LADDER"))
+                return turn;
+            float slide = name.EndsWith("LADDER3") ? l.Extend : name.EndsWith("LADDER2") ? l.Extend / 2 : 0;
+            // l'échelle repliée pointe vers l'avant (−Y du modèle) ; elle se lève autour de sa charnière
+            return SN.Matrix4x4.CreateTranslation(0, -slide, 0) * SN.Matrix4x4.CreateTranslation(-u.LadderHinge) * SN.Matrix4x4.CreateRotationX(-l.Pitch * raise)
+                * SN.Matrix4x4.CreateTranslation(u.LadderHinge) * turn;
+        }
+        if (u.Shove > 0 && (name.Contains("PELTEUZE") || name.Contains("BILDO_BRA") || name.Contains("VERRIN")))
+        {
+            SN.Vector3 arm = new SN.Vector3(0, -33, 88);
+            return SN.Matrix4x4.CreateTranslation(-arm) * SN.Matrix4x4.CreateRotationX(-0.45f * u.Shove) * SN.Matrix4x4.CreateTranslation(arm);
+        }
+        return SN.Matrix4x4.Identity;
     }
 
     // portes : fermées telles quelles, ouvertes pivotées d'un quart de tour, cassées retirées ; fenêtres cassées retirées

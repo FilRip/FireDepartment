@@ -49,11 +49,28 @@ public sealed partial class OpenFDGame
         }
         foreach (Fire.HotPoint h in _session.Fire.HotPoints.Where(h => h.IsBurning))
             Circle(h.Position, h.Class.LightingRange, new SN.Vector4(1f, 0.55f, 0.1f, 0.7f));
-        foreach (Unit u in _session.Units.Active.Where(u => !u.IsVehicle && u.Nozzle != null && !u.Unconscious))
+        // unités : seulement celles qui sont choisies (sinon trop de cercles)
+        foreach (Unit u in _session.Units.Active.Where(u => !u.IsVehicle && u.Nozzle != null && !u.Unconscious && _sel.Contains(u)))
         {
             float reach = MathF.Max(150, u.Nozzle!.RangeMax) + UnitManager.ExtraStandoff;
             Circle(u.Position, reach * MathF.Max(1, UnitManager.AutoAttackRange), new SN.Vector4(0.3f, 1f, 0.4f, 0.8f));   // il y va de lui-même
             Circle(u.Position, reach, new SN.Vector4(0.3f, 1f, 0.4f, 0.35f));                                              // il arrose d'où il est
+        }
+        // véhicules à lance : ils arrosent d'eux-mêmes les feux entre la portée minimale et la portée maximale de leur lance,
+        // tout autour (ceux de l'angle de la lance d'abord, traits clairs ; les autres après une manœuvre)
+        foreach (Unit v in _session.Units.Active.Where(v => v.IsVehicle && v.Nozzle != null && !v.Destroyed && _sel.Contains(v)))
+        {
+            SN.Vector4 col = new SN.Vector4(0.3f, 0.75f, 1f, 0.8f);
+            Circle(v.Position, v.Nozzle!.RangeMax, col);
+            Circle(v.Position, v.Nozzle.RangeMin, col with { W = 0.35f });
+            foreach (float side in new[] { -1f, 1f })
+            {
+                float a = v.Heading + side * UnitManager.CannonAngle;
+                SN.Vector3 dir = new SN.Vector3(MathF.Cos(a), MathF.Sin(a), 0);
+                SN.Vector3 z = new SN.Vector3(0, 0, 12);
+                if (Project(v.Position + z + dir * v.Nozzle.RangeMin) is { } p0 && Project(v.Position + z + dir * v.Nozzle.RangeMax) is { } p1)
+                    _ui.Line(p0.X, p0.Y, p1.X, p1.Y, col with { W = 0.5f }, 1.5f * MathF.Max(1, _scale));
+            }
         }
     }
 

@@ -26,6 +26,8 @@ public sealed partial class UnitManager
     public static float AmbulanceHeal = 12f;
     /// <summary>Endurance rendue (part de l'endurance maximale) quand un collègue ranime un pompier évanoui.</summary>
     public static float ReviveStamina = 0.35f;
+    /// <summary>Alerte « pompier en danger » à cette part de l'endurance ; de nouveau possible au-dessus de CriticalRearm.</summary>
+    public const float CriticalWarning = 0.2f, CriticalRearm = 0.4f;
     private int _blastsSeen;
 
     private void UpdateHealth(float dt)
@@ -96,6 +98,16 @@ public sealed partial class UnitManager
             u.Stamina = Math.Clamp(u.Stamina, 0, u.StaminaMax);
             if (healing && u.Stamina >= u.StaminaMax && u.Status.StartsWith("se soigne"))
                 u.Status = "attend les ordres";
+            // alerte avant l'évanouissement : à 20 % d'endurance, s'il en perd (pas pendant qu'il se soigne à l'ambulance) ;
+            // une seule fois, jusqu'à ce qu'il soit remonté au-dessus de 40 %
+            if (u.Stamina > u.StaminaMax * CriticalRearm)
+                u.CriticalWarned = false;
+            else if (!u.CriticalWarned && loss > 0 && !healing && u.Stamina > 0 && u.Stamina <= u.StaminaMax * CriticalWarning)
+            {
+                u.CriticalWarned = true;
+                Sounds.Add(("VOCAL_FIREMAN_CRITICAL", u.Position));
+                Log.Add($"{_s.Time,6:0} s : un pompier est à bout de forces ({100 * u.Stamina / u.StaminaMax:0} %)");
+            }
             if (u.Stamina <= 0 && !u.Unconscious)
             {
                 u.Unconscious = true;
@@ -105,7 +117,9 @@ public sealed partial class UnitManager
                 u.Opening = null;
                 u.GoTo = null;
                 u.GoToVehicle = null;
-                Sounds.Add(("VOCAL_FIREMAN_CRITICAL", u.Position));
+                if (!u.CriticalWarned)
+                    Sounds.Add(("VOCAL_FIREMAN_CRITICAL", u.Position));   // pas encore prévenu (chute d'un coup) : l'alerte maintenant
+                u.CriticalWarned = true;
                 Log.Add($"{_s.Time,6:0} s : un pompier s'évanouit (chaleur) — un collègue doit le ranimer");
             }
         }

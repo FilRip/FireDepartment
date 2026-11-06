@@ -28,6 +28,12 @@ public sealed partial class UnitManager
     // véhicules : ForwardSpeed de la classe (15 pour un camion, 20 le wildland, 10 l'ambulance…) × 120 unités/s ;
     // doublé (60 → 120) après comparaison avec le jeu d'origine, où les camions roulaient environ deux fois plus vite
     public const float FiremanSpeedFactor = 45f, VehicleSpeedFactor = 120f;
+    /// <summary>
+    /// Accélération et freinage des véhicules : [MOVING] AcceleratePower (8) et DeceleratePower (6) × 60 unités/s² ; un camion
+    /// met environ 4 s à atteindre sa vitesse. Sur les petites cartes (Institute), les trajets sont courts : il n'a pas le
+    /// temps d'aller vite, comme dans le jeu d'origine.
+    /// </summary>
+    public const float VehicleAccelFactor = 60f;
     /// <summary>Recul supplémentaire devant le feu (1 m = 100 unités), réglé à l'œil sur le jeu d'origine.</summary>
     public const float ExtraStandoff = 400f;
     /// <summary>Vrai pendant un ordre donné par le joueur (l'interface le met) : les réponses vocales ne concernent que ceux-là.</summary>
@@ -110,6 +116,7 @@ public sealed partial class UnitManager
             if (time >= _pending[i].eta)
             {
                 Dispatch(_pending[i].cfg, _pending[i].spawn);
+                _incoming.Remove(TeamCode(_pending[i].cfg));
                 _pending.RemoveAt(i);
             }
         foreach (Unit u in Units.Where(u => u.Unconscious || u.OnBoard))
@@ -140,6 +147,7 @@ public sealed partial class UnitManager
             u.Status = u.InjuredTimer > 0 ? "blessé, au sol" : "attend les ordres";
         }
         UpdateHealth(dt);
+        UpdateLadders(dt);
         foreach (Unit u in Units)
             Move(u, dt);
         UpdateVehicleObstacles();
@@ -372,9 +380,14 @@ public sealed partial class UnitManager
         }
         u.CanHeal = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanHeal");
         u.CanBreak = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanBreak");
+        u.CanDemolish = c.GetBool("CAPACITIES_ACTIONS", "CanDemolish");
         u.CanUse = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanUse");
         u.CanRepair = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanRepair");
         u.CanGrapple = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanGrapplin");
+        u.CanLadder = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanLadder");
+        u.IsAerial = vehicle && Enumerable.Range(1, 9).Any(i => string.Equals(c.Get("CAPACITIES_ACTIONS", $"Action{i}")?.Trim('"', ' '), "LADDER", StringComparison.OrdinalIgnoreCase));
+        if (u.IsAerial)
+            SetupLadder(u, c, gfx);
         u.ClimbSpeed = c.GetFloat("MOVING", "ClimbGrapplinSpeed", c.GetFloat("CAPACITIES_PROPS", "ClimbGrapplinSpeed", 133));
         u.BreakPower = c.GetFloat("CAPACITIES_PROPS", "BreakPower", 1);
         u.IsAmbulance = vehicle && classRel.Contains("ambulance", StringComparison.OrdinalIgnoreCase);
@@ -383,6 +396,8 @@ public sealed partial class UnitManager
             // marche arrière et braquage de la classe : BackwardSpeed (5 par défaut, 8 l'ambulance) ;
             // TurnSpeed (7 par défaut → rayon de 8 m ; plus grand = braque plus court : 8,5 l'ambulance → 6,6 m)
             u.BackSpeed = c.GetFloat("MOVING", "BackwardSpeed", 5) * VehicleSpeedFactor;
+            u.Accel = c.GetFloat("MOVING", "AcceleratePower", 8) * VehicleAccelFactor;
+            u.Decel = c.GetFloat("MOVING", "DeceleratePower", 6) * VehicleAccelFactor;
             u.TurnRadius = TurnRadiusRef * 7f / MathF.Max(1f, c.GetFloat("MOVING", "TurnSpeed", 7));
             u.ResupplyPower = c.GetFloat("CAPACITIES_RESERVE", "ResupplyPower", 0);
             u.SupplyAgent = (c.Get("CAPACITIES_RESERVE", "FireAgent") ?? "WATER").Trim('"', ' ').ToUpperInvariant();
@@ -561,12 +576,18 @@ public sealed partial class UnitManager
         u.Opening = null;
         Paths.PathingVehicle = u.IsVehicle && !drive;
         Paths.PathingGrapple = false;   // le scout ne passe au grappin que sur ordre (clic droit sur la flèche) : sinon il prend le portail comme les autres
+        Paths.PathingLadder = u.CanLadder && !u.IsVehicle;   // par les échelles dressées (Ladders.cs)
+        Paths.PathingBreak = u.CanBreak;
+        Paths.PathingUse = u.CanUse;
+        u.PassingWindow = false;
         Paths.Clearance = u.IsVehicle && drive ? 1 : 0;
         Paths.SelfId = u.IsVehicle ? u.Id : 0;
         bool partial = false;
+        // sur l'échelle : il finit d'abord de monter ou de descendre ; le chemin part de là où il arrivera
+        Vector2 from = u.OnLadder != null ? LadderExit(u, Walkable(dest)) : new Vector2(u.Position.X, u.Position.Y);
         try
         {
-            List<Vector2> path = FindPath(new(u.Position.X, u.Position.Y), Walkable(dest), out partial);
+            List<Vector2> path = FindPath(from, Walkable(dest), out partial);
             foreach (Vector2 p in path)
                 u.Path.Enqueue(p);
         }
@@ -576,9 +597,12 @@ public sealed partial class UnitManager
             Paths.Clearance = 0;
             Paths.SelfId = 0;
             Paths.PathingGrapple = false;
+            Paths.PathingLadder = false;
+            Paths.PathingBreak = false;
+            Paths.PathingUse = false;
         }
         // point inatteignable : l'unité ne bouge pas et le dit (« VOCAL_IMPOSSIBLE_TO_ACCESS »)
-        if (refuseUnreachable && (partial || (u.Path.Count == 0 && Vector2.Distance(new(u.Position.X, u.Position.Y), dest) > 150)))
+        if (refuseUnreachable && (partial || (u.Path.Count == 0 && Vector2.Distance(from, dest) > 150)))
         {
             u.Path.Clear();
             u.Target = null;
@@ -595,7 +619,21 @@ public sealed partial class UnitManager
     public List<(string label, Vector3? pos)> Sounds { get; } = new();
 
     /// <summary>Clic droit avec un véhicule choisi : il roule jusqu'au point (ou au plus près), en contournant les obstacles.</summary>
-    public bool Drive(Unit v, Vector2 dest) => Order(v, dest, null, drive: true);
+    public bool Drive(Unit v, Vector2 dest)
+    {
+        // camion échelle dressée : il replie d'abord son échelle, puis il roule
+        if (v.Ladder is { Placed: true } l)
+        {
+            l.Retracting = true;
+            v.LadderNext = null;
+            v.DriveNext = dest;
+            v.Status = "replie l'échelle";
+            return true;
+        }
+        if (v.Ladder != null)
+            v.Ladder = null;   // en route vers une fenêtre : l'ordre de rouler l'annule
+        return Order(v, dest, null, drive: true);
+    }
 
     /// <summary>
     /// Attaque d'un feu : l'unité se place à la distance d'arrosage (portée × 0,72 + recul réglé à l'œil),
@@ -632,7 +670,7 @@ public sealed partial class UnitManager
         if (d < want)
             want = near;
         // il arrose d'où il est s'il est à bonne distance et qu'aucun mur (ou porte fermée) ne le sépare du feu
-        if ((MathF.Abs(d - want) < 80 || (d >= near && d <= want + 80)) && !WallBetween(me, f))
+        if ((MathF.Abs(d - want) < 80 || (d >= near && d <= want + 80)) && !WallBetween(me, f) && SameLevel(me, f))
         {
             u.Path.Clear();
             u.Target = h;
@@ -648,8 +686,27 @@ public sealed partial class UnitManager
         foreach (Vector2 spot in SprayPlaces(f, dir, want, near, me).Take(6))
             if (Order(u, spot, h))
                 return;
+        // feu à un étage où l'on ne peut pas monter (ni escalier ni échelle) : refusé
+        if (!SameLevel(f + dir * want, f))
+        {
+            u.Path.Clear();
+            u.Target = null;
+            u.Status = $"{h.Name} est à un autre étage : inaccessible";
+            if (PlayerCommand)
+                Sounds.Add(("VOCAL_IMPOSSIBLE_TO_ACCESS", null));
+            return;
+        }
         Order(u, f + dir * want, h);
     }
+
+    /// <summary>
+    /// Même niveau : le sol (plancher) en a et sous le feu b ne diffèrent pas d'un étage. Un feu posé haut (avion, camion)
+    /// au-dessus d'un sol au même niveau compte comme le même niveau.
+    /// </summary>
+    public bool SameLevel(Vector2 a, Vector2 b) => MathF.Abs(Ground(a) - Ground(b)) < FloorStep;
+
+    /// <summary>Différence de hauteur de sol à partir de laquelle on est à un autre étage.</summary>
+    public const float FloorStep = 250f;
 
     /// <summary>
     /// Places d'où arroser le feu f : cases libres à la distance voulue (puis plus près), d'où l'on voit le feu sans mur
@@ -668,7 +725,7 @@ public sealed partial class UnitManager
                 float a = baseA + (k % 2 == 0 ? 1 : -1) * ((k + 1) / 2) * MathF.Tau / 24;
                 Vector2 p = f + new Vector2(MathF.Cos(a), MathF.Sin(a)) * dist;
                 (int cx, int cy) = g.CellOf(new Vector3(p, 0));
-                if (!Free(cx, cy) || WallBetween(p, f))
+                if (!Free(cx, cy) || WallBetween(p, f) || !SameLevel(p, f))
                     continue;
                 found.Add((p, Vector2.Distance(me, p)));
             }
@@ -779,6 +836,13 @@ public sealed partial class UnitManager
             UpdateClimb(u, dt);
             return;
         }   // au grappin : voir Grapple.cs
+        if (u.OnLadder != null)
+        {
+            UpdateLadderClimb(u, dt);
+            return;
+        }   // sur l'échelle : voir Ladders.cs
+        if (u.Path.Count > 0 && StartLadderIfNeeded(u, u.Path.Peek()))
+            return;
         if (u.Path.Count > 0 && StartClimbIfNeeded(u, u.Path.Peek()))
             return;
         float step = u.Speed * dt * (u.Carry == CarryPhase.Walking ? CarrySpeed : 1f);   // chargé d'un corps : plus lent

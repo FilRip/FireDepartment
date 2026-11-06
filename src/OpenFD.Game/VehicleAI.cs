@@ -15,8 +15,11 @@ public sealed partial class UnitManager
 {
     public const float CannonAngle = 0.9f;          // [UNIT] XSprinklerAngleMax : débattement de la lance d'un véhicule
 
-    /// <summary>Véhicule à lance inoccupé : il arrose de lui-même un feu visible, à portée et dans l'angle de sa lance
-    /// (pas pendant une cinématique, ni avant que son équipage ait débarqué).</summary>
+    /// <summary>
+    /// Véhicule à lance inoccupé : il arrose de lui-même un feu visible à portée de sa lance, tout autour de lui (pas
+    /// pendant une cinématique, ni avant que son équipage ait débarqué). D'abord ceux qui sont déjà dans l'angle de la
+    /// lance ; sinon il manœuvre sur place pour se tourner (VehicleAim), sans partir ailleurs.
+    /// </summary>
     private void VehicleAutoAttack(Unit u)
     {
         if (!IdleWithWater(u))
@@ -25,11 +28,18 @@ public sealed partial class UnitManager
             return;
         if ((u.Id + _autoTick) % 3 != 0)
             return;
-        if (FindVisibleFire(u, u.Nozzle!.RangeMax, CannonAngle) is { } best)
+        if ((FindVisibleFire(u, u.Nozzle!.RangeMax, CannonAngle) ?? FindVisibleFire(u, u.Nozzle.RangeMax, float.MaxValue)) is { } best)
         {
             u.GoToVehicle = null;
             u.Target = best;
             u.Status = $"arrose {best.Name}";
+            return;
+        }
+        // feu arrivé trop près (en deçà de la portée minimale de la lance) : il recule pour pouvoir l'arroser
+        if (FindVisibleFire(u, u.Nozzle.RangeMin, float.MaxValue, nearest: true, minRange: 0) is { } close)
+        {
+            u.GoToVehicle = null;
+            VehicleAttack(u, close);
         }
     }
 
@@ -129,9 +139,33 @@ public sealed partial class UnitManager
         return true;
     }
 
+    /// <summary>Vitesse minimale d'un véhicule en route (unités par seconde).</summary>
+    public const float MinCreep = 150f;
+
     private void VehicleMove(Unit v, float dt)
     {
-        float step = v.Speed * dt;
+        if (v.Path.Count == 0)
+        {
+            v.CurSpeed = 0;
+            if (v.Status.StartsWith("en route"))
+                v.Status = "garé";
+            return;
+        }
+        // vitesse du moment : il accélère jusqu'à sa vitesse, et freine pour s'arrêter au bout du chemin
+        float left = 0;
+        Vector2 from = new Vector2(v.Position.X, v.Position.Y);
+        foreach (Vector2 q in v.Path)
+        {
+            left += Vector2.Distance(from, q);
+            from = q;
+        }
+        float want = MathF.Min(v.Speed, MathF.Sqrt(2 * MathF.Max(1, v.Decel) * left));
+        if (v.CurSpeed < want)
+            v.CurSpeed = MathF.Min(want, v.CurSpeed + v.Accel * dt);
+        else
+            v.CurSpeed = MathF.Max(want, v.CurSpeed - v.Decel * dt);
+        v.CurSpeed = MathF.Max(v.CurSpeed, MinCreep);   // les derniers mètres au pas, sans s'arrêter avant le bout
+        float step = v.CurSpeed * dt;
         int guard = 0;
         while (step > 0.5f && v.Path.Count > 0 && guard++ < 8)
         {

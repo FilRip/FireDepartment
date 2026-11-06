@@ -16,6 +16,8 @@ public sealed class Unit
     public float Heading;                                 // radians, 0 = vers +X
     public float Speed;                                   // unités par seconde
     public float BackSpeed;                               // véhicule : marche arrière ([MOVING] BackwardSpeed), unités par seconde
+    public float Accel = 480, Decel = 360;                // véhicule : accélération et freinage ([MOVING] AcceleratePower, DeceleratePower), unités/s²
+    public float CurSpeed;                                // véhicule : vitesse du moment (il accélère au départ et freine à l'arrivée)
     public float TurnRadius = 800f;                       // véhicule : rayon de braquage, d'après [MOVING] TurnSpeed
     public Extinguisher? Nozzle;                          // lance (pompiers, médecin)
     public bool HasHose;                                  // (non utilisé : le jeu n'a pas de tuyaux)
@@ -31,7 +33,23 @@ public sealed class Unit
     public Unit? GoToVehicle;                             // véhicule vers lequel l'unité se dirige (remplir, déposer des civils)
     public float HealTimer;
     public bool CanBreak, CanUse;                         // hache (portes, fenêtres) ; ouvrir une porte
+    public bool CanDemolish;                              // bulldozer : dégage les débris « CouldBeDemolish »
+    public float Shove;                                   // coup de pelle en cours : avancée du bulldozer (0 à 1, dessin)
     public bool CanGrapple;                               // grappin ([CAPACITIES_ACTIONS] CanGrapplin : le « scout »)
+    public bool CanLadder;                                // pompier : monte à l'échelle d'un camion échelle ([CAPACITIES_ACTIONS] CanLadder)
+    public bool IsAerial;                                 // camion échelle ([CAPACITIES_ACTIONS] action LADDER)
+    public float LadderSpeed = 200, LadderMax = 2500;     // [UNIT] Ladder_Translation_Speed, Ladder_Max_Length
+    /// <summary>Camion échelle, repère du modèle : axe de la tourelle (ROTZ1), charnière de l'échelle (LADDER1), longueur repliée.</summary>
+    public Vector3 LadderPivot = new Vector3(0, 426, 245), LadderHinge = new Vector3(6.6f, 602, 300);
+    public float LadderRest = 894;
+    public Ladder? Ladder;                                // camion : son échelle (en route, dressée ou en train de se replier)
+    public Opening? LadderNext;                           // camion : fenêtre suivante, une fois l'échelle repliée
+    public Vector2? DriveNext;                            // camion : trajet demandé, une fois l'échelle repliée
+    public Ladder? OnLadder;                              // pompier sur une échelle
+    public LadderPhase LadderStep;
+    public float LadderTimer;
+    public bool LadderEnter;                              // sur l'échelle en montant : il entrera par la fenêtre (sinon il redescend)
+    public bool PassingWindow;                            // casse ou ouvre la fenêtre de l'échelle pour passer (chemin en cours)
     public float ClimbSpeed = 133;                        // [MOVING] ClimbGrapplinSpeed (unités par seconde)
     public ClimbPhase Climb;                              // passage d'un mur au grappin (voir Grapple.cs)
     public float ClimbTimer;
@@ -53,6 +71,7 @@ public sealed class Unit
     public int Wounds;
     /// <summary>Inconscient (backdraft) : reste au sol jusqu'à ce qu'un autre pompier le ranime.</summary>
     public bool Unconscious;
+    public bool CriticalWarned;                           // alerte « à bout de forces » (20 % d'endurance) déjà donnée
     public Unit? ReviveTarget;                            // collègue inconscient que l'unité va ranimer
     /// <summary>Véhicule : places ([CAPACITIES_PROPS] EmbarkCapacity) et passagers à bord.</summary>
     public int Seats;

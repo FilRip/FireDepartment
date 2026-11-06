@@ -97,6 +97,8 @@ public sealed partial class OpenFDGame
         : u.Climb == ClimbPhase.Top ? "@SingleChar\\sc_grappling_hook_get_on_top"
         : u.Climb == ClimbPhase.Descend ? "~SingleChar\\sc_grappling_hook_descend"
         : u.Climb == ClimbPhase.Land ? "@SingleChar\\sc_grappling_hook_descend_end"
+        // échelle du camion échelle : grimper, passer la fenêtre, casser la vitre depuis le haut ; échelle presque à plat : marcher
+        : u.OnLadder is { } ol ? LadderTag(u, ol)
         : u.Carry == CarryPhase.Lifting ? "@CharChar\\cc_lift_body"
         : u.Carry == CarryPhase.Dropping ? "@CharChar\\cc_drop_body"
         : u.Carry == CarryPhase.Walking ? "CARRYWALK"
@@ -105,6 +107,22 @@ public sealed partial class OpenFDGame
         : u.Target != null ? "ATTACKFIRE"
         : u.GoTo != null && u.HealTimer > 0 ? "HEAL"
         : "WAIT1";
+
+    private static string LadderTag(Unit u, Ladder l)
+    {
+        bool steep = l.Pitch > 0.6f;
+        return u.LadderStep switch
+        {
+            LadderPhase.Mount => "@SingleChar\\sc_ladder_get_on_top",
+            LadderPhase.Up => steep ? "~SingleChar\\sc_ladder_climb" : "WALK",
+            LadderPhase.Down => steep ? "~SingleChar\\sc_ladder_descend" : "WALK",
+            LadderPhase.Top when u.Opening != null && u.OpeningBreak => "~SingleChar\\sc_ladder_break_window",
+            LadderPhase.Enter => "@SingleChar\\sc_ladder_get_out_top",
+            LadderPhase.Leave => "@SingleChar\\sc_ladder_get_on_top",
+            LadderPhase.Dismount => "@SingleChar\\sc_ladder_get_out_top",
+            _ => "WAIT1",
+        };
+    }
 
     private static string CivTag(Civilian c, bool moving) =>
         c.Carrier is { } cu ? cu.Carry switch { CarryPhase.Lifting => "@CharChar\\cc_lift_body_lifted", CarryPhase.Dropping => "@CharChar\\cc_drop_body_droped", _ => "CARRIEDWALK" }
@@ -345,8 +363,18 @@ public sealed partial class OpenFDGame
         foreach (Unit u in _session.Units.Active.Where(u => u.IsVehicle || stillUnits.Contains(u)))
         {
             _charred = u.Destroyed;
-            foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(u.Model))
-                DrawMesh(mesh, (part * SN.Matrix4x4.CreateRotationZ(PoseOf(u, u.Position, u.Heading).h + (u.IsVehicle ? ModelYaw : CharYaw)) * SN.Matrix4x4.CreateTranslation(PoseOf(u, u.Position, u.Heading).p)).X());
+            (SN.Vector3 p, float h) vp = PoseOf(u, u.Position, u.Heading);
+            // coup de pelle du bulldozer : il avance d'un coup vers les débris
+            if (u.Shove > 0)
+                vp.p += new SN.Vector3(MathF.Cos(vp.h), MathF.Sin(vp.h), 0) * (60f * u.Shove);
+            List<(MeshGpu mesh, SN.Matrix4x4 part)> parts = UnitModel(u.Model);
+            List<string> names = _unitPartNames.TryGetValue(u.Model, out List<string>? nl) ? nl : new List<string>();
+            SN.Matrix4x4 place = SN.Matrix4x4.CreateRotationZ(vp.h + (u.IsVehicle ? ModelYaw : CharYaw)) * SN.Matrix4x4.CreateTranslation(vp.p);
+            for (int i = 0; i < parts.Count; i++)
+            {
+                SN.Matrix4x4 pose = u.IsVehicle && i < names.Count ? VehiclePartPose(u, names[i]) : SN.Matrix4x4.Identity;
+                DrawMesh(parts[i].mesh, (parts[i].part * pose * place).X());
+            }
             _charred = false;
         }
     }
