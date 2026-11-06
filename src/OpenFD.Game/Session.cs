@@ -36,6 +36,10 @@ public sealed class Session
     /// <summary>Pas de simulation faits depuis le début de la mission (0,1 s chacun).</summary>
     public int Steps => _steps;
     public const float Dt = 0.1f;
+    /// <summary>Boucle principale des scripts toutes les 0,2 s, comme le jeu d'origine (Mriya : le camion de la cinématique
+    /// fait ses 51 pas de 80 unités dans les 11 s que lui laisse le script ; l'avion traverse le hangar en 42 s).</summary>
+    public const int MainLoopSteps = 2;
+    public const float MainLoopPeriod = MainLoopSteps * Dt;
 
     public Session(GameFiles files, string mission, string difficulty = "EASY", bool runScripts = true)
     {
@@ -56,7 +60,7 @@ public sealed class Session
         Smoke = SmokeSystem.Load(Level, files, Fire, rooms);
         Smoke.Walls = Grid;
         Units = new UnitManager(this, files, mis);
-        Explosions = ExplosionSystem.Load(Level, files, Fire);
+        Explosions = ExplosionSystem.Load(Level, files, Fire, ScriptDamageIds(files, mission));
 
         if (!runScripts)
             return;
@@ -91,12 +95,25 @@ public sealed class Session
         return u;
     }
 
+    /// <summary>Objets dont les scripts de la mission suivent la vie (ENT_GetDamage / ENT_SetFireDamageCoef(numéro, …)).</summary>
+    private static HashSet<uint> ScriptDamageIds(GameFiles files, string mission)
+    {
+        HashSet<uint> ids = new HashSet<uint>();
+        string dir = Path.Combine(files.DataDir, "Script", "Mission", mission);
+        if (!Directory.Exists(dir))
+            return ids;
+        foreach (string f in Directory.EnumerateFiles(dir, "*.scp"))
+            foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(f, System.Text.Encoding.Latin1), @"ENT_(?:GetDamage|SetFireDamageCoef)\s*\(\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                ids.Add(uint.Parse(m.Groups[1].Value));
+        return ids;
+    }
+
     public void Step()
     {
         if (Scripts != null)
         {
             Scripts.Update();
-            if (_steps % 5 == 0)
+            if (_steps % MainLoopSteps == 0)
                 foreach (string m in _mainLoops)
                     Scripts.RunMainLoop(m);
         }

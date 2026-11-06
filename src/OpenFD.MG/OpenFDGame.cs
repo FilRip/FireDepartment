@@ -487,6 +487,10 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 Console.WriteLine(_session.Units.AsciiMap(z[0], z[1], z[2], z[3]));
             }
         }
+        // essai (captures) : FD3_CHOISIR → toutes les unités sur le terrain sont choisies
+        if (!_menu && _session != null && _sel.Count == 0 && Environment.GetEnvironmentVariable("FD3_CHOISIR") != null)
+            foreach (Unit u0 in _session.Units.Active.Where(u => !u.OnBoard))
+                _sel.Add(u0);
         // essai : FD3_CLIC=x,y → tous les pompiers choisis, clic droit à ce point de l'écran
         if (_frame == 4 && !_menu && _session != null && Environment.GetEnvironmentVariable("FD3_CLIC") is { } clic)
         {
@@ -682,6 +686,22 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         }
     }
 
+    /// <summary>Objets posés cachés par le script et qui sont des toits (numéro → nom de l'objet posé).</summary>
+    private readonly Dictionary<uint, string> _scriptRoofs = new();
+
+    /// <summary>L'objet posé est-il un toit suspendu (une de ses pièces au moins) ?</summary>
+    private bool IsOverhead(string mission, SceneAssets.Placed p)
+    {
+        try
+        {
+            return _assets.ModelParts(p.Model).Any(part => OverheadBox(_assets.LoadMesh(mission, part.Mesh, "gfx"), part.World * p.World) != null);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     private void AddStatic(SceneAssets.MeshAsset a, SN.Matrix4x4 world, bool roof, int layer, string? lightmap = null)
     {
         if (layer == 0)
@@ -871,17 +891,33 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         // objets que le script déplace (ENT_SetPosition(numéro, …) : le train de l'Eurotunnel) ou cache / montre
         // (ENT_SetVisibility(numéro, …) : la porte fixe du hangar de Mriya, remplacée par la porte animée) : dessinés à part,
         // à leur place du moment et seulement s'ils sont visibles
-        _scriptMoved.Clear();
+        _scriptMoved.Clear(); _scriptRoofs.Clear(); _glide.Clear();
         string scriptDir = Path.Combine(_files.DataDir, "Script", "Mission", mission);
         if (Directory.Exists(scriptDir))
         {
-            HashSet<uint> movedIds = new HashSet<uint>();
+            HashSet<uint> movedIds = new HashSet<uint>(), hiddenIds = new HashSet<uint>();
             foreach (string f in Directory.EnumerateFiles(scriptDir, "*.scp"))
-                foreach (System.Text.RegularExpressions.Match mm in System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(f, System.Text.Encoding.Latin1), @"ENT_Set(?:Position|Visibility)\s*\(\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
-                    movedIds.Add(uint.Parse(mm.Groups[1].Value));
+                foreach (System.Text.RegularExpressions.Match mm in System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(f, System.Text.Encoding.Latin1), @"ENT_Set(Position|Visibility)\s*\(\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                    (mm.Groups[1].Value.Equals("Position", StringComparison.OrdinalIgnoreCase) ? movedIds : hiddenIds).Add(uint.Parse(mm.Groups[2].Value));
+            // objets que le script cache et montre : cachés au départ si le niveau le dit (Mriya : le camion de la
+            // cinématique 3, la porte animée du hangar), tant que le script n'a rien dit d'autre
+            if (Host is { } host0)
+                foreach (LevelObject lo0 in _session.Level.Objects.Where(o => hiddenIds.Contains(o.Id) && o.Kind == EntityKind.Placeable && !o.StartVisible))
+                    host0.Visibility.TryAdd(lo0.Id, false);
             foreach (SceneAssets.Placed p in allPlaced)
-                if (byName.TryGetValue(p.Name, out LevelObject? lo) && movedIds.Contains(lo.Id) && !_scriptShown.Any(x => x.id == lo.Id))
-                    _scriptMoved.Add((lo.Id, p.Model, p.World, lo.Position));
+            {
+                // (véhicules explosifs : dessinés par RenderExplosives, qui suit aussi le script — sinon en double)
+                if (explosiveNames.Contains(p.Name) || !byName.TryGetValue(p.Name, out LevelObject? lo) || _scriptShown.Any(x => x.id == lo.Id) || !(movedIds.Contains(lo.Id) || hiddenIds.Contains(lo.Id)))
+                    continue;
+                // toit posé (« angar_roof » de Mriya) que le script cache : il reste un toit (il part aussi quand un pompier
+                // passe dessous), et le script peut en plus le faire partir (voir UpdateRoofs)
+                if (!movedIds.Contains(lo.Id) && IsOverhead(mission, p))
+                {
+                    _scriptRoofs[lo.Id] = p.Name;
+                    continue;
+                }
+                _scriptMoved.Add((lo.Id, p.Model, p.World, lo.Position));
+            }
         }
         // gravats à dégager : leur morceau cassé (« …_break ») n'apparaît qu'une fois l'obstacle dégagé ; le repère de hache
         // disparaît alors
@@ -1296,6 +1332,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         RenderOpenings();
         RenderExplosives();
         RenderGhosts();
+        RenderSelectionRings(_viewProj.X());   // après les unités et les véhicules : ce qui passe derrière eux est caché
         RenderParticles(time);
     }
 
@@ -1517,8 +1554,6 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             SN.Vector2 lv = o.Lever!.Value;
             P(new SN.Vector3(lv, _session.Units.GroundZ(lv) + 15), 220, new SN.Vector4(1f, 0.85f, 0.2f, 0.45f), right, up);
         }
-        foreach (Unit u in _sel)
-            P(u.Position + new SN.Vector3(0, 0, 20), u.IsVehicle ? 700 : 220, new SN.Vector4(0.3f, 0.75f, 1f, 0.55f), right, up);
         foreach (Civilian c in _session.Units.Civilians.Where(c => !c.Hidden && c.Carrier == null && (c.State == CivilianState.Unconscious || c.Leader != null)))
             P(c.Position + new SN.Vector3(0, 0, 230), 120, c.State == CivilianState.Unconscious ? new SN.Vector4(1f, 0.2f, 0.2f, 0.9f) : new SN.Vector4(0.3f, 1f, 0.4f, 0.9f), right, up);
         foreach (Unit u in _session.Units.Active.Where(u => u.Target != null && !u.Moving))
@@ -1569,7 +1604,10 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             float k = Math.Min(1, h.Intensity / h.Class.IntensityMax);
             (float clr0, _) = FireRoom(h);
             bool chem = h.Class.FireType == 'D';   // feu chimique (type D, agent anti-métal) : flammes vertes
-            SN.Vector4 glow = chem ? new SN.Vector4(0.2f, 0.85f, 0.25f, flames != null ? 0.07f : 0.45f) : new SN.Vector4(0.9f, 0.35f, 0.08f, flames != null ? 0.07f : 0.45f);
+            bool foam = h.Class.FireType == 'B';   // feu à la mousse (type B, hydrocarbures) : flammes très rouges
+            SN.Vector4 glow = chem ? new SN.Vector4(0.2f, 0.85f, 0.25f, flames != null ? 0.07f : 0.45f)
+                : foam ? new SN.Vector4(1f, 0.08f, 0.04f, flames != null ? 0.09f : 0.5f)
+                : new SN.Vector4(0.9f, 0.35f, 0.08f, flames != null ? 0.07f : 0.45f);
             P(h.Position + new SN.Vector3(0, 0, 60), MathF.Min(260 + 500 * k, clr0 * 1.6f + 120), glow, right, up);
             if (flames != null)
             {
@@ -1583,6 +1621,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 ox += MathF.Sin(time * 7 + ph * 20) * 12 * t; oy += MathF.Cos(time * 6 + ph * 13) * 12 * t;
                 SN.Vector4 col = chem
                     ? SN.Vector4.Lerp(new SN.Vector4(0.75f, 1f, 0.5f, 0.9f), new SN.Vector4(0.1f, 0.7f, 0.15f, 0.9f), Math.Clamp((t - 0.1f) / 0.7f, 0, 1))
+                    : foam ? SN.Vector4.Lerp(new SN.Vector4(1f, 0.3f, 0.15f, 0.9f), new SN.Vector4(0.8f, 0.02f, 0.02f, 0.9f), Math.Clamp((t - 0.1f) / 0.7f, 0, 1))
                     : SN.Vector4.Lerp(new SN.Vector4(1f, 0.9f, 0.45f, 0.9f), new SN.Vector4(0.95f, 0.25f, 0.05f, 0.9f), Math.Clamp((t - 0.1f) / 0.7f, 0, 1));
                 col.W *= 1 - t;
                 P(h.Position + new SN.Vector3(ox, oy, 20 + t * (120 + 380 * k)), (90 + 240 * k) * (1 - 0.7f * t), col, right, up);
@@ -1662,10 +1701,10 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
 
     // plusieurs langues de feu par foyer : debout (toujours verticales), chacune avec son image de départ, sa vitesse,
     // sa taille et sa teinte (rouge, orange, jaune), qui ondulent un peu ; plus le feu est fort, plus elles sont grandes et nombreuses
-    private void Flames(HotPoint h, int seed, float k, float time, SN.Vector3 right) => FlamesAt(h.Position, FireRoom(h), seed, k, time, right, h.Class.FireType == 'D');
+    private void Flames(HotPoint h, int seed, float k, float time, SN.Vector3 right) => FlamesAt(h.Position, FireRoom(h), seed, k, time, right, h.Class.FireType);
 
     /// <summary>Flammes d'un foyer (ou d'un véhicule en feu) posées en <paramref name="pos"/> ; room : place libre autour (murs).</summary>
-    private void FlamesAt(SN.Vector3 pos, (float clear, SN.Vector2 away) room0, int seed, float k, float time, SN.Vector3 right, bool chemical = false)
+    private void FlamesAt(SN.Vector3 pos, (float clear, SN.Vector2 away) room0, int seed, float k, float time, SN.Vector3 right, char fireType = 'A')
     {
         SN.Vector3 flat = new SN.Vector3(right.X, right.Y, 0);
         flat = flat.LengthSquared() > 1e-6f ? SN.Vector3.Normalize(flat) : SN.Vector3.UnitX;
@@ -1692,11 +1731,17 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             float centre = 1 - Math.Clamp(off.Length() / MathF.Max(1, spread), 0, 1);
             SN.Vector3 edge = (q % 2) == 0 ? new SN.Vector3(1f, 0.92f, 0.6f) : new SN.Vector3(1f, 0.7f, 0.35f);
             SN.Vector3 core = new SN.Vector3(1f, 0.32f, 0.14f);
-            if (chemical)
+            if (fireType == 'D')
             {
                 // feu chimique : vert-jaune pâle au bord, vert profond au centre
                 edge = (q % 2) == 0 ? new SN.Vector3(0.8f, 1f, 0.55f) : new SN.Vector3(0.5f, 1f, 0.4f);
                 core = new SN.Vector3(0.12f, 0.8f, 0.2f);
+            }
+            else if (fireType == 'B')
+            {
+                // feu à la mousse (hydrocarbures) : rouge vif au bord, rouge sombre au centre, sans jaune
+                edge = (q % 2) == 0 ? new SN.Vector3(1f, 0.32f, 0.18f) : new SN.Vector3(1f, 0.18f, 0.1f);
+                core = new SN.Vector3(0.85f, 0.03f, 0.02f);
             }
             SN.Vector3 tintRgb = SN.Vector3.Lerp(edge, core, centre * centre * 0.9f + 0.1f * ph2);
             float sway = MathF.Sin(time * 1.6f + ph * 17) * 0.1f;

@@ -67,7 +67,8 @@ public sealed class Unit
     public bool OnBoard => InVehicle != null;
     /// <summary>Véhicule : équipage à bord (classes), qui descend quand le véhicule est arrivé.</summary>
     public readonly List<string> Crew = new();
-    public string? TeamName;                              // nom de l'équipe (journal à l'arrivée)
+    public string? TeamName;                              // nom de l'équipe (« H7 ») : journal, ligne du panneau des unités
+    public bool InFire;                                   // dans le rayon de chaleur d'un feu (icône du feu sur son image)
     /// <summary>Endurance (pompiers : [CAPACITIES_PROPS] StaminaPoints/Max/Regen) : la chaleur des feux la fait baisser ;
     /// à 0, le pompier s'évanouit. Vie (véhicules : [DAMAGE] LifePoints, 500) : à 0, le véhicule est hors service.</summary>
     public float Stamina = 100, StaminaMax = 100, StaminaRegen = 0.5f, HeatCoef = 1, SmokeCoef = 0.7f;

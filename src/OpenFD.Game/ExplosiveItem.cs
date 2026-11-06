@@ -19,6 +19,8 @@ public sealed class ExplosiveItem
     public string? Sound;
     public float[] Thresholds = Array.Empty<float>();   // [DAMAGE] DamageTresholdStep0…n (points de vie)
     public bool Exploded;
+    /// <summary>Faux : objet qui s'abîme au feu sans exploser (Mriya : le générateur, dont le script suit la vie).</summary>
+    public bool CanExplode = true;
     public readonly List<HotPoint> NearFires = new();
 
     /// <summary>État d'affichage : « e1 » intact, « e2 », « e3 » de plus en plus abîmé, « dead » après l'explosion.</summary>

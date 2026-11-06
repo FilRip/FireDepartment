@@ -62,6 +62,7 @@ public sealed partial class UnitManager
         if (!string.IsNullOrEmpty(initial))
         {
             _initial = (initial, mission.GetInt(F, "InitialDispatchSpawnPoint", 1));
+            Teams.Add(TeamCode(initial));
             Dispatch(initial, _initial.Value.spawn);
         }
         for (int i = 1; i <= 9; i++)
@@ -71,6 +72,8 @@ public sealed partial class UnitManager
                 continue;
             // (la mission Fireworks écrit « REINFORECEMENT1ETA » : faute de frappe d'origine, valeur par défaut 60 s)
             _pending.Add((mission.GetFloat(F, $"Reinforcement{i}ETA", 60), r, mission.GetInt(F, $"Reinforcement{i}SpawnPoint", 1)));
+            if (!Teams.Contains(TeamCode(r)))
+                Teams.Add(TeamCode(r));
         }
     }
 
@@ -170,6 +173,12 @@ public sealed partial class UnitManager
             .Count(x => !string.IsNullOrEmpty(x) && !x.StartsWith("Firevehicle", StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>Équipes de la mission dans l'ordre (départ, puis renforts) : leur nom de code (« H7 », « H8 »).</summary>
+    public List<string> Teams { get; } = new();
+
+    /// <summary>Nom de code d'une équipe de la caserne ([FIRESTATION] CodeName), sinon le nom du fichier.</summary>
+    private string TeamCode(string cfgName) => Class("Design\\Firestation\\" + cfgName + ".cfg")?.Get("FIRESTATION", "CodeName")?.Trim('&', '"', ' ') is { Length: > 0 } c ? c : cfgName;
+
     private void Dispatch(string cfgName, int spawn)
     {
         ClassFile? cfg = Class("Design\\Firestation\\" + cfgName + ".cfg");
@@ -193,7 +202,9 @@ public sealed partial class UnitManager
             Order(u, end, refuseUnreachable: false);
             lead ??= u; k++;
         }
-        string team = cfg.Get("FIRESTATION", "CodeName")?.Trim('&') ?? cfgName;
+        string team = TeamCode(cfgName);
+        if (!Teams.Contains(team))
+            Teams.Add(team);
         List<Unit> trucks = Units.Where(u => u.IsVehicle && u.Id >= (lead?.Id ?? int.MaxValue)).ToList();
         if (trucks.Count > 0)
         {
@@ -213,7 +224,10 @@ public sealed partial class UnitManager
             float a = n * 0.9f; Vector2 pos = basePos + new Vector2(MathF.Cos(a), MathF.Sin(a)) * (250 + 60 * n);
             Unit? u = Create(c, false, Walkable(pos)); n++;
             if (u != null)
+            {
                 u.Status = "attend les ordres";
+                u.TeamName = team;
+            }
         }
         if (_s.Time > 1)
             Sounds.Add(("VOCAL_REINFORCEMENT_ARRIVED", null));
@@ -239,6 +253,7 @@ public sealed partial class UnitManager
                 continue;
             u.Heading = MathF.Atan2(spot.Y - me.Y, spot.X - me.X);
             u.Status = "attend les ordres";
+            u.TeamName = v.TeamName;
             n++;
         }
         v.Crew.Clear();

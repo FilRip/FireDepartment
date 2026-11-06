@@ -21,6 +21,29 @@ public sealed partial class OpenFDGame
     private readonly Dictionary<object, CharAnim> _chars = new();
     private readonly List<(uint id, string model, SN.Matrix4x4 world)> _scriptShown = new();
     private readonly List<(uint id, string model, SN.Matrix4x4 world, SN.Vector3 origin)> _scriptMoved = new();
+
+    // objets déplacés par le script (ENT_SetPosition : l'avion et le camion de Mriya avancent de 80 unités à chaque tour
+    // de la boucle principale) : on les fait glisser d'une position à la suivante pendant un tour, au lieu de sauter
+    private readonly Dictionary<uint, (SN.Vector2 from, SN.Vector2 to, float t0)> _glide = new();
+
+    /// <summary>Position du moment (glissée) d'un objet que le script a déplacé ; null s'il n'a pas bougé.</summary>
+    private SN.Vector2? ScriptPos(uint id)
+    {
+        if (Host?.MovedObjects.TryGetValue(id, out SN.Vector2 target) != true)
+            return null;
+        float now = (float)(_session.Time + (_paused ? 0 : _owed * Session.Dt));
+        static SN.Vector2 At((SN.Vector2 from, SN.Vector2 to, float t0) g, float t) =>
+            SN.Vector2.Lerp(g.from, g.to, Math.Clamp((t - g.t0) / Session.MainLoopPeriod, 0, 1));
+        if (!_glide.TryGetValue(id, out (SN.Vector2 from, SN.Vector2 to, float t0) g))
+            _glide[id] = g = (target, target, now);
+        else if (g.to != target)
+        {
+            SN.Vector2 cur = At(g, now);
+            // grand saut (téléportation par le script) : pas de glissade
+            _glide[id] = g = (SN.Vector2.Distance(cur, target) > 1500 ? target : cur, target, now);
+        }
+        return At(g, now);
+    }
     private readonly Dictionary<string, MeshGpu?> _partMeshes = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, CharacterRig?> _rigs = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, AnimClip?> _clips = new(StringComparer.OrdinalIgnoreCase);
@@ -296,7 +319,7 @@ public sealed partial class OpenFDGame
             if (Host?.Visibility.TryGetValue(id, out bool shown) == true && !shown)
                 continue;
             SN.Matrix4x4 w = world;
-            if (Host?.MovedObjects.TryGetValue(id, out SN.Vector2 mv) == true)
+            if (ScriptPos(id) is { } mv)
                 w.Translation += new SN.Vector3(mv.X - origin.X, mv.Y - origin.Y, 0);
             foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(model))
                 DrawMesh(mesh, (part * w).X());

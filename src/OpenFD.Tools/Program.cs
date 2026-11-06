@@ -79,6 +79,34 @@ public static class Program
                 }
                 foreach (Opening d in ses.Units.Openings.Where(d => d.ScriptGate))
                     Console.WriteLine($"porte script {d.Id} {d.Name} état {d.State} anim {d.OpenAnim}");
+                foreach (Civilian cv in ses.Units.Civilians)
+                    Console.WriteLine($"civil {cv.Id} {cv.Name,-24} caché {cv.Hidden,-5} état {cv.State,-12} ({cv.Position.X:0},{cv.Position.Y:0})");
+                Console.WriteLine($"script : CivilianSaved {ses.Scripts!.Globals.GetValueOrDefault("CivilianSaved").AsInt} / CounterPeop {ses.Scripts.Globals.GetValueOrDefault("CounterPeop").AsInt}");
+                // seconde réparation (Mriya : transformateur du hangar, rendu réparable par le script) : cinématique, PNJ, avion
+                if (Environment.GetEnvironmentVariable("FD3_REPARER2") is { Length: > 0 } r2 && uint.TryParse(r2, out uint rid))
+                {
+                    ses.Units.SetCapacity(rid, "CouldBeRepair", true);
+                    UsableObject? t2 = ses.Units.Usables.FirstOrDefault(o => o.Id == rid);
+                    Unit? ing2 = ses.Units.Units.FirstOrDefault(x => x.CanRepair && !x.OnBoard);
+                    if (t2 != null && ing2 != null)
+                    {
+                        Console.WriteLine($"réparation 2 de {t2.Name} : emprise ({t2.BoxMin.X:0},{t2.BoxMin.Y:0})-({t2.BoxMax.X:0},{t2.BoxMax.Y:0})");
+                        ing2.Position = t2.Position + new System.Numerics.Vector3(300, 0, 0); ing2.Path.Clear(); ing2.Target = null;
+                        ses.Units.UseObject(ing2, t2);
+                        int log0 = ses.Host!.FireLog.Count, slog0 = ses.Scripts!.Log.Count;
+                        for (int i = 0; i < 400; i++)
+                        {
+                            ses.Step();
+                            if (i % 40 == 0)
+                                foreach (Civilian cv in ses.Units.Civilians.Where(cv => cv.Id is 5017081 or 5017206))
+                                    Console.WriteLine($"  t {ses.Time,5:0} {cv.Name} caché {cv.Hidden} état {cv.State} pos ({cv.Position.X:0},{cv.Position.Y:0}) · avion {(ses.Host.MovedObjects.TryGetValue(5004103, out System.Numerics.Vector2 av) ? $"({av.X:0},{av.Y:0})" : "-")}");
+                        }
+                        Console.WriteLine($"  réparé {t2.Repaired} · {ing2.Status}");
+                        foreach (string l in ses.Host.FireLog.Skip(log0).Take(40)) Console.WriteLine("  hôte : " + l.Trim());
+                        foreach (string l in ses.Scripts.Log.Skip(slog0).Take(20)) Console.WriteLine("  script : " + l.Trim());
+                        foreach (KeyValuePair<string, int> kv in ses.Scripts.UnknownCalls) Console.WriteLine($"  inconnu : {kv.Key} ×{kv.Value}");
+                    }
+                }
                 return 0;
             }
             case "agents":
@@ -92,8 +120,9 @@ public static class Program
                     if (i % 50 == 0)
                         ses.Host?.EndCinematic();
                 }
+                Console.WriteLine($"équipes : {string.Join(", ", ses.Units.Teams)}");
                 foreach (Unit x in ses.Units.Units.Where(x => !x.OnBoard))
-                    Console.WriteLine($"{x.Name,-28} véhicule {x.IsVehicle,-5} agent {x.Nozzle?.Agent ?? "-",-6} fournit {(x.ResupplyPower > 0 ? UnitManager.SupplyAgentOf(x) : "-")}");
+                    Console.WriteLine($"{x.Name,-28} équipe {x.TeamName ?? "-",-6} véhicule {x.IsVehicle,-5} agent {x.Nozzle?.Agent ?? "-",-6} fournit {(x.ResupplyPower > 0 ? UnitManager.SupplyAgentOf(x) : "-")}");
                 Unit? w = ses.Units.Units.FirstOrDefault(x => !x.IsVehicle && !x.OnBoard && x.Nozzle is { Agent: "WATER", InfiniteReserve: false } && !x.IsCanon);
                 Unit? tox = ses.Units.Units.FirstOrDefault(x => x.IsVehicle && !x.OnBoard && x.ResupplyPower > 0 && UnitManager.SupplyAgentOf(x) == "METAL");
                 if (w == null || tox == null)
@@ -112,12 +141,40 @@ public static class Program
                 foreach (string l in ses.Units.Log.TakeLast(3)) Console.WriteLine("journal : " + l.Trim());
                 return 0;
             }
+            case "eteindre":
+            {
+                // eteindre <Data> <Mission> <foyer> [classe d'unité] : un pompier arrose ce foyer ; intensité toutes les 5 s
+                Session ses = new Session(files, args[2], "EASY");
+                OpenFD.Fire.HotPoint? h = ses.Fire.HotPoints.FirstOrDefault(x => x.Name.Equals(args[3], StringComparison.OrdinalIgnoreCase));
+                if (h == null)
+                    return 1;
+                for (int i = 0; i < 300; i++)
+                    ses.Step();
+                Console.WriteLine($"{h.Name} type {h.Class.FireType} : intensité {h.Intensity:0.0}/{h.Class.IntensityMax} allumé {h.Lit} sous tension {h.Powered}");
+                OpenFD.Fire.Extinguisher ex = ses.Spray(h, args.Length > 4 ? args[4] : "Unit\\Fireman\\fireman_sp_ua");
+                ex.InfiniteReserve = true;
+                for (int i = 0; i < 1200; i++)
+                {
+                    ses.Step();
+                    if (i % 50 == 0)
+                        Console.WriteLine($"  t {ses.Time,5:0} intensité {h.Intensity:0.0} allumé {h.Lit}");
+                }
+                return 0;
+            }
             case "typesfeux":
             {
                 // typesfeux <Data> <Mission> : nombre de foyers par type de feu et par classe
                 Session ses = new Session(files, args[2], "EASY", false);
                 foreach (IGrouping<string, OpenFD.Fire.HotPoint> g in ses.Fire.HotPoints.GroupBy(h => $"{h.Class.FireType} {h.Class.Name}").OrderBy(g => g.Key))
                     Console.WriteLine($"{g.Key,-50} {g.Count()}");
+                // [pas] : après autant de pas, les foyers en feu (type, position)
+                if (args.Length > 3)
+                {
+                    for (int i = 0; i < int.Parse(args[3]); i++)
+                        ses.Step();
+                    foreach (OpenFD.Fire.HotPoint h in ses.Fire.HotPoints.Where(h => h.IsBurning).Take(60))
+                        Console.WriteLine($"  en feu : {h.Class.FireType} {h.Name} ({h.Position.X:0},{h.Position.Y:0},{h.Position.Z:0})");
+                }
                 return 0;
             }
             case "groupefeux":
@@ -1300,6 +1357,45 @@ public static class Program
                     List<string> parts = d.Model == null ? new List<string>() : assets.ModelParts(d.Model).Select(n => n.Mesh[(n.Mesh.LastIndexOf('\\') + 1)..]).ToList();
                     Console.WriteLine($"{d.Name} : {d.OpenAnim} / {d.CloseAnim} · pistes {(clip == null ? "?" : string.Join(",", clip.Tracks.Keys))} · pièces {string.Join(",", parts)}");
                 }
+                return 0;
+            }
+            case "vieobjet":
+            {
+                // vieobjet <Data> <Mission> <numéro> [durée] : vie de l'objet (ENT_GetDamage) et objectifs, toutes les 10 s
+                Session ses = new Session(files, args[2], "EASY");
+                uint id = uint.Parse(args[3]);
+                int steps = (int)((args.Length > 4 ? float.Parse(args[4]) : 300) / Session.Dt);
+                for (int i = 0; i <= steps; i++)
+                {
+                    if (i % 100 == 0)
+                        Console.WriteLine($"t {ses.Time,5:0} vie {ses.Explosions.LifeOf(id)?.ToString("0.0") ?? "-"} · " + string.Join(" · ", ses.Host!.Objectives.Select(o => $"{o.Text} {o.Value:0}/{o.Max:0} état {o.Status}")) + (ses.Host.Outcome is { } oc ? $" · FIN {(oc ? "victoire" : "défaite")}" : ""));
+                    if (i % 50 == 0)
+                        ses.Host?.EndCinematic();
+                    ses.Step();
+                }
+                return 0;
+            }
+            case "chrono":
+            {
+                // chrono <Data> <Mission> <porte> : durée de l'ordre « casser cette porte » donné au premier pompier à hache
+                Session ses = new Session(files, args[2], "EASY");
+                for (int i = 0; i < 300; i++)
+                    ses.Step();
+                Opening? d = ses.Units.Openings.FirstOrDefault(o => o.Name.Equals(args[3], StringComparison.OrdinalIgnoreCase));
+                Unit? axe = ses.Units.Units.FirstOrDefault(x => x.CanBreak && !x.OnBoard);
+                if (d == null || axe == null)
+                    return 1;
+                for (int k = 0; k < 3; k++)
+                {
+                    System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+                    ses.Units.WorkOnOpening(axe, d);
+                    Console.WriteLine($"{axe.Name} → {d.Name} : {sw.ElapsedMilliseconds} ms, {axe.Status}, chemin {axe.Path.Count}");
+                }
+                System.Diagnostics.Stopwatch sw2 = System.Diagnostics.Stopwatch.StartNew();
+                ses.Units.Order(axe, new(d.Position.X - 300, d.Position.Y));
+                Console.WriteLine($"simple déplacement près de la porte : {sw2.ElapsedMilliseconds} ms, {axe.Status}");
+                Console.WriteLine($"{axe.Name} en ({axe.Position.X:0},{axe.Position.Y:0}) ; porte ({d.Position.X:0},{d.Position.Y:0}) cassable {d.Breakable} état {d.State} au sol {d.OnGround}");
+                Console.WriteLine(ses.Units.AsciiMap((int)d.Position.X - 1500, (int)d.Position.Y - 1200, (int)d.Position.X + 1500, (int)d.Position.Y + 1200, new List<System.Numerics.Vector2> { new(d.Position.X, d.Position.Y) }));
                 return 0;
             }
             case "chemin":

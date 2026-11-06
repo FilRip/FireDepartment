@@ -2,6 +2,7 @@ using OpenFD.Fire;
 using OpenFD.Game;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
 using SN = System.Numerics;
 
 namespace OpenFD.MG;
@@ -202,55 +203,130 @@ public sealed partial class OpenFDGame
         }
     }
 
-    // ---- panneau des unités choisies ----
-    private const int PanelMax = 12;
-    private (float x, float y, float cell, float iconH)? SelectionPanelRect()
+    // ---- panneau des unités : une ligne par équipe (« H7 », puis les renforts au-dessus), toutes les unités ----
+    // devant chaque ligne, le cadre de l'équipe (Overlay\Pages : vert quand elle est là, gris tant qu'elle n'est pas
+    // arrivée) ; les unités choisies sont entourées de vert ; une flamme clignote sur l'image d'une unité dans un feu,
+    // un « ? » sur un pompier qui ne fait rien
+    private const int PanelMax = 14;
+    private static readonly Rectangle TabOn = new Rectangle(1876, 688, 68, 46), TabOff = new Rectangle(1944, 736, 68, 46);
+    private static readonly Rectangle FireMark = new Rectangle(1736, 557, 24, 29), IdleMark = new Rectangle(1655, 592, 16, 22);
+
+    /// <summary>Lignes du panneau, de bas en haut : (nom de l'équipe, unités). Les unités sans équipe connue vont à la fin.</summary>
+    private List<(string team, List<Unit> units)> PanelRows()
     {
-        if (_map || _cineOn || _sel.Count == 0 || !MiniVisible)
-            return null;
-        (float x, float y, float w, float h) r = MiniRect();
-        float cell = 74 * _scale, iconH = 62 * _scale, total = iconH + 26 * _scale;
-        float x = r.x + r.w + 72 * _scale;      // après la mini-carte et l'icône « faire descendre »
-        return (x, _fbH - 12 * _scale - total, cell, iconH);
+        List<(string team, List<Unit> units)> rows = new List<(string team, List<Unit> units)>();
+        List<Unit> all = _session.Units.Units.Where(u => !u.Hidden).ToList();
+        foreach (string t in _session.Units.Teams)
+            rows.Add((t, all.Where(u => u.TeamName == t).OrderBy(u => u.IsVehicle ? 0 : 1).ThenBy(u => u.Id).Take(PanelMax).ToList()));
+        List<Unit> others = all.Where(u => u.TeamName == null || !_session.Units.Teams.Contains(u.TeamName)).OrderBy(u => u.IsVehicle ? 0 : 1).ThenBy(u => u.Id).Take(PanelMax).ToList();
+        if (others.Count > 0)
+            rows.Add(("", others));
+        return rows;
     }
 
-    private float SelectionPanelHeight => SelectionPanelRect() is { } p ? p.iconH + 26 * _scale + 16 * _scale : 0;
+    private (float x, float y, float cell, float iconH, float rowH, float tabW)? SelectionPanelRect()
+    {
+        if (_map || _cineOn || !MiniVisible || _session == null || (_session.Units.Teams.Count == 0 && _session.Units.Units.Count == 0))
+            return null;
+        (float x, float y, float w, float h) r = MiniRect();
+        float iconH = 46 * _scale, cell = 52 * _scale, rowH = iconH + 17 * _scale, tabW = iconH * 68f / 46f;
+        float x = r.x + r.w + 72 * _scale;      // après la mini-carte et l'icône « faire descendre »
+        return (x, _fbH - 12 * _scale - rowH, cell, iconH, rowH, tabW);   // y : ligne du bas (la première équipe)
+    }
+
+    private float SelectionPanelHeight => SelectionPanelRect() is { } p ? PanelRows().Count * p.rowH + 16 * _scale : 0;
 
     private void RenderSelectionPanel()
     {
         if (SelectionPanelRect() is not { } pr)
             return;
-        List<Unit> units = _sel.Where(u => _session.Units.Units.Contains(u)).OrderBy(u => u.IsVehicle ? 0 : 1).Take(PanelMax).ToList();
-        if (units.Count == 0)
-            return;
-        float pad = 6 * _scale, w = units.Count * pr.cell + pad, h = pr.iconH + 26 * _scale + pad;
-        _ui.Rect(pr.x - pad, pr.y - pad, w + pad, h + pad, new SN.Vector4(0.09f, 0.09f, 0.11f, 0.88f));
+        Texture2D? pages = PagesTexture();
         Texture2D? lifeTex = OverlayTexture("WID_PRO_LIFE.png"); Texture2D? stamTex = OverlayTexture("WID_PRO_STAMINA.png"); Texture2D? waterTex = OverlayTexture("WID_PRO_RESERVE.png");
-        float x = pr.x;
-        foreach (Unit u in units)
+        bool blink = _uiClock % 1f < 0.5f;   // une demi-seconde affiché, une demi-seconde caché
+        float pad = 6 * _scale, gap = 6 * _scale;
+        List<(string team, List<Unit> units)> rows = PanelRows();
+        for (int ri = 0; ri < rows.Count; ri++)
         {
-            float iw = pr.cell - pad;
-            _ui.Rect(x, pr.y, iw, pr.iconH, new SN.Vector4(0.16f, 0.17f, 0.2f, 1));
-            if (UnitIcon(u) is { } ic)
-            {
-                float s = MathF.Min(iw / ic.Width, pr.iconH / ic.Height);
-                SN.Vector4 tint = u.Destroyed || u.Unconscious ? new SN.Vector4(0.45f, 0.35f, 0.35f, 1) : SN.Vector4.One;
-                _ui.Image(ic, x + (iw - ic.Width * s) / 2, pr.y + (pr.iconH - ic.Height * s) / 2, ic.Width * s, ic.Height * s, tint);
-            }
+            (string team, List<Unit> units) = rows[ri];
+            float y = pr.y - ri * pr.rowH, x = pr.x;
+            // cadre de l'équipe et son nom
+            bool here = units.Count > 0;
+            if (pages != null)
+                _ui.Image(pages, x, y, pr.tabW, pr.iconH, here ? TabOn : TabOff, SN.Vector4.One);
             else
-                _ui.Text(x + 4 * _scale, pr.y + 4 * _scale, UnitLabel(u), new SN.Vector4(0.9f, 0.9f, 0.9f, 1));
-            if (u.Destroyed)
-                _ui.Text(x + 4 * _scale, pr.y + pr.iconH - _ui.LineHeight, "X", new SN.Vector4(1f, 0.3f, 0.3f, 1));
-            // vie (véhicule) ou endurance (pompier), puis eau
-            float k = u.IsVehicle ? u.Life / Math.Max(1, u.LifeMax) : u.Stamina / Math.Max(1, u.StaminaMax);
-            Bar(x, pr.y + pr.iconH + 4 * _scale, iw, 8 * _scale, Math.Clamp(k, 0, 1), u.IsVehicle ? lifeTex : stamTex,
-                new SN.Vector4(1 - Math.Clamp(k, 0, 1), 0.25f + 0.65f * Math.Clamp(k, 0, 1), 0.2f, 1));
-            if (u.Nozzle is { } n && !n.InfiniteReserve)
-                Bar(x, pr.y + pr.iconH + 15 * _scale, iw, 7 * _scale, Math.Clamp(n.Reserve / Math.Max(1, n.ReserveMax), 0, 1), waterTex, AgentColor(n.Agent));
-            x += pr.cell;
+                _ui.Rect(x, y, pr.tabW, pr.iconH, here ? new SN.Vector4(0.1f, 0.35f, 0.12f, 1) : new SN.Vector4(0.18f, 0.18f, 0.18f, 1));
+            float tw = _ui.Measure(team);
+            _ui.Text(x + (pr.tabW - tw) / 2, y + (pr.iconH - _ui.LineHeight) / 2, team, here ? new SN.Vector4(1, 1, 1, 1) : new SN.Vector4(0.75f, 0.75f, 0.75f, 1));
+            x += pr.tabW + gap;
+            if (units.Count > 0)
+                _ui.Rect(x - pad / 2, y - pad / 2, units.Count * pr.cell + pad / 2, pr.rowH - pad / 2, new SN.Vector4(0.09f, 0.09f, 0.11f, 0.88f));
+            foreach (Unit u in units)
+            {
+                float iw = pr.cell - pad;
+                if (_sel.Contains(u))   // unité choisie : cadre vert
+                    _ui.Rect(x - 2 * _scale, y - 2 * _scale, iw + 4 * _scale, pr.iconH + 4 * _scale, new SN.Vector4(0.2f, 0.95f, 0.25f, 1));
+                _ui.Rect(x, y, iw, pr.iconH, new SN.Vector4(0.16f, 0.17f, 0.2f, 1));
+                if (UnitIcon(u) is { } ic)
+                {
+                    float s = MathF.Min(iw / ic.Width, pr.iconH / ic.Height);
+                    SN.Vector4 tint = u.Destroyed || u.Unconscious ? new SN.Vector4(0.45f, 0.35f, 0.35f, 1) : u.OnBoard ? new SN.Vector4(0.7f, 0.7f, 0.7f, 1) : SN.Vector4.One;
+                    _ui.Image(ic, x + (iw - ic.Width * s) / 2, y + (pr.iconH - ic.Height * s) / 2, ic.Width * s, ic.Height * s, tint);
+                }
+                else
+                    _ui.Text(x + 4 * _scale, y + 4 * _scale, UnitLabel(u), new SN.Vector4(0.9f, 0.9f, 0.9f, 1));
+                if (u.Destroyed)
+                    _ui.Text(x + 4 * _scale, y + pr.iconH - _ui.LineHeight, "X", new SN.Vector4(1f, 0.3f, 0.3f, 1));
+                // dans un feu : flamme ; pompier qui ne fait rien : « ? » (une demi-seconde sur deux, sur l'image seulement)
+                Rectangle? mark = !blink || u.Destroyed ? null
+                    : u.InFire ? FireMark
+                    : !u.IsVehicle && !u.Unconscious && !u.OnBoard && !Busy(u) ? IdleMark : null;
+                if (mark is { } mk && pages != null)
+                {
+                    float ms = MathF.Min(pr.iconH * 0.62f / mk.Height, iw * 0.62f / mk.Width);
+                    _ui.Image(pages, x + (iw - mk.Width * ms) / 2, y + (pr.iconH - mk.Height * ms) / 2, mk.Width * ms, mk.Height * ms, mk, SN.Vector4.One);
+                }
+                // vie (véhicule) ou endurance (pompier), puis réserve d'agent
+                float k = u.IsVehicle ? u.Life / Math.Max(1, u.LifeMax) : u.Stamina / Math.Max(1, u.StaminaMax);
+                Bar(x, y + pr.iconH + 3 * _scale, iw, 6 * _scale, Math.Clamp(k, 0, 1), u.IsVehicle ? lifeTex : stamTex,
+                    new SN.Vector4(1 - Math.Clamp(k, 0, 1), 0.25f + 0.65f * Math.Clamp(k, 0, 1), 0.2f, 1));
+                if (u.Nozzle is { } n && !n.InfiniteReserve)
+                    Bar(x, y + pr.iconH + 11 * _scale, iw, 5 * _scale, Math.Clamp(n.Reserve / Math.Max(1, n.ReserveMax), 0, 1),
+                        n.Agent is "WATER" or "" ? waterTex : null, AgentColor(n.Agent));   // autre agent : couleur pleine (l'image de l'eau est bleue)
+                x += pr.cell;
+            }
         }
-        if (_sel.Count > PanelMax)
-            _ui.Text(x, pr.y + pr.iconH / 2, $"+{_sel.Count - PanelMax}", new SN.Vector4(0.9f, 0.9f, 0.9f, 1));
+    }
+
+    // planche d'icônes du jeu (Data\Overlay\Pages\TextureDefinitions0__32bpp.dds : 2048 × 1024, BGRA non compressé)
+    private Texture2D? _pages; private bool _pagesTried;
+    private Texture2D? PagesTexture()
+    {
+        if (_pagesTried)
+            return _pages;
+        _pagesTried = true;
+        try
+        {
+            string path = Path.Combine(_files.DataDir, "Overlay", "Pages", "TextureDefinitions0__32bpp.dds");
+            if (!File.Exists(path))
+                return null;
+            byte[] b = File.ReadAllBytes(path);
+            int h = BitConverter.ToInt32(b, 12), w = BitConverter.ToInt32(b, 16), bits = BitConverter.ToInt32(b, 88);
+            if (bits != 32 || b.Length < 128 + w * h * 4)
+                return null;
+            Color[] px = new Color[w * h];
+            for (int i = 0; i < px.Length; i++)
+            {
+                int o = 128 + 4 * i;
+                px[i] = new Color(b[o + 2], b[o + 1], b[o], b[o + 3]);   // BGRA → RGBA
+            }
+            _pages = new Texture2D(GraphicsDevice, w, h);
+            _pages.SetData(px);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Planche d'icônes : {e.Message}");
+        }
+        return _pages;
     }
 
     private void Bar(float x, float y, float w, float h, float k, Texture2D? tex, SN.Vector4 col)
@@ -264,31 +340,64 @@ public sealed partial class OpenFDGame
             _ui.Rect(x, y, w * k, h, col);
     }
 
-    /// <summary>Clic gauche sur une image du panneau : ne garder que cette unité.</summary>
+    /// <summary>Clic gauche sur le panneau : une image → cette unité seule (la caméra y va si elle était déjà choisie ;
+    /// Ctrl ou Maj : l'ajoute ou la retire) ; le cadre d'une équipe → toutes ses unités.</summary>
     private bool SelectionPanelPress(double x, double y)
     {
         if (SelectionPanelRect() is not { } pr)
             return false;
         (float sx, float sy) = Fb(x, y);
-        List<Unit> units = _sel.Where(u => _session.Units.Units.Contains(u)).OrderBy(u => u.IsVehicle ? 0 : 1).Take(PanelMax).ToList();
-        if (sy < pr.y || sy > pr.y + pr.iconH + 26 * _scale || sx < pr.x || sx > pr.x + units.Count * pr.cell)
-            return false;
-        int i = (int)((sx - pr.x) / pr.cell);
-        if (i >= 0 && i < units.Count)
+        List<(string team, List<Unit> units)> rows = PanelRows();
+        float gap = 6 * _scale;
+        for (int ri = 0; ri < rows.Count; ri++)
         {
-            Unit u = units[i];
+            float y0 = pr.y - ri * pr.rowH;
+            if (sy < y0 || sy > y0 + pr.rowH)
+                continue;
+            List<Unit> units = rows[ri].units;
+            KeyboardState kb = Keyboard.GetState();
+            // Maj ou Ctrl : plusieurs unités (ajoute ou retire celle-ci)
+            bool shift = kb.IsKeyDown(Keys.LeftShift) || kb.IsKeyDown(Keys.RightShift) || kb.IsKeyDown(Keys.LeftControl) || kb.IsKeyDown(Keys.RightControl);
+            if (sx >= pr.x && sx < pr.x + pr.tabW)
+            {
+                if (units.Count == 0)
+                    return true;
+                if (!shift)
+                    _sel.Clear();
+                foreach (Unit u in units.Where(u => !u.Destroyed))
+                    _sel.Add(u);
+                return true;
+            }
+            float x0 = pr.x + pr.tabW + gap;
+            int i = (int)MathF.Floor((sx - x0) / pr.cell);
+            if (sx < x0 || i < 0 || i >= units.Count)
+                return false;
+            Unit pick = units[i];
+            if (shift)
+            {
+                if (!_sel.Remove(pick))
+                    _sel.Add(pick);
+                return true;
+            }
+            // la caméra ne va sur l'unité que si elle était déjà choisie (second clic)
+            bool already = _sel.Contains(pick);
             _sel.Clear();
-            _sel.Add(u);
-            _target.X = u.Position.X;
-            _target.Y = u.Position.Y;
+            _sel.Add(pick);
+            if (already)
+            {
+                _target.X = pick.Position.X;
+                _target.Y = pick.Position.Y;
+            }
+            return true;
         }
-        return true;
+        return false;
     }
 
-    /// <summary>Couleur de la jauge de réserve selon l'agent : gris pour l'anti-métal, bleu sinon (eau ; mousse et poudre à choisir).</summary>
+    /// <summary>Couleur de la jauge de réserve selon l'agent : gris pour l'anti-métal, blanc pour la mousse, bleu sinon (eau).</summary>
     private static SN.Vector4 AgentColor(string agent) => agent switch
     {
         "METAL" => new SN.Vector4(0.62f, 0.64f, 0.68f, 1),
+        "FOAM" => new SN.Vector4(0.97f, 0.97f, 0.97f, 1),
         _ => new SN.Vector4(0.25f, 0.6f, 1f, 1),
     };
 }

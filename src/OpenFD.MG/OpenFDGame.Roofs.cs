@@ -1,5 +1,6 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using OpenFD.Fire;
 using OpenFD.Game;
 using SN = System.Numerics;
 
@@ -95,8 +96,13 @@ public sealed partial class OpenFDGame
         _roomOpen = new bool[comps.Count];
         // essais (captures) : FD3_OUVRIR_PORTES=nom1,nom2 ouvre ces portes au départ
         if (Environment.GetEnvironmentVariable("FD3_OUVRIR_PORTES") is { } names)
-            foreach (Opening o in ops.Where(o => names.Split(',').Contains(o.Name, StringComparer.OrdinalIgnoreCase)))
-                o.State = OpeningState.Open;
+            foreach (string nm in names.Split(','))
+                foreach (Opening o in ops.Where(o => o.Name.Equals(nm.TrimStart('!'), StringComparison.OrdinalIgnoreCase)))
+                    o.State = nm.StartsWith('!') ? OpeningState.Broken : OpeningState.Open;   // « !nom » : cassée
+        // essais (captures) : FD3_ALLUMER=préfixe → allume au départ les foyers dont le nom commence ainsi
+        if (Environment.GetEnvironmentVariable("FD3_ALLUMER") is { Length: > 0 } fire)
+            foreach (HotPoint hp in _session.Fire.HotPoints.Where(hp => hp.Name.StartsWith(fire, StringComparison.OrdinalIgnoreCase)))
+                _session.Fire.Ignite(hp, hp.Class.IntensityMax);
         if (rooms == 0)
             return;
         Console.WriteLine($"Pièces : {rooms} dans {_buildings.Count(b => b.HasRooms)} bâtiment(s)");
@@ -160,6 +166,49 @@ public sealed partial class OpenFDGame
                 lid.Shown = false;
     }
 
+    private readonly HashSet<uint> _revealedWindows = new();
+
+    /// <summary>
+    /// Fenêtre cassée : on découvre ce qu'il y a derrière (Mriya, House_02 : la pièce à backdraft s'attaque de dehors) —
+    /// les pièces de part et d'autre perdent leur couvercle noir, et le toit du bâtiment part.
+    /// </summary>
+    private void RevealBrokenWindows()
+    {
+        foreach (Opening o in _session.Units.Openings.Where(o => o.IsWindow && o.State == OpeningState.Broken && !_revealedWindows.Contains(o.Id)))
+        {
+            _revealedWindows.Add(o.Id);
+            SN.Vector2 c = new SN.Vector2(o.Center.X, o.Center.Y);
+            // pièces autour de la fenêtre (le mur fait une ou deux cases d'épaisseur)
+            if (_roomOf.Length > 0 && _session.Grid is { } g)
+            {
+                (int cx, int cy) = g.CellOf(o.Center);
+                for (int dy = -3; dy <= 3; dy++)
+                    for (int dx = -3; dx <= 3; dx++)
+                        if (g.Inside(cx + dx, cy + dy) && _roomOf[g.Index(cx + dx, cy + dy)] is int r and >= 0)
+                            _roomOpen[r] = true;
+                foreach (RoomLid lid in _lids.Where(l => l.Shown && l.Rooms.Any(r => _roomOpen[r])))
+                    lid.Shown = false;
+            }
+            // couvercle dont le bord passe par la fenêtre (la fenêtre est dans le mur, au bord du couvercle)
+            foreach (RoomLid lid in _lids.Where(l => l.Shown && Inside(c, l.Min, l.Max, 120)))
+                lid.Shown = false;
+            // toit du bâtiment : le plus petit toit qui couvre la fenêtre (« House_02_ROOF », pas le toit du hangar
+            // qui couvre tout), et le bâtiment de plusieurs maillages qui la contient (pas un groupe géant)
+            float Area(Building b) => (b.Max.X - b.Min.X) * (b.Max.Y - b.Min.Y);
+            List<Building> around = _buildings.Where(b => Inside(c, b.Min, b.Max, 150)).ToList();
+            Building? roof = around.Where(b => b.Nodes.Count == 1).OrderBy(Area).FirstOrDefault(b => b.Nodes[0].Contains("ROOF", StringComparison.OrdinalIgnoreCase) || b.MinZ > o.Center.Z + 150);
+            Building? group = around.Where(b => b.Nodes.Count > 1 && Area(b) <= 0.25f * _gridW * _gridH).OrderBy(Area).FirstOrDefault();
+            foreach (Building? b in new[] { roof, group })
+            {
+                if (b == null || b.Open)
+                    continue;
+                b.Open = true;
+                Log($"Toit retiré (fenêtre cassée : {o.Name}) : {b.Nodes[0]}");
+                Console.WriteLine($"Toit retiré (fenêtre cassée : {o.Name}) : {b.Nodes[0]}");
+            }
+        }
+    }
+
     private sealed class RoomLid
     {
         public required string Name;
@@ -178,6 +227,7 @@ public sealed partial class OpenFDGame
         foreach (RoomLid l in _lids)
             l.Vb.Dispose();
         _lids.Clear();
+        _revealedWindows.Clear();
         _lidFx ??= new BasicEffect(GraphicsDevice) { LightingEnabled = false, VertexColorEnabled = false, TextureEnabled = false, DiffuseColor = Vector3.Zero };
         Formats.Grid? g = _session.Grid;
         const float Cell = OpenFD.Formats.Grid.CellSize;
@@ -370,11 +420,17 @@ public sealed partial class OpenFDGame
                         b0.Open = hidden;
             }
             h.RoofRequests.Clear();
+            // toits posés que le script cache ou remontre (ENT_SetVisibility : « angar_roof » de Mriya à l'interrupteur)
+            foreach ((uint rid, string rname) in _scriptRoofs)
+                if (h.Visibility.TryGetValue(rid, out bool rv) && !rv)
+                    foreach (Building b0 in _buildings.Where(b0 => !b0.Open && b0.Nodes.Contains(rname, StringComparer.OrdinalIgnoreCase)))
+                        b0.Open = true;
         }
         if ((_roofCheck -= dt) > 0 || _buildings.Count == 0)
             return;
         _roofCheck = 0.25f;
         UpdateRoomRoofs();
+        RevealBrokenWindows();
         List<SN.Vector2> men = _session.Units.Active.Where(u => !u.IsVehicle).Select(u => new SN.Vector2(u.Position.X, u.Position.Y)).ToList();
         if (men.Count == 0)
             return;
