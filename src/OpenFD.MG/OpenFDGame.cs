@@ -811,6 +811,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         // le jeu d'origine ne le montre pas (face arrière) ; on ne le dessine pas
         List<SceneAssets.Node> scenery = _assets.Scenery(mission).Where(n => !System.Text.RegularExpressions.Regex.IsMatch(n.Mesh, @"^GROUND_?ROOF", System.Text.RegularExpressions.RegexOptions.IgnoreCase)).ToList();
         FindBuildings(mission, scenery);
+        FindRooms();
+        LoadLids(mission);
         BuildSurface(mission, scenery);
         int k = 0;
         foreach (SceneAssets.Node n in scenery)
@@ -1278,6 +1280,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             }
         }
         gd.RasterizerState = RasterizerState.CullNone;
+        RenderLids(_viewProj.X());   // couvercles noirs des pièces pas encore atteintes
         gd.SamplerStates[1] = SamplerState.AnisotropicWrap; gd.SamplerStates[2] = SamplerState.LinearWrap;
         foreach ((MeshGpu? mesh, bool roof, int layer) in _draw)
         {

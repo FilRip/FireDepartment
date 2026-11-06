@@ -45,10 +45,14 @@ public sealed class SceneAssets
     }
 
     /// <summary>Décor de la mission : bâtiments (&lt;mission&gt;.sg) et sol (FGD_&lt;mission&gt;.sg).</summary>
-    public List<Node> Scenery(string mission)
+    /// <summary>Couvercles noirs des pièces (« Bank_ROOM3_MASK ») : posés sur les pièces que l'on n'a pas encore ouvertes.</summary>
+    public List<Node> Masks(string mission) => Scenery(mission, true);
+
+    public List<Node> Scenery(string mission, bool onlyMasks = false)
     {
         string prefix = $"Gfx\\Mission\\{GfxDir(mission)}\\";
         List<Node> list = new List<Node>();
+        bool masks = onlyMasks;
         foreach (string sg in _files.List(prefix).Where(p =>
                  {
                      // décor « London.sg » et sol « FGD_London.sg » ; certaines missions (Institute) : « level_institute.sg »
@@ -63,8 +67,9 @@ public sealed class SceneAssets
             foreach (string k in nodes.Keys)
             {
                 string up = k.ToUpperInvariant();
-                // les nœuds « …_ROOM » sont de vrais maillages (sol et cloisons de la pièce, éclairage précalculé) : affichés
-                if (up.Contains("_COLL") || up.Contains("MASK"))
+                // les nœuds « …_ROOM » sont de vrais maillages (sol et cloisons de la pièce, éclairage précalculé) : affichés ;
+                // les « …_MASK » (couvercles noirs des pièces) sont à part : voir Masks
+                if (up.Contains("_COLL") || up.Contains("MASK") != masks)
                     continue;
                 if (_files.TryRead(prefix + k + ".mesh") == null)
                     continue;
