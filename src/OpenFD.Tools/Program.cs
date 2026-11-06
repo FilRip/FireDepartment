@@ -34,6 +34,53 @@ public static class Program
                 }
                 return bad == 0 ? 0 : 2;
             }
+            case "reparer":
+            {
+                // reparer <Data> <Mission> [pas] : objets à réparer / utiliser, et qui peut le faire
+                Session ses = new Session(files, args[2], "EASY");
+                int steps = args.Length > 3 ? int.Parse(args[3]) : 300;
+                for (int i = 0; i < steps; i++)
+                {
+                    ses.Step();
+                    if (i % 50 == 0)
+                        ses.Host?.EndCinematic();
+                }
+                ses.Scripts!.Load(OpenFD.Script.Parser.ParseFile("s32 __V() { return SCR_GetVarS32(\"RepairedGenerator\") + 10 * SCR_GetVarS32(\"RepGen_1\"); }", "essai"));
+                foreach (UsableObject o in ses.Units.Usables)
+                    Console.WriteLine($"{o.Id} {o.Name,-28} utiliser {o.CanBeUsed} réparer {o.CanBeRepaired} réparé {o.Repaired} actions [{string.Join(", ", o.Actions.Select(a => a.action + "→" + a.script))}]");
+                foreach (Unit x in ses.Units.Units.Where(x => !x.IsVehicle))
+                    Console.WriteLine($"  {x.Name,-24} à bord {x.OnBoard} CanUse {x.CanUse} CanRepair {x.CanRepair}");
+                // le technicien répare le premier objet à réparer
+                if (ses.Units.Usables.FirstOrDefault(o => o.CanBeRepaired && !o.Repaired) is { } rep && ses.Units.Units.FirstOrDefault(x => x.CanRepair && !x.OnBoard) is { } ing)
+                {
+                    Console.WriteLine($"réparation de {rep.Name} : emprise ({rep.BoxMin.X:0},{rep.BoxMin.Y:0})-({rep.BoxMax.X:0},{rep.BoxMax.Y:0}) par {ing.Name}");
+                    ing.Position = rep.Position + new System.Numerics.Vector3(300, 0, 0); ing.Path.Clear();
+                    ses.Units.UseObject(ing, rep);
+                    for (int i = 0; i < 200; i++) ses.Step();
+                    Console.WriteLine($"  réparé {rep.Repaired} · {ing.Status} · RepairedGenerator = {ses.Scripts!.TryRun("__V")?.AsNum}");
+                    foreach (string l in ses.Units.Log.TakeLast(4)) Console.WriteLine("  journal : " + l.Trim());
+                    foreach (OpenFD.Game.MissionHost.Objective ob in ses.Host!.Objectives) Console.WriteLine($"  objectif : {ob.Text} {ob.Status}");
+                }
+                // puis un pompier actionne l'interrupteur (objet à utiliser) ; état des portes animées
+                if (ses.Units.Usables.FirstOrDefault(o => o.CanBeUsed && o.Actions.Any(a => a.script == "ElectricityClosed")) is { } sw && ses.Units.Units.FirstOrDefault(x => x.CanUse && !x.OnBoard && !x.IsVehicle) is { } user)
+                {
+                    Console.WriteLine($"interrupteur {sw.Name} par {user.Name}");
+                    user.Position = sw.Position + new System.Numerics.Vector3(150, 0, 0); user.Path.Clear();
+                    ses.Units.UseObject(user, sw);
+                    for (int i = 0; i < 400; i++)
+                    {
+                        ses.Step();
+                        if (i % 50 == 0)
+                            ses.Host?.EndCinematic();
+                    }
+                    Console.WriteLine($"  {user.Status}");
+                    foreach (string l in ses.Units.Log.TakeLast(6)) Console.WriteLine("  journal : " + l.Trim());
+                    foreach ((string vocal, string text, float x, float y) m in ses.Host!.Messages.TakeLast(3)) Console.WriteLine("  message : " + m.text);
+                }
+                foreach (Opening d in ses.Units.Openings.Where(d => d.ScriptGate))
+                    Console.WriteLine($"porte script {d.Id} {d.Name} état {d.State} anim {d.OpenAnim}");
+                return 0;
+            }
             case "agents":
             {
                 // agents <Data> <Mission> : agents des unités ; changement d'agent à un camion d'un autre agent
@@ -101,7 +148,9 @@ public static class Program
                 OpenFD.Fire.HotPoint h = Environment.GetEnvironmentVariable("FD3_FEU_A") != null
                     ? ses.Fire.HotPoints.Where(x => x.IsBurning && x.Class.FireType == 'A').OrderByDescending(x => x.Intensity).First()
                     : ses.Fire.HotPoints.First(x => x.Electrified);
-                Unit u = ses.Units.Units.First(x => !x.IsVehicle && x.Nozzle != null && !x.IsCanon && !x.OnBoard);
+                Unit u = Environment.GetEnvironmentVariable("FD3_ELEC_CAMION") != null
+                    ? ses.Units.Units.First(x => UnitManager.WaterTruck(x) && !x.OnBoard)
+                    : ses.Units.Units.First(x => !x.IsVehicle && x.Nozzle != null && !x.IsCanon && !x.OnBoard);
                 u.Position = h.Position + new System.Numerics.Vector3(500, 0, 0); u.Path.Clear();
                 Console.WriteLine(h.Class.ToString());
                 Console.WriteLine($"{h.Name} électrique {h.Electrified} intensité {h.Intensity:0} ; {u.Name} vie {u.Life:0}");
@@ -1245,7 +1294,7 @@ public static class Program
                 // portesanim <Data> <Mission> : portes avec une animation d'ouverture, et les pièces du modèle qu'elle anime
                 Session ses = new Session(files, args[2], "EASY", false);
                 SceneAssets assets = new OpenFD.Game.SceneAssets(files);
-                foreach (Opening d in ses.Units.Openings.Where(d => d.OpenAnim != null || d.CloseAnim != null).Take(12))
+                foreach (Opening d in ses.Units.Openings.Where(d => d.OpenAnim != null || d.CloseAnim != null).Take(200))
                 {
                     AnimClip? clip = files.TryRead("Gfx\\Anim\\" + (d.OpenAnim ?? d.CloseAnim) + ".anim") is { } b ? AnimClip.Parse(b) : null;
                     List<string> parts = d.Model == null ? new List<string>() : assets.ModelParts(d.Model).Select(n => n.Mesh[(n.Mesh.LastIndexOf('\\') + 1)..]).ToList();

@@ -293,6 +293,8 @@ public sealed partial class OpenFDGame
                     * SN.Matrix4x4.CreateRotationZ(PoseOf(c, c.Position, c.Heading).h + CharYaw) * SN.Matrix4x4.CreateTranslation(PoseOf(c, c.Position, c.Heading).p)).X());
         foreach ((uint id, string? model, SN.Matrix4x4 world, SN.Vector3 origin) in _scriptMoved)
         {
+            if (Host?.Visibility.TryGetValue(id, out bool shown) == true && !shown)
+                continue;
             SN.Matrix4x4 w = world;
             if (Host?.MovedObjects.TryGetValue(id, out SN.Vector2 mv) == true)
                 w.Translation += new SN.Vector3(mv.X - origin.X, mv.Y - origin.Y, 0);

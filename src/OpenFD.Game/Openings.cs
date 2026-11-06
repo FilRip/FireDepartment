@@ -11,6 +11,35 @@ public sealed partial class UnitManager
     /// <summary>Réglé pour qu'une porte ordinaire (HitDamageCoef 10,73, 100 points de vie) tombe en 3 coups.</summary>
     public const float BlowFactor = 3.11f, BlowSeconds = 1.2f, UseSeconds = 1.0f, ActionReach = 260f;
 
+    /// <summary>Animation de l'état « open » ([LOGICAL_STATE] S0n__NAME = open, S0n_ANIM) ; null s'il n'y en a pas.</summary>
+    /// <summary>Vrai si l'animation anime au moins une pièce du modèle.</summary>
+    private bool AnimMovesModel(SceneAssets assets, string anim, string? model)
+    {
+        if (model == null || _files.TryRead("Gfx\\Anim\\" + anim + ".anim") is not { } b)
+            return false;
+        try
+        {
+            OpenFD.Formats.AnimClip clip = OpenFD.Formats.AnimClip.Parse(b);
+            return assets.ModelParts(model).Any(n => clip.Tracks.ContainsKey(n.Mesh[(n.Mesh.LastIndexOf('\\') + 1)..]));
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private static string? StateOpenAnim(ClassFile c)
+    {
+        for (int k = 1; k <= 6; k++)
+        {
+            string? name = c.Get("LOGICAL_STATE", $"S{k:00}__NAME")?.Trim('"', ' ');
+            string? anim = c.Get("LOGICAL_STATE", $"S{k:00}_ANIM")?.Trim('"', ' ');
+            if (string.Equals(name, "open", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(anim))
+                return anim;
+        }
+        return null;
+    }
+
     private void LoadOpenings(Level level)
     {
         SceneAssets assets = _assets ??= new SceneAssets(_files);
@@ -18,15 +47,25 @@ public sealed partial class UnitManager
         {
             ClassFile? c = Class("Design\\" + o.ClassPath["design\\".Length..] + ".class");
             string? type = c?.Get("OCCUPATION", "Occupation_Type")?.Trim('"', ' ').ToUpperInvariant();
-            if (c == null || type is not ("DOOR" or "WINDOW"))
+            // portail animé commandé par le script (Mriya : « angar_door_anim », état « open » → si_angar_door_use) :
+            // traité comme une porte que seul le script ouvre (ENT_SwitchState) ; fermé, il bloque le passage
+            string? stateOpen = c == null ? null : StateOpenAnim(c);
+            if (c == null || (type is not ("DOOR" or "WINDOW") && stateOpen == null))
+                continue;
+            // un objet que le joueur actionne lui-même (vanne de gaz de Mriya : use → RotateTube) reste un objet à utiliser
+            if (type is not ("DOOR" or "WINDOW") && o.GetComponent(0xA027) is { } uc && ParseActions(o.ComponentBytes(uc).ToArray()).Any())
                 continue;
             string? m = c.Get("DISPLAY", "Model")?.Trim('"', ' ');
             string? model = string.IsNullOrEmpty(m) || m.Equals("noitem", StringComparison.OrdinalIgnoreCase) ? null : SceneAssets.GfxPath("Placeable", m);
+            // un portail du script doit avoir des battants que son animation « open » fait bouger (pas le tonneau de Mriya)
+            if (type is not ("DOOR" or "WINDOW") && !AnimMovesModel(assets, stateOpen!, model))
+                continue;
             Opening d = new Opening
             {
                 Id = o.Id, Name = o.Name, IsWindow = type == "WINDOW", Model = model, World = o.Matrix,
                 Breakable = c.GetBool("CAPACITIES_ACTIONS", "CouldBeBreak") && c.GetBool("DAMAGE", "UseDamage", true),
                 Usable = type == "DOOR" && c.GetBool("CAPACITIES_ACTIONS", "CouldBeUse"),
+                ScriptGate = type != "DOOR" && type != "WINDOW",
                 MaxLife = c.GetFloat("DAMAGE", "MaxLifePoints", 100), HitCoef = c.GetFloat("DAMAGE", "HitDamageCoef", 1),
             };
             d.Life = c.GetFloat("DAMAGE", "LifePoints", d.MaxLife);
@@ -47,6 +86,8 @@ public sealed partial class UnitManager
                         d.CloseAnim ??= mm.Value;
                 }
             }
+            if (stateOpen != null && d.ScriptGate)
+                d.OpenAnim ??= stateOpen;
             d.Center = d.Position;
             if (model != null)
             {

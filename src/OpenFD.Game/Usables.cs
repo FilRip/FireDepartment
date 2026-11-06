@@ -20,6 +20,25 @@ public sealed partial class UnitManager
             if (Openings.Any(d => d.Id == o.Id))
                 continue;   // portes et fenêtres : voir Openings
             UsableObject u = new UsableObject { Id = o.Id, Name = o.Name, Position = o.Position, CanBeUsed = use, CanBeRepaired = repair };
+            u.BoxMin = u.BoxMax = new Vector2(o.Position.X, o.Position.Y);
+            string? m = c.Get("DISPLAY", "Model")?.Trim('"', ' ');
+            if (!string.IsNullOrEmpty(m) && !m.Equals("noitem", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    List<Vector2> pts = PathFind.Footprint(_assets ??= new SceneAssets(_files), SceneAssets.GfxPath("Placeable", m), 0, 400);
+                    foreach (Vector2 q in pts)
+                    {
+                        Vector3 wq = Vector3.Transform(new Vector3(q, 0), o.Matrix);
+                        u.BoxMin = Vector2.Min(u.BoxMin, new(wq.X, wq.Y));
+                        u.BoxMax = Vector2.Max(u.BoxMax, new(wq.X, wq.Y));
+                    }
+                }
+                catch
+                {
+                    // modèle illisible : on vise le pivot
+                }
+            }
             if (o.GetComponent(0xA027) is { } comp)
                 u.Actions.AddRange(ParseActions(o.ComponentBytes(comp).ToArray()));
             // objets sans action de script mais utilisables (les scripts peuvent les activer : ENT_SetCapacityTarget)
@@ -190,5 +209,8 @@ public sealed partial class UnitManager
         u.Status = "attend les ordres";
         if (act is { } a1)
             _s.Scripts?.TryRun(a1.script, Value.I(u.Id), Value.I(o.Id), Value.T(a1.action));
+        // fin d'une réparation : la mission est prévenue par OnRepairDone(technicien, machine) (Mriya, Military)
+        if (repair && _s.Scripts is { } sc && sc.HasFunction("OnRepairDone"))
+            sc.TryRun("OnRepairDone", Value.I(u.Id), Value.I(o.Id));
     }
 }

@@ -83,7 +83,8 @@ public sealed partial class UnitManager
 
     // ---- conduite des véhicules : pas de demi-tour sur place ; ils tournent en avançant (rayon de braquage), et quand il
     // faut repartir dans l'autre sens, ils reculent d'abord en braquant puis repartent en avant (manœuvre en deux temps)
-    public const float TurnRadius = 800f;
+    /// <summary>Rayon de braquage d'un véhicule de TurnSpeed 7 (camion standard) ; les autres en découlent.</summary>
+    public const float TurnRadiusRef = 800f;
 
     private bool VehicleFits(Unit v, Vector2 p, float heading)
     {
@@ -109,7 +110,7 @@ public sealed partial class UnitManager
     private bool DriveArc(Unit v, float s, int dir, float turn)
     {
         Vector2 p = new Vector2(v.Position.X, v.Position.Y);
-        float h = v.Heading + turn * s / TurnRadius;
+        float h = v.Heading + turn * s / v.TurnRadius;
         Vector2 np = p + new Vector2(MathF.Cos(h), MathF.Sin(h)) * s * dir;
         if (!VehicleFits(v, np, h))
             return false;
@@ -139,7 +140,7 @@ public sealed partial class UnitManager
             {
                 if (v.Reversing <= 0)
                     v.Reversing = 700;
-                float s = MathF.Min(step, v.Speed * 0.5f * dt);
+                float s = MathF.Min(step, (v.BackSpeed > 0 ? v.BackSpeed : v.Speed * 0.5f) * dt);   // marche arrière : BackwardSpeed
                 if (MathF.Abs(diff) < 1.0f)
                     v.Reversing = -1;
                 else if (!DriveArc(v, s, -1, MathF.Sign(diff)))
@@ -157,7 +158,7 @@ public sealed partial class UnitManager
                 v.Reversing = 0;
             // en avant : le cap tourne au plus du rayon de braquage ; on suit le chemin (les cases sont sûres)
             float s2 = MathF.Min(step, len);
-            float turn = Math.Clamp(diff, -s2 / TurnRadius * 1.6f, s2 / TurnRadius * 1.6f);
+            float turn = Math.Clamp(diff, -s2 / v.TurnRadius * 1.6f, s2 / v.TurnRadius * 1.6f);
             if (MathF.Abs(diff) > 0.6f)
             {
                 // virage serré : ralentit et tourne sur un arc, sans quitter les cases libres

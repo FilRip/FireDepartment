@@ -25,7 +25,9 @@ public sealed partial class UnitManager
 
     // vitesses : les classes donnent des km/h pour les piétons et des m/s pour les véhicules ; 1 unité = 1 cm
     // pompiers : RunSpeed 10 → 450 unités/s, accordé à l'animation de course (foulée mesurée : 500 à 550 unités/s)
-    public const float FiremanSpeedFactor = 45f, VehicleSpeedFactor = 60f;
+    // véhicules : ForwardSpeed de la classe (15 pour un camion, 20 le wildland, 10 l'ambulance…) × 120 unités/s ;
+    // doublé (60 → 120) après comparaison avec le jeu d'origine, où les camions roulaient environ deux fois plus vite
+    public const float FiremanSpeedFactor = 45f, VehicleSpeedFactor = 120f;
     /// <summary>Recul supplémentaire devant le feu (1 m = 100 unités), réglé à l'œil sur le jeu d'origine.</summary>
     public const float ExtraStandoff = 400f;
     /// <summary>Vrai pendant un ordre donné par le joueur (l'interface le met) : les réponses vocales ne concernent que ceux-là.</summary>
@@ -343,6 +345,10 @@ public sealed partial class UnitManager
         u.IsAmbulance = vehicle && classRel.Contains("ambulance", StringComparison.OrdinalIgnoreCase);
         if (vehicle)
         {
+            // marche arrière et braquage de la classe : BackwardSpeed (5 par défaut, 8 l'ambulance) ;
+            // TurnSpeed (7 par défaut → rayon de 8 m ; plus grand = braque plus court : 8,5 l'ambulance → 6,6 m)
+            u.BackSpeed = c.GetFloat("MOVING", "BackwardSpeed", 5) * VehicleSpeedFactor;
+            u.TurnRadius = TurnRadiusRef * 7f / MathF.Max(1f, c.GetFloat("MOVING", "TurnSpeed", 7));
             u.ResupplyPower = c.GetFloat("CAPACITIES_RESERVE", "ResupplyPower", 0);
             u.SupplyAgent = (c.Get("CAPACITIES_RESERVE", "FireAgent") ?? "WATER").Trim('"', ' ').ToUpperInvariant();
         }
@@ -837,6 +843,9 @@ public sealed partial class UnitManager
         Log.Add($"{_s.Time,6:0} s : un pompier s'électrocute sur {h.Name} (courant non coupé)");
     }
 
+    /// <summary>Camion à lance chargé d'eau : il peut arroser un feu électrique même sous tension (sur ordre ou de lui-même).</summary>
+    public static bool WaterTruck(Unit u) => u.IsVehicle && u.Nozzle is { Agent: "WATER" };
+
     /// <summary>Part de la vie perdue par un pompier qui arrose un feu électrique sous tension.</summary>
     public const float ElectricShock = 0.08f;
 
@@ -855,7 +864,7 @@ public sealed partial class UnitManager
             u.Target = null; u.Status = "attend les ordres"; return;
         }
         _reported.Remove(h);
-        if (h.Electrified)
+        if (h.Electrified && !WaterTruck(u))   // la lance d'un camion à eau peut arroser un feu électrique sous tension
         {
             Electrocute(u, h);
             return;
@@ -890,7 +899,7 @@ public sealed partial class UnitManager
             Sounds.Add(("VOCAL_RESERVE_EMPTY", null));
             return;
         }
-        u.Nozzle.Spray(_s.Fire, h, dt);
+        u.Nozzle.Spray(_s.Fire, h, dt, powered: !WaterTruck(u));   // camion à eau : le courant ne l'arrête pas
         u.Status = $"arrose {h.Name}";
     }
 }
