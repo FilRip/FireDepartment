@@ -19,5 +19,9 @@ public sealed class UsableObject
     public readonly List<(string action, string script)> Actions = new();
     public int Uses;                      // nombre de fois utilisé (les actions alternent : use, use2…)
     public bool Repaired;
+    /// <summary>Emprise du modèle au sol (vue de dessus) : on peut viser l'objet n'importe où dessus, pas seulement son pivot
+    /// (Mriya : le pivot du générateur est à un bout, la clé à molette 4,5 m plus loin).</summary>
+    public Vector2 BoxMin, BoxMax;
+    public float Height = 160;
     public bool Enabled => CanBeUsed || (CanBeRepaired && !Repaired);
 }

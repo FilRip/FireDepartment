@@ -19,6 +19,7 @@ public sealed class Opening
     public Vector3 Position => World.Translation;
     public bool Breakable;          // [CAPACITIES_ACTIONS] CouldBeBreak et [DAMAGE] UseDamage
     public bool Usable;             // CouldBeUse : s'ouvre et se ferme à la main
+    public bool ScriptGate;         // portail animé que seul le script ouvre (ENT_SwitchState) : pas de clic du joueur
     public float Life, MaxLife, HitCoef;
     public OpeningState State;
     public bool OnGround;           // au niveau de la grille (les portes des étages ne touchent pas le chemin)

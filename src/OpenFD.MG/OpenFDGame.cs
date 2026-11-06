@@ -868,17 +868,19 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         foreach (SceneAssets.Placed p in allPlaced.Where(p => p.Model.Contains("rally_symbol", StringComparison.OrdinalIgnoreCase) || p.Name.StartsWith("rally_symbol", StringComparison.OrdinalIgnoreCase)))
             if (byName.TryGetValue(p.Name, out LevelObject? lo))
                 _scriptShown.Add((lo.Id, p.Model, p.World));
-        // objets que le script déplace (ENT_SetPosition(numéro, …) : le train de l'Eurotunnel) : dessinés à part, à leur place du moment
+        // objets que le script déplace (ENT_SetPosition(numéro, …) : le train de l'Eurotunnel) ou cache / montre
+        // (ENT_SetVisibility(numéro, …) : la porte fixe du hangar de Mriya, remplacée par la porte animée) : dessinés à part,
+        // à leur place du moment et seulement s'ils sont visibles
         _scriptMoved.Clear();
         string scriptDir = Path.Combine(_files.DataDir, "Script", "Mission", mission);
         if (Directory.Exists(scriptDir))
         {
             HashSet<uint> movedIds = new HashSet<uint>();
             foreach (string f in Directory.EnumerateFiles(scriptDir, "*.scp"))
-                foreach (System.Text.RegularExpressions.Match mm in System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(f, System.Text.Encoding.Latin1), @"ENT_SetPosition\s*\(\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                foreach (System.Text.RegularExpressions.Match mm in System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(f, System.Text.Encoding.Latin1), @"ENT_Set(?:Position|Visibility)\s*\(\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
                     movedIds.Add(uint.Parse(mm.Groups[1].Value));
             foreach (SceneAssets.Placed p in allPlaced)
-                if (byName.TryGetValue(p.Name, out LevelObject? lo) && movedIds.Contains(lo.Id))
+                if (byName.TryGetValue(p.Name, out LevelObject? lo) && movedIds.Contains(lo.Id) && !_scriptShown.Any(x => x.id == lo.Id))
                     _scriptMoved.Add((lo.Id, p.Model, p.World, lo.Position));
         }
         // gravats à dégager : leur morceau cassé (« …_break ») n'apparaît qu'une fois l'obstacle dégagé ; le repère de hache

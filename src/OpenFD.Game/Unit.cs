@@ -15,6 +15,8 @@ public sealed class Unit
     public Vector3 Position;
     public float Heading;                                 // radians, 0 = vers +X
     public float Speed;                                   // unités par seconde
+    public float BackSpeed;                               // véhicule : marche arrière ([MOVING] BackwardSpeed), unités par seconde
+    public float TurnRadius = 800f;                       // véhicule : rayon de braquage, d'après [MOVING] TurnSpeed
     public Extinguisher? Nozzle;                          // lance (pompiers, médecin)
     public bool HasHose;                                  // (non utilisé : le jeu n'a pas de tuyaux)
     public bool CanHeal;                                  // médecin : peut réanimer un civil inconscient

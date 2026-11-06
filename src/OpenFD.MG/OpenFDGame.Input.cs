@@ -563,6 +563,12 @@ public sealed partial class OpenFDGame
                 best = o;
             }
         }
+        if (best != null)
+            return best;
+        // sinon : la souris sur l'emprise du modèle (le pivot peut être à un bout de l'objet : générateur de Mriya)
+        if (Ground(x, y) is { } gp)
+            best = _session.Units.Usables.Where(o => o.Enabled && Inside(gp, o.BoxMin, o.BoxMax, 40) && o.BoxMax.X - o.BoxMin.X < 3000 && o.BoxMax.Y - o.BoxMin.Y < 3000)
+                .OrderBy(o => (o.BoxMax.X - o.BoxMin.X) * (o.BoxMax.Y - o.BoxMin.Y)).FirstOrDefault();
         return best;
     }
 
