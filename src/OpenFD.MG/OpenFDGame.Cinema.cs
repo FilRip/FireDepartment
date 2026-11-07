@@ -124,6 +124,8 @@ public sealed partial class OpenFDGame
         if (!_cineOn && !_cineMoving && h.CameraOrders.Count == 0)
             _playerView = (_target, _yaw, _pitch, _dist);
         double now = _session.Time + (_paused ? 0 : _owed * Session.Dt);
+        if (h.CameraOrders.Count > 0)
+            _camScriptQuiet = 0.5f;   // caméra déplacée par le script : pas un geste du joueur (didacticiel, OnCameraMove…)
         foreach ((LevelObject? wp, float dur, bool tp, double at) in h.CameraOrders)
         {
             if (free)
@@ -170,6 +172,7 @@ public sealed partial class OpenFDGame
         {
             // fin de la cinématique : la vue revient où elle était
             (_target, _yaw, _pitch, _dist) = v;
+            _camScriptQuiet = 0.5f;
             _viewBeforeCine = null;
             _cineMoving = false;
         }
