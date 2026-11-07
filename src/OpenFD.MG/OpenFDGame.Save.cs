@@ -168,6 +168,9 @@ public sealed partial class OpenFDGame
                 if (U(e.A) is { } a4 && U(e.B) is { } b4)
                     um.GoToVehicle(a4, b4);
                 break;
+            case "airstrike":
+                um.CallAirStrike(new SN.Vector2(e.X, e.Y));
+                break;
             case "renfort":
                 if (e.S is { } team)
                     um.ChooseReinforcement(team);

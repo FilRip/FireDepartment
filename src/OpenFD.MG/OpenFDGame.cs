@@ -225,6 +225,18 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                     DoOpening(dozer, bd);
             }
         }
+        // essai (captures) : FD3_CANADAIR=x,y → aide aérienne accordée à 31 s puis appelée sur (x, y) ; FD3_CANADAIR=vise → visée affichée
+        if (!_menu && _session != null && !_testAir && _session.Time > 31 && Environment.GetEnvironmentVariable("FD3_CANADAIR") is { Length: > 0 } air)
+        {
+            _testAir = true;
+            _session.Units.AddAirStationForTest();
+            if (_session.Units.AirGrants == 0)
+                _session.Units.GrantAirSupport();
+            if (air == "vise")
+                _airTargeting = true;
+            else if (air.Split(',') is { Length: 2 } xy)
+                DoAirStrike(new SN.Vector2(float.Parse(xy[0]), float.Parse(xy[1])));
+        }
         if (_testLadder is { } tw && _session?.Units.LadderAt(tw) is { Ready: true } && _session.Units.Units.Where(u => u.CanLadder && u.CanBreak && !u.OnBoard && !u.IsVehicle)
                 .OrderBy(u => SN.Vector3.Distance(u.Position, tw.Center)).FirstOrDefault() is { } climber)
         {
@@ -1533,6 +1545,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         RenderExplosives();
         RenderGhosts();
         RenderSelectionRings(_viewProj.X());   // après les unités et les véhicules : ce qui passe derrière eux est caché
+        RenderAirSupport(_viewProj.X());       // cible du bombardier d'eau, ombre de l'avion
         RenderParticles(time);
     }
 
@@ -1616,7 +1629,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     }
 
     private bool _charred;   // DrawMesh : dessin d'une carcasse calcinée
-    private bool _testSpawned;      // essais FD3_ECHELLE, FD3_BULLDO : une seule fois
+    private bool _testSpawned, _testAir;      // essais FD3_ECHELLE, FD3_BULLDO : une seule fois
     private Opening? _testLadder;
 
     private List<(MeshGpu mesh, SN.Matrix4x4 part)> UnitModel(string model)

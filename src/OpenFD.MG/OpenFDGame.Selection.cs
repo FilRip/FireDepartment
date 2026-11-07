@@ -270,7 +270,7 @@ public sealed partial class OpenFDGame
             float y = pr.y - ri * pr.rowH, x = pr.x;
             // cadre de l'équipe et son nom : vert si elle est là, jaune (clignotant) si on peut la choisir comme renfort,
             // gris sinon ; un renfort choisi a une barre d'avancement sous son nom jusqu'à son arrivée (1 minute)
-            bool here = units.Count > 0;
+            bool here = units.Count > 0 || (team == _session.Units.AirTeam && _session.Units.AirAvailable);   // bombardier disponible : cadre vert
             bool choosable = _session.Units.ChoosableTeams.Contains(team);
             float? incoming = _session.Units.IncomingProgress(team);
             // (cadre jaune : renfort en route, sa fente noire reçoit la barre d'avancement)
@@ -427,6 +427,9 @@ public sealed partial class OpenFDGame
             bool shift = kb.IsKeyDown(Keys.LeftShift) || kb.IsKeyDown(Keys.RightShift) || kb.IsKeyDown(Keys.LeftControl) || kb.IsKeyDown(Keys.RightControl);
             if (sx >= pr.x && sx < pr.x + pr.tabW)
             {
+                // caserne aérienne : visée de la zone à arroser (OpenFDGame.AirSupport.cs)
+                if (AirTabPress(rows[ri].team))
+                    return true;
                 // renfort accordé : le clic sur le cadre d'une caserne la fait venir
                 if (_session.Units.ChoosableTeams.Contains(rows[ri].team))
                 {

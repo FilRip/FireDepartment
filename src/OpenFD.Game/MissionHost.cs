@@ -658,9 +658,9 @@ public sealed class MissionHost : IScriptHost
                     a[2].Set(Value.F(deg));
                 return Value.F(deg);
             }
-            // aide aérienne (bombardier d'eau) : pas encore simulée, l'appel est accepté
+            // aide aérienne (bombardier d'eau) : un passage accordé au joueur (AirSupport.cs)
             case "LEV_GRANTAIRSUPPORT":
-                FireLog.Add($"{GameTime,6:0.0} LEV_GrantAirSupport (non simulé)");
+                Units?.GrantAirSupport();
                 return Value.Zero;
         }
         return null;

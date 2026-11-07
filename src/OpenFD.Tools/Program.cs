@@ -907,7 +907,7 @@ public static class Program
                 SceneAssets assets = new SceneAssets(files);
                 foreach (string name in args.Skip(2))
                 {
-                    string gfx = SceneAssets.GfxPath("Unit\\FireVehicle", name);
+                    string gfx = name.Contains('\\') ? name : SceneAssets.GfxPath("Unit\\FireVehicle", name);
                     float lo = float.MaxValue, hi = float.MinValue;
                     foreach (SceneAssets.Node part in assets.ModelParts(gfx))
                     {
@@ -1537,6 +1537,37 @@ public static class Program
                 Level level = Level.Parse(files.Read(lvPath));
                 foreach (IGrouping<string, LevelObject> g in level.Objects.Where(o => o.Kind == EntityKind.Placeable && o.HasTransform && !o.StartVisible).GroupBy(o => o.ClassPath))
                     Console.WriteLine($"{g.Count(),4} {g.Key} : {string.Join(", ", g.Take(4).Select(o => o.Name + " " + o.Id))}");
+                return 0;
+            }
+            case "canadair":
+            {
+                // canadair <Data> <Mission> [durée] : aide aérienne accordée par le script, puis appelée sur le feu le plus fort
+                Session ses = new Session(files, args[2], "EASY");
+                Console.WriteLine($"caserne aérienne {ses.Units.AirTeam} : délai {ses.Units.AirEta} s, rayon {ses.Units.AirRadius}, puissance {ses.Units.AirPower}, imprécision {ses.Units.AirRandom}, modèle {ses.Units.AirModel}");
+                int steps = (int)((args.Length > 3 ? float.Parse(args[3]) : 900) / Session.Dt);
+                bool called = false;
+                for (int i = 0; i <= steps; i++)
+                {
+                    ses.Step();
+                    if (i % 50 == 0)
+                        ses.Host?.EndCinematic();
+                    if (i == 600 && !called && ses.Units.AirGrants == 0)
+                        ses.Units.GrantAirSupport();   // (essai : accordée d'office à 60 s si le script ne l'a pas fait)
+                    if (ses.Units.AirAvailable && !called)
+                    {
+                        called = true;
+                        OpenFD.Fire.HotPoint hot = ses.Fire.HotPoints.Where(h => h.IsBurning).OrderByDescending(h => h.Intensity).First();
+                        System.Numerics.Vector2 c = new(hot.Position.X, hot.Position.Y);
+                        int before = ses.Fire.HotPoints.Count(h => h.IsBurning && System.Numerics.Vector2.Distance(new(h.Position.X, h.Position.Y), c) < ses.Units.AirRadius);
+                        Console.WriteLine($"t {ses.Time:0} accordée ; appel sur {hot.Name} ({c.X:0},{c.Y:0}) : {before} foyers en feu dans le rayon · {ses.Units.CallAirStrike(c)}");
+                    }
+                    if (called && ses.Units.Strike is { } st && i % 10 == 0)
+                    {
+                        int n = ses.Fire.HotPoints.Count(h => h.IsBurning && System.Numerics.Vector2.Distance(new(h.Position.X, h.Position.Y), st.Drop) < ses.Units.AirRadius);
+                        Console.WriteLine($"t {ses.Time:0.0} passage {st.Pass:0.0} largué {st.Dropped} · {n} foyers en feu dans le rayon du largage");
+                    }
+                }
+                Console.WriteLine(string.Join("\n", ses.Units.Log.Where(l => l.Contains("aérienne") || l.Contains("bombardier") || l.Contains("largage"))));
                 return 0;
             }
             case "camionia":

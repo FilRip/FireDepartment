@@ -78,7 +78,10 @@ public sealed partial class UnitManager
             if (string.IsNullOrEmpty(r))
                 continue;
             // (la mission Fireworks écrit « REINFORECEMENT1ETA » : faute de frappe d'origine, valeur par défaut 60 s)
-            _pending.Add((mission.GetFloat(F, $"Reinforcement{i}ETA", 60), r, mission.GetInt(F, $"Reinforcement{i}SpawnPoint", 1)));
+            float eta = mission.GetFloat(F, $"Reinforcement{i}ETA", 60);
+            // caserne aérienne (bombardier d'eau) : appelée par le joueur sur une zone, voir AirSupport.cs
+            if (!SetupAirStation(r, mission.Get(F, $"Reinforcement{i}ETA") != null ? eta : 30))
+                _pending.Add((eta, r, mission.GetInt(F, $"Reinforcement{i}SpawnPoint", 1)));
             if (!Teams.Contains(TeamCode(r)))
                 Teams.Add(TeamCode(r));
         }
@@ -148,6 +151,7 @@ public sealed partial class UnitManager
         }
         UpdateHealth(dt);
         UpdateLadders(dt);
+        UpdateAirStrike();
         foreach (Unit u in Units)
             Move(u, dt);
         UpdateVehicleObstacles();

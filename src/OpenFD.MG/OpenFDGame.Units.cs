@@ -417,6 +417,14 @@ public sealed partial class OpenFDGame
                 else if (u.Moving)
                     _audio.Keep(u, "SC_RUN_GENERIC_FIREMAN", u.Position, 0.5f);
             }
+            // bombardier d'eau : bruit de l'avion pendant son passage, qui monte puis redescend (il arrive, passe, s'en va)
+            if (_session.Units.Strike is { } air)
+            {
+                float t0 = air.Pass - _session.Units.AirBefore;
+                float k = (_session.Time - t0) / MathF.Max(0.1f, air.End - t0);
+                if (k >= 0 && k <= 1)
+                    _audio.Keep(air, "AIRSTRIKE", _audio.Listener, MathF.Pow(MathF.Sin(MathF.PI * k), 1.5f));
+            }
             // feux : les 6 plus proches ; étiquette FIRE<type>_<niveau 01..16>_1 selon l'intensité (choix estimé)
             foreach (Fire.HotPoint h in _session.Fire.HotPoints.Where(h => h.IsBurning)
                 .OrderBy(h => SN.Vector2.DistanceSquared(new(h.Position.X, h.Position.Y), new(_audio.Listener.X, _audio.Listener.Y))).Take(6))

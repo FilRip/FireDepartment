@@ -40,6 +40,14 @@ public sealed partial class OpenFDGame
             _mPrev = m;
             return;
         }
+        // visée du bombardier d'eau : Échap l'annule (sans ouvrir la pause)
+        if (_airTargeting && Pressed(k, Keys.Escape))
+        {
+            AirTargetInput(new KeyboardStateLike(true), false, false, m.X, m.Y);
+            _kPrev = k;
+            _mPrev = m;
+            return;
+        }
         if (Pressed(k, Keys.Escape) || Pressed(k, Keys.Space))
         {
             OpenPause();
@@ -155,15 +163,17 @@ public sealed partial class OpenFDGame
             _dragM = false;
         if (_dragL && m.LeftButton == ButtonState.Released)
         {
-            if (!_moved)
-                Select(m.X, m.Y, shift);
-            else
+            // (clic de visée du bombardier d'eau : pris par AirTargetInput)
+            if (_moved)
                 SelectBox(_downX, _downY, m.X, m.Y, shift);
+            else if (!AirTargetInput(new KeyboardStateLike(false), true, false, m.X, m.Y))
+                Select(m.X, m.Y, shift);
             _dragL = false;
         }
         if (_dragR && m.RightButton == ButtonState.Released)
         {
-            if (!_moved)
+            // (clic droit pendant la visée du bombardier : annule la visée, pas d'ordre)
+            if (!_moved && !AirTargetInput(new KeyboardStateLike(false), false, true, m.X, m.Y))
                 CommandWithFeedback(m.X, m.Y);
             _dragR = false;
         }
