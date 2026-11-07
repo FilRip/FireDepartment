@@ -913,6 +913,8 @@ public sealed partial class OpenFDGame
             want = Cur.Bulldozer;   // débris : le bulldozer les dégage
         else if (_sel.Any(u => u.IsAerial && !u.Destroyed) && OpeningAt(x, y) is { } hw && _session.Units.IsHighWindow(hw))
             want = Cur.Ladder;      // fenêtre d'étage : dresser l'échelle
+        else if (walkers.Count > 0 && Ground(x, y) is { } stairAt && _session.Units.TeleportEndNear(stairAt))
+            want = Cur.Enter;       // icône d'escalier : y entrer (il ressort par l'autre)
         else if (walkers.Count == 0)
             want = UnitAt(x, y) != null ? Cur.Unit : Cur.Normal;
         else if (GrappleAt(x, y) != null)

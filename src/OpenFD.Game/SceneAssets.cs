@@ -290,6 +290,19 @@ public sealed class SceneAssets
 
     private List<string>? _missions;
 
+    /// <summary>
+    /// Ciel d'une eau (cubemap « Set1_RTSet1_LF…_cube ») : l'entrée de la banque de textures qui commence par la première
+    /// face nommée dans le matériau et finit par « _cube ». Ses premières données sont la première face (lue comme une image).
+    /// </summary>
+    public byte[]? CubeTexture(string mission, string firstFace)
+    {
+        string n = Path.GetFileNameWithoutExtension(firstFace.Replace('\\', '/')).Trim();
+        string dir = "Gfx\\Textures\\" + mission + "\\";
+        string? p = _files.List("Gfx\\Textures\\").FirstOrDefault(f => f.StartsWith(dir, StringComparison.OrdinalIgnoreCase)
+            && f[dir.Length..].StartsWith(n, StringComparison.OrdinalIgnoreCase) && f.EndsWith("_cube", StringComparison.OrdinalIgnoreCase));
+        return p != null ? _files.Read(p) : null;
+    }
+
     public byte[]? Texture(string mission, string name) => ResolveTex(mission, name) is { } p ? _files.Read(p) : null;
 
     private static bool IsSecondMap(string n, string rest) =>

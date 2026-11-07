@@ -266,7 +266,7 @@ public sealed partial class OpenFDGame
     private void RenderGhosts()
     {
         Microsoft.Xna.Framework.Graphics.GraphicsDevice gd = GraphicsDevice;
-        List<Unit> men = _session.Units.Active.Where(u => !u.IsVehicle).ToList();
+        List<Unit> men = _session.Units.Active.Where(u => !u.IsVehicle && u.Stairs == null).ToList();
         if (men.Count == 0)
             return;
         Microsoft.Xna.Framework.Graphics.DepthStencilState oldDepth = gd.DepthStencilState;
@@ -308,6 +308,8 @@ public sealed partial class OpenFDGame
             bool moving = SN.Vector3.Distance(a.LastPos, c.Position) > 1f;
             a.LastPos = c.Position;
             a.MovingFor = moving ? 0.3f : MathF.Max(0, a.MovingFor - dt);
+            if (c.Carrier is { Stairs: not null })
+                continue;   // porté dans un escalier : caché avec son porteur
             if (c.Carrier is { } cu)
             {
                 // porté : à la place du porteur, avec son cap et sa cadence (les animations des deux vont ensemble)
@@ -322,7 +324,8 @@ public sealed partial class OpenFDGame
                 still.Add(c);
         }
         List<Unit> stillUnits = new List<Unit>();
-        foreach (Unit u in _session.Units.Active.Where(u => !u.IsVehicle))
+        // (dans un escalier : caché jusqu'à ce qu'il ressorte de l'autre côté)
+        foreach (Unit u in _session.Units.Active.Where(u => !u.IsVehicle && u.Stairs == null))
         {
             CharAnim a = Char(u, u.Model, "Design\\Unit\\" + u.ClassPath + ".class");
             bool axe = u.Opening != null && u.OpeningBreak && !u.Moving;

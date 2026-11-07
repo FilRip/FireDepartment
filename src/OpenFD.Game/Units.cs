@@ -54,6 +54,8 @@ public sealed partial class UnitManager
         if (Environment.GetEnvironmentVariable("FD3_NOBLOCK") == null)
             Paths.BuildObstacles(s.Level);
         LoadOpenings(s.Level);
+        LoadTeleports(s.Level);
+        FindWater();
         LockBuriedRubble();   // voir Dog.cs
         AssignLevers(s.Level);
         Paths.BlockThinWalls(Openings, KeepPoints());
@@ -80,10 +82,21 @@ public sealed partial class UnitManager
             // (la mission Fireworks écrit « REINFORECEMENT1ETA » : faute de frappe d'origine, valeur par défaut 60 s)
             float eta = mission.GetFloat(F, $"Reinforcement{i}ETA", 60);
             // caserne aérienne (bombardier d'eau) : appelée par le joueur sur une zone, voir AirSupport.cs
-            if (!SetupAirStation(r, mission.Get(F, $"Reinforcement{i}ETA") != null ? eta : 30))
-                _pending.Add((eta, r, mission.GetInt(F, $"Reinforcement{i}SpawnPoint", 1)));
-            if (!Teams.Contains(TeamCode(r)))
-                Teams.Add(TeamCode(r));
+            if (SetupAirStation(r, mission.Get(F, $"Reinforcement{i}ETA") != null ? eta : 30))
+            {
+                if (!Teams.Contains(TeamCode(r)))
+                    Teams.Add(TeamCode(r));
+                continue;
+            }
+            // même caserne qu'une équipe déjà là (TMI : deux « E9 » de plus en renfort) : une équipe à part, « E9-2 », « E9-3 »
+            string code = TeamCode(r);
+            int same = 1;
+            while (Teams.Contains(same == 1 ? code : $"{code}-{same}"))
+                same++;
+            if (same > 1)
+                r += "#" + same;
+            _pending.Add((eta, r, mission.GetInt(F, $"Reinforcement{i}SpawnPoint", 1)));
+            Teams.Add(TeamCode(r));
         }
     }
 
@@ -189,7 +202,7 @@ public sealed partial class UnitManager
     /// <summary>Nombre de pompiers (hors véhicules) d'une équipe de la caserne.</summary>
     private int CrewSize(string cfgName)
     {
-        ClassFile? cfg = Class("Design\\Firestation\\" + cfgName + ".cfg");
+        ClassFile? cfg = Class("Design\\Firestation\\" + CfgFile(cfgName) + ".cfg");
         if (cfg == null)
             return 0;
         return Enumerable.Range(1, 20).Select(i => cfg.Get("FIRESTATION", $"UNIT{i:00}")?.Trim('"', ' '))
@@ -200,11 +213,24 @@ public sealed partial class UnitManager
     public List<string> Teams { get; } = new();
 
     /// <summary>Nom de code d'une équipe de la caserne ([FIRESTATION] CodeName), sinon le nom du fichier.</summary>
-    private string TeamCode(string cfgName) => Class("Design\\Firestation\\" + cfgName + ".cfg")?.Get("FIRESTATION", "CodeName")?.Trim('&', '"', ' ') is { Length: > 0 } c ? c : cfgName;
+    /// <summary>
+    /// Code de l'équipe (« E9 ») ; un renfort qui reprend la caserne d'une autre équipe est noté « classic_E9#2 » et devient
+    /// « E9-2 » (une ligne à part dans le cadre des équipes).
+    /// </summary>
+    private string TeamCode(string cfgName)
+    {
+        string file = CfgFile(cfgName);
+        string code = Class("Design\\Firestation\\" + file + ".cfg")?.Get("FIRESTATION", "CodeName")?.Trim('&', '"', ' ') is { Length: > 0 } c ? c : file;
+        int hash = cfgName.IndexOf('#');
+        return hash >= 0 ? $"{code}-{cfgName[(hash + 1)..]}" : code;
+    }
+
+    /// <summary>Nom du fichier de caserne, sans le numéro d'équipe en double (« classic_E9#2 » → « classic_E9 »).</summary>
+    private static string CfgFile(string cfgName) => cfgName.IndexOf('#') is int h and >= 0 ? cfgName[..h] : cfgName;
 
     private void Dispatch(string cfgName, int spawn)
     {
-        ClassFile? cfg = Class("Design\\Firestation\\" + cfgName + ".cfg");
+        ClassFile? cfg = Class("Design\\Firestation\\" + CfgFile(cfgName) + ".cfg");
         if (cfg == null)
         {
             Log.Add($"Équipe introuvable : {cfgName}");
@@ -222,6 +248,8 @@ public sealed partial class UnitManager
             Unit? u = Create(v, true, start);
             if (u == null)
                 continue;
+            if (u.IsBoat)
+                PutOnWater(u);
             u.Heading = MathF.Atan2(end.Y - start.Y, end.X - start.X);
             Order(u, end, refuseUnreachable: false);
             lead ??= u;
@@ -389,6 +417,7 @@ public sealed partial class UnitManager
         u.CanRepair = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanRepair");
         u.CanGrapple = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanGrapplin");
         u.CanLadder = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanLadder");
+        u.IsBoat = vehicle && (string.Equals(c.Get("UNIT", "Type")?.Trim('"', ' '), "FIREBOAT", StringComparison.OrdinalIgnoreCase) || c.GetBool("MOVING", "NoGroundContact"));
         u.IsAerial = vehicle && Enumerable.Range(1, 9).Any(i => string.Equals(c.Get("CAPACITIES_ACTIONS", $"Action{i}")?.Trim('"', ' '), "LADDER", StringComparison.OrdinalIgnoreCase));
         if (u.IsAerial)
             SetupLadder(u, c, gfx);
@@ -581,6 +610,8 @@ public sealed partial class UnitManager
         Paths.PathingVehicle = u.IsVehicle && !drive;
         Paths.PathingGrapple = false;   // le scout ne passe au grappin que sur ordre (clic droit sur la flèche) : sinon il prend le portail comme les autres
         Paths.PathingLadder = u.CanLadder && !u.IsVehicle;   // par les échelles dressées (Ladders.cs)
+        Paths.PathingBoat = u.IsBoat;
+        u.FakeStairs = null;
         Paths.PathingBreak = u.CanBreak;
         Paths.PathingUse = u.CanUse;
         u.PassingWindow = false;
@@ -588,12 +619,14 @@ public sealed partial class UnitManager
         Paths.SelfId = u.IsVehicle ? u.Id : 0;
         bool partial = false;
         // sur l'échelle : il finit d'abord de monter ou de descendre ; le chemin part de là où il arrivera
-        Vector2 from = u.OnLadder != null ? LadderExit(u, Walkable(dest)) : new Vector2(u.Position.X, u.Position.Y);
+        // (dans un escalier : depuis l'autre bout)
+        Vector2 from = u.OnLadder != null ? LadderExit(u, Walkable(dest)) : u.Stairs != null ? u.StairsTo : new Vector2(u.Position.X, u.Position.Y);
         try
         {
             List<Vector2> path = FindPath(from, Walkable(dest), out partial);
             foreach (Vector2 p in path)
                 u.Path.Enqueue(p);
+            TeleportAtDestination(u, dest);   // ordre sur une icône d'escalier : il le prend
         }
         finally
         {
@@ -602,6 +635,7 @@ public sealed partial class UnitManager
             Paths.SelfId = 0;
             Paths.PathingGrapple = false;
             Paths.PathingLadder = false;
+            Paths.PathingBoat = false;
             Paths.PathingBreak = false;
             Paths.PathingUse = false;
         }
@@ -846,6 +880,15 @@ public sealed partial class UnitManager
             return;
         }   // sur l'échelle : voir Ladders.cs
         if (u.Path.Count > 0 && StartLadderIfNeeded(u, u.Path.Peek()))
+            return;
+        if (u.Stairs != null)
+        {
+            UpdateTeleport(u, dt);
+            return;
+        }   // dans un escalier : voir Teleports.cs
+        if (u.FakeStairs != null && u.Path.Count == 0)
+            ReachFakeStairs(u);
+        if (u.Path.Count > 0 && StartTeleportIfNeeded(u, u.Path.Peek()))
             return;
         if (u.Path.Count > 0 && StartClimbIfNeeded(u, u.Path.Peek()))
             return;

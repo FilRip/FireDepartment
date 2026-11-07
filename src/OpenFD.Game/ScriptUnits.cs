@@ -194,7 +194,7 @@ public sealed partial class UnitManager
     {
         List<(string cls, string? icon, bool vehicle, bool ambulance)> res = new();
         string? cfgName = _toGrant.Concat(_granted).Select(t => t.cfg).FirstOrDefault(c => TeamCode(c) == team);
-        if (cfgName == null || Class("Design\\Firestation\\" + cfgName + ".cfg") is not { } cfg)
+        if (cfgName == null || Class("Design\\Firestation\\" + CfgFile(cfgName) + ".cfg") is not { } cfg)
             return res;
         for (int i = 1; i <= 20; i++)
         {

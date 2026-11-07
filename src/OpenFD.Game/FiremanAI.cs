@@ -61,7 +61,7 @@ public sealed partial class UnitManager
           || (!u.Nozzle.InfiniteReserve && u.Nozzle.Reserve <= 0) || u.GoTo != null || u.Opening != null
           || (u.GoToVehicle != null && (u.Nozzle.Reserve < u.Nozzle.ReserveMax || Civilians.Any(c => c.Leader == u)))
           || u.UseTarget != null || u.ReviveTarget != null || u.Boarding || u.Carrying != null || u.Climb != ClimbPhase.None
-          || u.OnLadder != null);
+          || u.OnLadder != null || u.Stairs != null);
 
     /// <summary>
     /// Feu le plus intéressant (le plus proche, et le plus fort) que l'unité voit à moins de <paramref name="range"/>,
@@ -81,7 +81,9 @@ public sealed partial class UnitManager
             float d = Vector2.Distance(me, f);
             if (d > range || d < (minRange ?? u.Nozzle!.RangeMin))
                 continue;
-            if (MathF.Abs(h.Position.Z - u.Position.Z) > 350)
+            // hauteur : un pompier à pied, son étage ; la lance d'un véhicule porte aussi en hauteur (toits, étages)
+            float dz = h.Position.Z - u.Position.Z;
+            if (u.IsVehicle ? dz < -350 || dz > VehicleFireHeight : MathF.Abs(dz) > 350)
                 continue;
             if (angle < MathF.PI && MathF.Abs(MathF.IEEERemainder(MathF.Atan2(f.Y - me.Y, f.X - me.X) - u.Heading, 2 * MathF.PI)) > angle)
                 continue;
@@ -93,7 +95,8 @@ public sealed partial class UnitManager
             Paths.PathingVehicle = true;
             Paths.Clearance = 0;
             Vector2 end = f - Vector2.Normalize(f - me + new Vector2(0.01f, 0)) * 120;
-            bool seen = u.IsVehicle ? Paths.WaterLineFree(me, end) : LineFree(me, end, ignoreFire: true);
+            // feu en hauteur (sur un toit) : le jet passe au-dessus du bâtiment qui le porte (le bout de la ligne peut y être)
+            bool seen = u.IsVehicle ? Paths.WaterLineFree(me, end, elevated: dz > FloorStep) : LineFree(me, end, ignoreFire: true);
             Paths.PathingVehicle = saved;
             Paths.Clearance = savedClear;
             if (!seen)
@@ -103,6 +106,9 @@ public sealed partial class UnitManager
         }
         return best;
     }
+
+    /// <summary>Hauteur maximale (au-dessus du véhicule) d'un feu que la lance d'un véhicule arrose d'elle-même (toits, étages).</summary>
+    public const float VehicleFireHeight = 1500f;
 
     // ---- diagnostics (OpenFD.Tools) ----
     /// <summary>Pourquoi le véhicule n'arrose pas le feu h de lui-même (essais).</summary>
