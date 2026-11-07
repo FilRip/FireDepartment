@@ -210,10 +210,17 @@ public sealed partial class OpenFDGame
     // déplace, tourne et approche la caméra
     private (SN.Vector3 t, float yaw, float pitch, float dist)? _camPrev;
     private float _camCbWait;
+    /// <summary>
+    /// Caméra déplacée par le script (saut vers un repère, glissement, retour après une cinématique) : pendant ce temps, et
+    /// un court instant après, ses changements ne comptent pas comme des gestes du joueur (le didacticiel validait seul ses
+    /// objectifs « déplacer, tourner, approcher la caméra » au saut de caméra qui les accompagne).
+    /// </summary>
+    private float _camScriptQuiet;
     private void CameraCallbacks(float dt)
     {
-        if (_session?.Scripts is not { } sc || _cineOn || _paused)
+        if (_session?.Scripts is not { } sc || _cineOn || _paused || _cineMoving || _camScriptQuiet > 0)
         {
+            _camScriptQuiet = MathF.Max(0, _camScriptQuiet - dt);
             _camPrev = null;
             return;
         }
@@ -313,21 +320,28 @@ public sealed partial class OpenFDGame
         bool anyBar = h.Objectives.Any(o => o.Progress && o.Status == 1);
         float barW = box * 2.4f, gap = (anyBar ? barW : box) + 8 * _scale;
         List<(string s, SN.Vector4 c, int status, bool first, float? frac)> rows = new List<(string s, SN.Vector4 c, int status, bool first, float? frac)>();
+        List<MissionHost.Objective> owners = new List<MissionHost.Objective>();   // objectif de chaque ligne (clic : la caméra y va)
         foreach (MissionHost.Objective o in h.Objectives)
         {
             SN.Vector4 col = o.Status == 2 ? new SN.Vector4(0.45f, 0.95f, 0.45f, 1) : o.Status == 0 ? new SN.Vector4(1f, 0.4f, 0.35f, 1) : new SN.Vector4(0.98f, 0.92f, 0.45f, 1);
             float? frac = o.Progress && o.Status == 1 ? Math.Clamp((o.Value - o.Min) / MathF.Max(1e-3f, o.Max - o.Min), 0, 1) : null;
             List<string> lines = Wrap(_loc.Get(o.Text), maxW - 2 * pad - gap, _scale);
             for (int k = 0; k < lines.Count; k++)
+            {
                 rows.Add((lines[k], col, o.Status, k == 0, frac));
+                owners.Add(o);
+            }
         }
         float w = MathF.Min(maxW, rows.Max(r => _ui.Measure(r.s)) + 2 * pad + gap), hgt = rows.Count * lh + 16 * _scale + lh;
         float x = m;
         _ui.Rect(x, m, w, hgt, new SN.Vector4(0.09f, 0.09f, 0.11f, 0.88f));
         _ui.Text(x + pad, m + 6 * _scale, L("&Objectives", "Objectifs"), new SN.Vector4(1f, 0.48f, 0.18f, 1));
         float y = m + 6 * _scale + lh;
-        foreach ((string? s, SN.Vector4 c, int st, bool first, float? frac) in rows)
+        _objectiveRows.Clear();
+        for (int ri = 0; ri < rows.Count; ri++)
         {
+            (string? s, SN.Vector4 c, int st, bool first, float? frac) = rows[ri];
+            _objectiveRows.Add((x, y, w, lh, owners[ri]));
             if (first && frac is { } f)
             {
                 float bh = box * 0.72f, by = y + (_ui.LineHeight - bh) / 2, t = MathF.Max(1, 1.5f * _scale);
@@ -347,6 +361,29 @@ public sealed partial class OpenFDGame
             _ui.Text(x + pad + gap, y, s, c);
             y += lh;
         }
+    }
+
+    // lignes du panneau des objectifs, à l'écran (dernière image dessinée)
+    private readonly List<(float x, float y, float w, float h, MissionHost.Objective o)> _objectiveRows = new();
+
+    /// <summary>
+    /// Clic sur un objectif : la caméra va sur son repère (LEV_SetObjectivePos, celui de la mini-carte). Sans repère, rien.
+    /// true si le clic est sur le panneau des objectifs.
+    /// </summary>
+    private bool ObjectivePress(double winX, double winY)
+    {
+        if (!_showObjectives || _cineOn || _map || Host is not { } host || host.Objectives.Count == 0)
+            return false;
+        (float mx, float my) = Fb(winX, winY);
+        foreach ((float x, float y, float w, float h, MissionHost.Objective o) in _objectiveRows)
+        {
+            if (mx < x || mx > x + w || my < y || my > y + h)
+                continue;
+            if (o.Positions.Count > 0)
+                MiniLook(new SN.Vector2(o.Positions[0].x, o.Positions[0].y));
+            return true;
+        }
+        return false;
     }
 
     private void RenderEndScreen()

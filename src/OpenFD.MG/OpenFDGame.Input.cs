@@ -113,6 +113,8 @@ public sealed partial class OpenFDGame
             pressL = false;
         if (pressL && ObjButtonPress(m.X, m.Y))
             pressL = false;   // bouton « i » : panneau des objectifs
+        if (pressL && ObjectivePress(m.X, m.Y))
+            pressL = false;   // clic sur un objectif : la caméra va sur son repère
         if (pressL && SenseButtonPress(m.X, m.Y))
             pressL = false;   // bouton « flairer » du maître-chien
         if (pressL && MiniPress(m.X, m.Y, false))
