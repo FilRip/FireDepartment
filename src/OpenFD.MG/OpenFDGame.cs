@@ -216,6 +216,9 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                     DoLadder(truck, ew);
                 _testLadder = ew;
             }
+            if (Environment.GetEnvironmentVariable("FD3_BATEAU") is { Length: > 0 } bat && bat.Split(',') is { Length: 4 } ba4
+                && _session.Units.SpawnScripted("Data/Design/Unit/Firevehicle/Veh_P_fireboat.class", "bateau", new SN.Vector3(float.Parse(ba4[0]), float.Parse(ba4[1]), 0)) is { } boat)
+                _session.Units.Drive(boat, new SN.Vector2(float.Parse(ba4[2]), float.Parse(ba4[3])));
             if (Environment.GetEnvironmentVariable("FD3_BULLDO") is { Length: > 0 } bul && bul.Split(',') is { Length: >= 3 } ba
                 && _session.Units.Openings.FirstOrDefault(o => o.Name.Equals(ba[0], StringComparison.OrdinalIgnoreCase)) is { } bd)
             {
@@ -946,6 +949,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             d.ib.Dispose();
         }
         _sceneDraw.Clear();
+        ClearWater();
         foreach (Texture2D? t in _texCache.Values)
             t?.Dispose();
         foreach (List<(MeshGpu mesh, SN.Matrix4x4 part)> l in _unitModels.Values)
@@ -1009,6 +1013,12 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             try
             {
                 SceneAssets.MeshAsset asset = _assets.LoadMesh(mission, n.Mesh, null);
+                // eau (rivière, mer : shader « FD2Water ») : dessinée à part, texture qui défile (OpenFDGame.Water.cs)
+                if (asset.Mesh.Shader.Contains("Water", StringComparison.OrdinalIgnoreCase))
+                {
+                    AddWater(asset, n.World);
+                    continue;
+                }
                 if (!ground && n.Mesh.EndsWith("_ROOF", StringComparison.OrdinalIgnoreCase) && _curBuilding >= 0)
                 {
                     // toit nommé (« M_Parn_12_ROOF » de Maidan : la place au-dessus d'une salle souterraine ; « CompClub_ROOF »…) :
@@ -1529,6 +1539,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             }
         }
         gd.RasterizerState = RasterizerState.CullNone;
+        RenderWater(_viewProj.X());  // rivière, mer : texture qui défile (OpenFDGame.Water.cs)
         RenderLids(_viewProj.X());   // couvercles noirs des pièces pas encore atteintes
         gd.SamplerStates[1] = SamplerState.AnisotropicWrap;
         gd.SamplerStates[2] = SamplerState.LinearWrap;

@@ -263,8 +263,9 @@ public sealed partial class UnitManager
             }
             // l'échelle fait partie des chemins (fenêtre fermée : pour ceux qui peuvent la casser ou l'ouvrir en passant)
             if (l.Ready && l.FootCell >= 0 && l.InsideCell >= 0)
-                Paths.Links.Add((l.FootCell, l.InsideCell, l.Window.State == OpeningState.Closed, l.Window.Breakable, l.Window.Usable));
+                Paths.Links.Add((l.FootCell, l.InsideCell, l.Window.State == OpeningState.Closed, l.Window.Breakable, l.Window.Usable, true));
         }
+        UpdateTeleportLinks();
     }
 
     /// <summary>

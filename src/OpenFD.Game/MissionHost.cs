@@ -441,6 +441,9 @@ public sealed class MissionHost : IScriptHost
             case "LEV_ROOFVISIBILITY":
                 RoofRequests.Add((V(0).AsText, V(1).AsInt == 0));
                 return Value.Zero;
+            case "ENT_ACTIVATETELEPORT":
+                Units?.ActivateTeleport(V(0).AsInt, V(1).AsInt != 0);
+                return Value.Zero;
             case "ENT_SETVISIBILITY":
                 foreach (long id in Members(V(0).AsInt))
                     if (Units?.ById(id) is { } vu)

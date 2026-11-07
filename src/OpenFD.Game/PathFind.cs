@@ -53,15 +53,20 @@ public sealed class PathFind
     public int Clearance, SelfId;
     /// <summary>Recherche en cours : véhicule qui suit sa route (ignore les véhicules garés), pompier au grappin (passe les murs à grappin).</summary>
     public bool PathingVehicle, PathingGrapple, PathingLadder;
+    /// <summary>Recherche en cours pour un bateau : seulement sur l'eau (Water.cs).</summary>
+    public bool PathingBoat;
+    /// <summary>Cases d'eau (null : pas d'eau dans la mission).</summary>
+    public bool[]? Water;
     /// <summary>Recherche en cours : le pompier peut casser (hache) ou ouvrir une fenêtre fermée pour passer par l'échelle.</summary>
     public bool PathingBreak, PathingUse;
     /// <summary>
     /// Échelles dressées devant une fenêtre : passages directs entre une case au sol et une case de l'étage. Fenêtre
     /// fermée : seulement pour qui peut la casser (breakable) ou l'ouvrir (usable).
     /// </summary>
-    public readonly List<(int a, int b, bool closed, bool breakable, bool usable)> Links = new();
+    public readonly List<(int a, int b, bool closed, bool breakable, bool usable, bool ladder)> Links = new();
 
     public bool FreeCell(int cx, int cy) => _s.Grid is not { } g || (g.Inside(cx, cy) && g.ZoneA[g.Index(cx, cy)] != 0 && (Blocked.Length == 0 || !Blocked[g.Index(cx, cy)])
+        && (Water == null ? !PathingBoat : Water[g.Index(cx, cy)] == PathingBoat)   // l'eau : aux bateaux seulement
         && (PathingVehicle || VehicleBlocked.Length == 0 || VehicleBlocked[g.Index(cx, cy)] == 0 || VehicleBlocked[g.Index(cx, cy)] == SelfId)
         && (DoorClosed.Length == 0 || !DoorClosed[g.Index(cx, cy)])
         && (PathingGrapple || !IsGrappleCell(g.Index(cx, cy))));   // mur à franchir au grappin : seulement avec un grappin
@@ -614,14 +619,15 @@ public sealed class PathFind
                     Set(k, c, Key(x, y));
                     open.Enqueue((nx, ny), c + MathF.Sqrt((tx - nx) * (tx - nx) + (ty - ny) * (ty - ny)));
                 }
-            if (!PathingLadder)
+            if (PathingVehicle || Links.Count == 0)
                 continue;
-            // échelle : de son pied à l'étage (ou l'inverse) d'un seul pas, compté comme une vingtaine de cases (la montée est lente)
+            // échelle (pompiers qui y montent) ou escalier (tous les piétons) : de son pied à l'autre bout d'un seul pas,
+            // compté comme une vingtaine de cases (la montée est lente)
             int here = Key(x, y);
-            foreach ((int la, int lb, bool closed, bool breakable, bool usable) in Links)
+            foreach ((int la, int lb, bool closed, bool breakable, bool usable, bool ladder) in Links)
             {
                 int other = la == here ? lb : lb == here ? la : -1;
-                if (other < 0)
+                if (other < 0 || (ladder && !PathingLadder))
                     continue;
                 if (closed && !(breakable && PathingBreak) && !(usable && PathingUse))
                     continue;
@@ -689,7 +695,11 @@ public sealed class PathFind
     /// portes fermées et les obstacles épais (bâtiment, gros objet : plus de <see cref="WaterHopMax"/> d'affilée) ; une
     /// bordure, une barrière, une voiture ou un véhicule ne l'arrêtent pas.
     /// </summary>
-    public bool WaterLineFree(Vector2 a, Vector2 b)
+    /// <param name="elevated">
+    /// Feu en hauteur (toit, étage) : le jet monte en cloche jusqu'au bâtiment qui le porte ; il suffit que rien ne l'arrête
+    /// avant d'atteindre ce bâtiment (le premier mur ou obstacle épais rencontré est celui du bâtiment).
+    /// </param>
+    public bool WaterLineFree(Vector2 a, Vector2 b, bool elevated = false)
     {
         if (_s.Grid is not { } g)
             return true;
@@ -703,12 +713,11 @@ public sealed class PathFind
             if (!g.Inside(cx, cy))
                 return false;
             int k = g.Index(cx, cy);
-            if (IsClosedDoor(k) || (BlockedBy.TryGetValue(k, out string? by) && by is "mur" or "cloison" or "mur de pièce"))
-                return false;
-            bool open = g.ZoneA[k] != 0 && !IsBlocked(k);
+            bool wall = IsClosedDoor(k) || (BlockedBy.TryGetValue(k, out string? by) && by is "mur" or "cloison" or "mur de pièce");
+            bool open = !wall && g.ZoneA[k] != 0 && !IsBlocked(k);
             run = open ? 0 : run + Step;
-            if (run > WaterHopMax)
-                return false;
+            if (wall || run > WaterHopMax)
+                return elevated;
         }
         return true;
     }

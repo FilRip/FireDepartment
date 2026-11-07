@@ -37,6 +37,7 @@ public sealed class Unit
     public float Shove;                                   // coup de pelle en cours : avancée du bulldozer (0 à 1, dessin)
     public bool CanGrapple;                               // grappin ([CAPACITIES_ACTIONS] CanGrapplin : le « scout »)
     public bool CanLadder;                                // pompier : monte à l'échelle d'un camion échelle ([CAPACITIES_ACTIONS] CanLadder)
+    public bool IsBoat;                                   // bateau-pompe ([UNIT] Type=FIREBOAT) : seulement sur l'eau
     public bool IsAerial;                                 // camion échelle ([CAPACITIES_ACTIONS] action LADDER)
     public float LadderSpeed = 200, LadderMax = 2500;     // [UNIT] Ladder_Translation_Speed, Ladder_Max_Length
     /// <summary>Camion échelle, repère du modèle : axe de la tourelle (ROTZ1), charnière de l'échelle (LADDER1), longueur repliée.</summary>
@@ -49,7 +50,11 @@ public sealed class Unit
     public LadderPhase LadderStep;
     public float LadderTimer;
     public bool LadderEnter;                              // sur l'échelle en montant : il entrera par la fenêtre (sinon il redescend)
-    public bool PassingWindow;                            // casse ou ouvre la fenêtre de l'échelle pour passer (chemin en cours)
+    public bool PassingWindow;
+    public Teleport? Stairs;                              // dans un escalier (Teleports.cs) : caché, il ressort à StairsTo
+    public float StairsTimer;
+    public Vector2 StairsTo;
+    public Teleport? FakeStairs;                          // envoyé sur un faux escalier (Lab) : son message à l'arrivée                            // casse ou ouvre la fenêtre de l'échelle pour passer (chemin en cours)
     public float ClimbSpeed = 133;                        // [MOVING] ClimbGrapplinSpeed (unités par seconde)
     public ClimbPhase Climb;                              // passage d'un mur au grappin (voir Grapple.cs)
     public float ClimbTimer;

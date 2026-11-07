@@ -755,6 +755,8 @@ public static class Program
                 string prefix = "Gfx\\Mission\\" + args[2] + "\\";
                 Mesh m = Mesh.Load(files.Read(prefix + args[3] + ".mesh"), files.Read(prefix + args[3] + ".meshdata"), args[3]);
                 Console.WriteLine($"{m.VertexCount} sommets ; uv {string.Join(",", Enumerable.Range(0, 8).Select(i => m.Uv[i] != null ? i.ToString() : "-"))} ; couleurs {(m.Colors != null ? "oui" : "non")} ; shader « {m.Shader} »");
+                if (m.Uv[0] is { } u0)
+                    Console.WriteLine($"  uv0 u {Enumerable.Range(0, m.VertexCount).Min(i => u0[2 * i]):0.00}..{Enumerable.Range(0, m.VertexCount).Max(i => u0[2 * i]):0.00} v {Enumerable.Range(0, m.VertexCount).Min(i => u0[2 * i + 1]):0.00}..{Enumerable.Range(0, m.VertexCount).Max(i => u0[2 * i + 1]):0.00} ; x {Enumerable.Range(0, m.VertexCount).Min(i => m.Positions[3 * i]):0}..{Enumerable.Range(0, m.VertexCount).Max(i => m.Positions[3 * i]):0} y {Enumerable.Range(0, m.VertexCount).Min(i => m.Positions[3 * i + 1]):0}..{Enumerable.Range(0, m.VertexCount).Max(i => m.Positions[3 * i + 1]):0} z {Enumerable.Range(0, m.VertexCount).Min(i => m.Positions[3 * i + 2]):0}..{Enumerable.Range(0, m.VertexCount).Max(i => m.Positions[3 * i + 2]):0}");
                 if (m.Colors != null)
                     Console.WriteLine($"  alpha des sommets : min {m.Colors.Where((b, i) => i % 4 == 3).Min()} max {m.Colors.Where((b, i) => i % 4 == 3).Max()} ; rvb exemple {m.Colors[0]},{m.Colors[1]},{m.Colors[2]} ; moyenne bvr {m.Colors.Where((b, i) => i % 4 == 0).Average(x => x):0},{m.Colors.Where((b, i) => i % 4 == 1).Average(x => x):0},{m.Colors.Where((b, i) => i % 4 == 2).Average(x => x):0} ; max {m.Colors.Where((b, i) => i % 4 != 3).Max()}");
                 foreach ((string material, int start, int count) g in m.Groups)
@@ -1501,6 +1503,112 @@ public static class Program
                     Console.WriteLine("  journal : " + l.Trim());
                 return 0;
             }
+            case "eaux":
+            {
+                // eaux <Data> <Mission> : maillages d'eau du décor (shader « FD2Water ») et leur étendue dans le monde
+                SceneAssets assets = new SceneAssets(files);
+                foreach (SceneAssets.Node n in assets.Scenery(args[2]))
+                {
+                    SceneAssets.MeshAsset a;
+                    try { a = assets.LoadMesh(args[2], n.Mesh, null); } catch { continue; }
+                    if (!a.Mesh.Shader.Contains("Water", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    System.Numerics.Vector3 mn = new(float.MaxValue), mx = new(float.MinValue);
+                    for (int i = 0; i < a.Mesh.VertexCount; i++)
+                    {
+                        System.Numerics.Vector3 v = System.Numerics.Vector3.Transform(new(a.Mesh.Positions[3 * i], a.Mesh.Positions[3 * i + 1], a.Mesh.Positions[3 * i + 2]), n.World);
+                        mn = System.Numerics.Vector3.Min(mn, v);
+                        mx = System.Numerics.Vector3.Max(mx, v);
+                    }
+                    Console.WriteLine($"{n.Mesh} : x {mn.X:0}..{mx.X:0} y {mn.Y:0}..{mx.Y:0} z {mn.Z:0}..{mx.Z:0} ({a.Mesh.Indices.Length / 3} triangles)");
+                }
+                return 0;
+            }
+            case "bateau":
+            {
+                // bateau <Data> <Mission> x y dx dy : un bateau-pompe posé en (x, y), envoyé en (dx, dy) ; puis un pompier envoyé sur l'eau
+                Session ses = new Session(files, args[2], "EASY");
+                Console.WriteLine(string.Join(" · ", ses.Units.Log.Where(l => l.StartsWith("Eau"))));
+                for (int i = 0; i < 300; i++)
+                    ses.Step();
+                Unit boat = ses.Units.SpawnScripted("Data/Design/Unit/Firevehicle/Veh_P_fireboat.class", "bateau", new System.Numerics.Vector3(float.Parse(args[3]), float.Parse(args[4]), 0))!;
+                Console.WriteLine($"bateau {boat.IsBoat} vitesse {boat.Speed:0} accélération {boat.Accel:0} lance {boat.Nozzle?.RangeMax} en ({boat.Position.X:0},{boat.Position.Y:0},{boat.Position.Z:0})");
+                ses.Units.PlayerCommand = true;
+                bool ok = ses.Units.Drive(boat, new(float.Parse(args[5]), float.Parse(args[6])));
+                Console.WriteLine($"ordre : {ok} {boat.Status} chemin {boat.Path.Count} → {(boat.Path.Count > 0 ? $"({boat.Path.Last().X:0},{boat.Path.Last().Y:0})" : "-")}");
+                Unit man = ses.Units.Units.First(u => !u.IsVehicle && !u.OnBoard);
+                bool walk = ses.Units.Order(man, new(float.Parse(args[3]), float.Parse(args[4])));
+                ses.Units.PlayerCommand = false;
+                Console.WriteLine($"pompier envoyé sur l'eau : {walk} · {man.Status} · fin du chemin {(man.Path.Count > 0 ? $"({man.Path.Last().X:0},{man.Path.Last().Y:0})" : "-")}");
+                for (int i = 0; i < 1200; i++)
+                {
+                    ses.Step();
+                    if (i % 40 == 0)
+                        Console.WriteLine($"t {ses.Time:0} bateau ({boat.Position.X:0},{boat.Position.Y:0},{boat.Position.Z:0}) {boat.Status} vitesse {boat.CurSpeed:0}");
+                }
+                return 0;
+            }
+            case "relief":
+            {
+                // relief <Data> <Mission> [pas] : carte grossière de la grille (. fermé, chiffre : hauteur du sol / 2 m)
+                Grid gr = Grid.Parse(files.Read(files.List("Design\\Mission\\" + args[2] + "\\").First(p => p.EndsWith(".grid", StringComparison.OrdinalIgnoreCase))));
+                int step = args.Length > 3 ? int.Parse(args[3]) : 4;
+                Console.WriteLine($"grille {gr.Width}×{gr.Height} ; hauteurs {gr.GroundHeight.Min():0}..{gr.GroundHeight.Max():0}");
+                for (int y = gr.Height - 1; y >= 0; y -= step * 2)
+                {
+                    System.Text.StringBuilder line = new System.Text.StringBuilder($"{y * 100,6} ");
+                    for (int x = 0; x < gr.Width; x += step)
+                    {
+                        int k = gr.Index(x, y);
+                        line.Append(gr.ZoneA[k] == 0 ? '.' : args.Length > 4 ? (char)('A' + (args[4] == "b" ? gr.ZoneB[k] : gr.ZoneA[k]) % 26) : (char)('0' + Math.Clamp((int)(gr.GroundHeight[k] / 200), 0, 9)));
+                    }
+                    Console.WriteLine(line.ToString());
+                }
+                return 0;
+            }
+            case "escaliers":
+            {
+                // escaliers <Data> <Mission> : escaliers du niveau ; un pompier envoyé sur la première icône de chacun
+                Session ses = new Session(files, args[2], "EASY");
+                for (int i = 0; i < 300; i++)
+                    ses.Step();
+                foreach (Teleport t in ses.Units.Teleports)
+                    Console.WriteLine($"{t.Name} ({t.Id}) : actif {t.Active}, {t.Duration} s, ({t.EndA.X:0},{t.EndA.Y:0}) ↔ ({t.EndB.X:0},{t.EndB.Y:0}), entrée « {t.OnEnter} » sortie « {t.OnLeave} » ; cases {t.CellA}/{t.CellB}");
+                Unit? man = ses.Units.Units.FirstOrDefault(u => !u.IsVehicle && !u.OnBoard && !u.Hidden);
+                Teleport? tp = ses.Units.Teleports.FirstOrDefault(t => t.Active);
+                if (man == null || tp == null)
+                    return 0;
+                // posé près de la première icône, envoyé dessus, puis vers un point près de l'autre bout
+                ses.Units.Teleport(man, tp.EndA + new System.Numerics.Vector2(300, 0));
+                ses.Units.PlayerCommand = true;
+                bool ok = ses.Units.Order(man, tp.EndA);
+                ses.Units.PlayerCommand = false;
+                Console.WriteLine($"ordre sur l'icône : {ok} · chemin {string.Join(" → ", man.Path.Select(p => $"({p.X:0},{p.Y:0})"))}");
+                for (int i = 0; i < 400; i++)
+                {
+                    ses.Step();
+                    if (i % 10 == 0)
+                        Console.WriteLine($"t {ses.Time:0.0} ({man.Position.X:0},{man.Position.Y:0},{man.Position.Z:0}) {man.Status} {(man.Stairs != null ? $"[dans l'escalier {man.StairsTimer:0.0}]" : "")} chemin {man.Path.Count}");
+                    if (man.Stairs == null && man.Path.Count == 0 && System.Numerics.Vector2.Distance(new(man.Position.X, man.Position.Y), tp.EndB) < 300)
+                        break;
+                }
+                return 0;
+            }
+            case "composant":
+            {
+                // composant <Data> <Mission> <nom> : tous les composants de l'objet, en hexadécimal (et texte lisible)
+                string lvPath = files.List("Design\\Mission\\" + args[2] + "\\").First(p => p.EndsWith(".level", StringComparison.OrdinalIgnoreCase));
+                Level level = Level.Parse(files.Read(lvPath));
+                foreach (LevelObject o in level.Objects.Where(o => o.Name.Equals(args[3], StringComparison.OrdinalIgnoreCase)))
+                    foreach (var c in o.Components)
+                    {
+                        byte[] b = o.ComponentBytes(c).ToArray();
+                        string txt = new string(b.Select(x => x >= 32 && x < 127 ? (char)x : '.').ToArray());
+                        Console.WriteLine($"{c.Id:X4} ({b.Length}) {BitConverter.ToString(b, 0, Math.Min(b.Length, 96))}");
+                        Console.WriteLine($"      {txt[..Math.Min(txt.Length, 160)]}");
+                    }
+                return 0;
+            }
             case "visible":
             {
                 // visible <Data> <Mission> <nom>… : visibilité de départ et octets du bloc A001 qui suivent « AA AA FF FF 0A »
@@ -1586,7 +1694,7 @@ public static class Program
                     {
                         OpenFD.Fire.HotPoint? h = ses.Fire.HotPoints.Where(x => x.IsBurning).OrderBy(x => System.Numerics.Vector3.Distance(x.Position, v.Position)).FirstOrDefault();
                         string near = h == null ? "aucun feu" : $"feu le plus proche {h.Name} à {System.Numerics.Vector3.Distance(h.Position, v.Position):0} angle {MathF.IEEERemainder(MathF.Atan2(h.Position.Y - v.Position.Y, h.Position.X - v.Position.X) - v.Heading, 2 * MathF.PI):0.00} · {ses.Units.VehicleAutoDiag(v, h)}";
-                        Console.WriteLine($"t {ses.Time,5:0} {v.Name,-22} [{v.Status}] eau {v.Nozzle!.Reserve:0} portée {v.Nozzle.RangeMin:0}-{v.Nozzle.RangeMax:0} · {near}");
+                        Console.WriteLine($"t {ses.Time,5:0} {v.Name,-22} [{v.Status}{(v.Target is { } tg ? $" dz {tg.Position.Z - v.Position.Z:0}" : "")}] eau {v.Nozzle!.Reserve:0} portée {v.Nozzle.RangeMin:0}-{v.Nozzle.RangeMax:0} · {near}");
                     }
                 }
                 return 0;
