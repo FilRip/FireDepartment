@@ -1788,6 +1788,152 @@ public static class Program
                 }
                 return 0;
             }
+            case "soigner":
+            {
+                // soigner <Data> <Mission> : postes de soins du niveau ; un pompier épuisé posé sur le premier visible, son
+                // endurance pendant 10 s (et un autre, à 10 m, pour comparer)
+                Session ses = new Session(files, args[2], "EASY");
+                foreach (HealPoint hp in ses.Units.HealPoints)
+                    Console.WriteLine($"poste {hp.Name} ({hp.Position.X:0},{hp.Position.Y:0}) visible {ses.Units.HealPointActive(hp)} modèle {hp.Model}");
+                while (ses.Time < 300 && ses.Units.Active.Count(u => !u.IsVehicle && !u.OnBoard) < 2)
+                    ses.Step();
+                HealPoint? p0 = ses.Units.HealPoints.FirstOrDefault(ses.Units.HealPointActive);
+                List<Unit> men = ses.Units.Active.Where(u => !u.IsVehicle && !u.OnBoard).Take(2).ToList();
+                if (p0 == null || men.Count < 2)
+                    return 1;
+                ses.Units.Teleport(men[0], new System.Numerics.Vector2(p0.Position.X, p0.Position.Y));
+                ses.Units.Teleport(men[1], new System.Numerics.Vector2(p0.Position.X + 1000, p0.Position.Y));
+                foreach (Unit u in men)
+                    u.Stamina = 20;
+                for (int i = 0; i < (int)(10 / Session.Dt); i++)
+                    ses.Step();
+                foreach (Unit u in men)
+                    Console.WriteLine($"{u.Name} ({u.Position.X:0},{u.Position.Y:0}) endurance {u.Stamina:0} · {u.Status}");
+                // un civil conscient qui suit le premier pompier, amené sur le poste : il doit être mis à l'abri
+                if (ses.Units.Civilians.FirstOrDefault(c => c.State == OpenFD.Game.CivilianState.Conscious && !c.Hidden) is { } cv)
+                {
+                    cv.Leader = men[0];
+                    cv.Position = men[0].Position + new System.Numerics.Vector3(60, 0, 0);
+                    for (int i = 0; i < (int)(3 / Session.Dt); i++)
+                        ses.Step();
+                    Console.WriteLine($"civil {cv.Name} : {cv.State} · {ses.Units.Rescued} sauvé(s)");
+                }
+                return 0;
+            }
+            case "appel":
+            {
+                // appel <Data> <Mission> <fonction> [secondes] : la fonction du script est appelée à 3 s ; puis, pendant ce temps,
+                // l'état des véhicules posés dans le niveau (visibles ou non, position, animation lancée)
+                Session ses = new Session(files, args[2], "EASY");
+                float end = args.Length > 4 ? float.Parse(args[4]) : 30;
+                bool called = false;
+                int k = 0;
+                while (ses.Time < end)
+                {
+                    ses.Step();
+                    if (!called && ses.Time > 3)
+                    {
+                        called = true;
+                        ses.Scripts?.TryRun(args[3]);
+                    }
+                    if (k++ % 50 == 0)
+                        foreach (Unit u in ses.Units.Units.Where(u => u.FromLevel))
+                            Console.WriteLine($"t {ses.Time:0} {u.Name} n° {u.Id} caché {u.Hidden} ({u.Position.X:0},{u.Position.Y:0},{u.Position.Z:0}) anim {(ses.Host!.PlayedAnims.TryGetValue((uint)u.Id, out (string anim, float start, bool loop) pa) ? pa.anim : "-")}");
+                }
+                foreach (string l in ses.Scripts?.Log ?? new List<string>())
+                    Console.WriteLine("script : " + l);
+                return 0;
+            }
+            case "vent":
+            {
+                // vent <Data> <Mission> [secondes] [fonction] : chaque changement du vent (force, direction en degrés) pendant la
+                // partie ; « fonction » : cette fonction du script est appelée à 5 s (Forest : Wind_direction_X2, le vent tourne)
+                Session ses = new Session(files, args[2], "EASY");
+                float end = args.Length > 3 ? float.Parse(args[3]) : 900;
+                (float p, System.Numerics.Vector3 d) last = (-1, default);
+                bool called = args.Length < 5;
+                while (ses.Time < end)
+                {
+                    ses.Step();
+                    if (!called && ses.Time > 5)
+                    {
+                        called = true;
+                        ses.Scripts?.TryRun(args[4]);
+                    }
+                    OpenFD.Fire.FireSettings fs = ses.Fire.Settings;
+                    if (fs.WindPower != last.p || fs.WindDirection != last.d)
+                    {
+                        last = (fs.WindPower, fs.WindDirection);
+                        Console.WriteLine($"t {ses.Time,5:0} s : force {fs.WindPower:0.00}, vers {MathF.Atan2(fs.WindDirection.Y, fs.WindDirection.X) * 180 / MathF.PI:0}°");
+                    }
+                }
+                return 0;
+            }
+            case "grimper":
+            {
+                // grimper <Data> <Mission> <x départ> <y départ> <x> <y> : le premier pompier à pied (après 12 s) posé au départ va au but ; sa
+                // position, son état et sa phase sur une échelle verticale, toutes les 0,5 s
+                Session ses = new Session(files, args[2], "EASY");
+                while (ses.Time < 12 || (ses.Time < 300 && !ses.Units.Active.Any(u => !u.IsVehicle && !u.OnBoard && !u.Hidden)))
+                    ses.Step();
+                Unit w = ses.Units.Active.First(u => !u.IsVehicle && !u.OnBoard && !u.Hidden);
+                ses.Units.Teleport(w, ses.Units.Paths.Walkable(new System.Numerics.Vector2(float.Parse(args[3]), float.Parse(args[4]))));
+                ses.Step();
+                ses.Units.PlayerCommand = true;
+                Console.WriteLine($"ordre : {ses.Units.Order(w, new System.Numerics.Vector2(float.Parse(args[5]), float.Parse(args[6])))} de ({w.Position.X:0},{w.Position.Y:0},{w.Position.Z:0})");
+                ses.Units.PlayerCommand = false;
+                for (int i = 0; i < 2000; i++)
+                {
+                    ses.Step();
+                    if (i % 5 == 0)
+                        Console.WriteLine($"t {ses.Time:0.0} ({w.Position.X:0},{w.Position.Y:0},{w.Position.Z:0}) {w.Vertical} {w.Status}");
+                    if (w.Path.Count == 0 && w.Stairs == null && i > 10)
+                        break;
+                }
+                Console.WriteLine($"fin ({w.Position.X:0},{w.Position.Y:0},{w.Position.Z:0}) {w.Status}");
+                return 0;
+            }
+            case "solgrille":
+            {
+                // solgrille <Data> <Mission> x0 y0 x1 y1 : hauteur du sol de chaque case (en mètres ; « -- » hors zone)
+                Session ses = new Session(files, args[2], "EASY", false);
+                Grid g = ses.Grid!;
+                (int ax, int ay) = g.CellOf(new System.Numerics.Vector3(float.Parse(args[3]), float.Parse(args[4]), 0));
+                (int bx, int by) = g.CellOf(new System.Numerics.Vector3(float.Parse(args[5]), float.Parse(args[6]), 0));
+                for (int y = by; y >= ay; y--)
+                {
+                    System.Text.StringBuilder sb = new System.Text.StringBuilder($"{y * 100,6} ");
+                    for (int x = ax; x <= bx; x++)
+                        sb.Append(!g.Inside(x, y) || g.ZoneA[g.Index(x, y)] == 0 ? "  --" : $"{g.GroundHeight[g.Index(x, y)] / 100,4:0}");
+                    Console.WriteLine(sb);
+                }
+                Console.WriteLine($"{"",6} x de {ax * 100} à {bx * 100}");
+                return 0;
+            }
+            case "boite":
+            {
+                // boite <Data> <modèle Gfx> : boîte englobante de chaque pièce du modèle, et les points nommés du squelette
+                SceneAssets assets = new OpenFD.Game.SceneAssets(files);
+                foreach (SceneAssets.Node part in assets.ModelParts(args[2]))
+                {
+                    Mesh m = assets.LoadMesh("", part.Mesh, "gfx").Mesh;
+                    System.Numerics.Vector3 lo = new System.Numerics.Vector3(float.MaxValue), hi = new System.Numerics.Vector3(float.MinValue);
+                    for (int i = 0; i < m.VertexCount; i++)
+                    {
+                        System.Numerics.Vector3 v = System.Numerics.Vector3.Transform(new System.Numerics.Vector3(m.Positions[i * 3], m.Positions[i * 3 + 1], m.Positions[i * 3 + 2]), part.World);
+                        lo = System.Numerics.Vector3.Min(lo, v);
+                        hi = System.Numerics.Vector3.Max(hi, v);
+                    }
+                    Console.WriteLine($"{part.Mesh,-40} ({lo.X:0},{lo.Y:0},{lo.Z:0}) - ({hi.X:0},{hi.Y:0},{hi.Z:0})");
+                }
+                if (OpenFD.Game.CharacterRig.Build(assets, files, args[2]) is { } rig)
+                {
+                    System.Numerics.Matrix4x4[] pose = rig.Pose(null, 0);
+                    for (int i = 0; i < rig.Names.Length; i++)
+                        Console.WriteLine($"  point {rig.Names[i],-30} ({pose[i].Translation.X:0},{pose[i].Translation.Y:0},{pose[i].Translation.Z:0})");
+                }
+                return 0;
+            }
             case "sauvercivil":
             {
                 // sauvercivil <Data> <Mission> [secondes] [nom] [suivi] : comme F6 (débogage), sauve ce civil (sinon le premier
@@ -1882,7 +2028,7 @@ public static class Program
                 string lvPath = files.List("Design\\Mission\\" + args[2] + "\\").First(p => p.EndsWith(".level", StringComparison.OrdinalIgnoreCase));
                 Level level = Level.Parse(files.Read(lvPath));
                 foreach (LevelObject o in level.Objects.Where(o => o.Name.Equals(args[3], StringComparison.OrdinalIgnoreCase)))
-                    foreach (var c in o.Components)
+                    foreach (Component c in o.Components)
                     {
                         byte[] b = o.ComponentBytes(c).ToArray();
                         string txt = new string(b.Select(x => x >= 32 && x < 127 ? (char)x : '.').ToArray());

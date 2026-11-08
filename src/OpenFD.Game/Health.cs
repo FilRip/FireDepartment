@@ -86,7 +86,9 @@ public sealed partial class UnitManager
                 if (sp.Intensity > 1 && Vector3.DistanceSquared(sp.Position, u.Position) < sp.Class.InfluenceRange * sp.Class.InfluenceRange)
                     smoke += Math.Min(1, sp.Intensity / Math.Max(1, sp.Max));
             float loss = (heat * u.HeatCoef * u.ScriptHeatCoef * HeatFactor + smoke * u.SmokeCoef * SmokeFactor * 10) * dt * StaminaLoss;
-            bool healing = !u.Moving && Units.Any(a => a.HealsUnits && !a.Destroyed && !a.OnBoard && Vector3.Distance(a.Position, u.Position) < VehicleReach);
+            // près d'une ambulance (ou de l'hélicoptère posé), ou sur un poste de soins du niveau (pompiers seulement)
+            bool healing = !u.Moving && (Units.Any(a => a.HealsUnits && !a.Destroyed && !a.OnBoard && !a.Hidden && Vector3.Distance(a.Position, u.Position) < VehicleReach)
+                || (!u.IsVehicle && HealPoints.Any(p => HealPointActive(p) && Vector2.Distance(new(p.Position.X, p.Position.Y), new(u.Position.X, u.Position.Y)) < HealPointReach)));
             if (loss > 0)
                 u.Stamina -= loss;
             else if (healing)

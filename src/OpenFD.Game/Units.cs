@@ -61,6 +61,7 @@ public sealed partial class UnitManager
         LoadOpenings(s.Level);
         LoadTeleports(s.Level);
         LoadOccupations(s.Level);
+        LoadLevelVehicles(s.Level);
         FindWater();
         LockBuriedRubble();   // voir Dog.cs
         AssignLevers(s.Level);
@@ -387,7 +388,8 @@ public sealed partial class UnitManager
         return Class("Design\\Unit\\" + cand + ".class") != null ? cand : classRel;
     }
 
-    private Unit? Create(string classRel, bool vehicle, Vector2 pos)
+    /// <summary>Nouvelle unité de cette classe ; <paramref name="id"/> : son numéro imposé (véhicule posé dans le niveau).</summary>
+    private Unit? Create(string classRel, bool vehicle, Vector2 pos, int? id = null)
     {
         classRel = WithNationality(classRel);
         ClassFile? c = Class("Design\\Unit\\" + classRel + ".class");
@@ -397,7 +399,7 @@ public sealed partial class UnitManager
         string gfx = SceneAssets.GfxPath(vehicle ? "Unit\\FireVehicle" : "Unit\\Fireman", model);
         Unit u = new Unit
         {
-            Id = _nextId++, Name = classRel[(classRel.LastIndexOf('\\') + 1)..], ClassPath = classRel, Model = gfx, IsVehicle = vehicle,
+            Id = id ?? _nextId++, Name = classRel[(classRel.LastIndexOf('\\') + 1)..], ClassPath = classRel, Model = gfx, IsVehicle = vehicle,
             Position = new Vector3(pos, Ground(pos)),
             Speed = vehicle ? c.GetFloat("MOVING", "ForwardSpeed", 15) * VehicleSpeedFactor : c.GetFloat("MOVING", "RunSpeed", 10) * FiremanSpeedFactor,
         };
@@ -611,6 +613,11 @@ public sealed partial class UnitManager
         }
         if (u.Unconscious)
             return false;
+        if (u.Fixed)
+        {
+            u.Status = "ne roule pas (posé par le script)";
+            return false;
+        }
         u.Target = target;
         if (PlayerOrder && target == null)
             u.FireFocus = null;   // simple déplacement demandé par le joueur : l'IA reprend « le plus près de lui »

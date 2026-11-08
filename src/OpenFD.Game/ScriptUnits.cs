@@ -107,8 +107,8 @@ public sealed partial class UnitManager
     {
         if (initialByScript && _initial is { } ini && !_initialCalled)
         {
-            _deferredCrew = Units.Count(u => !u.IsVehicle) + Units.Sum(v => v.Crew.Count);   // équipe de départ seulement (les renforts sont comptés à part)
-            Units.Clear();
+            _deferredCrew = Units.Count(u => !u.IsVehicle && !u.FromLevel) + Units.Sum(v => v.Crew.Count);   // équipe de départ seulement (les renforts sont comptés à part)
+            Units.RemoveAll(u => !u.FromLevel);   // (les véhicules posés dans le niveau restent)
             _byId.Clear();
             _initialDeferred = true;
         }

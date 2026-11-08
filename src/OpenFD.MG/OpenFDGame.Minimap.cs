@@ -71,6 +71,8 @@ public sealed partial class OpenFDGame
     }
 
     private bool MiniVisible => !_map && _session?.Grid != null && _gridW > 0;
+    /// <summary>Mini-carte cachée par le joueur (touche M) : ni dessinée ni cliquable ; le reste de l'interface ne bouge pas.</summary>
+    private bool _miniHidden;
 
     // monde → mini-carte (nord en haut, comme l'image du jeu)
     private SN.Vector2 MiniPos(float wx, float wy)
@@ -81,7 +83,7 @@ public sealed partial class OpenFDGame
 
     private SN.Vector2? MiniToWorld(double winX, double winY)
     {
-        if (!MiniVisible)
+        if (!MiniVisible || _miniHidden)
             return null;
         (float sx, float sy) = Fb(winX, winY);
         (float x, float y, float w, float h) r = MiniRect();
@@ -92,7 +94,7 @@ public sealed partial class OpenFDGame
 
     private void RenderMinimap()
     {
-        if (!MiniVisible)
+        if (!MiniVisible || _miniHidden)
             return;
         (float x, float y, float w, float h) r = MiniRect();
         float px = MathF.Max(1, _scale), b = 3 * _scale;
@@ -213,9 +215,17 @@ public sealed partial class OpenFDGame
         (float x, float y, float s) = ObjButton();
         if (sx < x || sy < y || sx > x + s * IconW / IconH || sy > y + s)
             return false;
+        ToggleObjectives();
+        return true;
+    }
+
+    /// <summary>Bouton « i » ou touche I : montre ou cache les objectifs (et les derniers messages de la mission).</summary>
+    private void ToggleObjectives()
+    {
+        if (Host is not { } h || h.Objectives.Count == 0)
+            return;
         _showObjectives = !_showObjectives;
         _showMessageHistory = _showObjectives;   // le bouton « I » réaffiche aussi les derniers messages de la mission
-        return true;
     }
 
     // point du sol vu à une position de l'écran (pixels de l'image) ; vers l'horizon, un point lointain dans la même direction

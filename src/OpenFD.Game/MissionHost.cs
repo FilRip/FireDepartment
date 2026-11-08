@@ -75,6 +75,15 @@ public sealed class MissionHost : IScriptHost
     public Dictionary<uint, bool> SwitchedStates { get; } = new();
     /// <summary>Objets du décor déplacés par le script (ENT_SetPosition : le train de l'Eurotunnel…).</summary>
     public Dictionary<uint, System.Numerics.Vector2> MovedObjects { get; } = new();
+    /// <summary>
+    /// Animations lancées par le script (ANM_Play(entité, « SingleItem/si_… », « hold », boucle)) : nom (« SingleItem\\si_… »),
+    /// heure de départ (temps de la partie) et lecture en boucle. Forest et Stadium : l'hélicoptère se pose et redécolle.
+    /// </summary>
+    public Dictionary<uint, (string anim, float start, bool loop)> PlayedAnims { get; } = new();
+    /// <summary>Objets du décor tournés par le script (ENT_SetOrientation, en radians comme le niveau : la manche à air de Forest).</summary>
+    public Dictionary<uint, float> TurnedObjects { get; } = new();
+    /// <summary>Repère du vent du niveau (point de type « wind » : Forest, « wind_direction ») ; null s'il n'y en a pas.</summary>
+    private readonly uint? _windId;
 
     public MissionHost(Level level, FireWorld fire)
     {
@@ -84,7 +93,18 @@ public sealed class MissionHost : IScriptHost
         _byName = new(StringComparer.OrdinalIgnoreCase);
         foreach (LevelObject o in level.Objects)
             _byName.TryAdd(o.Name, o);
+        // vent : sa direction est celle du repère (rotation autour de Z) ; sa force reste 1 (sans effet) tant que le
+        // script ne l'a pas réglée (ENT_SetWindPower)
+        if (level.Objects.FirstOrDefault(o => o.ClassPath.EndsWith("\\winddirection", StringComparison.OrdinalIgnoreCase) && o.HasTransform) is { } wind)
+        {
+            _windId = wind.Id;
+            SetWindDirection(wind.Rotation.Z);
+        }
     }
+
+    /// <summary>Le vent souffle vers cet angle (radians, 0 : vers +X) : le feu se propage plus vite dans ce sens.</summary>
+    private void SetWindDirection(float angle) =>
+        _fire.Settings.WindDirection = new System.Numerics.Vector3(MathF.Cos(angle), MathF.Sin(angle), 0);
 
     private List<HotPoint> HotPointsOf(long id)
     {
@@ -474,10 +494,28 @@ public sealed class MissionHost : IScriptHost
                     else
                         MovedObjects[(uint)id] = new((float)V(1).AsNum, (float)V(2).AsNum);
                 return Value.Zero;
-            case "ENT_SETORIENTATION":   // degrés (0 : vers +X)
+            case "ENT_SETORIENTATION":   // unités : degrés (0 : vers +X) ; objets du décor et repère du vent : radians
                 foreach (long id in Members(V(0).AsInt))
                     if (Units?.ById(id) is { } ru0)
                         ru0.Heading = (float)(V(1).AsNum * Math.PI / 180);
+                    else
+                    {
+                        TurnedObjects[(uint)id] = (float)V(1).AsNum;
+                        if (_windId == id)
+                            SetWindDirection((float)V(1).AsNum);
+                    }
+                return Value.Zero;
+            case "ANM_PLAY":
+                foreach (long id in Members(V(0).AsInt))
+                    PlayedAnims[(uint)id] = (V(1).AsText.Replace('/', '\\'), (float)GameTime, a.Count > 3 && V(3).AsInt != 0);
+                return Value.Zero;
+            case "ANM_STOP":
+                foreach (long id in Members(V(0).AsInt))
+                    PlayedAnims.Remove((uint)id);
+                return Value.Zero;
+            // ENT_SetWindPower(force) : force du vent (Forest : 1 à 1,5, puis 3 quand il tourne) ; 1 : sans effet
+            case "ENT_SETWINDPOWER":
+                _fire.Settings.WindPower = MathF.Max(1, (float)V(0).AsNum);
                 return Value.Zero;
             case "ENT_GETORIENTATION":
             {

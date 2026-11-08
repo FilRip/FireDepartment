@@ -186,8 +186,8 @@ public sealed partial class UnitManager
     }
 
     // ---- état de la partie pour les scripts (conditions de défaite) ----
-    public bool AnyDispatched => Units.Count > 0 && !(_initialDeferred && !_initialCalled);
-    public bool HealVehicleRemaining => !AnyDispatched || Units.Any(u => u.IsAmbulance);
+    public bool AnyDispatched => Units.Any(u => !u.FromLevel) && !(_initialDeferred && !_initialCalled);   // (les véhicules posés dans le niveau ne sont pas des secours envoyés)
+    public bool HealVehicleRemaining => !AnyDispatched || Units.Any(u => u.IsAmbulance && !u.Fixed);
     public bool SupplierRemaining => !AnyDispatched || Units.Any(u => u.IsVehicle && u.ResupplyPower > 0);
     public int Victims => Civilians.Count(c => c.State == CivilianState.Dead && !_deadAtStart.Contains(c));
     private HashSet<Civilian>? _deadAtStartSet;
