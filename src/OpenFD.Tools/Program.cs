@@ -1876,6 +1876,28 @@ public static class Program
                     Console.WriteLine($"  objectif {key} : {success}");
                 return 0;
             }
+            case "loc":
+            {
+                // loc <Data> : langue et nombre de textes chargés ; clés « &… » des missions (campagne, .mis) sans texte
+                Localization loc = Localization.Load(args[1]);
+                Console.WriteLine($"langue {loc.Language} · {loc.Count} textes · édition {Localization.StartIni(args[1], "License")}");
+                System.Text.RegularExpressions.Regex key = new System.Text.RegularExpressions.Regex(@"&([A-Za-z0-9_]+)");
+                Dictionary<string, string> missing = new Dictionary<string, string>();
+                int found = 0;
+                foreach (string f in files.List("Design\\Mission\\").Where(p => p.EndsWith(".mis", StringComparison.OrdinalIgnoreCase) || p.EndsWith(".ini", StringComparison.OrdinalIgnoreCase)))
+                    foreach (System.Text.RegularExpressions.Match mt in key.Matches(System.Text.Encoding.Latin1.GetString(files.Read(f))))
+                    {
+                        string k = mt.Groups[1].Value;
+                        if (loc.Get(k) != k)
+                            found++;
+                        else
+                            missing.TryAdd(k, f);
+                    }
+                Console.WriteLine($"{found} clés trouvées, {missing.Count} sans texte :");
+                foreach (KeyValuePair<string, string> kv in missing.Take(40))
+                    Console.WriteLine($"  {kv.Key}  ({kv.Value})");
+                return 0;
+            }
             case "capacites":
             {
                 // capacites <Data> <Mission>… : objets dont le composant A026 (capacités propres à l'objet) n'est pas nul

@@ -170,14 +170,16 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _settings = Settings.Load(_files.DataDir);
         ApplySettings();
 
-        if (StartMenu && (CapturePath == null || Environment.GetEnvironmentVariable("FD3_INTRO") != null))
+        if (StartMenu && StartScreen == 0 && (CapturePath == null || Environment.GetEnvironmentVariable("FD3_INTRO") != null))
             StartIntro();
         else
             _introDone = true;
         if (StartMenu)
         {
             OpenMenu();
-            if (int.TryParse(Environment.GetEnvironmentVariable("FD3_ECRAN"), out int e0))
+            if (StartScreen != 0)
+                OpenScreenOfGame(StartScreen);   // relancé sur l'autre jeu : son écran « Campagne » ou « Autres missions »
+            else if (int.TryParse(Environment.GetEnvironmentVariable("FD3_ECRAN"), out int e0))
                 _screen = e0;
         }
         else

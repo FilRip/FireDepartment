@@ -11,7 +11,7 @@ namespace OpenFD.MG;
 public sealed partial class OpenFDGame
 {
     private Settings _settings = new();
-    private int _screen;          // 0 menu principal, 1 choix de la mission, 2 options, 3 pause, 4 sauvegardes
+    private int _screen;          // 0 menu principal, 1 choix de la mission, 2 options, 3 pause, 4 sauvegardes, 9 choix du jeu
     private int _mainIndex, _optIndex;
     private static readonly string[] TexQ = { "high", "med", "low" };
     private static readonly string[] Nats = { "", "us", "fr", "gb", "gr", "ua" };
@@ -67,11 +67,25 @@ public sealed partial class OpenFDGame
         return l;
     }
 
+    /// <summary>Argument « -windowed » : toujours en fenêtre, quel que soit le réglage enregistré (qui n'est pas modifié).</summary>
+    public bool ForceWindowed { get; set; }
+
+    // plein écran voulu maintenant : le réglage, sauf « -windowed »
+    private bool FullscreenNow => _settings.Fullscreen && !ForceWindowed;
+
+    // le joueur bascule lui-même (Alt + Entrée, options) : « -windowed » ne compte plus
+    private void ToggleFullscreen()
+    {
+        bool want = !FullscreenNow;
+        ForceWindowed = false;
+        _settings.Fullscreen = want;
+    }
+
     private void ApplyResolution()
     {
         if (CapturePath != null)
             return;
-        string key = _settings.Resolution + (_settings.Fullscreen ? "F" : "W");
+        string key = _settings.Resolution + (FullscreenNow ? "F" : "W");
         if (_appliedRes == key)
             return;
         bool first = _appliedRes == null;
@@ -82,10 +96,10 @@ public sealed partial class OpenFDGame
             _gdm.PreferredBackBufferWidth = w;
             _gdm.PreferredBackBufferHeight = h;
         }
-        else if (!first || _settings.Fullscreen)
+        else if (!first || FullscreenNow)
         {
             DisplayMode mode = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode;
-            if (_settings.Fullscreen)
+            if (FullscreenNow)
             {
                 _gdm.PreferredBackBufferWidth = mode.Width;
                 _gdm.PreferredBackBufferHeight = mode.Height;
@@ -96,9 +110,9 @@ public sealed partial class OpenFDGame
                 _gdm.PreferredBackBufferHeight = (int)Math.Min(860 * _scale, mode.Height * 0.88f);
             }
         }
-        else if (!_settings.Fullscreen && !_gdm.IsFullScreen)
+        else if (!FullscreenNow && !_gdm.IsFullScreen)
             return;   // au démarrage, sans réglage : la fenêtre par défaut
-        _gdm.IsFullScreen = _settings.Fullscreen;
+        _gdm.IsFullScreen = FullscreenNow;
         _gdm.ApplyChanges();
     }
 
@@ -112,7 +126,7 @@ public sealed partial class OpenFDGame
         bool down = alt && k.IsKeyDown(Keys.Enter);
         if (down && !_altEnterDown)
         {
-            _settings.Fullscreen = !_settings.Fullscreen;
+            ToggleFullscreen();
             ApplyResolution();
             _settings.Save();
         }
@@ -288,6 +302,11 @@ public sealed partial class OpenFDGame
             MenuInput(k, m);
             return;
         }
+        if (_screen == 9)
+        {
+            GameChoiceInput(k, m);
+            return;
+        }
         if (_screen == 6)
         {
             NetHomeInput(k, m);
@@ -360,13 +379,8 @@ public sealed partial class OpenFDGame
 
     private List<Row> MainRows() => new()
     {
-        new(L("&Campaign", "Campagne"), null, true, _ => OpenCampaign()),
-        new("Autres missions", null, true, _ =>
-        {
-            EnsureMissionList();
-            _screen = 5;
-            _menuNote = null;
-        }),
+        new(L("&Campaign", "Campagne"), null, true, _ => OpenGameFor(1)),
+        new("Autres missions", null, true, _ => OpenGameFor(5)),
         new(L("&Multiplayer", "Multijoueur"), null, true, _ => OpenMultiplayer()),
         new(L("&LoadSavedGame", "Charger une sauvegarde"), null, true, _ => OpenLoadScreen(0)),
         new(L("&Options", "Options"), null, true, _ =>
@@ -489,9 +503,9 @@ public sealed partial class OpenFDGame
                 _settings.Resolution = rs[((rs.IndexOf(_settings.Resolution) + d) % rs.Count + rs.Count) % rs.Count];
                 Changed();
             }),
-            new(O("Fullscreen"), YN(_settings.Fullscreen), true, _ =>
+            new(O("Fullscreen"), YN(FullscreenNow), true, _ =>
             {
-                _settings.Fullscreen = !_settings.Fullscreen;
+                ToggleFullscreen();
                 Changed();
             }),
             new(O("Textures"), texNames[Math.Max(0, Array.IndexOf(TexQ, _settings.Textures))], true, d =>
@@ -550,6 +564,11 @@ public sealed partial class OpenFDGame
         if (_screen == 5)
         {
             RenderMenu();
+            return;
+        }
+        if (_screen == 9)
+        {
+            RenderGameChoice();
             return;
         }
         if (_screen == 6)

@@ -35,11 +35,15 @@ public sealed class Localization
             .Where(x => x.code.StartsWith("Lang_", StringComparison.OrdinalIgnoreCase))
             .ToDictionary(x => x.code[5..].ToUpperInvariant(), x => x.dir);
         string? want = (string.IsNullOrEmpty(Forced) ? Environment.GetEnvironmentVariable("FD3_LANGUE") : Forced)?.ToUpperInvariant();
+        // sinon la langue du jeu installé (Data\Config\Start.Ini : « Language FRA »), puis celle des voix installées
+        if (want == null || !langs.ContainsKey(want))
+            want = StartIni(dataDir, "Language")?.ToUpperInvariant();
         if (want == null || !langs.ContainsKey(want))
             want = DetectFromVoices(dataDir, langs);
         if (!langs.TryGetValue(want, out string? langDir))
         {
-            want = "ENG";
+            // Fire Department 2 n'a pas de Lang_ENG : la première langue présente
+            want = langs.ContainsKey("ENG") ? "ENG" : langs.Keys.OrderBy(x => x).FirstOrDefault() ?? "ENG";
             langs.TryGetValue(want, out langDir);
         }
         if (langDir == null)
@@ -47,7 +51,29 @@ public sealed class Localization
         loc.Language = want;
         foreach (string f in Directory.EnumerateFiles(langDir, "*.loc"))
             try { loc.Parse(File.ReadAllText(f)); } catch { }
+        // textes propres à l'édition (Data\Localize\Lic_FD2\License_FD2.loc : le nom du jeu…)
+        string? lic = StartIni(dataDir, "License");
+        string? licDir = lic == null ? null : FindDir(root, "Lic_" + lic);
+        if (licDir != null)
+            foreach (string f in Directory.EnumerateFiles(licDir, "*.loc"))
+                try { loc.Parse(File.ReadAllText(f)); } catch { }
         return loc;
+    }
+
+    /// <summary>Valeur d'une ligne de Data\Config\Start.Ini (« License FD2 », « Language FRA ») ; null sans fichier.</summary>
+    public static string? StartIni(string dataDir, string key)
+    {
+        string? cfg = Directory.Exists(dataDir) ? FindDir(dataDir, "Config") : null;
+        string? file = cfg == null ? null : Directory.EnumerateFiles(cfg).FirstOrDefault(f => Path.GetFileName(f).Equals("Start.ini", StringComparison.OrdinalIgnoreCase));
+        if (file == null)
+            return null;
+        foreach (string raw in File.ReadAllLines(file))
+        {
+            string[] parts = raw.Trim().Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 2 && parts[0].Equals(key, StringComparison.OrdinalIgnoreCase))
+                return parts[1].Trim().Trim('"');
+        }
+        return null;
     }
 
     private static string DetectFromVoices(string dataDir, Dictionary<string, string> langs)
