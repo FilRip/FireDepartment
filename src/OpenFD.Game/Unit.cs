@@ -34,6 +34,8 @@ public sealed class Unit
     public float HealTimer;
     public bool CanBreak, CanUse;                         // hache (portes, fenêtres) ; ouvrir une porte
     public bool CanDemolish;                              // bulldozer : dégage les débris « CouldBeDemolish »
+    public bool CanExtricate;                             // désincarcérateur : découpe les portails « à désincarcérer »
+    public float ExtricatePower = 20;                     // [CAPACITIES_PROPS] ExtricatePower : points de vie enlevés par seconde
     public float Shove;                                   // coup de pelle en cours : avancée du bulldozer (0 à 1, dessin)
     public bool CanGrapple;                               // grappin ([CAPACITIES_ACTIONS] CanGrapplin : le « scout »)
     public bool CanLadder;                                // pompier : monte à l'échelle d'un camion échelle ([CAPACITIES_ACTIONS] CanLadder)

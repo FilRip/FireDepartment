@@ -211,6 +211,7 @@ public sealed partial class UnitManager
             Openings.Add(d);
         }
         LoadObstacles(level, assets);
+        LoadExtricable(level, assets);
         RefreshDoorCells();
     }
 
@@ -241,48 +242,134 @@ public sealed partial class UnitManager
             }
             if (life <= 0)
                 continue;   // déjà cassé (le morceau « _break » qui le remplace)
-            string? m = c.Get("DISPLAY", "Model")?.Trim('"', ' ');
-            string? model = string.IsNullOrEmpty(m) ? null : SceneAssets.GfxPath("Placeable", m);
-            Opening d = new Opening
-            {
-                Id = o.Id, Name = o.Name, IsWindow = false, Model = model, World = o.Matrix, IsObstacle = true,
-                Breakable = true, Usable = false, MaxLife = c.GetFloat("DAMAGE", "MaxLifePoints", 100), HitCoef = c.GetFloat("DAMAGE", "HitDamageCoef", 1),
-                Life = life, State = OpeningState.Closed, OnGround = true,
-                Demolish = c.GetBool("CAPACITIES_ACTIONS", "CouldBeDemolish"), HitSpeed = c.GetFloat("DAMAGE", "HitDamageSpeed", 20),
-            };
-            d.Center = d.Position;
-            if (_s.Grid is { } g)
-            {
-                // ses cases : celles que le décor lui attribue déjà (BuildObstacles) et son emprise au sol
-                foreach ((int i, string? name) in BlockedBy)
-                    if (name == o.Name)
-                        d.Cells.Add(i);
-                if (model != null)
-                {
-                    List<Vector2> pts = PathFind.Footprint(assets, model, -400, 400);
-                    foreach (Vector2 p in pts)
-                    {
-                        (int cx, int cy) = g.CellOf(Vector3.Transform(new Vector3(p, 0), o.Matrix));
-                        if (g.Inside(cx, cy) && g.ZoneA[g.Index(cx, cy)] != 0 && !d.Cells.Contains(g.Index(cx, cy)))
-                            d.Cells.Add(g.Index(cx, cy));
-                    }
-                    if (pts.Count > 0)
-                    {
-                        Vector2 mid = pts.Aggregate(Vector2.Zero, (a, p) => a + p) / pts.Count;
-                        d.Center = Vector3.Transform(new Vector3(mid, 0), o.Matrix);
-                    }
-                }
-                // ces cases ne sont plus des obstacles fixes : elles suivent l'état des gravats
-                foreach (int i in d.Cells)
-                    if (i < Paths.Blocked.Length && Paths.Blocked[i])
-                    {
-                        Paths.Blocked[i] = false;
-                        BlockedBy.Remove(i);
-                    }
-            }
-            Openings.Add(d);
+            Opening d = AddObstacle(o, c, life, assets);
             Log.Add($"Obstacle à dégager à la hache : {o.Name} ({d.Cells.Count} case(s), {life:0} points de vie)");
         }
+    }
+
+    /// <summary>
+    /// Obstacle du décor qui ferme ses cases jusqu'à ce qu'il soit dégagé : les cases que le décor lui attribue déjà
+    /// (BuildObstacles) et son emprise au sol.
+    /// </summary>
+    private Opening AddObstacle(LevelObject o, ClassFile c, float life, SceneAssets assets)
+    {
+        string? m = c.Get("DISPLAY", "Model")?.Trim('"', ' ');
+        string? model = string.IsNullOrEmpty(m) ? null : SceneAssets.GfxPath("Placeable", m);
+        Opening d = new Opening
+        {
+            Id = o.Id, Name = o.Name, IsWindow = false, Model = model, World = o.Matrix, IsObstacle = true,
+            Breakable = true, Usable = false, MaxLife = c.GetFloat("DAMAGE", "MaxLifePoints", 100), HitCoef = c.GetFloat("DAMAGE", "HitDamageCoef", 1),
+            Life = life, State = OpeningState.Closed, OnGround = true,
+            Demolish = c.GetBool("CAPACITIES_ACTIONS", "CouldBeDemolish"), HitSpeed = c.GetFloat("DAMAGE", "HitDamageSpeed", 20),
+        };
+        d.Center = d.Position;
+        if (_s.Grid is { } g)
+        {
+            // ses cases : celles que le décor lui attribue déjà (BuildObstacles) et son emprise au sol
+            foreach ((int i, string? name) in BlockedBy)
+                if (name == o.Name)
+                    d.Cells.Add(i);
+            if (model != null)
+            {
+                List<Vector2> pts = PathFind.Footprint(assets, model, -400, 400);
+                foreach (Vector2 p in pts)
+                {
+                    (int cx, int cy) = g.CellOf(Vector3.Transform(new Vector3(p, 0), o.Matrix));
+                    if (g.Inside(cx, cy) && g.ZoneA[g.Index(cx, cy)] != 0 && !d.Cells.Contains(g.Index(cx, cy)))
+                        d.Cells.Add(g.Index(cx, cy));
+                }
+                if (pts.Count > 0)
+                {
+                    Vector2 mid = pts.Aggregate(Vector2.Zero, (a, p) => a + p) / pts.Count;
+                    d.Center = Vector3.Transform(new Vector3(mid, 0), o.Matrix);
+                }
+            }
+            // ces cases ne sont plus des obstacles fixes : elles suivent l'état des gravats
+            foreach (int i in d.Cells)
+                if (i < Paths.Blocked.Length && Paths.Blocked[i])
+                {
+                    Paths.Blocked[i] = false;
+                    BlockedBy.Remove(i);
+                }
+        }
+        Openings.Add(d);
+        return d;
+    }
+
+    /// <summary>
+    /// Portails à découper (Fireworks : « old_gates_break », le portail qui barre la voie du train) : objets du décor marqués
+    /// « à désincarcérer » (classe CouldBeExtricate, ou dans le niveau : composant A026, troisième octet du bloc des capacités)
+    /// avec une icône de scie (« saw_symbol ») à moins de 8 m. Seul le désincarcérateur (CanExtricate) les ouvre, et seulement
+    /// du côté de l'icône. Leur vie (composant A024) descend de ExtricatePower par seconde ; à zéro, la fonction du script
+    /// nommée dans A024 (« OnGateBreak ») est appelée.
+    /// </summary>
+    private void LoadExtricable(Level level, SceneAssets assets)
+    {
+        List<Vector3> saws = level.Objects.Where(o => o.Kind == EntityKind.Placeable && o.HasTransform && o.ClassPath.EndsWith("saw_symbol", StringComparison.OrdinalIgnoreCase))
+            .Select(o => o.Position).ToList();
+        if (saws.Count == 0)
+            return;
+        foreach (LevelObject o in level.Objects.Where(o => o.Kind == EntityKind.Placeable && o.HasTransform))
+        {
+            if (Openings.Any(d => d.Id == o.Id) || o.ClassPath.EndsWith("saw_symbol", StringComparison.OrdinalIgnoreCase))
+                continue;
+            ClassFile? c = Class("Design\\" + o.ClassPath["design\\".Length..] + ".class");
+            if (c == null)
+                continue;
+            bool mark = c.GetBool("CAPACITIES_ACTIONS", "CouldBeExtricate");
+            if (o.GetComponent(0xA026) is { } cc)
+            {
+                ReadOnlySpan<byte> b = o.ComponentBytes(cc);
+                if (b.Length > 38 && b[22] == 0xAA && b[26] == 0x09 && b[38] == 1)
+                    mark = true;
+            }
+            if (!mark)
+                continue;
+            Vector3? saw = saws.Where(p => Vector2.Distance(new(p.X, p.Y), new(o.Position.X, o.Position.Y)) < 800)
+                .OrderBy(p => Vector3.Distance(p, o.Position)).Cast<Vector3?>().FirstOrDefault();
+            if (saw == null)
+                continue;
+            float life = c.GetFloat("DAMAGE", "LifePoints", 100), max = c.GetFloat("DAMAGE", "MaxLifePoints", 100);
+            string? onDestroy = null;
+            if (o.GetComponent(0xA024) is { } dc && dc.Size > 13)
+            {
+                byte[] b = o.ComponentBytes(dc).ToArray();
+                if (b[4] == 0x0C)
+                {
+                    life = BitConverter.ToSingle(b, 5);
+                    max = BitConverter.ToSingle(b, 9);
+                }
+                onDestroy = ScriptNameIn(b);
+            }
+            if (life <= 0)
+                continue;
+            Opening d = AddObstacle(o, c, life, assets);
+            d.Breakable = false;
+            d.Demolish = false;
+            d.Extricate = true;
+            d.MaxLife = MathF.Max(max, life);
+            d.ExtricateSide = new Vector2(saw.Value.X, saw.Value.Y);
+            d.OnDestroy = onDestroy;
+            d.FallAnim = d.Model != null && _files.TryRead("Gfx\\" + d.Model + ".anim") != null ? "Gfx\\" + d.Model : null;
+            Log.Add($"À désincarcérer : {o.Name} ({d.Cells.Count} case(s), {life:0} points de vie, côté ({saw.Value.X:0},{saw.Value.Y:0}), script « {onDestroy} »)");
+        }
+    }
+
+    /// <summary>Premier texte du composant précédé de sa longueur (entier) : nom d'une fonction du script.</summary>
+    private static string? ScriptNameIn(byte[] b)
+    {
+        for (int i = 0; i + 4 < b.Length; i++)
+        {
+            int n = BitConverter.ToInt32(b, i);
+            if (n < 3 || n > 64 || i + 4 + n > b.Length || b[i + 4 + n - 1] != 0)
+                continue;
+            bool ok = true;
+            for (int k = 0; k < n - 1 && ok; k++)
+                ok = b[i + 4 + k] is (>= (byte)'A' and <= (byte)'Z') or (>= (byte)'a' and <= (byte)'z') or (>= (byte)'0' and <= (byte)'9') or (byte)'_';
+            if (ok)
+                return System.Text.Encoding.ASCII.GetString(b, i + 4, n - 1);
+        }
+        return null;
     }
 
     /// <summary>Portes à mécanisme : les rouages (« mechanism_symbol ») posés à moins de 12 m d'une porte qui s'ouvre à la main.</summary>
@@ -352,6 +439,12 @@ public sealed partial class UnitManager
                 DemolishOrder(u, d);
             return;
         }
+        // portail à découper (Fireworks) : seul le désincarcérateur
+        if (d.Extricate && d.State != OpeningState.Broken)
+        {
+            ExtricateOrder(u, d);
+            return;
+        }
         // débris pour bulldozer (Institute) : la hache n'y peut rien
         if (d.Demolish && d.State != OpeningState.Broken)
         {
@@ -393,6 +486,36 @@ public sealed partial class UnitManager
         u.Status = breakIt ? $"va casser {d.Name}" : d.State == OpeningState.Closed ? $"va ouvrir {d.Name}" : $"va fermer {d.Name}";
     }
 
+    /// <summary>
+    /// Désincarcérateur : il va se placer contre le portail, du côté de l'icône de scie (l'intérieur), puis le découpe.
+    /// De l'autre côté, ou sans chemin jusqu'à ce côté-là : refusé.
+    /// </summary>
+    private void ExtricateOrder(Unit u, Opening d)
+    {
+        if (!u.CanExtricate)
+        {
+            Sounds.Add(("VOCAL_NO_SKILLS_FOR_THIS_ACTION", null));
+            u.Status = $"{d.Name} : il faut un désincarcérateur";
+            return;
+        }
+        Vector2 spot = ApproachPoint(u, d);
+        if (!_approachFound)
+        {
+            Sounds.Add(("VOCAL_IMPOSSIBLE_TO_ACCESS", null));
+            u.Status = $"{d.Name} : ne se découpe que de l'autre côté";
+            return;
+        }
+        if (!Order(u, spot))
+            return;
+        u.Opening = d;
+        u.OpeningBreak = true;
+        u.ActionTimer = 0;
+        u.Status = $"va découper {d.Name}";
+    }
+
+    /// <summary>Durée de sc_extricate_init : le désincarcérateur met sa pince en place avant de couper.</summary>
+    public const float ExtricateStart = 1.17f;
+
     /// <summary>Le pompier est déjà à l'étage de cette fenêtre (il y travaille comme au sol, sans échelle).</summary>
     private bool CanReachFromHere(Unit u, Opening d) => MathF.Abs(d.Center.Z - u.Position.Z) <= ReachHeight && u.OnLadder == null;
 
@@ -429,6 +552,15 @@ public sealed partial class UnitManager
     // vrai si le dernier ApproachPoint a trouvé une case atteignable (sinon il renvoie la case libre la plus proche)
     private bool _approachFound;
 
+    // portail à découper : seulement du côté de son icône de scie
+    private static bool WrongSide(Vector2 p, Opening d)
+    {
+        if (d.ExtricateSide is not { } side)
+            return false;
+        Vector2 c = new Vector2(d.Center.X, d.Center.Y);
+        return Vector2.Dot(p - c, side - c) <= 0;
+    }
+
     // case libre la plus proche du battant, du côté de l'unité
     private Vector2 ApproachPoint(Unit u, Opening d)
     {
@@ -452,7 +584,7 @@ public sealed partial class UnitManager
                         if (!Free(x, y))
                             continue;
                         Vector2 p = new Vector2((x + 0.5f) * Grid.CellSize, (y + 0.5f) * Grid.CellSize);
-                        if (ReachDist(p, d) > reach)
+                        if (ReachDist(p, d) > reach || WrongSide(p, d))
                             continue;
                         List<Vector2> path = FindPath(me, p, out bool partial);
                         if (partial || (path.Count == 0 && Vector2.Distance(me, p) > 1))
@@ -483,7 +615,7 @@ public sealed partial class UnitManager
                 if (!Free(x, y))
                     continue;
                 Vector2 p = new Vector2((x + 0.5f) * Grid.CellSize, (y + 0.5f) * Grid.CellSize);
-                if (ReachDist(p, d) > ActionReach * 0.9f)
+                if (ReachDist(p, d) > ActionReach * 0.9f || WrongSide(p, d))
                     continue;
                 // fenêtre : seulement d'un sol d'où on l'atteint (dans la pièce à l'étage, plutôt que dans la rue en dessous)
                 if (d.IsWindow && d.Center.Z - Ground(p) > ReachHeight)
@@ -549,6 +681,39 @@ public sealed partial class UnitManager
         RefreshDoorCells();
     }
 
+    /// <summary>
+    /// Découpe à la pince : après la mise en place (ExtricateStart), la vie du portail descend de ExtricatePower par seconde ;
+    /// à zéro, les battants s'ouvrent et tombent (dessin), le passage s'ouvre et le script est prévenu (OnGateBreak).
+    /// </summary>
+    private void Extricating(Unit u, Opening d, float dt)
+    {
+        if (d.State == OpeningState.Broken)
+        {
+            u.Opening = null;
+            u.Status = "attend les ordres";
+            return;
+        }
+        u.Status = $"découpe {d.Name} ({d.Life / d.MaxLife:P0})";
+        // il démarre la scie (le bruit de coupe, en boucle, vient ensuite : voir le dessin des unités)
+        if (u.ActionTimer <= dt + 1e-4f)
+            Sounds.Add(("SC_EXTRICATE_INIT", u.Position));
+        if (u.ActionTimer < ExtricateStart)
+            return;
+        d.Life -= u.ExtricatePower * dt;
+        if (d.Life > 0)
+            return;
+        d.Life = 0;
+        d.State = OpeningState.Broken;
+        d.BrokenAt = _s.Time;
+        Sounds.Add(("SC_EXTRICATE_END", u.Position));   // il éteint la scie
+        u.Opening = null;
+        u.Status = "attend les ordres";
+        Log.Add($"{_s.Time,6:0} s : {d.Name} découpé par {u.Name}");
+        RefreshDoorCells();
+        if (!string.IsNullOrEmpty(d.OnDestroy))
+            _s.Scripts?.TryRun(d.OnDestroy!, Script.Value.I(d.Id));
+    }
+
     private void WorkOpening(Unit u, float dt)
     {
         u.Shove = 0;
@@ -596,6 +761,11 @@ public sealed partial class UnitManager
         else
             u.Heading = MathF.Atan2(d.Center.Y - u.Position.Y, d.Center.X - u.Position.X);
         u.ActionTimer += dt;
+        if (d.Extricate)
+        {
+            Extricating(u, d, dt);
+            return;
+        }
         if (u.OpeningBreak)
         {
             if (d.State == OpeningState.Broken)

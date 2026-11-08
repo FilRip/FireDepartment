@@ -73,6 +73,7 @@ public sealed partial class UnitManager
                 {
                     c.State = CivilianState.Conscious;
                     u.HealTimer = 0;
+                    Sounds.Add(("SC_WAKEUP_CIVIL", c.Position));   // le civil revient à lui
                     Log.Add($"{_s.Time,6:0} s : {c.Name} réanimé");
                 }
                 return;
@@ -98,6 +99,7 @@ public sealed partial class UnitManager
         u.Carrying = c;
         u.Carry = CarryPhase.Lifting;
         u.CarryTimer = 0;
+        Sounds.Add(("CC_LIFT_BODY", u.Position));   // il charge le civil sur son dos
         c.Carrier = u;
         c.Leader = null;
         u.Heading = MathF.Atan2(c.Position.Y - u.Position.Y, c.Position.X - u.Position.X);
@@ -169,6 +171,7 @@ public sealed partial class UnitManager
                 {
                     u.Carry = CarryPhase.Dropping;
                     u.CarryTimer = 0;
+                    Sounds.Add(("CC_DROP_BODY", u.Position));   // il dépose le corps au sol
                     u.Heading = MathF.Atan2(amb.Position.Y - u.Position.Y, amb.Position.X - u.Position.X);
                     u.Status = $"dépose {c.Name} à l'ambulance";
                 }

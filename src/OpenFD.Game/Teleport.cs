@@ -13,6 +13,8 @@ public sealed class Teleport
     public string Name = "";
     /// <summary>Les deux bouts : position des icônes, case de la grille (-1 hors de la carte).</summary>
     public Vector2 EndA, EndB;
+    /// <summary>Hauteur des icônes : le plancher de chaque bout (la case de sortie est prise à cette hauteur-là).</summary>
+    public float HeightA, HeightB;
     public int CellA = -1, CellB = -1;
     public bool Active;
     /// <summary>Faux escalier (Lab : les deux icônes au même endroit) : il n'emmène nulle part, il affiche un message (ON_ENTER).</summary>

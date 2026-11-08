@@ -70,7 +70,9 @@ public sealed partial class OpenFDGame
     {
         if (_clips.TryGetValue(file, out AnimClip? c))
             return c;
-        try { c = _files.TryRead("Gfx\\Anim\\" + file + ".anim") is { } d ? AnimClip.Parse(d) : null; } catch { c = null; }
+        // « Gfx\… » : chemin complet (animation d'un modèle posé) ; « ..\Placeable\… » : relatif au dossier des animations
+        string path = file.StartsWith("Gfx\\", StringComparison.OrdinalIgnoreCase) ? file : SceneAssets.GfxPath("Gfx\\Anim", file);
+        try { c = _files.TryRead(path + ".anim") is { } d ? AnimClip.Parse(d) : null; } catch { c = null; }
         return _clips[file] = c;
     }
 
@@ -103,6 +105,8 @@ public sealed partial class OpenFDGame
         : u.Carry == CarryPhase.Dropping ? "@CharChar\\cc_drop_body"
         : u.Carry == CarryPhase.Walking ? "CARRYWALK"
         : moving ? "RUN"
+        // désincarcérateur : il met sa pince en place (sc_extricate_init) puis coupe en boucle (EXTRICATE)
+        : u.Opening is { Extricate: true } && u.OpeningBreak ? (u.ActionTimer < UnitManager.ExtricateStart ? "@SingleChar\\sc_extricate_init" : "EXTRICATE")
         : u.Opening != null && u.OpeningBreak ? (u.Opening.IsWindow ? "BREAKWINDOW" : "BREAKDOOR")
         : u.Target != null ? "ATTACKFIRE"
         : u.GoTo != null && u.HealTimer > 0 ? "HEAL"
@@ -194,7 +198,9 @@ public sealed partial class OpenFDGame
             bool canonTool = canon && leaf.EndsWith("_canon", StringComparison.OrdinalIgnoreCase);
             if (canon && leaf.Contains("launchfire", StringComparison.OrdinalIgnoreCase))
                 continue;
-            if (ToolRx.IsMatch(leaf) && !(axe && leaf.EndsWith("_axe", StringComparison.OrdinalIgnoreCase)) && !nozzle && !canonTool)
+            // pince du désincarcérateur (CH_P_des_scie) : seulement pendant la découpe
+            bool saw = axe && tag.Contains("extricate", StringComparison.OrdinalIgnoreCase) && leaf.Contains("scie", StringComparison.OrdinalIgnoreCase);
+            if (ToolRx.IsMatch(leaf) && !(axe && leaf.EndsWith("_axe", StringComparison.OrdinalIgnoreCase)) && !nozzle && !canonTool && !saw)
                 continue;
             if (part.Skin != null)
             {
@@ -415,6 +421,12 @@ public sealed partial class OpenFDGame
                 }
                 if (u.Target != null && !u.Moving)
                     _audio.Keep(u, "HOSE_01_01", u.Position);
+                else if (u.Opening is { Extricate: true } && u.OpeningBreak && !u.Moving)
+                {
+                    // désincarcérateur : la scie tourne en boucle tant que la vie du portail descend
+                    if (u.ActionTimer >= UnitManager.ExtricateStart)
+                        _audio.Keep(u, "SC_EXTRICATE_LOOP", u.Position);
+                }
                 else if (u.Opening != null && u.OpeningBreak && !u.Moving)
                     _audio.Keep(u, "SC_BREAK_DOOR", u.Position);
                 else if (u.Moving)

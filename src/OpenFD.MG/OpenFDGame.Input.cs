@@ -452,6 +452,17 @@ public sealed partial class OpenFDGame
         }
         if (OpeningAt(x, y) is { } door)
         {
+            // portail à découper : le désincarcérateur choisi (les autres n'y peuvent rien)
+            if (door.Extricate && door.State != OpeningState.Broken)
+            {
+                Unit? cutter = _sel.FirstOrDefault(u => u.CanExtricate && !u.Unconscious) ?? _sel.FirstOrDefault(u => !u.IsVehicle);
+                if (cutter != null)
+                {
+                    DoOpening(cutter, door);
+                    Log($"{UnitLabel(cutter)} : {cutter.Status}");
+                }
+                return;
+            }
             // débris : le bulldozer choisi va les dégager à coups de pelle
             if (door.Demolish && _sel.FirstOrDefault(u => u.CanDemolish && !u.Destroyed) is { } dozer)
             {
@@ -830,7 +841,7 @@ public sealed partial class OpenFDGame
     }
 
     // ---- curseurs du jeu (Gfx\Textures\_cache\MouseCursors.dds, cases de 32 × 32, 8 par ligne) ----
-    private enum Cur { Grapple = 12, Normal = 0, Unit = 1, Use = 2, Heal = 3, Axe = 4, Move = 5, Target = 8, Rescue = 3, Forbidden = 13, Enter = 14, Water = 15, Ladder = 11, Bulldozer = 20 }
+    private enum Cur { Grapple = 12, Normal = 0, Unit = 1, Use = 2, Heal = 3, Axe = 4, Move = 5, Target = 8, Rescue = 3, Forbidden = 13, Enter = 14, Water = 15, Ladder = 11, Bulldozer = 20, Extricate = 16 }
     private readonly Dictionary<Cur, MouseCursor> _cursors = new();
     private readonly List<Texture2D> _cursorTex = new();
     private Cur _cur = (Cur)(-1);
@@ -935,7 +946,8 @@ public sealed partial class OpenFDGame
         {
             bool brk = o.Breakable && o.State != OpeningState.Broken && (o.IsWindow || o.State == OpeningState.Closed);
             bool ladder = _session.Units.LadderAt(o) != null && walkers.Any(u => u.CanLadder);
-            want = o.Demolish ? Cur.Forbidden   // débris : seul le bulldozer
+            want = o.Extricate ? (walkers.Any(u => u.CanExtricate) ? Cur.Extricate : Cur.Forbidden)   // portail : le désincarcérateur
+                : o.Demolish ? Cur.Forbidden   // débris : seul le bulldozer
                 : brk && walkers.Any(u => u.CanBreak) ? Cur.Axe
                 : ladder ? Cur.Ladder           // échelle dressée devant la fenêtre ouverte : y monter
                 : o.Usable && walkers.Any(u => u.CanUse) ? Cur.Use : Cur.Forbidden;

@@ -26,6 +26,7 @@ public sealed partial class UnitManager
             {
                 Id = o.Id, Name = o.Name,
                 EndA = new Vector2(a.Position.X, a.Position.Y), EndB = new Vector2(b.Position.X, b.Position.Y),
+                HeightA = a.Position.Z, HeightB = b.Position.Z,
                 Active = o.StartVisible,
             };
             ReadTeleportBlock(o, t);
@@ -90,9 +91,9 @@ public sealed partial class UnitManager
         foreach (Teleport t in Teleports)
         {
             if (t.CellA < 0)
-                t.CellA = CellIndex(g, t.EndA);
+                t.CellA = EndCell(g, t.EndA, t.HeightA);
             if (t.CellB < 0)
-                t.CellB = CellIndex(g, t.EndB);
+                t.CellB = EndCell(g, t.EndB, t.HeightB);
             if (TeleportUsable(t) && !t.Fake)
                 Paths.Links.Add((t.CellA, t.CellB, false, false, false, false));
         }
@@ -102,6 +103,37 @@ public sealed partial class UnitManager
     {
         (int cx, int cy) = g.CellOf(new Vector3(Walkable(p), 0));
         return g.Inside(cx, cy) ? g.Index(cx, cy) : -1;
+    }
+
+    /// <summary>
+    /// Case d'un bout d'escalier : la case libre la plus proche de l'icône, au niveau de son plancher. L'icône est souvent
+    /// posée sur une case fermée ; la plus proche des cases libres peut être un autre étage (Tutorial : palier à 11,75 m à
+    /// côté de l'icône à 8,75 m) d'où l'on ne peut plus repartir.
+    /// </summary>
+    private int EndCell(Grid g, Vector2 p, float z)
+    {
+        (int cx, int cy) = g.CellOf(new Vector3(p, 0));
+        for (int r = 0; r < 8; r++)
+        {
+            int best = -1;
+            float bd = float.MaxValue;
+            for (int dx = -r; dx <= r; dx++)
+                for (int dy = -r; dy <= r; dy++)
+                {
+                    int x = cx + dx, y = cy + dy;
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dy)) != r || !Free(x, y) || MathF.Abs(g.GroundHeight[g.Index(x, y)] - z) > PathFind.MaxStep)
+                        continue;
+                    float d = Vector2.Distance(p, CellCenter(g, g.Index(x, y)));
+                    if (d < bd)
+                    {
+                        bd = d;
+                        best = g.Index(x, y);
+                    }
+                }
+            if (best >= 0)
+                return best;
+        }
+        return CellIndex(g, p);
     }
 
     private Vector2 CellCenter(Grid g, int cell) => new Vector2((cell % g.Width + 0.5f) * Grid.CellSize, (cell / g.Width + 0.5f) * Grid.CellSize);
@@ -188,7 +220,10 @@ public sealed partial class UnitManager
         if (u.StairsTimer > 0)
             return;
         Teleport t = u.Stairs!;
+        // il ressort sur la case du bout d'escalier (au bon étage), pas sur la case libre la plus proche de l'icône
         Vector2 to = Walkable(u.StairsTo);
+        if (_s.Grid is { } g && (u.StairsTo == t.EndA ? t.CellA : t.CellB) is int end && end >= 0)
+            to = CellCenter(g, end);
         u.Position = new Vector3(to, Ground(to));
         u.Stairs = null;
         u.Status = u.Path.Count > 0 ? "en route" : "attend les ordres";
