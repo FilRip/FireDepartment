@@ -509,6 +509,7 @@ public sealed class MissionHost : IScriptHost
                     gl.Add(V(1).AsInt);
                 return Value.Zero;
             case "ENT_GROUPREMOVEENTITY":
+            case "ENT_GROUPREMENTITY":
                 if (_groups.TryGetValue(V(0).AsInt, out List<long>? gr2))
                     gr2.Remove(V(1).AsInt);
                 return Value.Zero;

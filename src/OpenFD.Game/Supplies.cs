@@ -84,12 +84,17 @@ public sealed partial class UnitManager
             string script = System.Text.Encoding.Latin1.GetString(b, p + 4, len - 1);
             // puis On_Leave (longueur + texte) et Enabled (octet) : un déclencheur peut être éteint au départ
             bool enabled = true;
+            string onLeave = "";
             int q = p + 4 + len;
             if (q + 4 <= b.Length)
             {
                 int len2 = BitConverter.ToInt32(b, q);
                 if (len2 >= 0 && len2 < 128 && q + 4 + len2 < b.Length)
+                {
                     enabled = b[q + 4 + len2] != 0;
+                    if (len2 > 1)
+                        onLeave = System.Text.Encoding.Latin1.GetString(b, q + 4, len2 - 1);
+                }
             }
             // fin du composant : trois flottants = taille de la zone (x, y, z)
             int e = b.Length - 4 - 12;
@@ -99,7 +104,7 @@ public sealed partial class UnitManager
             Matrix4x4.Invert(o.Matrix, out Matrix4x4 inv);
             Triggers.Add(new TriggerZone
             {
-                Id = o.Id, Name = o.Name, Script = script, Inverse = inv, Position = o.Position, Enabled = enabled,
+                Id = o.Id, Name = o.Name, Script = script, OnLeave = onLeave, Inverse = inv, Position = o.Position, Enabled = enabled,
                 Half = new Vector3(MathF.Max(150, size.X / 2), MathF.Max(150, size.Y / 2), MathF.Max(300, size.Z)),
             });
         }
@@ -118,7 +123,9 @@ public sealed partial class UnitManager
                 bool inside = MathF.Abs(l.X) <= t.Half.X && MathF.Abs(l.Y) <= t.Half.Y && MathF.Abs(l.Z) <= t.Half.Z;
                 if (!inside)
                 {
-                    t.Inside.Remove(u.Id);
+                    // il en sort : ON_LEAVE (Street : le tram repart quand le camion a quitté sa voie)
+                    if (t.Inside.Remove(u.Id) && t.OnLeave.Length > 0)
+                        scripts.TryRun(t.OnLeave, Value.I(u.Id), Value.I(t.Id));
                     continue;
                 }
                 if (!t.Inside.Add(u.Id))
