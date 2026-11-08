@@ -232,7 +232,9 @@ public sealed class Interpreter
             return Value.T(l.AsText + r.AsText);
         if (op is "==" or "!=")
         {
-            bool eq = l.Kind == VKind.Str || r.Kind == VKind.Str ? string.Equals(l.AsText, r.AsText, StringComparison.Ordinal) : l.AsNum == r.AsNum;
+            // textes : sans tenir compte des majuscules, comme le jeu (les noms des objets sont rangés en minuscules dans le
+            // niveau, « chemin1 », et les scripts les comparent à « Chemin1 » : Street, tramways)
+            bool eq = l.Kind == VKind.Str || r.Kind == VKind.Str ? string.Equals(l.AsText, r.AsText, StringComparison.OrdinalIgnoreCase) : l.AsNum == r.AsNum;
             return Value.I(eq == (op == "==") ? 1 : 0);
         }
         bool ints = l.Kind == VKind.Int && r.Kind == VKind.Int;

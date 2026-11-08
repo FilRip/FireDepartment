@@ -1922,6 +1922,32 @@ public static class Program
                 }
                 return 0;
             }
+            case "tram":
+            {
+                // tram <Data> : Street, à 15 s le camion E9 est posé sur la voie du tram 1 ; suivi du tram et de son arrêt
+                Session ses = new Session(files, "Street", "EASY");
+                Unit? truck = null;
+                for (int i = 0; i < 900; i++)
+                {
+                    ses.Step();
+                    if (truck == null && ses.Time > 40 && ses.Units.Active.FirstOrDefault(u => u.IsVehicle) is { } v)
+                    {
+                        truck = v;
+                        ses.Units.Teleport(v, new System.Numerics.Vector2(10232, 6000));
+                        v.Path.Clear();
+                        v.GoTo = null;
+                    }
+                    if (truck != null && ses.Time > 75 && ses.Time < 75.15)
+                        ses.Units.Teleport(truck, new System.Numerics.Vector2(9000, 6000));   // il quitte la voie : le tram repart
+                    if (i % 20 == 0 && ses.Host != null)
+                    {
+                        uint cc = (uint)(ses.Scripts?.Globals.GetValueOrDefault("CC1").AsInt ?? 0);
+                        string pos = ses.Host.MovedObjects.TryGetValue(cc, out System.Numerics.Vector2 p) ? $"({p.X:0},{p.Y:0})" : "-";
+                        Console.WriteLine($"t {ses.Time:0} tram {pos} enMarche {ses.Scripts?.Globals.GetValueOrDefault("CC1enMarche").AsInt} déclencheur {ses.Units.LastTrigger?.Name} groupe {string.Join(",", ((System.Collections.IDictionary)typeof(MissionHost).GetField("_groups", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(ses.Host)!).Values.Cast<List<long>>().Select(l => l.Count))} camion {(truck == null ? "-" : $"({truck.Position.X:0},{truck.Position.Y:0})")}");
+                    }
+                }
+                return 0;
+            }
             case "capacites":
             {
                 // capacites <Data> <Mission>… : objets dont le composant A026 (capacités propres à l'objet) n'est pas nul
