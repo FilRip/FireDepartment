@@ -22,7 +22,7 @@ public sealed partial class OpenFDGame
     }
     private readonly Dictionary<object, CharAnim> _chars = new();
     private readonly List<(uint id, string model, SN.Matrix4x4 world)> _scriptShown = new();
-    private readonly List<(uint id, string model, SN.Matrix4x4 world, SN.Vector3 origin)> _scriptMoved = new();
+    private readonly List<(uint id, string model, SN.Matrix4x4 world, SN.Vector3 origin, float yaw)> _scriptMoved = new();
 
     // objets déplacés par le script (ENT_SetPosition : l'avion et le camion de Mriya avancent de 80 unités à chaque tour
     // de la boucle principale) : on les fait glisser d'une position à la suivante pendant un tour, au lieu de sauter
@@ -128,7 +128,12 @@ public sealed partial class OpenFDGame
     private static bool InStairs(Unit u) => u.Stairs is { Walk: false };
 
     private static string UnitTag(Unit u, bool moving) =>
-        u.Stairs is { Walk: true } ? "~SingleChar\\sc_walk_generic_stair"   // escalier extérieur : il monte ou descend les marches
+        // échelle verticale fixe (Forest) : grimper, passer sur le plancher du haut ; enjamber le haut, descendre
+        u.Vertical == VerticalPhase.Climb ? "~SingleChar\\sc_vertical_ladder_climb"
+        : u.Vertical == VerticalPhase.Out ? "@SingleChar\\sc_vertical_ladder_get_out_top"
+        : u.Vertical == VerticalPhase.On ? "@SingleChar\\sc_vertical_ladder_get_on_top"
+        : u.Vertical == VerticalPhase.Descend ? "~SingleChar\\sc_vertical_ladder_descend"
+        : u.Stairs is { Walk: true } ? "~SingleChar\\sc_walk_generic_stair"   // escalier extérieur : il monte ou descend les marches
         : u.InjuredTimer > 0 || u.Unconscious ? "FAINT"
         : u.SenseTimer > 0 && !moving ? "SENSE_VICTIM"   // chien : aboie (sc_bark)
         // grappin : lancer, grimper (en boucle), passer le haut du mur, redescendre (en boucle), toucher le sol
@@ -420,11 +425,14 @@ public sealed partial class OpenFDGame
                 DrawMesh(mesh, (part * (c.State == CivilianState.Conscious ? SN.Matrix4x4.Identity
                     : SN.Matrix4x4.CreateRotationY(MathF.PI / 2) * SN.Matrix4x4.CreateTranslation(0, 0, 25))
                     * SN.Matrix4x4.CreateRotationZ(PoseOf(c, c.Position, c.Heading).h + CharYaw) * SN.Matrix4x4.CreateTranslation(PoseOf(c, c.Position, c.Heading).p)).X());
-        foreach ((uint id, string? model, SN.Matrix4x4 world, SN.Vector3 origin) in _scriptMoved)
+        foreach ((uint id, string? model, SN.Matrix4x4 world, SN.Vector3 origin, float yaw) in _scriptMoved)
         {
             if (Host?.Visibility.TryGetValue(id, out bool shown) == true && !shown)
                 continue;
             SN.Matrix4x4 w = world;
+            // tourné par le script (ENT_SetOrientation : la manche à air de Forest suit le vent), autour de son pied
+            if (Host?.TurnedObjects.TryGetValue(id, out float turn) == true)
+                w = w * SN.Matrix4x4.CreateTranslation(-origin) * SN.Matrix4x4.CreateRotationZ(turn - yaw) * SN.Matrix4x4.CreateTranslation(origin);
             if (ScriptPos(id) is { } mv)
                 w = FollowGround(id, world, origin, mv);
             foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(model))
@@ -445,6 +453,11 @@ public sealed partial class OpenFDGame
             List<(MeshGpu mesh, SN.Matrix4x4 part)> parts = UnitModel(u.Model);
             List<string> names = _unitPartNames.TryGetValue(u.Model, out List<string>? nl) ? nl : new List<string>();
             SN.Matrix4x4 place = SN.Matrix4x4.CreateRotationZ(vp.h + (u.IsVehicle ? ModelYaw : CharYaw)) * SN.Matrix4x4.CreateTranslation(vp.p);
+            if (u.FromLevel && DrawLevelVehicle(u, place))
+            {
+                _charred = false;
+                continue;
+            }
             for (int i = 0; i < parts.Count; i++)
             {
                 SN.Matrix4x4 pose = u.IsVehicle && i < names.Count ? VehiclePartPose(u, names[i]) : SN.Matrix4x4.Identity;
@@ -452,6 +465,48 @@ public sealed partial class OpenFDGame
             }
             _charred = false;
         }
+    }
+
+    /// <summary>
+    /// Véhicule posé dans le niveau dont le modèle est animé pièce par pièce (l'hélicoptère : corps, portes, rotors) : les
+    /// pièces de l'état intact (« …_e1 », détruit : « …_e2 » ; jamais les débris d'explosion), posées par l'animation que le
+    /// script a lancée (ANM_Play : atterrissage, décollage ; « hold » : la dernière image reste). false : modèle ordinaire.
+    /// </summary>
+    private bool DrawLevelVehicle(Unit u, SN.Matrix4x4 place)
+    {
+        if (!_propRigs.TryGetValue(u.Model, out CharacterRig? rig))
+        {
+            try { rig = CharacterRig.Build(_assets, _files, u.Model); } catch { rig = null; }
+            _propRigs[u.Model] = rig;
+        }
+        if (rig == null || !rig.Names.Any(n => n.EndsWith("_e1", StringComparison.OrdinalIgnoreCase)))
+            return false;
+        AnimClip? clip = null;
+        float t = 0;
+        if (Host?.PlayedAnims.TryGetValue((uint)u.Id, out (string anim, float start, bool loop) pa) == true && Clip(pa.anim) is { } c && c.Duration > 0)
+        {
+            clip = c;
+            float now = (float)(_session.Time + (_paused ? 0 : _owed * Session.Dt));
+            t = pa.loop ? (now - pa.start) % c.Duration : Math.Clamp(now - pa.start, 0, c.Duration);
+        }
+        SN.Matrix4x4[] world = rig.Pose(clip, t);
+        string state = u.Destroyed ? "_e2" : "_e1";
+        foreach (CharacterRig.Part part in rig.Parts)
+        {
+            int root = part.Node;
+            while (rig.Parent[root] >= 0)
+                root = rig.Parent[root];
+            if (!rig.Names[root].EndsWith(state, StringComparison.OrdinalIgnoreCase) && !rig.Names[root].EndsWith(state + "_base", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (!_partMeshes.TryGetValue(part.Mesh, out MeshGpu? mesh))
+            {
+                try { mesh = Upload(_assets.LoadMesh(_mission, part.Mesh, "gfx")); } catch { mesh = null; }
+                _partMeshes[part.Mesh] = mesh;
+            }
+            if (mesh != null)
+                DrawMesh(mesh, (world[part.Node] * place).X());
+        }
+        return true;
     }
 
     // sons : voix et bruits signalés par le jeu, puis sons entretenus (lances, haches, pas, moteurs, feux proches)

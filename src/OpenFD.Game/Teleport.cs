@@ -26,5 +26,14 @@ public sealed class Teleport
     /// </summary>
     public bool Walk;
     public Vector2 Foot;
+    /// <summary>
+    /// Échelle verticale fixe (« base_ladder_forest », [ITEM] Type=LADDER, CouldBeClimb : Forest, la tour de guet) : le
+    /// pompier grimpe le long des barreaux, de LadderBottom (pied, point Dum_climbup du modèle) à LadderTop (haut des
+    /// barreaux, Dum_climbdown), puis passe sur le plancher (EndA : Dum_climbout) ; animations sc_vertical_ladder_*.
+    /// </summary>
+    public bool Vertical;
+    public Vector3 LadderBottom, LadderTop;
+    /// <summary>Le pompier fait face à l'échelle (vers le plancher du haut).</summary>
+    public float LadderHeading;
     public string OnEnter = "", OnLeave = "";
 }

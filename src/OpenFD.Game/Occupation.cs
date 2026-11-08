@@ -1,8 +1,9 @@
 namespace OpenFD.Game;
 
 /// <summary>
-/// Zone d'occupation posée par le concepteur de la mission (objet dont le nom contient « occupation » : Port,
-/// « occupation_train » sur la rame en gare ; Ch_Plant, « truck_occupation_1 » devant le portail fermé). Ses cases,
+/// Zone d'occupation posée par le concepteur de la mission (objet dont le nom contient « occupation » ou commence par
+/// « occup_ » : Port, « occupation_train » sur la rame en gare ; Ch_Plant, « truck_occupation_1 » devant le portail fermé ;
+/// Tutorial, « occup_porte_garage »). Ses cases,
 /// dessinées dans l'éditeur (LevelObject.OccupationCells), sont fermées tant que l'objet est visible ; le script la pose
 /// ou la lève par ENT_SetVisibility.
 /// </summary>

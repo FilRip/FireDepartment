@@ -26,6 +26,10 @@ public sealed class Unit
     public string SupplyAgent = "WATER";                  // véhicule : agent qu'il fournit ([CAPACITIES_RESERVE] FireAgent, voir Agents.cs)
     public OpenFD.Fire.HotPoint? WarnedAgent;             // feu pour lequel « mauvais agent » a déjà été annoncé
     public bool IsAmbulance;
+    /// <summary>Véhicule posé dans le niveau (LevelVehicles.cs) : dessiné pièce par pièce, animé par le script (ANM_Play).</summary>
+    public bool FromLevel;
+    /// <summary>Ne roule pas (l'hélicoptère sanitaire : le script le fait atterrir et décoller).</summary>
+    public bool Fixed;
     public Civilian? GoTo;                                // civil vers lequel l'unité se dirige
     public Civilian? Carrying;                            // civil inconscient porté sur le dos
     public CarryPhase Carry;
@@ -57,6 +61,8 @@ public sealed class Unit
     public float StairsTimer;
     public Vector2 StairsTo;
     public Vector3 StairsFrom;
+    /// <summary>Sur une échelle verticale fixe (Teleport.Vertical) : grimpe, passe le haut, enjambe, redescend.</summary>
+    public VerticalPhase Vertical;
     /// <summary>
     /// Après un ordre d'attaque du joueur : point du feu demandé, puis du dernier feu éteint. L'IA choisit le feu suivant
     /// le plus près de ce point (et non de l'unité) : elle finit le foyer commencé avant de passer à un autre. Un simple

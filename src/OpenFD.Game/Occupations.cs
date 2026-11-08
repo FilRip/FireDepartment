@@ -15,8 +15,13 @@ public sealed partial class UnitManager
     /// <summary>Objets du décor cachés par le script : les cases qu'ils fermaient, rouvertes (refermées s'ils réapparaissent).</summary>
     private readonly Dictionary<uint, List<int>> _hiddenFootprints = new();
 
-    /// <summary>Objet du décor qui n'est qu'une zone d'occupation (sa forme ne compte pas : seulement ses cases dessinées).</summary>
-    public static bool IsOccupationName(string name) => name.Contains("occupation", StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// Objet du décor qui n'est qu'une zone d'occupation (sa forme ne compte pas : seulement ses cases dessinées) : son nom
+    /// contient « occupation » (Port, Ch_Plant) ou commence par « occup_ » (Tutorial : « occup_porte_garage », la porte du
+    /// garage fermée tant que le tutoriel ne dit pas d'en sortir).
+    /// </summary>
+    public static bool IsOccupationName(string name) =>
+        name.Contains("occupation", StringComparison.OrdinalIgnoreCase) || name.StartsWith("occup_", StringComparison.OrdinalIgnoreCase);
 
     private void LoadOccupations(Level level)
     {

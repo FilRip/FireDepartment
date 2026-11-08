@@ -41,6 +41,12 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     // monde
     private Session _session = null!;
     private readonly List<(MeshGpu mesh, bool roof, int layer)> _draw = new();   // layer : 0 décor, 1 objets, 2 arbres
+    /// <summary>
+    /// Arbres : un modèle par variante (écorce, feuillage), dessiné à chacune de ses places. Recopier chaque arbre dans les
+    /// lots fixes faisait, sur Forest (2 000 arbres), près de 50 millions de sommets et des gigaoctets de mémoire. Les arbres
+    /// hors de la vue (ou hors de la carte d'ombres) ne sont pas dessinés.
+    /// </summary>
+    private readonly List<(MeshGpu mesh, List<(Matrix world, BoundingSphere bounds)> at)> _treeDraw = new();
     private readonly Dictionary<string, Texture2D?> _texCache = new(StringComparer.OrdinalIgnoreCase);
     private SN.Vector3 _sceneMin, _sceneMax;
     private Texture2D? _gridTex;
@@ -231,16 +237,31 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                     DoOpening(dozer, bd);
             }
         }
-        // essai (captures) : FD3_ALLER=x,y → à 12 s, le premier pompier à pied y est envoyé
+        // essai (captures) : FD3_ALLER=x,y → à 12 s, le premier pompier à pied y est envoyé ; FD3_ALLER=xd,yd,x,y : il est
+        // d'abord posé en (xd, yd)
         if (!_menu && _session != null && !_testGo && _session.Time > 12 && Environment.GetEnvironmentVariable("FD3_ALLER") is { } go
             && _session.Units.Active.FirstOrDefault(u => !u.IsVehicle && !u.OnBoard) is { } walker)
         {
             _testGo = true;
             float[] g = go.Split(',').Select(v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+            if (g.Length >= 4)
+            {
+                _session.Units.Teleport(walker, _session.Units.Paths.Walkable(new SN.Vector2(g[0], g[1])));
+                g = g[2..];
+            }
             _session.Units.PlayerCommand = true;
             bool ok = _session.Units.Order(walker, new SN.Vector2(g[0], g[1]));
             _session.Units.PlayerCommand = false;
             Console.WriteLine($"essai aller : {walker.Name} {(ok ? "en route" : "refusé")} · {walker.Status}");
+        }
+        // essai (captures) : FD3_APPEL=fonction,secondes → cette fonction du script est appelée à ce moment de la partie
+        // (Forest, Stadium : « etat_2 », l'hélicoptère se pose)
+        if (!_menu && _session != null && !_testCall && Environment.GetEnvironmentVariable("FD3_APPEL") is { } call && call.Split(',') is { Length: 2 } cp
+            && _session.Time > float.Parse(cp[1], System.Globalization.CultureInfo.InvariantCulture))
+        {
+            _testCall = true;
+            _session.Scripts?.TryRun(cp[0]);
+            Console.WriteLine($"essai appel : {cp[0]} à {_session.Time:0.0} s");
         }
         // essai (captures) : FD3_DESINC=1 → à 45 s, le désincarcérateur est posé du côté de l'icône et découpe le portail
         if (!_menu && _session != null && !_testCut && _session.Time > 45 && Environment.GetEnvironmentVariable("FD3_DESINC") == "1"
@@ -976,6 +997,9 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         Status($"Chargement de {mission}...", 0);
         foreach ((MeshGpu mesh, bool roof, int layer) d in _draw)
             d.mesh.Dispose();
+        foreach ((MeshGpu mesh, List<(Matrix world, BoundingSphere bounds)> at) tr in _treeDraw)
+            tr.mesh.Dispose();
+        _treeDraw.Clear();
         foreach ((VertexBuffer vb, IndexBuffer ib, int count, Texture2D? tex, Texture2D? dirt, Texture2D? lm, bool alpha, bool roof, int mode, bool caster, int bld) d in _sceneDraw)
         {
             d.vb.Dispose();
@@ -1108,9 +1132,24 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         if (Directory.Exists(scriptDir))
         {
             HashSet<uint> movedIds = new HashSet<uint>(), hiddenIds = new HashSet<uint>();
-            foreach (string f in Directory.EnumerateFiles(scriptDir, "*.scp"))
-                foreach (System.Text.RegularExpressions.Match mm in System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(f, System.Text.Encoding.Latin1), @"ENT_Set(Position|Visibility)\s*\(\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
-                    (mm.Groups[1].Value.Equals("Position", StringComparison.OrdinalIgnoreCase) ? movedIds : hiddenIds).Add(uint.Parse(mm.Groups[2].Value));
+            List<string> texts = Directory.EnumerateFiles(scriptDir, "*.scp").Select(f => File.ReadAllText(f, System.Text.Encoding.Latin1)).ToList();
+            // l'objet est souvent désigné par son nom (ENT_FindByName("port_Train")), directement ou par une variable
+            // (SCR_SetVarS32("ID_Train", ENT_FindByName("port_Train")), puis ENT_SetPosition(SCR_GetVarS32("ID_Train"), …) :
+            // le train de Port, la manche à air de Forest)
+            Dictionary<string, string> varNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string t in texts)
+                foreach (System.Text.RegularExpressions.Match vm in System.Text.RegularExpressions.Regex.Matches(t, @"SCR_SetVarS32\s*\(\s*""([^""]+)""\s*,\s*ENT_FindByName\s*\(\s*""([^""]+)""\s*\)\s*\)", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                    varNames[vm.Groups[1].Value] = vm.Groups[2].Value;
+            foreach (string t in texts)
+                foreach (System.Text.RegularExpressions.Match mm in System.Text.RegularExpressions.Regex.Matches(t, @"ENT_Set(Position|Visibility|Orientation)\s*\(\s*(?:(\d+)|ENT_FindByName\s*\(\s*""([^""]+)""\s*\)|SCR_GetVarS32\s*\(\s*""([^""]+)""\s*\))", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                {
+                    HashSet<uint> into = mm.Groups[1].Value.Equals("Visibility", StringComparison.OrdinalIgnoreCase) ? hiddenIds : movedIds;
+                    string? name = mm.Groups[3].Success ? mm.Groups[3].Value : mm.Groups[4].Success && varNames.TryGetValue(mm.Groups[4].Value, out string? vn) ? vn : null;
+                    if (mm.Groups[2].Success)
+                        into.Add(uint.Parse(mm.Groups[2].Value));
+                    else if (name != null && byName.TryGetValue(name, out LevelObject? no) && no.Kind == EntityKind.Placeable)
+                        into.Add(no.Id);
+                }
             // objets que le script cache et montre : cachés au départ si le niveau le dit (Mriya : le camion de la
             // cinématique 3, la porte animée du hangar), tant que le script n'a rien dit d'autre
             if (Host is { } host0)
@@ -1128,8 +1167,10 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                     _scriptRoofs[lo.Id] = p.Name;
                     continue;
                 }
-                _scriptMoved.Add((lo.Id, p.Model, p.World, lo.Position));
+                _scriptMoved.Add((lo.Id, p.Model, p.World, lo.Position, lo.Rotation.Z));
             }
+            if (_scriptMoved.Count > 0)
+                Console.WriteLine($"Objets suivis par le script : {_scriptMoved.Count} ({string.Join(", ", _scriptMoved.Select(x => _session.Level.Objects.First(o => o.Id == x.id).Name).Take(12))})");
         }
         // gravats à dégager : leur morceau cassé (« …_break ») n'apparaît qu'une fois l'obstacle dégagé ; le repère de hache
         // disparaît alors
@@ -1148,10 +1189,11 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             else if (p.Name.Contains("_break", StringComparison.OrdinalIgnoreCase) || p.Model.Contains("break", StringComparison.OrdinalIgnoreCase))
                 _brokenParts.Add((lo.Id, p.Model, p.World, near));
         }
-        // repères animés : rouages d'un mécanisme (interrupteur) qui tournent sur eux-mêmes, flèches qui avancent et reculent
+        // repères animés : rouages d'un mécanisme (interrupteur), croix rouge d'un poste de soins… qui tournent sur eux-mêmes,
+        // flèches qui avancent et reculent
         _animMarks.Clear();
         foreach (SceneAssets.Placed p in allPlaced)
-            if (byName.TryGetValue(p.Name, out LevelObject? lo) && System.Text.RegularExpressions.Regex.IsMatch(lo.ClassPath, @"(mechanism|mechanism_symbol_blue|elec|elec_symbol_off|repair|buldo|arrow|koshka|saw)_symbol$|mechanism_symbol_blue$|elec_symbol_off$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            if (byName.TryGetValue(p.Name, out LevelObject? lo) && System.Text.RegularExpressions.Regex.IsMatch(lo.ClassPath, @"(mechanism|mechanism_symbol_blue|elec|elec_symbol_off|repair|buldo|arrow|koshka|saw|cross)_symbol$|mechanism_symbol_blue$|elec_symbol_off$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
                 _animMarks.Add((lo.Id, p.Model, p.World, System.Text.RegularExpressions.Regex.IsMatch(lo.ClassPath, @"(arrow|koshka)_symbol$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)));
         HashSet<string> shownNames = _scriptShown.Select(x => byName.Values.First(o => o.Id == x.id).Name)
             .Concat(_animMarks.Select(x => byName.Values.First(o => o.Id == x.id).Name))
@@ -1221,7 +1263,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     private void LoadTrees()
     {
         List<SceneAssets.TreeInfo> trees = _assets.Trees(_session.Level);
-        Dictionary<string, (SceneAssets.MeshAsset bark, SceneAssets.MeshAsset leaves, float h, float y0)> variants = new Dictionary<string, (SceneAssets.MeshAsset bark, SceneAssets.MeshAsset leaves, float h, float y0)>();
+        // variante d'arbre : ses deux modèles dans _treeDraw (écorce, feuillage), sa hauteur et le bas de son tronc
+        Dictionary<string, (int bark, int leaves, float h, float y0)> variants = new Dictionary<string, (int bark, int leaves, float h, float y0)>();
         string Preset(string m) => System.Text.RegularExpressions.Regex.IsMatch(m, "conif|pin", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ? "pine_medium"
             : m.Contains("pleur", StringComparison.OrdinalIgnoreCase) ? "aspen_medium"
             : System.Text.RegularExpressions.Regex.IsMatch(m, "feuillu0[24]", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ? "oak_medium" : "ash_medium";
@@ -1256,14 +1299,19 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 SceneAssets.MeshAsset leaves = Asset(tr.LeafPos, tr.LeafNrm, tr.LeafUv.ToArray(), tr.LeafIdx, "ez:leaves_" + o.LeafType, true);
                 TreeTex("bark_" + o.BarkType);
                 TreeTex("leaves_" + o.LeafType);
-                variants[key] = (bark, leaves, ymax - ymin, ymin);
+                _treeDraw.Add((Upload(bark), new()));
+                _treeDraw.Add((Upload(leaves), new()));
+                variants[key] = (_treeDraw.Count - 2, _treeDraw.Count - 1, ymax - ymin, ymin);
             }
-            (SceneAssets.MeshAsset bark, SceneAssets.MeshAsset leaves, float h, float y0) v = variants[key];
+            (int bark, int leaves, float h, float y0) v = variants[key];
             float s = t.Height / v.h;
             // EZ-Tree pousse vers +Y ; le jeu a Z vers le haut
             SN.Matrix4x4 w = SN.Matrix4x4.CreateTranslation(0, -v.y0, 0) * SN.Matrix4x4.CreateScale(s) * SN.Matrix4x4.CreateRotationX(MathF.PI / 2) * Lift(t.World);
-            AddStatic(v.bark, w, false, 2);
-            AddStatic(v.leaves, w, false, 2);
+            // sphère autour de l'arbre (du pied à la cime, et la largeur du houppier) : pour ne pas dessiner ceux hors de la vue
+            SN.Vector3 foot = SN.Vector3.Transform(SN.Vector3.Zero, Lift(t.World));
+            BoundingSphere bounds = new BoundingSphere(new Vector3(foot.X, foot.Y, foot.Z + t.Height / 2), t.Height * 0.75f);
+            _treeDraw[v.bark].at.Add((w.X(), bounds));
+            _treeDraw[v.leaves].at.Add((w.X(), bounds));
         }
     }
 
@@ -1492,6 +1540,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             foreach ((MeshGpu? mesh, bool roof, int layer) in _draw)
                 if (layer == 2 && _objects)
                     DrawMesh(mesh, Matrix.Identity);   // arbres
+            if (_objects)
+                DrawTrees(new BoundingFrustum(_lightVp));
             RenderUnits();
         }
         finally
@@ -1586,6 +1636,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 continue;
             DrawMesh(mesh, Matrix.Identity);
         }
+        if (_objects)
+            DrawTrees(new BoundingFrustum(_viewProj));
         RenderUnits();
         RenderOpenings();
         RenderExplosives();
@@ -1593,6 +1645,15 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         RenderSelectionRings(_viewProj.X());   // après les unités et les véhicules : ce qui passe derrière eux est caché
         RenderAirSupport(_viewProj.X());       // cible du bombardier d'eau, ombre de l'avion
         RenderParticles(time);
+    }
+
+    /// <summary>Arbres (_treeDraw) dont la sphère touche la vue : la caméra, ou la zone de la carte d'ombres.</summary>
+    private void DrawTrees(BoundingFrustum view)
+    {
+        foreach ((MeshGpu mesh, List<(Matrix world, BoundingSphere bounds)> at) in _treeDraw)
+            foreach ((Matrix world, BoundingSphere bounds) in at)
+                if (view.Intersects(bounds))
+                    DrawMesh(mesh, world);
     }
 
     private void DrawMesh(MeshGpu mesh, Matrix world)
@@ -1675,7 +1736,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     }
 
     private bool _charred;   // DrawMesh : dessin d'une carcasse calcinée
-    private bool _testCut, _testGo;
+    private bool _testCut, _testGo, _testCall;
     private bool _testSpawned, _testAir;      // essais FD3_ECHELLE, FD3_BULLDO : une seule fois
     private Opening? _testLadder;
 
@@ -1753,6 +1814,10 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(model))
                 DrawMesh(mesh, (part * anim).X());
         }
+        // postes de soins du niveau (ambulances factices) : la flèche verte au sol, sous la croix rouge
+        foreach (HealPoint hp in _session.Units.HealPoints.Where(h => h.Model.Length > 0 && _session.Units.HealPointActive(h)))
+            foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(hp.Model))
+                DrawMesh(mesh, (part * hp.World).X());
         foreach ((uint id, string? model, SN.Matrix4x4 world, Opening? ob) in _brokenParts)
             if (Vis(id, ob.State == OpeningState.Broken))
                 foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(model))
@@ -2334,7 +2399,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         {
             lines.Add(("", txt));
             lines.Add(("Espace : pause · 1 2 3 4 : vitesse ×1 ×4 ×16 ×64", muted));
-            lines.Add(("Tab : carte / 3D · T : toits · O : objets · F : fumée · B : ombres · Ctrl + D : débogage", muted));
+            lines.Add(("Tab : carte / 3D · M : mini-carte · I : objectifs · B : ombres · Ctrl + D : débogage", muted));
             lines.Add(("F5 : sauvegarder · F9 : charger la dernière sauvegarde", muted));
             lines.Add(("H : masquer l'aide · Échap : menu des missions", muted));
         }

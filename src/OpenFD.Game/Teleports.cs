@@ -34,7 +34,63 @@ public sealed partial class UnitManager
             Teleports.Add(t);
         }
         LoadStreetStairs(level);
+        LoadVerticalLadders(level);
     }
+
+    /// <summary>
+    /// Échelles verticales fixes ([ITEM] Type=LADDER et CouldBeClimb : Forest, « base_ladder_forest » au pied de la tour de
+    /// guet) : un passage entre le sol (case libre au pied) et le plancher du haut, que le pompier monte ou descend visible.
+    /// Points du modèle : Dum_climbup (pied, côté barreaux), Dum_climbdown (haut des barreaux), Dum_climbout (sur le plancher).
+    /// </summary>
+    private void LoadVerticalLadders(Level level)
+    {
+        foreach (LevelObject o in level.Objects.Where(o => o.Kind == EntityKind.Placeable && o.HasTransform))
+        {
+            ClassFile? c = Class("Design\\" + o.ClassPath["design\\".Length..] + ".class");
+            if (c == null || !string.Equals(c.Get("ITEM", "Type")?.Trim('"', ' '), "LADDER", StringComparison.OrdinalIgnoreCase) || !c.GetBool("CAPACITIES_ACTIONS", "CouldBeClimb"))
+                continue;
+            string? m = c.Get("DISPLAY", "Model")?.Trim('"', ' ');
+            if (string.IsNullOrEmpty(m))
+                continue;
+            Vector3? bottom = null, top = null, exit = null;
+            try
+            {
+                CharacterRig? rig = CharacterRig.Build(_assets ??= new SceneAssets(_files), _files, SceneAssets.GfxPath("Placeable", m));
+                if (rig != null)
+                {
+                    Matrix4x4[] pose = rig.Pose(null, 0);
+                    for (int i = 0; i < rig.Names.Length; i++)
+                    {
+                        Vector3 w = Vector3.Transform(pose[i].Translation, o.Matrix);
+                        if (rig.Names[i].Equals("Dum_climbup", StringComparison.OrdinalIgnoreCase))
+                            bottom = w;
+                        else if (rig.Names[i].Equals("Dum_climbdown", StringComparison.OrdinalIgnoreCase))
+                            top = w;
+                        else if (rig.Names[i].Equals("Dum_climbout", StringComparison.OrdinalIgnoreCase))
+                            exit = w;
+                    }
+                }
+            }
+            catch { }
+            if (bottom is not { } b || top is not { } tp || exit is not { } ex)
+            {
+                Log.Add($"Échelle verticale {o.Name} : points du modèle introuvables");
+                continue;
+            }
+            Vector2 foot = new Vector2(b.X, b.Y), up = new Vector2(ex.X, ex.Y);
+            Teleports.Add(new Teleport
+            {
+                Id = o.Id, Name = o.Name, EndA = up, HeightA = ex.Z, Active = o.StartVisible, Walk = true, Vertical = true,
+                Foot = foot, LadderBottom = b, LadderTop = tp, LadderHeading = MathF.Atan2(up.Y - foot.Y, up.X - foot.X),
+                Duration = 1,
+            });
+            Log.Add($"Échelle verticale : {o.Name}, du sol ({b.X:0},{b.Y:0},{b.Z:0}) au plancher ({ex.X:0},{ex.Y:0},{ex.Z:0})");
+        }
+    }
+
+    /// <summary>Vitesse le long d'une échelle verticale (unités par seconde) et durée du passage du haut (animations de 2 s).</summary>
+    private const float VerticalClimbSpeed = 160f;
+    private const float VerticalTopSeconds = 2f;
 
     /// <summary>
     /// Escaliers extérieurs (« street_stairs », modèle buildvicto_escal : Fire Department 2, Street) : une volée de marches
@@ -182,6 +238,9 @@ public sealed partial class UnitManager
                     t.EndB = CellCenter(g, t.CellB);
                     t.HeightB = g.GroundHeight[t.CellB];
                     t.Duration = Math.Clamp(Vector3.Distance(new Vector3(t.EndA, t.HeightA), new Vector3(t.EndB, t.HeightB)) / StairsWalkSpeed, 1, 12);
+                    // échelle verticale : les barreaux à la vitesse d'un grimpeur, puis le passage du haut
+                    if (t.Vertical)
+                        t.Duration = MathF.Max(1, (t.LadderTop.Z - t.HeightB) / VerticalClimbSpeed) + VerticalTopSeconds;
                 }
             }
             else if (t.CellB < 0)
@@ -291,6 +350,48 @@ public sealed partial class UnitManager
         return false;
     }
 
+    /// <summary>
+    /// Sur une échelle verticale. En montant : il rejoint le pied, grimpe jusqu'en haut des barreaux, puis passe sur le
+    /// plancher (l'animation le hisse ; il est posé au bout à la fin). En descendant : il enjambe le haut, puis descend.
+    /// </summary>
+    private void VerticalClimb(Unit u, Teleport t)
+    {
+        bool up = u.StairsTo == t.EndA;
+        float climb = t.Duration - VerticalTopSeconds;
+        float e = t.Duration - u.StairsTimer;
+        Vector3 bottom = new Vector3(t.LadderBottom.X, t.LadderBottom.Y, t.HeightB);
+        u.Heading = t.LadderHeading;
+        if (up)
+        {
+            if (e < climb)
+            {
+                float k = e / climb;
+                Vector2 xy = Vector2.Lerp(new Vector2(u.StairsFrom.X, u.StairsFrom.Y), new Vector2(bottom.X, bottom.Y), MathF.Min(1, k * 5));
+                u.Position = new Vector3(xy, bottom.Z + (t.LadderTop.Z - bottom.Z) * k);
+                u.Vertical = VerticalPhase.Climb;
+            }
+            else
+            {
+                u.Position = t.LadderTop;
+                u.Vertical = VerticalPhase.Out;
+            }
+            u.Status = "monte à l'échelle";
+            return;
+        }
+        if (e < VerticalTopSeconds)
+        {
+            u.Position = new Vector3(t.EndA, t.HeightA);
+            u.Vertical = VerticalPhase.On;
+        }
+        else
+        {
+            float k = Math.Clamp((e - VerticalTopSeconds) / climb, 0, 1);
+            u.Position = Vector3.Lerp(t.LadderTop, bottom, k);
+            u.Vertical = VerticalPhase.Descend;
+        }
+        u.Status = "descend de l'échelle";
+    }
+
     /// <summary>Arrivé sur un faux escalier : la fonction du script (le message) ; il ne va nulle part.</summary>
     private void ReachFakeStairs(Unit u)
     {
@@ -311,6 +412,12 @@ public sealed partial class UnitManager
     {
         u.StairsTimer -= dt;
         Teleport t = u.Stairs!;
+        if (t.Vertical && u.StairsTimer > 0)
+        {
+            VerticalClimb(u, t);
+            return;
+        }
+        u.Vertical = VerticalPhase.None;
         if (t.Walk && u.StairsTimer > 0)
         {
             // escalier extérieur : il suit la volée, du point de départ au bout, en montant ou en descendant

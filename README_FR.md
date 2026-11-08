@@ -1,16 +1,16 @@
-# OpenFD — réimplémentation C# de Fire Department 2 et 3
+# FD3 — réimplémentation C# de Fire Department 3
 
-Nouveau moteur qui lit les fichiers d'une installation originale de Fire Department 2 et 3.
+Nouveau moteur qui lit les fichiers d'une installation originale de Fire Department 3.
 Aucune donnée du jeu n'est incluse dans ce dépôt.
 
-## Le jeu (Windows et Linux)
+## Le jeu (MonoGame, Windows et Linux)
 
 Double-cliquez sur `Lancer_FD3.bat` (sous Linux : `./lancer_fd3.sh "<dossier du jeu>"`).
 La première compilation télécharge MonoGame (paquet NuGet `MonoGame.Framework.DesktopGL`) : il faut
 une connexion Internet cette fois-là. Aucun « content pipeline » : textures, modèles, animations et sons
 sont lus directement dans les fichiers du jeu installé. Une fenêtre s'ouvre avec la mission en 3D (décor, objets,
 véhicules, civils, arbres, feu et fumée). Touches : Espace pause, 1 à 4 vitesse, Tab carte vue de
-dessus, T toits, O objets, F fumée, B ombres, F5 sauvegarder, F9 charger la dernière sauvegarde, Alt + Entrée plein écran.
+dessus, M mini-carte, T toits, O objets, F fumée, B ombres, F5 sauvegarder, F9 charger la dernière sauvegarde, Alt + Entrée plein écran.
 Le soleil (direction, opacité des ombres, nuit) vient de l'objet lumière `base_sun` de la carte
 (composant FD2_LIGHT). Mini-carte en bas à gauche (image `Minimap` du fichier .mis) : clic pour y
 regarder, clic droit pour y envoyer les unités choisies.

@@ -91,6 +91,13 @@ public sealed partial class OpenFDGame
             _debugExtinguish = false;
             _debugTeleport = false;
             _debugSave = false;
+            // T, O, F (toits, objets, fumée) ne marchent qu'en débogage : en sortant, tout redevient visible
+            if (!_debugAi)
+            {
+                _roofs = !NoRoofs;
+                _objects = true;
+                _smokeOn = true;
+            }
             Log(_debugAi ? "Débogage : portée des pompiers (vert) et propagation des feux (orange)" : "Débogage : non");
         }
         if (_debugAi && !_netGame)
@@ -247,14 +254,21 @@ public sealed partial class OpenFDGame
             return;
         switch (char.ToLowerInvariant(ch))
         {
-            case 't':
+            // toits, objets, fumée : seulement en débogage (Ctrl + D)
+            case 't' when _debugAi:
                 _roofs = !_roofs;
                 break;
-            case 'o':
+            case 'o' when _debugAi:
                 _objects = !_objects;
                 break;
-            case 'f':
+            case 'f' when _debugAi:
                 _smokeOn = !_smokeOn;
+                break;
+            case 'm':
+                _miniHidden = !_miniHidden;   // montrer / cacher la mini-carte
+                break;
+            case 'i':
+                ToggleObjectives();           // comme le bouton « i » au-dessus de la mini-carte
                 break;
             case 'b':
                 _shadowsOn = !_shadowsOn;
@@ -284,6 +298,7 @@ public sealed partial class OpenFDGame
         "F4 : éteint le prochain feu cliqué",
         "F5 : téléporte les unités choisies au prochain clic",
         "F6 : sauve le prochain civil cliqué",
+        "T : toits · O : objets · F : fumée",
     };
 
     // F4 : le prochain clic gauche sur un feu l'éteint ; F5 : le prochain clic gauche y téléporte les unités choisies ;
