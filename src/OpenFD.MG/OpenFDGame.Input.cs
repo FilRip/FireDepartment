@@ -83,8 +83,17 @@ public sealed partial class OpenFDGame
             _mPrev = m;
             return;
         }
-        if (Pressed(k, Keys.F1))
-            LoadMission(_mission, _difficulty switch { "EASY" => "NORMAL", "NORMAL" => "HARD", _ => "EASY" });   // difficulté suivante
+        // Ctrl + D : infos de débogage ; les touches F1 à F4 ne marchent que dans ce mode
+        bool ctrlKey = k.IsKeyDown(Keys.LeftControl) || k.IsKeyDown(Keys.RightControl);
+        if (ctrlKey && Pressed(k, Keys.D))
+        {
+            _debugAi = !_debugAi;
+            _debugExtinguish = false;
+            _debugTeleport = false;
+            Log(_debugAi ? "Débogage : portée des pompiers (vert) et propagation des feux (orange)" : "Débogage : non");
+        }
+        if (_debugAi && !_netGame)
+            DebugKeys(k);
         HandleArrows(k, dt);
 
         // molette : zoom
@@ -109,6 +118,41 @@ public sealed partial class OpenFDGame
         bool pressL = inside && m.LeftButton == ButtonState.Pressed && _mPrev.LeftButton == ButtonState.Released;
         bool pressR = inside && m.RightButton == ButtonState.Pressed && _mPrev.RightButton == ButtonState.Released;
         // mini-carte : prend les clics faits sur elle
+        // débogage (F5) : ce clic téléporte les unités choisies (en cercle autour du point, chacune sur une case libre)
+        if (pressL && _debugTeleport)
+        {
+            _debugTeleport = false;
+            pressL = false;
+            if (Ground(m.X, m.Y) is { } at)
+            {
+                List<Unit> who = _sel.Where(u => !u.Destroyed && !u.OnBoard && u.OnLadder == null).ToList();
+                for (int i = 0; i < who.Count; i++)
+                {
+                    Unit u = who[i];
+                    float ang = i * MathF.Tau / Math.Max(1, who.Count);
+                    SN.Vector2 p = i == 0 ? at : at + new SN.Vector2(MathF.Cos(ang), MathF.Sin(ang)) * (u.IsVehicle ? 500 : 120);
+                    u.Target = null;
+                    u.Opening = null;
+                    u.Stairs = null;
+                    u.GoTo = null;
+                    _session.Units.Teleport(u, _session.Units.Paths.Walkable(p));
+                }
+                Log($"Débogage : {who.Count} unité(s) téléportée(s)");
+            }
+        }
+        // débogage (F4) : ce clic éteint le feu visé, sans rien sélectionner
+        if (pressL && _debugExtinguish)
+        {
+            _debugExtinguish = false;
+            pressL = false;
+            if (FireAt(m.X, m.Y) is { } hp)
+            {
+                _session.Fire.Extinguish(hp);
+                Log($"Débogage : {hp.Name} éteint");
+            }
+            else
+                Log("Débogage : pas de feu à cet endroit");
+        }
         if (pressL && SelectionPanelPress(m.X, m.Y))
             pressL = false;
         if (pressL && ObjButtonPress(m.X, m.Y))
@@ -217,10 +261,59 @@ public sealed partial class OpenFDGame
                 _unitClass = _unitClass.EndsWith("medic") ? "Unit\\Fireman\\fireman_sp" : "Unit\\Fireman\\fireman_medic";
                 Log("Unité qui arrose : " + (_unitClass.EndsWith("medic") ? "médecin" : "pompier"));
                 break;
-            case 'd':
-                _debugAi = !_debugAi;
-                Log(_debugAi ? "Débogage : portée des pompiers (vert) et propagation des feux (orange)" : "Débogage : non");
-                break;
+        }
+    }
+
+    /// <summary>Commandes de débogage (Ctrl + D), affichées dans le panneau de droite.</summary>
+    private static readonly string[] DebugHelp =
+    {
+        "F1 : change la difficulté (relance la mission)",
+        "F2 : soigne à 100 % les unités choisies",
+        "F3 : remplit l'agent à 100 % des unités choisies",
+        "F4 : éteint le prochain feu cliqué",
+        "F5 : téléporte les unités choisies au prochain clic",
+    };
+
+    // F4 : le prochain clic gauche sur un feu l'éteint ; F5 : le prochain clic gauche y téléporte les unités choisies
+    private bool _debugExtinguish, _debugTeleport;
+
+    private void DebugKeys(KeyboardState k)
+    {
+        if (Pressed(k, Keys.F1))
+            LoadMission(_mission, _difficulty switch { "EASY" => "NORMAL", "NORMAL" => "HARD", _ => "EASY" });   // difficulté suivante
+        if (Pressed(k, Keys.F2) && _sel.Count > 0)
+        {
+            foreach (Unit u in _sel)
+            {
+                u.Stamina = u.StaminaMax;
+                u.Unconscious = false;
+                u.CriticalWarned = false;
+                if (u.IsVehicle && !u.Destroyed)
+                    u.Life = u.LifeMax;
+            }
+            Log($"Débogage : {_sel.Count} unité(s) soignée(s) à 100 %");
+        }
+        if (Pressed(k, Keys.F3) && _sel.Count > 0)
+        {
+            int n = 0;
+            foreach (Unit u in _sel.Where(u => u.Nozzle != null))
+            {
+                UnitManager.SetReserve(u, u.Nozzle!.ReserveMax);
+                n++;
+            }
+            Log($"Débogage : agent rempli à 100 % pour {n} unité(s)");
+        }
+        if (Pressed(k, Keys.F5))
+        {
+            _debugTeleport = !_debugTeleport && _sel.Count > 0;
+            _debugExtinguish = false;
+            Log(_debugTeleport ? "Débogage : cliquez où téléporter les unités choisies" : _sel.Count == 0 ? "Débogage : aucune unité choisie" : "Débogage : téléportation annulée");
+        }
+        if (Pressed(k, Keys.F4))
+        {
+            _debugTeleport = false;
+            _debugExtinguish = !_debugExtinguish;
+            Log(_debugExtinguish ? "Débogage : cliquez sur un feu pour l'éteindre" : "Débogage : extinction annulée");
         }
     }
 
@@ -920,7 +1013,11 @@ public sealed partial class OpenFDGame
         List<Unit> walkers = _sel.Where(u => !u.IsVehicle).ToList();
         Cur want = Cur.Normal;
         walkers = walkers.Where(u => !u.Unconscious).ToList();
-        if (MiniToWorld(x, y) != null)
+        if (_debugExtinguish)
+            want = Cur.Target;   // débogage (F4) : viser le feu à éteindre
+        else if (_debugTeleport)
+            want = Cur.Move;     // débogage (F5) : l'endroit où téléporter
+        else if (MiniToWorld(x, y) != null)
             want = Cur.Normal;
         else if (_sel.Any(u => u.CanDemolish && !u.Destroyed) && OpeningAt(x, y) is { Demolish: true })
             want = Cur.Bulldozer;   // débris : le bulldozer les dégage

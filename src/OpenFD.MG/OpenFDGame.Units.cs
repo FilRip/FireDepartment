@@ -180,6 +180,8 @@ public sealed partial class OpenFDGame
             : tag == "HEAL" && a.Tags.TryGetValue("ATTACKFIRE", out string? h) ? h
             : a.Tags.TryGetValue("WAIT1", out string? i) ? i : null;
         AnimClip? clip = file != null ? Clip(file) : null;
+        if (dt > 0 && !_ghostPass && !_paused && file != null)
+            AnimSound(a, file, tag != a.Tag, position);
         if (tag != a.Tag)
         {
             a.Tag = tag;
@@ -227,6 +229,29 @@ public sealed partial class OpenFDGame
             }
         }
         return true;
+    }
+
+    // ---- sons des animations : le jeu range sous le nom de l'animation le bruit qui l'accompagne (cc_lift_body →
+    // CC_LIFT_BODY, sc_break_door → SC_BREAK_DOOR, sc_extricate_loop → SC_EXTRICATE_LOOP…). Son en boucle dans la base
+    // (LOOP = 1) : entretenu tant que l'animation joue ; sinon joué une fois quand elle commence (variantes _02 … _06 au hasard)
+    private readonly Dictionary<string, (string label, bool loop)?> _animSounds = new(StringComparer.OrdinalIgnoreCase);
+
+    private void AnimSound(CharAnim a, string file, bool started, SN.Vector3 position)
+    {
+        if (_audio == null)
+            return;
+        if (!_animSounds.TryGetValue(file, out (string label, bool loop)? snd))
+        {
+            string label = file[(file.LastIndexOf('\\') + 1)..].ToUpperInvariant();
+            snd = _audio.Db.TryGet(label, out SoundDb.Entry? e) ? (label, e.Loop) : null;
+            _animSounds[file] = snd;
+        }
+        if (snd is not { } sd)
+            return;
+        if (sd.loop)
+            _audio.Keep(a, sd.label, position);
+        else if (started)
+            _audio.PlayAny(new[] { sd.label }.Concat(Enumerable.Range(2, 5).Select(k => $"{sd.label}_{k:00}")), position);
     }
 
     // ---- mouvement fluide : la simulation avance par pas de 0,1 s ; entre deux pas, on dessine les personnages et les
@@ -421,16 +446,10 @@ public sealed partial class OpenFDGame
                 }
                 if (u.Target != null && !u.Moving)
                     _audio.Keep(u, "HOSE_01_01", u.Position);
-                else if (u.Opening is { Extricate: true } && u.OpeningBreak && !u.Moving)
-                {
-                    // désincarcérateur : la scie tourne en boucle tant que la vie du portail descend
-                    if (u.ActionTimer >= UnitManager.ExtricateStart)
-                        _audio.Keep(u, "SC_EXTRICATE_LOOP", u.Position);
-                }
-                else if (u.Opening != null && u.OpeningBreak && !u.Moving)
+                // pas, coups de hache sur une porte, scie du désincarcérateur… : sons des animations (AnimSound) ;
+                // la vitre (sc_break_window) n'a pas de son à son nom : celui de la hache sur la porte
+                else if (u.Opening is { IsWindow: true } && u.OpeningBreak && !u.Moving)
                     _audio.Keep(u, "SC_BREAK_DOOR", u.Position);
-                else if (u.Moving)
-                    _audio.Keep(u, "SC_RUN_GENERIC_FIREMAN", u.Position, 0.5f);
             }
             // bombardier d'eau : bruit de l'avion pendant son passage, qui monte puis redescend (il arrive, passe, s'en va)
             if (_session.Units.Strike is { } air)

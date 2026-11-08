@@ -694,9 +694,6 @@ public sealed partial class UnitManager
             return;
         }
         u.Status = $"découpe {d.Name} ({d.Life / d.MaxLife:P0})";
-        // il démarre la scie (le bruit de coupe, en boucle, vient ensuite : voir le dessin des unités)
-        if (u.ActionTimer <= dt + 1e-4f)
-            Sounds.Add(("SC_EXTRICATE_INIT", u.Position));
         if (u.ActionTimer < ExtricateStart)
             return;
         d.Life -= u.ExtricatePower * dt;
@@ -705,7 +702,7 @@ public sealed partial class UnitManager
         d.Life = 0;
         d.State = OpeningState.Broken;
         d.BrokenAt = _s.Time;
-        Sounds.Add(("SC_EXTRICATE_END", u.Position));   // il éteint la scie
+        Sounds.Add(("SC_EXTRICATE_END", u.Position));   // il éteint la scie (démarrage et coupe : sons des animations)
         u.Opening = null;
         u.Status = "attend les ordres";
         Log.Add($"{_s.Time,6:0} s : {d.Name} découpé par {u.Name}");
