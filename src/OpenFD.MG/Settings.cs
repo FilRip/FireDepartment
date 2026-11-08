@@ -12,6 +12,7 @@ public sealed class Settings
 {
     public bool InvertX { get; set; }
     public bool InvertY { get; set; }
+    public bool EdgeScroll { get; set; }            // souris au bord de l'écran : la caméra se déplace (comme les flèches)
     public int Volume { get; set; } = 100;          // % (volume général)
     public int VolumeVoice { get; set; } = 100;     // % interface et voix (VOCAL_…)
     public int VolumeEffects { get; set; } = 80;    // % effets (tout le reste)

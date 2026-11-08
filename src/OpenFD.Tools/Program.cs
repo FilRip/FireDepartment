@@ -1842,7 +1842,9 @@ public static class Program
                 {
                     System.Text.StringBuilder line = new System.Text.StringBuilder($"{y * 100,6} ");
                     for (int x = cx - r; x <= cx + r; x++)
-                        line.Append(g.Inside(x, y) ? $"{g.GroundHeight[g.Index(x, y)],6:0}{(ses.Units.WalkableCell(x, y) ? 'l' : '#')}{(x == cx && y == cy ? '*' : ' ')}" : "   ----  ");
+                        line.Append(!g.Inside(x, y) ? "   ----  "
+                            : Environment.GetEnvironmentVariable("FD3_ZONES") == "1" ? $"{g.ZoneA[g.Index(x, y)],4}/{g.ZoneB[g.Index(x, y)],-4}"
+                            : $"{g.GroundHeight[g.Index(x, y)],6:0}{(ses.Units.WalkableCell(x, y) ? 'l' : '#')}{(x == cx && y == cy ? '*' : ' ')}");
                     Console.WriteLine(line.ToString());
                 }
                 foreach (Teleport t in ses.Units.Teleports)
@@ -1896,6 +1898,28 @@ public static class Program
                 Console.WriteLine($"{found} clés trouvées, {missing.Count} sans texte :");
                 foreach (KeyValuePair<string, string> kv in missing.Take(40))
                     Console.WriteLine($"  {kv.Key}  ({kv.Value})");
+                return 0;
+            }
+            case "aller":
+            {
+                // aller <Data> <Mission> <x> <y> : comme FD3_ALLER (à 12 s, le premier pompier à pied), suivi de sa marche
+                Session ses = new Session(files, args[2], "EASY");
+                Unit? w = null;
+                for (int i = 0; i < 3000; i++)
+                {
+                    ses.Step();
+                    if (w == null && ses.Time > 12 && ses.Units.Active.FirstOrDefault(u => !u.IsVehicle && !u.OnBoard) is { } f)
+                    {
+                        w = f;
+                        ses.Units.PlayerCommand = true;
+                        Console.WriteLine($"ordre : {ses.Units.Order(w, new System.Numerics.Vector2(float.Parse(args[3]), float.Parse(args[4])))}");
+                        ses.Units.PlayerCommand = false;
+                    }
+                    if (w != null && i % 20 == 0)
+                        Console.WriteLine($"t {ses.Time:0} ({w.Position.X:0},{w.Position.Y:0},{w.Position.Z:0}) {w.Status}");
+                    if (w != null && w.Path.Count == 0 && w.Stairs == null && ses.Time > 20)
+                        break;
+                }
                 return 0;
             }
             case "capacites":

@@ -20,5 +20,11 @@ public sealed class Teleport
     /// <summary>Faux escalier (Lab : les deux icônes au même endroit) : il n'emmène nulle part, il affiche un message (ON_ENTER).</summary>
     public bool Fake;
     public float Duration = 1;
+    /// <summary>
+    /// Escalier extérieur (« street_stairs », Fire Department 2) : le pompier le monte ou le descend à pied, visible
+    /// (animation sc_walk_generic_stair), au lieu de disparaître ; son bout bas est cherché au pied de l'escalier (Foot).
+    /// </summary>
+    public bool Walk;
+    public Vector2 Foot;
     public string OnEnter = "", OnLeave = "";
 }

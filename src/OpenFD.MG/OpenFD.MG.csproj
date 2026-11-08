@@ -6,6 +6,8 @@
   -->
   <ItemGroup>
     <ProjectReference Include="..\OpenFD.Game\OpenFD.Game.csproj" />
+    <ProjectReference Include="..\OpenFD.FD2\OpenFD.FD2.csproj" />
+    <ProjectReference Include="..\OpenFD.FD3\OpenFD.FD3.csproj" />
     <ProjectReference Include="..\OpenFD.EzTree\OpenFD.EzTree.csproj" />
     <ProjectReference Include="..\OpenFD.Video\OpenFD.Video.csproj" />
     <ProjectReference Include="..\OpenFD.Multiplayer\OpenFD.Multiplayer.csproj" />

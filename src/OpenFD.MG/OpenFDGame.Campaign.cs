@@ -263,20 +263,11 @@ public sealed partial class OpenFDGame
                 lines.Add((l, accent));
         if (lines.Count > 0)
             lines.Add(("", text));
-        if (page.StoryKey != null)
-            foreach (string l in Wrap(Loc(page.StoryKey), rw, storyScale))
+        // l'histoire de la mission (FD3) ou les lignes de son briefing (FD2) : IEdition.CampaignStory
+        _loc ??= Localization.Load(_files.DataDir);
+        foreach (string para in _edition.CampaignStory(_loc, page.Dir, page.StoryKey))
+            foreach (string l in Wrap(para, rw, storyScale))
                 lines.Add((l, text));
-        else
-            // Fire Department 2 : pas d'histoire ; les lignes du briefing de la mission (« &BriefingSuburb_Line1 »…)
-            for (int i = 1; i < 30; i++)
-            {
-                string key = $"&Briefing{page.Dir}_Line{i}";
-                string t = Loc(key);
-                if (t == key.TrimStart('&'))
-                    break;
-                foreach (string l in Wrap(t, rw, storyScale))
-                    lines.Add((l, text));
-            }
         float lh = _font.LineHeight * storyScale + 4 * _scale;
         float maxScroll = MathF.Max(0, lines.Count * lh - rh);
         _storyScroll = MathF.Min(_storyScroll, maxScroll);

@@ -320,6 +320,9 @@ public sealed partial class OpenFDGame
     // flèches du clavier : déplacent la vue (en 3D, dans la direction où regarde la caméra)
     private float _arrowShift = 1.6f;
 
+    // largeur (pixels de la fenêtre) du bord qui fait défiler la caméra (option EdgeScroll)
+    private const int EdgeBand = 2;
+
     private void HandleArrows(KeyboardState k, float dt)
     {
         float x = (k.IsKeyDown(Keys.Right) ? 1 : 0) - (k.IsKeyDown(Keys.Left) ? 1 : 0);
@@ -331,6 +334,19 @@ public sealed partial class OpenFDGame
             x = 0;
         }
         float y = (k.IsKeyDown(Keys.Up) ? 1 : 0) - (k.IsKeyDown(Keys.Down) ? 1 : 0);
+        // option « déplacer la caméra par la souris aux limites de l'écran » : la souris tout au bord de la fenêtre agit
+        // comme la flèche de ce côté (en haut : en avant ; en bas : en arrière), même avec Ctrl enfoncé
+        if (_settings.EdgeScroll && IsActive && !_dragL && !_dragM && !_dragR)
+        {
+            MouseState ms = Mouse.GetState();
+            if (ms.X >= 0 && ms.Y >= 0 && ms.X < _winW && ms.Y < _winH)
+            {
+                if (x == 0)
+                    x = ms.X <= EdgeBand ? -1 : ms.X >= _winW - 1 - EdgeBand ? 1 : 0;
+                if (y == 0)
+                    y = ms.Y <= EdgeBand ? 1 : ms.Y >= _winH - 1 - EdgeBand ? -1 : 0;
+            }
+        }
         if (x == 0 && y == 0)
             return;
         // Maj : défilement un peu plus rapide (options : Gameplay.ArrowShiftSpeed)

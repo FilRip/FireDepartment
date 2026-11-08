@@ -117,6 +117,10 @@ public sealed partial class OpenFDGame
             Log(shown);
         }
         h.Messages.Clear();
+        foreach (string bik in h.Cutscenes)
+            StartMissionVideo(bik);
+        h.Cutscenes.Clear();
+        UpdateMissionVideo(dt);
         _subtitle = h.Subtitle != null ? _loc.Get(h.Subtitle) : null;
 
         bool free = CameraSpec != null;   // essais : caméra imposée
@@ -232,6 +236,52 @@ public sealed partial class OpenFDGame
         return true;
     }
 
+    // ---- petites vidéos de mission (FD2 : PNL_StartCutscene("data/video/street_houses.bik")) : elles passent pendant que
+    // la partie continue, accompagnées d'un message vocal ; d'origine un « timbre-poste », ici agrandies en haut de l'écran
+    private VideoScreen? _missionVideo;
+
+    private void StartMissionVideo(string file)
+    {
+        if (VideoPath(Path.GetFileName(file.Replace('\\', '/'))) is not { } p)
+        {
+            Console.WriteLine($"Vidéo de mission introuvable : {file}");
+            return;
+        }
+        _missionVideo?.Dispose();
+        _missionVideo = VideoScreen.Open(GraphicsDevice, p, false, VideoVolume);
+    }
+
+    private void UpdateMissionVideo(float dt)
+    {
+        if (_missionVideo == null)
+            return;
+        if (!_paused)
+            _missionVideo.Update(dt);
+        if (_missionVideo.Finished)
+            StopMissionVideo();
+    }
+
+    private void StopMissionVideo()
+    {
+        _missionVideo?.Dispose();
+        _missionVideo = null;
+    }
+
+    private void DrawMissionVideo(float bar)
+    {
+        if (_missionVideo is not { } v)
+            return;
+        // 40 % de la largeur de l'écran (au plus 45 % de sa hauteur), centrée en haut, dans un cadre
+        float s = MathF.Min(_fbW * MissionVideoWidth / v.Width, _fbH * 0.45f / v.Height);
+        float w = v.Width * s, h = v.Height * s, x = (_fbW - w) / 2, y = MathF.Max(bar, 0) + 24 * _scale;
+        float f = 4 * _scale;
+        _ui.Rect(x - f, y - f, w + 2 * f, h + 2 * f, new SN.Vector4(0, 0, 0, 0.85f));
+        _ui.Image(v.Texture, x, y, w, h, SN.Vector4.One);
+    }
+
+    // largeur de la vidéo de mission, en part de l'écran
+    private const float MissionVideoWidth = 0.4f;
+
     // bandes noires et sous-titres
     private void RenderCinema()
     {
@@ -261,6 +311,7 @@ public sealed partial class OpenFDGame
                 y += lh;
             }
         }
+        DrawMissionVideo(bar);
         if (_cineOn && bar > 0.5f)
         {
             const string hint = "Échap : passer";

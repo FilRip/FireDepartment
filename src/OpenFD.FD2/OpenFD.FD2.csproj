@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Fire Department 2 : seulement ce qui s'oppose à Fire Department 3 pour les mêmes données (IEdition, OpenFD.Game).
+    Tout ce que FD2 ajoute sans rien changer à FD3 (escaliers extérieurs, bateaux-pompes…) est dans le moteur commun.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\OpenFD.Game\OpenFD.Game.csproj" />
+  </ItemGroup>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+</Project>

@@ -26,6 +26,7 @@ public sealed partial class OpenFDGame
     private void Rec(string op, long a = 0, long b = 0, float x = 0, float y = 0, string? s = null)
     {
         _session.Units.PlayerCommand = !_replaying;   // ordre du joueur : réponse vocale permise (remis à faux après l'ordre, voir Update)
+        _session.Units.PlayerOrder = true;
         if (_replaying || _session == null)
             return;
         _journal.Add(new JournalEntry { Step = _session.Steps, Op = op, A = a, B = b, X = x, Y = y, S = s });
@@ -146,7 +147,21 @@ public sealed partial class OpenFDGame
         sc.TryRun(fn);
     }
 
+    // ordre rejoué (chargement, multijoueur) : il agit comme l'ordre d'origine (UnitManager.PlayerOrder)
     private void Replay(JournalEntry e)
+    {
+        _session.Units.PlayerOrder = true;
+        try
+        {
+            ReplayOrder(e);
+        }
+        finally
+        {
+            _session.Units.PlayerOrder = false;
+        }
+    }
+
+    private void ReplayOrder(JournalEntry e)
     {
         UnitManager um = _session.Units;
         Unit? U(long id) => um.ById(id);

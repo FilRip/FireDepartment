@@ -46,6 +46,43 @@ public sealed partial class OpenFDGame
         }
         return At(g, now);
     }
+    /// <summary>
+    /// Objet que le script fait avancer (ENT_SetPosition ne donne que x et y) : il suit le relief (la grille de la carte,
+    /// lissée), en montant ou en descendant de la même hauteur que le sol, et penche dans le sens de la pente. Street (FD2) :
+    /// les tramways montent et redescendent la colline au lieu de passer sous la rue.
+    /// </summary>
+    private SN.Matrix4x4 FollowGround(uint id, SN.Matrix4x4 world, SN.Vector3 origin, SN.Vector2 at)
+    {
+        SN.Vector2 o2 = new SN.Vector2(origin.X, origin.Y);
+        SN.Vector3 to = new SN.Vector3(at, origin.Z + GridZ(at) - GridZ(o2));
+        SN.Matrix4x4 tilt = SN.Matrix4x4.Identity;
+        if (_glide.TryGetValue(id, out (SN.Vector2 from, SN.Vector2 to, float t0) g) && SN.Vector2.Distance(g.from, g.to) > 1)
+        {
+            SN.Vector2 dir = SN.Vector2.Normalize(g.to - g.from);
+            float rise = GridZ(at + dir * SlopeReach) - GridZ(at - dir * SlopeReach);
+            float ang = MathF.Atan2(rise, 2 * SlopeReach);
+            // l'avant se lève quand ça monte : rotation autour de l'axe horizontal perpendiculaire à la marche
+            if (MathF.Abs(ang) > 0.005f)
+                tilt = SN.Matrix4x4.CreateFromAxisAngle(new SN.Vector3(dir.Y, -dir.X, 0), ang);
+        }
+        return world * SN.Matrix4x4.CreateTranslation(-origin) * tilt * SN.Matrix4x4.CreateTranslation(to);
+    }
+
+    // demi-longueur sur laquelle on mesure la pente sous un objet déplacé par le script
+    private const float SlopeReach = 300f;
+
+    /// <summary>Hauteur de la grille de la carte en un point, interpolée entre les centres des cases (sans marches).</summary>
+    private float GridZ(SN.Vector2 p)
+    {
+        if (_session?.Grid is not { } g)
+            return 0;
+        float fx = p.X / Grid.CellSize - 0.5f, fy = p.Y / Grid.CellSize - 0.5f;
+        int x0 = (int)MathF.Floor(fx), y0 = (int)MathF.Floor(fy);
+        float tx = fx - x0, ty = fy - y0;
+        float H(int x, int y) => g.GroundHeight[g.Index(Math.Clamp(x, 0, g.Width - 1), Math.Clamp(y, 0, g.Height - 1))];
+        return (H(x0, y0) * (1 - tx) + H(x0 + 1, y0) * tx) * (1 - ty) + (H(x0, y0 + 1) * (1 - tx) + H(x0 + 1, y0 + 1) * tx) * ty;
+    }
+
     private readonly Dictionary<string, MeshGpu?> _partMeshes = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, CharacterRig?> _rigs = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, AnimClip?> _clips = new(StringComparer.OrdinalIgnoreCase);
@@ -87,8 +124,12 @@ public sealed partial class OpenFDGame
 
     // étiquette d'animation de la classe ([ANIM_PLAYER]) selon ce que fait le personnage
     // « @fichier » : animation donnée directement (à deux personnages : CharChar\cc_lift_body…), jouée une seule fois
+    // dans un escalier « téléporteur » : caché jusqu'à ce qu'il ressorte ; dans un escalier extérieur (Walk) : visible
+    private static bool InStairs(Unit u) => u.Stairs is { Walk: false };
+
     private static string UnitTag(Unit u, bool moving) =>
-        u.InjuredTimer > 0 || u.Unconscious ? "FAINT"
+        u.Stairs is { Walk: true } ? "~SingleChar\\sc_walk_generic_stair"   // escalier extérieur : il monte ou descend les marches
+        : u.InjuredTimer > 0 || u.Unconscious ? "FAINT"
         : u.SenseTimer > 0 && !moving ? "SENSE_VICTIM"   // chien : aboie (sc_bark)
         // grappin : lancer, grimper (en boucle), passer le haut du mur, redescendre (en boucle), toucher le sol
         : u.Climb == ClimbPhase.Launch ? "@SingleChar\\sc_grappling_hook_launch"
@@ -297,7 +338,7 @@ public sealed partial class OpenFDGame
     private void RenderGhosts()
     {
         Microsoft.Xna.Framework.Graphics.GraphicsDevice gd = GraphicsDevice;
-        List<Unit> men = _session.Units.Active.Where(u => !u.IsVehicle && u.Stairs == null).ToList();
+        List<Unit> men = _session.Units.Active.Where(u => !u.IsVehicle && !InStairs(u)).ToList();
         if (men.Count == 0)
             return;
         Microsoft.Xna.Framework.Graphics.DepthStencilState oldDepth = gd.DepthStencilState;
@@ -339,7 +380,7 @@ public sealed partial class OpenFDGame
             bool moving = SN.Vector3.Distance(a.LastPos, c.Position) > 1f;
             a.LastPos = c.Position;
             a.MovingFor = moving ? 0.3f : MathF.Max(0, a.MovingFor - dt);
-            if (c.Carrier is { Stairs: not null })
+            if (c.Carrier is { } inStairs && InStairs(inStairs))
                 continue;   // porté dans un escalier : caché avec son porteur
             if (c.Carrier is { } cu)
             {
@@ -356,7 +397,7 @@ public sealed partial class OpenFDGame
         }
         List<Unit> stillUnits = new List<Unit>();
         // (dans un escalier : caché jusqu'à ce qu'il ressorte de l'autre côté)
-        foreach (Unit u in _session.Units.Active.Where(u => !u.IsVehicle && u.Stairs == null))
+        foreach (Unit u in _session.Units.Active.Where(u => !u.IsVehicle && !InStairs(u)))
         {
             CharAnim a = Char(u, u.Model, "Design\\Unit\\" + u.ClassPath + ".class");
             bool axe = u.Opening != null && u.OpeningBreak && !u.Moving;
@@ -385,7 +426,7 @@ public sealed partial class OpenFDGame
                 continue;
             SN.Matrix4x4 w = world;
             if (ScriptPos(id) is { } mv)
-                w.Translation += new SN.Vector3(mv.X - origin.X, mv.Y - origin.Y, 0);
+                w = FollowGround(id, world, origin, mv);
             foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(model))
                 DrawMesh(mesh, (part * w).X());
         }

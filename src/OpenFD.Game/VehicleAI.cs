@@ -28,7 +28,10 @@ public sealed partial class UnitManager
             return;
         if ((u.Id + _autoTick) % 3 != 0)
             return;
-        if ((FindVisibleFire(u, u.Nozzle!.RangeMax, CannonAngle) ?? FindVisibleFire(u, u.Nozzle.RangeMax, float.MaxValue)) is { } best)
+        // après un ordre d'attaque (FireFocus) : le feu le plus proche du dernier éteint, même hors de l'angle de la lance
+        HotPoint? next = u.FireFocus != null ? FindVisibleFire(u, u.Nozzle!.RangeMax, float.MaxValue)
+            : FindVisibleFire(u, u.Nozzle!.RangeMax, CannonAngle) ?? FindVisibleFire(u, u.Nozzle.RangeMax, float.MaxValue);
+        if (next is { } best)
         {
             u.GoToVehicle = null;
             u.Target = best;

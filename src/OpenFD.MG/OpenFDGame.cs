@@ -79,6 +79,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     public OpenFDGame(GameFiles files, string mission, string difficulty)
     {
         _files = files;
+        _edition = MakeEdition(files.DataDir);
         _assets = new SceneAssets(files);
         _mission = mission;
         _difficulty = difficulty;
@@ -230,6 +231,17 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                     DoOpening(dozer, bd);
             }
         }
+        // essai (captures) : FD3_ALLER=x,y → à 12 s, le premier pompier à pied y est envoyé
+        if (!_menu && _session != null && !_testGo && _session.Time > 12 && Environment.GetEnvironmentVariable("FD3_ALLER") is { } go
+            && _session.Units.Active.FirstOrDefault(u => !u.IsVehicle && !u.OnBoard) is { } walker)
+        {
+            _testGo = true;
+            float[] g = go.Split(',').Select(v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+            _session.Units.PlayerCommand = true;
+            bool ok = _session.Units.Order(walker, new SN.Vector2(g[0], g[1]));
+            _session.Units.PlayerCommand = false;
+            Console.WriteLine($"essai aller : {walker.Name} {(ok ? "en route" : "refusé")} · {walker.Status}");
+        }
         // essai (captures) : FD3_DESINC=1 → à 45 s, le désincarcérateur est posé du côté de l'icône et découpe le portail
         if (!_menu && _session != null && !_testCut && _session.Time > 45 && Environment.GetEnvironmentVariable("FD3_DESINC") == "1"
             && _session.Units.Active.FirstOrDefault(u => u.CanExtricate) is { } cutter
@@ -380,7 +392,10 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         if (IsActive)
             HandleInput(dt);
         if (_session != null)
+        {
             _session.Units.PlayerCommand = false;   // les décisions de l'IA qui suivent restent muettes
+            _session.Units.PlayerOrder = false;
+        }
         if (_menu)
         {
             base.Update(gameTime);
@@ -407,10 +422,15 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         if (_fbW == 0 || _fbH == 0)
             return;
         float time = _visTime;   // s'arrête en pause : flammes, fumée et eau figées
-        if (_intro != null)
+        if (_intro != null || _splash != null)
         {
             DrawIntro();
             base.Draw(gameTime);
+            if (CapturePath != null && Environment.GetEnvironmentVariable("FD3_INTRO") != null && ++_frame >= CaptureAfter)
+            {
+                Capture(CapturePath);
+                Exit();
+            }
             return;
         }
         // essai : FD3_TEST_CHARGEMENT=mission,progression → l'écran de chargement de cette mission
@@ -1001,6 +1021,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _cineMoving = false;
         _cineBars = 0;
         _subtitle = null;
+        StopMissionVideo();
         _messages.Clear();
         _showMessageHistory = false;
         _ended = false;
@@ -1653,7 +1674,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     }
 
     private bool _charred;   // DrawMesh : dessin d'une carcasse calcinée
-    private bool _testCut;
+    private bool _testCut, _testGo;
     private bool _testSpawned, _testAir;      // essais FD3_ECHELLE, FD3_BULLDO : une seule fois
     private Opening? _testLadder;
 

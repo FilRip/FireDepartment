@@ -33,6 +33,8 @@ public sealed class MissionHost : IScriptHost
     public List<string> Sounds2D { get; } = new();
     /// <summary>Messages (PNL_AddMessage(voix, texte, x, y)) : étiquette de la voix (peut être vide), clé de traduction du texte, point de la carte.</summary>
     public List<(string vocal, string text, float x, float y)> Messages { get; } = new();
+    /// <summary>PNL_StartCutscene (FD2) : petites vidéos du jeu (« data/video/street_houses.bik ») à passer pendant la partie.</summary>
+    public List<string> Cutscenes { get; } = new();
     /// <summary>PNL_ClearAllMessages demandé depuis la dernière image : le panneau des messages se vide.</summary>
     public bool MessagesCleared { get; set; }
     /// <summary>Visibilité changée par les scripts (ENT_SetVisibility).</summary>
@@ -429,6 +431,9 @@ public sealed class MissionHost : IScriptHost
             case "PNL_ADDMESSAGE":
                 Messages.Add((V(0).AsText, V(1).AsText, (float)V(2).AsNum, (float)V(3).AsNum));
                 return Value.Zero;
+            case "PNL_STARTCUTSCENE":
+                Cutscenes.Add(V(0).AsText);
+                return Value.Zero;
             case "PNL_CLEARALLMESSAGES":
                 Messages.Clear();
                 MessagesCleared = true;
@@ -571,7 +576,9 @@ public sealed class MissionHost : IScriptHost
             {
                 List<HotPoint> all = _fire.HotPoints;
                 double max = all.Sum(h => (double)h.Class.IntensityMax);
-                return Value.F(max <= 0 ? 0 : 100 * all.Where(h => h.IsBurning).Sum(h => (double)h.Intensity) / max);
+                // une fraction (0 à 1) : les scripts des deux jeux écrivent « 100.0 * LEV_GetFireSizePercent() » pour le
+                // pourcentage et « LEV_GetFireSizePercent() > 0.45 » pour un seuil (Street : renfort quand le feu dépasse 45 %)
+                return Value.F(max <= 0 ? 0 : all.Where(h => h.IsBurning).Sum(h => (double)h.Intensity) / max);
             }
             case "UTL_GETRANDOM": return Value.F(_rng.NextDouble());
             case "UTL_GETDELTAGAMETIME": return Value.F(Session.MainLoopPeriod);

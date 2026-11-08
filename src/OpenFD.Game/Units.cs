@@ -38,6 +38,11 @@ public sealed partial class UnitManager
     public const float ExtraStandoff = 400f;
     /// <summary>Vrai pendant un ordre donné par le joueur (l'interface le met) : les réponses vocales ne concernent que ceux-là.</summary>
     public bool PlayerCommand;
+    /// <summary>
+    /// Ordre du joueur en cours d'exécution, y compris rejoué (chargement d'une partie, ordre d'un autre joueur en
+    /// multijoueur) : contrairement à PlayerCommand (réponses vocales), il change le jeu de la même façon partout.
+    /// </summary>
+    public bool PlayerOrder;
     /// <summary>Portée à laquelle un pompier libre repère un feu et va l'éteindre, en multiple de celle de sa lance (options : Gameplay).</summary>
     public static float AutoAttackRange = 2f;
     /// <summary>Feu tout proche : le pompier recule jusqu'à cette part de sa distance d'arrosage habituelle (options : Gameplay).</summary>
@@ -128,6 +133,7 @@ public sealed partial class UnitManager
 
     public void Update(float time, float dt)
     {
+        PlayerOrder = false;   // l'ordre du joueur est appliqué : ce qui suit est l'IA (même chose en direct et rejoué)
         for (int i = _pending.Count - 1; i >= 0; i--)
             if (time >= _pending[i].eta)
             {
@@ -604,6 +610,8 @@ public sealed partial class UnitManager
         if (u.Unconscious)
             return false;
         u.Target = target;
+        if (PlayerOrder && target == null)
+            u.FireFocus = null;   // simple déplacement demandé par le joueur : l'IA reprend « le plus près de lui »
         u.Path.Clear();
         u.GoTo = null;
         u.GoToVehicle = null;
@@ -680,6 +688,14 @@ public sealed partial class UnitManager
     /// en s'approchant ou en reculant, puis arrose.
     /// </summary>
     public void Attack(Unit u, HotPoint h)
+    {
+        AttackFire(u, h);
+        // ordre du joueur : la suite (IA) se cherche autour de ce feu-là, puis du dernier éteint (FireFocus)
+        if (PlayerOrder && u.Nozzle != null && !u.Destroyed)
+            u.FireFocus = new Vector2(h.Position.X, h.Position.Y);
+    }
+
+    private void AttackFire(Unit u, HotPoint h)
     {
         if (u.Nozzle == null || u.Destroyed)
         {
@@ -1109,6 +1125,9 @@ public sealed partial class UnitManager
         {
             if (_reported.Add(h))
                 Log.Add($"{_s.Time,6:0} s : {h.Name} éteint");
+            // il finit le même foyer : le prochain feu se cherche autour de celui-ci
+            if (u.FireFocus != null)
+                u.FireFocus = new Vector2(h.Position.X, h.Position.Y);
             u.Target = null;
             u.Status = "attend les ordres";
             return;
