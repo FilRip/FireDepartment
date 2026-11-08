@@ -382,6 +382,19 @@ public sealed class FireWorld
         }
     }
     public List<string> ExtinguishLog { get; } = new();
+
+    /// <summary>Éteint un foyer d'un coup (débogage, F4), comme un arrosage qui l'amène à 0.</summary>
+    public void Extinguish(HotPoint hp)
+    {
+        if (!hp.Lit)
+            return;
+        hp.Lit = false;
+        hp.Intensity = 0f;
+        hp.State = HotPointState.Idle;
+        hp.HeatingTime = 0f;
+        ExtinguishLog.Add($"{Time,6:0.0} {hp.Name} éteint (débogage)");
+    }
+
     private float LastDt = 0.1f;
 
     // § 3.3

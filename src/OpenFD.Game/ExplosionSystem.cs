@@ -7,6 +7,11 @@ namespace OpenFD.Game;
 public sealed class ExplosionSystem
 {
     public List<ExplosiveItem> Items { get; } = new();
+    /// <summary>
+    /// Grille de la carte : le souffle d'une explosion ne traverse pas les murs (cases fermées entre l'explosion et le foyer
+    /// ou l'objet). Fireworks : l'entrepôt principal garde son feu plusieurs minutes au lieu de l'envoyer dans la rue.
+    /// </summary>
+    public Grid? Walls;
     public Dictionary<uint, ExplosiveItem> ById { get; } = new();
     /// <summary>Explosions survenues (pour l'image et le son) ; le jeu retire celles qu'il a traitées.</summary>
     public List<Explosion> Happened { get; } = new();
@@ -151,7 +156,7 @@ public sealed class ExplosionSystem
         foreach (HotPoint h in fire.HotPoints)
         {
             float d = Vector3.Distance(h.Position, it.Position);
-            if (d > it.HpRadius || !h.Enabled)
+            if (d > it.HpRadius || !h.Enabled || Shielded(it.Position, h.Position))
                 continue;
             float k = 1 - d / it.HpRadius;   // décroît jusqu'au bord du souffle
             if (!h.Lit)
@@ -163,13 +168,42 @@ public sealed class ExplosionSystem
             if (o == it || o.Exploded)
                 continue;
             float d = Vector3.Distance(o.Position, it.Position);
-            if (d <= it.LpRadius)
+            if (d <= it.LpRadius && !Shielded(it.Position, o.Position))
                 o.Life -= it.LpPower * BlastOnItems * (1 - d / it.LpRadius);
         }
         Blasts.Add((it.Position, it.StaminaRadius, it.StaminaPower));
         if (lit > 0)
             Log.Add($"{time,6:0} s : {lit} nouveau(x) foyer(s) allumé(s) par l'explosion");
     }
+
+    /// <summary>
+    /// Un mur entre l'explosion et la cible : une case fermée de la grille sur la ligne qui les relie, hors des deux cases
+    /// les plus proches de chaque bout (l'objet qui explose et la cible occupent souvent leur propre case).
+    /// </summary>
+    private bool Shielded(Vector3 a, Vector3 b)
+    {
+        if (Walls is not { } g)
+            return false;
+        (int ax, int ay) = g.CellOf(a);
+        (int bx, int by) = g.CellOf(b);
+        int n = Math.Max(Math.Abs(bx - ax), Math.Abs(by - ay));
+        float top = MathF.Max(a.Z, b.Z) + WallRise;
+        for (int i = ShieldSkip; i <= n - ShieldSkip; i++)
+        {
+            int cx = ax + (int)MathF.Round((bx - ax) * i / (float)n), cy = ay + (int)MathF.Round((by - ay) * i / (float)n);
+            if (!g.Inside(cx, cy))
+                continue;
+            int k = g.Index(cx, cy);
+            // case fermée, ou mur dont la grille garde le dessus comme sol (Fireworks : les murs de l'entrepôt, 4 à 8 m)
+            if (g.ZoneA[k] == 0 || g.GroundHeight[k] > top)
+                return true;
+        }
+        return false;
+    }
+
+    private const int ShieldSkip = 2;
+    /// <summary>Hauteur au-dessus de l'explosion et de la cible à partir de laquelle une case de la grille fait mur.</summary>
+    private const float WallRise = 250f;
 
     /// <summary>Points de vie (scripts : ENT_GetDamage) ; null si l'objet n'est pas un objet explosif.</summary>
     public void SetFireCoef(uint id, float coef)

@@ -2298,11 +2298,19 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         lines.Add(($"{_session.Units.Active.Count} unités · {_sel.Count} sélectionnée(s)", txt));
         foreach (Unit u in _sel.Take(6))
             lines.Add(($"  {UnitLabel(u)} : {u.Status}{(u.IsCanon ? (u.FeedTruck != null ? " · relié à un camion" : " · aucun camion à portée") : u.Nozzle != null ? $" · {UnitManager.AgentName(u.Nozzle.Agent)} {u.Nozzle.Reserve:0}/{u.Nozzle.ReserveMax:0}" : "")}{(u.Seats > 0 ? $" · à bord {u.Passengers.Count}/{u.Seats}" : "")}", new SN.Vector4(0.45f, 0.75f, 1, 1)));
+        if (_debugAi)
+        {
+            // commandes de débogage (seulement dans ce mode)
+            lines.Add(("", txt));
+            lines.Add(("Débogage (Ctrl + D)", accent));
+            foreach (string dh in DebugHelp)
+                lines.Add((dh, (_debugExtinguish && dh.StartsWith("F4")) || (_debugTeleport && dh.StartsWith("F5")) ? accent : muted));
+        }
         if (_help)
         {
             lines.Add(("", txt));
             lines.Add(("Espace : pause · 1 2 3 4 : vitesse ×1 ×4 ×16 ×64", muted));
-            lines.Add(("Tab : carte / 3D · T : toits · O : objets · F : fumée · B : ombres · F1 : difficulté · D : portées (débogage)", muted));
+            lines.Add(("Tab : carte / 3D · T : toits · O : objets · F : fumée · B : ombres · Ctrl + D : débogage", muted));
             lines.Add(("F5 : sauvegarder · F9 : charger la dernière sauvegarde", muted));
             lines.Add(("H : masquer l'aide · Échap : menu des missions", muted));
         }

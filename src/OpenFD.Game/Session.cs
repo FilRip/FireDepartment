@@ -62,6 +62,7 @@ public sealed class Session
         Smoke.Walls = Grid;
         Units = new UnitManager(this, files, mis);
         Explosions = ExplosionSystem.Load(Level, files, Fire, ScriptDamageIds(files, mission));
+        Explosions.Walls = Grid;
 
         if (!runScripts)
             return;

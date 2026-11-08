@@ -131,6 +131,16 @@ public sealed partial class UnitManager
         if (!v.IsVehicle || v.Destroyed || amount <= 0)
             return;
         v.Life = MathF.Max(0, v.Life - amount);
+        // alerte « véhicule en danger » à 20 % de vie, une seule fois (comme le pompier à bout de forces) ; de nouveau
+        // possible s'il est réparé au-dessus de 40 %
+        if (v.Life > v.LifeMax * CriticalRearm)
+            v.CriticalWarned = false;
+        else if (!v.CriticalWarned && v.LifeMax > 0 && v.Life <= v.LifeMax * CriticalWarning)
+        {
+            v.CriticalWarned = true;
+            Sounds.Add(("VOCAL_VEHICLE_CRITICAL", v.Position));
+            Log.Add($"{_s.Time,6:0} s : {v.Name} est presque détruit ({100 * v.Life / v.LifeMax:0} %)");
+        }
         if (v.Life > 0)
             return;
         v.Destroyed = true;

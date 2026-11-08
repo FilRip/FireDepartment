@@ -28,17 +28,34 @@ public sealed class MusicPlayer : IDisposable
     /// Musique voulue maintenant (nom du fichier sans extension, « Menu ») ; null : silence. La même musique continue sans
     /// recommencer, même finie (une musique jouée une fois ne repart pas).
     /// </summary>
-    public void Want(string? name, bool loop)
+    public void Want(string? name, bool loop) => Want(name, loop, null);
+
+    /// <summary>
+    /// Musique voulue, puis une autre en boucle quand elle est finie (partie : « Intro », puis l'ambiance de la mission).
+    /// Nom : fichier de Data\Sound\Music sans extension, ou chemin complet d'un .mp3 (ambiances de Data\Sound\Ambience).
+    /// </summary>
+    public void Want(string? name, bool loop, string? then)
     {
-        if (string.Equals(name, _current, StringComparison.OrdinalIgnoreCase))
+        string? key = name == null ? null : name + "|" + then;
+        if (string.Equals(key, _current, StringComparison.OrdinalIgnoreCase))
             return;
         Stop();
-        _current = name;
+        _current = key;
+        _then = then;
+        Open(name, loop);
+    }
+
+    // suite prévue (jouée en boucle quand la musique en cours est finie)
+    private string? _then;
+
+    private void Open(string? name, bool loop)
+    {
         if (name == null)
             return;
         try
         {
-            string? path = Directory.Exists(_dir) ? Directory.EnumerateFiles(_dir).FirstOrDefault(f => Path.GetFileName(f).Equals(name + ".mp3", StringComparison.OrdinalIgnoreCase)) : null;
+            string? path = File.Exists(name) ? name
+                : Directory.Exists(_dir) ? Directory.EnumerateFiles(_dir).FirstOrDefault(f => Path.GetFileName(f).Equals(name + ".mp3", StringComparison.OrdinalIgnoreCase)) : null;
             if (path == null)
                 return;
             _file = new NLayer.MpegFile(path);
@@ -54,8 +71,9 @@ public sealed class MusicPlayer : IDisposable
         catch (Exception e)
         {
             Console.WriteLine($"Musique {name} : {e.Message}");
+            string? key = _current;
             Stop();
-            _current = name;   // pas de nouvel essai à chaque image
+            _current = key;   // pas de nouvel essai à chaque image
         }
     }
 
@@ -64,6 +82,15 @@ public sealed class MusicPlayer : IDisposable
     {
         if (_inst != null)
             _inst.Volume = Math.Clamp(Volume, 0, 1);
+        // musique finie (tout le son décodé a été joué) : la suite prévue, en boucle
+        if (_ended && _then != null && (_inst == null || _inst.PendingBufferCount == 0))
+        {
+            string next = _then, key = _current ?? "";
+            _then = null;
+            Close();
+            _current = key;
+            Open(next, true);
+        }
     }
 
     // environ un quart de seconde de son décodé, envoyé à la carte son
@@ -109,6 +136,14 @@ public sealed class MusicPlayer : IDisposable
 
     public void Stop()
     {
+        Close();
+        _current = null;
+        _then = null;
+    }
+
+    // fichier et son en cours libérés (la musique voulue reste notée)
+    private void Close()
+    {
         try
         {
             _inst?.Stop();
@@ -121,7 +156,6 @@ public sealed class MusicPlayer : IDisposable
         _inst = null;
         _file?.Dispose();
         _file = null;
-        _current = null;
     }
 
     public void Dispose() => Stop();

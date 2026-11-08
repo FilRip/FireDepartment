@@ -829,10 +829,58 @@ public static class Program
                 {
                     ses.Step();
                     if (i % 300 == 299)
-                        Console.WriteLine($"FEUX {ses.Time,5:0} s : {ses.Fire.HotPoints.Count(h => h.IsBurning)} foyers en feu, {ses.Explosions.Items.Count(x => x.Exploded)} objets explosés");
+                        Console.WriteLine($"FEUX {ses.Time,5:0} s : {ses.Fire.HotPoints.Count(h => h.IsBurning)} foyers en feu, dont {ses.Fire.HotPoints.Count(h => h.IsBurning && !(h.Position.X > 8400 && h.Position.X < 14500 && h.Position.Y > 5200 && h.Position.Y < 11800))} hors du rectangle 8400-14500 × 5200-11800 ({string.Join(", ", ses.Fire.HotPoints.Where(h => h.IsBurning).GroupBy(h => ses.RoomOf.GetValueOrDefault(h.Id, "")).Select(g => $"{(g.Key == "" ? "dehors" : g.Key)} {g.Count()}"))}), {ses.Explosions.Items.Count(x => x.Exploded)} objets explosés");
                 }
                 foreach (string l in ses.Explosions.Log)
                     Console.WriteLine(l);
+                return 0;
+            }
+            case "cartefeu":
+            {
+                // cartefeu <Data> <Mission> <secondes> <sortie.ppm> : grille (blanc ouvert, noir fermé), foyers allumés au départ
+                // (rouge), en feu à la fin (orange), objets explosifs (bleu, cyan : explosés)
+                Session ses = new Session(files, args[2], "EASY");
+                Grid g = ses.Grid!;
+                HashSet<uint> start = ses.Fire.HotPoints.Where(h => h.IsBurning).Select(h => h.Id).ToHashSet();
+                int steps = (int)(float.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture) / Session.Dt);
+                for (int i = 0; i < steps; i++)
+                    ses.Step();
+                byte[] px = new byte[g.Width * g.Height * 3];
+                for (int k = 0; k < g.Width * g.Height; k++)
+                {
+                    byte v = g.ZoneA[k] == 0 ? (byte)40 : (byte)200;
+                    px[3 * k] = v;
+                    px[3 * k + 1] = v;
+                    px[3 * k + 2] = v;
+                }
+                void Dot(System.Numerics.Vector3 p, byte r, byte gg, byte b)
+                {
+                    (int cx, int cy) = g.CellOf(p);
+                    if (!g.Inside(cx, cy))
+                        return;
+                    int k = ((g.Height - 1 - cy) * g.Width + cx) * 3;
+                    px[k] = r;
+                    px[k + 1] = gg;
+                    px[k + 2] = b;
+                }
+                // la grille est rangée y croissant : on retourne l'image (nord en haut)
+                byte[] flip = new byte[px.Length];
+                for (int y = 0; y < g.Height; y++)
+                    Array.Copy(px, y * g.Width * 3, flip, (g.Height - 1 - y) * g.Width * 3, g.Width * 3);
+                px = flip;
+                foreach (OpenFD.Fire.HotPoint h in ses.Fire.HotPoints.Where(h => h.IsBurning))
+                    Dot(h.Position, 255, 150, 0);
+                foreach (OpenFD.Fire.HotPoint h in ses.Fire.HotPoints.Where(h => start.Contains(h.Id)))
+                    Dot(h.Position, 255, 0, 0);
+                foreach (ExplosiveItem it in ses.Explosions.Items)
+                    Dot(it.Position, 0, it.Exploded ? (byte)220 : (byte)0, 255);
+                using (FileStream fs = File.Create(args[4]))
+                {
+                    byte[] head = System.Text.Encoding.ASCII.GetBytes($"P6 {g.Width} {g.Height} 255\n");
+                    fs.Write(head);
+                    fs.Write(px);
+                }
+                Console.WriteLine($"{start.Count} foyers au départ, {ses.Fire.HotPoints.Count(h => h.IsBurning)} en feu à {ses.Time:0} s");
                 return 0;
             }
             case "hpbloc":

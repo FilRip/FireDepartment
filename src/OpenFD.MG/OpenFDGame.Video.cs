@@ -27,11 +27,41 @@ public sealed partial class OpenFDGame
             _music.Want(won ? "Victory" : "Defeat", false);
         else if (_menu && !_inGame)
             _music.Want("Menu", true);
+        else if (_session != null && !_ended)
+        {
+            // en partie : « Intro » puis l'ambiance de la mission en boucle ; « Autres missions » et Tutorial : l'ambiance
+            // directement ; sans ambiance dans SoundDB.INI : « Intro » seule, une fois (pas pour le Tutorial)
+            bool tutorial = _session.Mission.Equals("Tutorial", StringComparison.OrdinalIgnoreCase);
+            string? amb = AmbiencePath();
+            if (amb == null)
+                _music.Want(tutorial ? null : "Intro", false);
+            else if (tutorial || _missions.Any(m => m.Dir.Equals(_session.Mission, StringComparison.OrdinalIgnoreCase)))
+                _music.Want(amb, true);
+            else
+                _music.Want("Intro", false, amb);
+        }
         else
             _music.Want(null, false);
         _music.Update();
     }
     private bool _introDone;
+
+    /// <summary>
+    /// Ambiance de la mission : [MISSION] AmbienceMusic de la mission (« AMBIENCE_FIREWORKS ») → fichier de la section du
+    /// même nom dans SoundDB.INI (Data\Sound\Ambience\Factory.mp3). Pas de section à ce nom (« AMBIENCE_INDUSTRIAL » de
+    /// Ch_Plant et Vegas, « AMBIENCE_URBAN » de MonteCristo) : pas d'ambiance du tout.
+    /// </summary>
+    private string? AmbiencePath()
+    {
+        if (_audio == null || _session == null)
+            return null;
+        if (_ambience.TryGetValue(_session.Mission, out string? cached))
+            return cached;
+        string? label = _session.MissionConfig.Get("MISSION", "AmbienceMusic")?.Trim('"', ' ');
+        string? file = !string.IsNullOrEmpty(label) && _audio.Db.TryGet(label, out SoundDb.Entry? e) && File.Exists(e.File) ? e.File : null;
+        return _ambience[_session.Mission] = file;
+    }
+    private readonly Dictionary<string, string?> _ambience = new(StringComparer.OrdinalIgnoreCase);
 
     private string? VideoPath(string name)
     {
