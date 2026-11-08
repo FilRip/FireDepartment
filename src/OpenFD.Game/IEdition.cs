@@ -19,4 +19,10 @@ public interface IEdition
     /// FD2, qui n'a pas d'histoire : les lignes du briefing.
     /// </summary>
     IReadOnlyList<string> CampaignStory(Localization loc, string missionDir, string? storyKey);
+
+    /// <summary>
+    /// Flèches de la page de campagne (BUT_PREVIOUS_CAMPAIGN / BUT_NEXT_CAMPAIGN) à éclaircir : celles de FD2 sont grises sur
+    /// un fond violet, à peine visibles ; leur gris est alors affiché en blanc.
+    /// </summary>
+    bool WhiteCampaignArrows { get; }
 }

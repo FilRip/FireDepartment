@@ -23,4 +23,14 @@ public sealed class Civilian
     public Vector2 FollowGoal;
     public float Replan;
     public float RunSpeed = 280f;                         // vitesse d'un trajet commandé par le script
+    /// <summary>
+    /// Mené par le script (IA_CmdMoveTo) : il déclenche les zones où il entre, comme une unité (Port : le conducteur du
+    /// train qui rejoint sa locomotive). Un civil qui suit un pompier ou qu'on porte, non : le pompier les déclenche déjà.
+    /// </summary>
+    public bool ScriptWalk;
+    /// <summary>Escalier en cours (il suit son guide dans un escalier : il le monte ou le descend d'un bout à l'autre).</summary>
+    public Teleport? Stairs;
+    public float StairsTimer;
+    public Vector3 StairsFrom;
+    public Vector3 StairsTo;
 }

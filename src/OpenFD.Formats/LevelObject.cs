@@ -49,4 +49,34 @@ public sealed class LevelObject
         }
     }
     public ReadOnlySpan<byte> ComponentBytes(Component c) => Raw.AsSpan(c.Offset, c.Size);
+
+    /// <summary>
+    /// Cases d'occupation dessinées dans l'éditeur (Port : « occupation_train », la rame en gare ; Ch_Plant :
+    /// « truck_occupation_1 »). Dans le composant A001, bloc « AA AA FF FF 0A » : à +35, leur nombre ; à +39, chaque case
+    /// (entier dx, entier dy, 2 octets) en cases de la grille (1 m), comptée depuis la case de l'objet, axes du monde. Un
+    /// objet ordinaire n'a que sa propre case (0, 0) : liste vide alors.
+    /// </summary>
+    public List<(int Dx, int Dy)> OccupationCells
+    {
+        get
+        {
+            List<(int, int)> list = new List<(int, int)>();
+            if (GetComponent(0xA001) is not { } c)
+                return list;
+            ReadOnlySpan<byte> b = ComponentBytes(c);
+            ReadOnlySpan<byte> mark = stackalloc byte[] { 0xAA, 0xAA, 0xFF, 0xFF, 0x0A };
+            int i = b.LastIndexOf(mark);
+            if (i < 0 || i + 39 > b.Length)
+                return list;
+            int n = BitConverter.ToInt32(b.Slice(i + 35, 4));
+            if (n <= 1 || n > 100_000 || i + 39 + n * 10 > b.Length)
+                return list;
+            for (int k = 0; k < n; k++)
+            {
+                int p = i + 39 + k * 10;
+                list.Add((BitConverter.ToInt32(b.Slice(p, 4)), BitConverter.ToInt32(b.Slice(p + 4, 4))));
+            }
+            return list;
+        }
+    }
 }

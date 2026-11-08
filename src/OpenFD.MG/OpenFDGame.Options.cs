@@ -167,6 +167,8 @@ public sealed partial class OpenFDGame
     }
 
     /// <summary>Réglages de jeu (Gameplay) : ceux du joueur, ou ceux du serveur pendant une partie en réseau.</summary>
+    private const float OldArrowShift = 1.6f;
+
     private void ApplyGameplay(GameplaySettings gp)
     {
         UnitManager.HeatFactor = gp.HeatFactor;
@@ -179,7 +181,10 @@ public sealed partial class OpenFDGame
         UnitManager.StaminaLoss = Math.Clamp(gp.StaminaLoss, 0f, 5f);
         ExplosionSystem.ObjectiveTimeFactor = Math.Clamp(gp.ObjectiveTimeFactor, 0.1f, 20f);
         UnitManager.CarrySpeed = Math.Clamp(gp.CarrySpeed, 0.2f, 1f);
-        _arrowShift = Math.Clamp(gp.ArrowShiftSpeed, 1f, 5f);
+        // ancienne valeur par défaut (1,6, trop lente) : remplacée par la nouvelle, trois fois plus rapide
+        if (MathF.Abs(gp.ArrowShiftSpeed - OldArrowShift) < 0.001f)
+            gp.ArrowShiftSpeed = new GameplaySettings().ArrowShiftSpeed;
+        _arrowShift = Math.Clamp(gp.ArrowShiftSpeed, 1f, 15f);
         _flameFps = Math.Clamp(gp.FlameSpeed, 0.5f, 60f);
         _flameFpsVar = Math.Clamp(gp.FlameSpeedVariation, 0f, 60f);
     }

@@ -1222,8 +1222,12 @@ public static class Program
             }
             case "carte":
             {
-                // carte <Data> <Mission> x0 y0 x1 y1 : cases de la grille (# mur, m cloison, x bloqué, D porte fermée, d porte)
+                // carte <Data> <Mission> x0 y0 x1 y1 [secondes] : cases de la grille (# mur, m cloison, x bloqué, o zone
+                // d'occupation, D porte fermée, d porte), après quelques secondes de jeu si on le demande
                 Session ses = new Session(files, args[2], "EASY");
+                float wait = args.Length > 7 ? float.Parse(args[7]) : 0;
+                while (ses.Time < wait)
+                    ses.Step();
                 Console.WriteLine(ses.Units.AsciiMap(int.Parse(args[3]), int.Parse(args[4]), int.Parse(args[5]), int.Parse(args[6])));
                 return 0;
             }
@@ -1784,9 +1788,97 @@ public static class Program
                 }
                 return 0;
             }
+            case "sauvercivil":
+            {
+                // sauvercivil <Data> <Mission> [secondes] [nom] [suivi] : comme F6 (débogage), sauve ce civil (sinon le premier
+                // vivant) ; compte avant et après ; « suivi » : encore 120 s de jeu, position des civils et journal du script
+                Session ses = new Session(files, args[2], "EASY");
+                float wait = args.Length > 3 ? float.Parse(args[3]) : 10;
+                while (ses.Time < wait)
+                    ses.Step();
+                Civilian? c = ses.Units.Civilians.FirstOrDefault(x => (args.Length > 4 ? x.Name.Equals(args[4], StringComparison.OrdinalIgnoreCase) : !x.Hidden)
+                    && x.State is OpenFD.Game.CivilianState.Conscious or OpenFD.Game.CivilianState.Unconscious);
+                Console.WriteLine($"avant : {ses.Units.Rescued} sauvé(s)");
+                if (c != null)
+                    Console.WriteLine($"{c.Name} ({c.State}) : {ses.Units.DebugSave(c)} → {c.State}");
+                for (int i = 0; i < 20; i++)
+                    ses.Step();
+                Console.WriteLine($"après : {ses.Units.Rescued} sauvé(s)");
+                if (args.Length > 5)
+                {
+                    int shown = ses.Units.Log.Count;
+                    float end = ses.Time + 120;
+                    int k = 0;
+                    while (ses.Time < end)
+                    {
+                        ses.Step();
+                        if (k++ % 100 == 0)
+                            foreach (Civilian cv in ses.Units.Civilians.Where(x => x.Name.Contains(args[5], StringComparison.OrdinalIgnoreCase)))
+                                Console.WriteLine($"t {ses.Time:0} {cv.Name} ({cv.Position.X:0},{cv.Position.Y:0}) {cv.State} caché {cv.Hidden} chemin {cv.Path.Count}");
+                    }
+                    foreach (string line in ses.Units.Log.Skip(shown))
+                        Console.WriteLine(line);
+                }
+                return 0;
+            }
+            case "franchir":
+            {
+                // franchir <Data> <Mission> <x> <y> <secondes> [objet caché…] : après ce temps de jeu (et les objets nommés cachés
+                // comme par le script), chemin d'un véhicule (IA, puis conduit par le joueur) et d'un pompier vers (x, y)
+                Session ses = new Session(files, args[2], "EASY");
+                while (ses.Time < float.Parse(args[5]))
+                    ses.Step();
+                foreach (string n in args.Skip(6))
+                    foreach (LevelObject o in ses.Level.Objects.Where(o => o.Name.Equals(n, StringComparison.OrdinalIgnoreCase)))
+                        ses.Host!.Visibility[o.Id] = false;
+                ses.Step();
+                System.Numerics.Vector2 dest = new System.Numerics.Vector2(float.Parse(args[3]), float.Parse(args[4]));
+                Unit? v = ses.Units.Units.FirstOrDefault(u => u.IsVehicle && !u.IsBoat && !u.Destroyed);
+                Unit? f = ses.Units.Units.FirstOrDefault(u => !u.IsVehicle && !u.Hidden && !u.OnBoard);
+                void Show(string what, Unit u, bool ok)
+                {
+                    System.Numerics.Vector2 end = u.Path.Count > 0 ? u.Path.Last() : new System.Numerics.Vector2(u.Position.X, u.Position.Y);
+                    Console.WriteLine($"{what} {u.Name} de ({u.Position.X:0},{u.Position.Y:0}) : ordre {ok}, arrive à ({end.X:0},{end.Y:0}), à {System.Numerics.Vector2.Distance(end, dest):0} du but ({u.Status})");
+                }
+                if (v != null)
+                {
+                    Show("véhicule (IA)", v, ses.Units.Order(v, dest, refuseUnreachable: false));
+                    Show("véhicule (joueur)", v, ses.Units.Drive(v, dest));
+                }
+                if (f != null)
+                    Show("pompier", f, ses.Units.Order(f, dest));
+                foreach (string line in ses.Units.Log.Where(l => l.Contains("occupation") || l.Contains("caché")))
+                    Console.WriteLine(line);
+                return 0;
+            }
+            case "occupations":
+            {
+                // occupations <Data> [Mission] : objets avec des cases d'occupation dessinées (nombre, étendue, visible au départ)
+                IEnumerable<string> levels = files.List("Design\\Mission\\").Where(p => p.EndsWith(".level", StringComparison.OrdinalIgnoreCase)
+                    && (args.Length < 3 || p.Contains("\\" + args[2] + "\\", StringComparison.OrdinalIgnoreCase)));
+                foreach (string lvPath in levels)
+                {
+                    Level level = Level.Parse(files.Read(lvPath));
+                    foreach (LevelObject o in level.Objects)
+                    {
+                        List<(int Dx, int Dy)> cells = o.OccupationCells;
+                        if (cells.Count == 0 || o.Kind != EntityKind.Placeable)
+                            continue;
+                        ClassFile? oc = null;
+                        try { oc = ClassFile.Load(files, "Design\\" + o.ClassPath["design\\".Length..] + ".class"); } catch { }
+                        string mode = oc?.Get("OCCUPATION", "Occupation_Mode")?.Trim('"', ' ').ToUpperInvariant() ?? "?";
+                        int rect = (oc?.GetInt("OCCUPATION", "Rect_SizeX", 0) ?? 0) * (oc?.GetInt("OCCUPATION", "Rect_SizeY", 0) ?? 0);
+                        // seulement les cases qui ne viennent pas de la forme de la classe : rectangle plus grand que prévu
+                        if (mode != "RECTANGLE" || cells.Count <= rect)
+                            continue;
+                        Console.WriteLine($"{Path.GetFileNameWithoutExtension(lvPath),-14} {o.Name,-28} {o.ClassName,-20} {mode} {rect} {cells.Count,4} cases x {cells.Min(c => c.Dx)}..{cells.Max(c => c.Dx)} y {cells.Min(c => c.Dy)}..{cells.Max(c => c.Dy)} visible {o.StartVisible}");
+                    }
+                }
+                return 0;
+            }
             case "composant":
             {
-                // composant <Data> <Mission> <nom> : tous les composants de l'objet, en hexadécimal (et texte lisible)
+                // composant <Data> <Mission> <nom> [tout] : tous les composants de l'objet, en hexadécimal (et texte lisible ; « tout » : sans couper)
                 string lvPath = files.List("Design\\Mission\\" + args[2] + "\\").First(p => p.EndsWith(".level", StringComparison.OrdinalIgnoreCase));
                 Level level = Level.Parse(files.Read(lvPath));
                 foreach (LevelObject o in level.Objects.Where(o => o.Name.Equals(args[3], StringComparison.OrdinalIgnoreCase)))
@@ -1794,7 +1886,8 @@ public static class Program
                     {
                         byte[] b = o.ComponentBytes(c).ToArray();
                         string txt = new string(b.Select(x => x >= 32 && x < 127 ? (char)x : '.').ToArray());
-                        Console.WriteLine($"{c.Id:X4} ({b.Length}) {BitConverter.ToString(b, 0, Math.Min(b.Length, 96))}");
+                        int show = args.Length > 4 && args[4] == "tout" ? b.Length : Math.Min(b.Length, 96);
+                        Console.WriteLine($"{c.Id:X4} ({b.Length}) {BitConverter.ToString(b, 0, show)}");
                         Console.WriteLine($"      {txt[..Math.Min(txt.Length, 160)]}");
                     }
                 return 0;
@@ -1945,6 +2038,31 @@ public static class Program
                         string pos = ses.Host.MovedObjects.TryGetValue(cc, out System.Numerics.Vector2 p) ? $"({p.X:0},{p.Y:0})" : "-";
                         Console.WriteLine($"t {ses.Time:0} tram {pos} enMarche {ses.Scripts?.Globals.GetValueOrDefault("CC1enMarche").AsInt} déclencheur {ses.Units.LastTrigger?.Name} groupe {string.Join(",", ((System.Collections.IDictionary)typeof(MissionHost).GetField("_groups", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(ses.Host)!).Values.Cast<List<long>>().Select(l => l.Count))} camion {(truck == null ? "-" : $"({truck.Position.X:0},{truck.Position.Y:0})")}");
                     }
+                }
+                return 0;
+            }
+            case "suivreescalier":
+            {
+                // suivreescalier <Data> : Street, un pompier posé dans le couloir de la maison au sud-est emmène un civil dans la rue
+                // par l'escalier ; positions du pompier et du civil
+                Session ses = new Session(files, "Street", "EASY");
+                for (int i = 0; i < 400; i++)
+                    ses.Step();
+                Unit? man = ses.Units.Active.FirstOrDefault(u => !u.IsVehicle && !u.IsCanon && u.Nozzle != null);
+                Civilian? civ = ses.Units.Civilians.Where(c => c.State == CivilianState.Conscious).OrderBy(c => System.Numerics.Vector2.Distance(new(c.Position.X, c.Position.Y), new(7684, 3218))).FirstOrDefault();
+                if (man == null || civ == null)
+                    return 0;
+                ses.Units.Teleport(man, new System.Numerics.Vector2(7750, 3218));
+                civ.Position = new System.Numerics.Vector3(7650, 3218, ses.Units.GroundZ(new(7650, 3218)));
+                civ.Leader = man;
+                ses.Units.PlayerCommand = true;
+                ses.Units.Order(man, new System.Numerics.Vector2(8900, 3300));
+                ses.Units.PlayerCommand = false;
+                for (int i = 0; i < 400; i++)
+                {
+                    ses.Step();
+                    if (i % 10 == 0)
+                        Console.WriteLine($"t {ses.Time:0.0} pompier ({man.Position.X:0},{man.Position.Y:0},{man.Position.Z:0}){(man.Stairs != null ? " escalier" : "")} · civil ({civ.Position.X:0},{civ.Position.Y:0},{civ.Position.Z:0}) chemin {civ.FollowPath.Count}");
                 }
                 return 0;
             }

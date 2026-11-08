@@ -1347,6 +1347,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
 
     private void Log(string s, bool error = false)
     {
+        CrashLog.Note((error ? "! " : "") + s);   // aussi dans OpenFD.log
         _log.Add((s, error));
         if (_log.Count > 6)
             _log.RemoveAt(0);
@@ -2327,7 +2328,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             lines.Add(("", txt));
             lines.Add(("Débogage (Ctrl + D)", accent));
             foreach (string dh in DebugHelp)
-                lines.Add((dh, (_debugExtinguish && dh.StartsWith("F4")) || (_debugTeleport && dh.StartsWith("F5")) ? accent : muted));
+                lines.Add((dh, (_debugExtinguish && dh.StartsWith("F4")) || (_debugTeleport && dh.StartsWith("F5")) || (_debugSave && dh.StartsWith("F6")) ? accent : muted));
         }
         if (_help)
         {

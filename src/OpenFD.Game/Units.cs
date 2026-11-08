@@ -60,6 +60,7 @@ public sealed partial class UnitManager
             Paths.BuildObstacles(s.Level);
         LoadOpenings(s.Level);
         LoadTeleports(s.Level);
+        LoadOccupations(s.Level);
         FindWater();
         LockBuriedRubble();   // voir Dog.cs
         AssignLevers(s.Level);
@@ -134,6 +135,7 @@ public sealed partial class UnitManager
     public void Update(float time, float dt)
     {
         PlayerOrder = false;   // l'ordre du joueur est appliqué : ce qui suit est l'IA (même chose en direct et rejoué)
+        UpdateOccupations();
         for (int i = _pending.Count - 1; i >= 0; i--)
             if (time >= _pending[i].eta)
             {

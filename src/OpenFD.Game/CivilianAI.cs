@@ -245,6 +245,12 @@ public sealed partial class UnitManager
     /// </summary>
     private void FollowLeader(Civilian c, Unit l, float dt)
     {
+        // dans un escalier : il va au bout sans recalculer son chemin
+        if (c.Stairs != null)
+        {
+            CivilianStairs(c, dt);
+            return;
+        }
         Vector2 me = new Vector2(c.Position.X, c.Position.Y);
         Vector2 to = new Vector2(l.Position.X, l.Position.Y);
         float d = Vector2.Distance(me, to);
@@ -273,6 +279,19 @@ public sealed partial class UnitManager
         while (st > 0 && c.FollowPath.Count > 0)
         {
             Vector2 t = c.FollowPath.Peek();
+            // prochain pas : l'autre bout d'un escalier (lien du chemin) → il le prend, comme son guide
+            if (StairsBetween(me, t) is { } stairs)
+            {
+                c.FollowPath.Clear();
+                c.Stairs = stairs;
+                c.StairsTimer = stairs.Duration;
+                c.StairsFrom = new Vector3(me, Ground(me));
+                bool down = Vector2.Distance(t, stairs.EndB) < Vector2.Distance(t, stairs.EndA);
+                c.StairsTo = new Vector3(t, down ? stairs.HeightB : stairs.HeightA);
+                c.Heading = MathF.Atan2(t.Y - me.Y, t.X - me.X);
+                c.Position = c.StairsFrom;
+                return;
+            }
             // inutile d'aller jusqu'au guide : il s'arrête à FollowDistance de lui
             if (c.FollowPath.Count == 1 && Vector2.Distance(t, to) < 1)
             {
@@ -304,6 +323,26 @@ public sealed partial class UnitManager
         }   // perdu : il rejoint son guide
     }
 
+    /// <summary>
+    /// Civil dans un escalier : escalier extérieur (Walk), il suit la volée comme le pompier ; escalier « téléporteur »,
+    /// il ressort à l'autre bout au bout du même temps.
+    /// </summary>
+    private void CivilianStairs(Civilian c, float dt)
+    {
+        Teleport t = c.Stairs!;
+        c.StairsTimer -= dt;
+        if (c.StairsTimer > 0)
+        {
+            if (t.Walk)
+                c.Position = Vector3.Lerp(c.StairsFrom, c.StairsTo, 1 - c.StairsTimer / MathF.Max(0.01f, t.Duration));
+            return;
+        }
+        Vector2 end = new Vector2(c.StairsTo.X, c.StairsTo.Y);
+        c.Position = new Vector3(end, Ground(end));
+        c.Stairs = null;
+        c.FollowGoal = new Vector2(float.MaxValue, 0);   // nouveau chemin vers son guide
+    }
+
     public const float FollowDistance = 140f;
 
     /// <summary>Essais : le point est-il atteignable à pied depuis cette position (chemin complet sur la grille) ?</summary>
@@ -331,7 +370,7 @@ public sealed partial class UnitManager
                     continue;
                 }
                 int i = g.Index(x, y);
-                sb.Append(mark.Contains(i) ? '*' : IsGrappleCell(i) ? 'g' : g.ZoneA[i] == 0 ? '#' : Paths.Blocked.Length > i && Paths.Blocked[i] ? (BlockedBy.TryGetValue(i, out string? by) && by == "mur" ? 'm' : 'x') : IsClosedDoor(i) ? 'D' : Openings.Any(d => d.Cells.Contains(i)) ? 'd' : '.');
+                sb.Append(mark.Contains(i) ? '*' : IsGrappleCell(i) ? 'g' : g.ZoneA[i] == 0 ? '#' : Paths.Occupied.Length > i && Paths.Occupied[i] > 0 ? 'o' : Paths.Blocked.Length > i && Paths.Blocked[i] ? (BlockedBy.TryGetValue(i, out string? by) && by == "mur" ? 'm' : 'x') : IsClosedDoor(i) ? 'D' : Openings.Any(d => d.Cells.Contains(i)) ? 'd' : '.');
             }
             sb.Append('\n');
         }
