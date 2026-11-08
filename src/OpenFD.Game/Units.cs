@@ -413,6 +413,8 @@ public sealed partial class UnitManager
         u.CanHeal = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanHeal");
         u.CanBreak = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanBreak");
         u.CanDemolish = c.GetBool("CAPACITIES_ACTIONS", "CanDemolish");
+        u.CanExtricate = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanExtricate");
+        u.ExtricatePower = c.GetFloat("CAPACITIES_PROPS", "ExtricatePower", 20);
         u.CanUse = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanUse");
         u.CanRepair = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanRepair");
         u.CanGrapple = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanGrapplin");

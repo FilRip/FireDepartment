@@ -228,6 +228,17 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                     DoOpening(dozer, bd);
             }
         }
+        // essai (captures) : FD3_DESINC=1 → à 45 s, le désincarcérateur est posé du côté de l'icône et découpe le portail
+        if (!_menu && _session != null && !_testCut && _session.Time > 45 && Environment.GetEnvironmentVariable("FD3_DESINC") == "1"
+            && _session.Units.Active.FirstOrDefault(u => u.CanExtricate) is { } cutter
+            && _session.Units.Openings.FirstOrDefault(o => o.Extricate && o.ExtricateSide != null) is { } cg)
+        {
+            _testCut = true;
+            SN.Vector2 c = new SN.Vector2(cg.Center.X, cg.Center.Y);
+            _session.Units.Teleport(cutter, c + SN.Vector2.Normalize(cg.ExtricateSide!.Value - c) * 400);
+            DoOpening(cutter, cg);
+            Console.WriteLine($"essai désincarcération : {cutter.Status}");
+        }
         // essai (captures) : FD3_CANADAIR=x,y → aide aérienne accordée à 31 s puis appelée sur (x, y) ; FD3_CANADAIR=vise → visée affichée
         if (!_menu && _session != null && !_testAir && _session.Time > 31 && Environment.GetEnvironmentVariable("FD3_CANADAIR") is { Length: > 0 } air)
         {
@@ -1117,7 +1128,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         // repères animés : rouages d'un mécanisme (interrupteur) qui tournent sur eux-mêmes, flèches qui avancent et reculent
         _animMarks.Clear();
         foreach (SceneAssets.Placed p in allPlaced)
-            if (byName.TryGetValue(p.Name, out LevelObject? lo) && System.Text.RegularExpressions.Regex.IsMatch(lo.ClassPath, @"(mechanism|mechanism_symbol_blue|elec|elec_symbol_off|repair|buldo|arrow|koshka)_symbol$|mechanism_symbol_blue$|elec_symbol_off$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            if (byName.TryGetValue(p.Name, out LevelObject? lo) && System.Text.RegularExpressions.Regex.IsMatch(lo.ClassPath, @"(mechanism|mechanism_symbol_blue|elec|elec_symbol_off|repair|buldo|arrow|koshka|saw)_symbol$|mechanism_symbol_blue$|elec_symbol_off$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
                 _animMarks.Add((lo.Id, p.Model, p.World, System.Text.RegularExpressions.Regex.IsMatch(lo.ClassPath, @"(arrow|koshka)_symbol$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)));
         HashSet<string> shownNames = _scriptShown.Select(x => byName.Values.First(o => o.Id == x.id).Name)
             .Concat(_animMarks.Select(x => byName.Values.First(o => o.Id == x.id).Name))
@@ -1640,6 +1651,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     }
 
     private bool _charred;   // DrawMesh : dessin d'une carcasse calcinée
+    private bool _testCut;
     private bool _testSpawned, _testAir;      // essais FD3_ECHELLE, FD3_BULLDO : une seule fois
     private Opening? _testLadder;
 
@@ -1721,11 +1733,61 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             if (Vis(id, ob.State == OpeningState.Broken))
                 foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(model))
                     DrawMesh(mesh, (part * world).X());
-        foreach (Opening o in _session.Units.Openings.Where(o => o.Model != null && o.State != OpeningState.Broken && Vis(o.Id, true) && (o.OpenAnim != null || o.CloseAnim != null)))
+        foreach (Opening o in _session.Units.Openings.Where(o => o.Extricate && o.Model != null && Vis(o.Id, true)))
+            DrawExtricable(o);
+        foreach (Opening o in _session.Units.Openings.Where(o => !o.Extricate && o.Model != null && o.State != OpeningState.Broken && Vis(o.Id, true) && (o.OpenAnim != null || o.CloseAnim != null)))
             DrawAnimatedOpening(o);
-        foreach (Opening o in _session.Units.Openings.Where(o => o.Model != null && o.State != OpeningState.Broken && Vis(o.Id, true) && o.OpenAnim == null && o.CloseAnim == null))
+        foreach (Opening o in _session.Units.Openings.Where(o => !o.Extricate && o.Model != null && o.State != OpeningState.Broken && Vis(o.Id, true) && o.OpenAnim == null && o.CloseAnim == null))
             foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(o.Model!))
                 DrawMesh(mesh, (part * (o.State == OpeningState.Open && !o.IsWindow ? SN.Matrix4x4.CreateRotationZ(-MathF.PI / 2) : SN.Matrix4x4.Identity) * o.World).X());
+    }
+
+    // portail à découper (Fireworks, f_gates_01) : intact, les pièces sous le nœud « _e1 » (le portail fermé d'un seul
+    // tenant) ; découpé, les battants sous « _e2 » suivent l'animation du modèle (ils s'ouvrent puis tombent) et restent
+    // couchés au sol à la fin
+    private readonly Dictionary<string, CharacterRig?> _propRigs = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<uint, float> _fallStart = new();
+    private void DrawExtricable(Opening o)
+    {
+        if (!_propRigs.TryGetValue(o.Model!, out CharacterRig? rig))
+        {
+            try { rig = CharacterRig.Build(_assets, _files, o.Model!); } catch { rig = null; }
+            _propRigs[o.Model!] = rig;
+        }
+        bool broken = o.State == OpeningState.Broken;
+        if (rig == null)
+        {
+            if (!broken)
+                foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(o.Model!))
+                    DrawMesh(mesh, (part * o.World).X());
+            return;
+        }
+        AnimClip? clip = broken && o.FallAnim != null ? Clip(o.FallAnim) : null;
+        float t = 0;
+        if (broken && clip != null)
+        {
+            // départ de la chute à l'heure de l'affichage (fluide) ; partie rechargée bien après : déjà au sol
+            if (!_fallStart.TryGetValue(o.Id, out float start))
+                _fallStart[o.Id] = start = _visTime - MathF.Max(0, _session.Time - o.BrokenAt);
+            t = Math.Clamp(_visTime - start, 0, clip.Duration);
+        }
+        SN.Matrix4x4[] world = rig.Pose(clip, t);
+        string state = broken ? "_e2" : "_e1";
+        foreach (CharacterRig.Part part in rig.Parts)
+        {
+            int root = part.Node;
+            while (rig.Parent[root] >= 0)
+                root = rig.Parent[root];
+            if (!rig.Names[root].EndsWith(state, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (!_partMeshes.TryGetValue(part.Mesh, out MeshGpu? mesh))
+            {
+                try { mesh = Upload(_assets.LoadMesh(_mission, part.Mesh, "gfx")); } catch { mesh = null; }
+                _partMeshes[part.Mesh] = mesh;
+            }
+            if (mesh != null)
+                DrawMesh(mesh, (world[part.Node] * o.World).X());
+        }
     }
 
     // portail coulissant (Jail) : seuls les battants bougent, d'après l'animation d'ouverture ou de fermeture du jeu

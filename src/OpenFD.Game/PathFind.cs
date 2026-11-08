@@ -612,6 +612,10 @@ public sealed class PathFind
                         continue;
                     if (dx != 0 && dy != 0 && (!Free(x + dx, y) || !Free(x, y + dy)))
                         continue;
+                    // marche trop haute (bord d'un toit, d'un étage : la grille n'a qu'un niveau par case) : on ne saute pas ;
+                    // on passe par l'escalier, l'échelle ou le grappin
+                    if (TooHigh(g, Key(x, y), Key(nx, ny)))
+                        continue;
                     float c = c0 + (dx != 0 && dy != 0 ? 1.414f : 1f) + FireCost(nx, ny) + (IsGrappleCell(Key(nx, ny)) ? 15 : 0);   // grimper prend du temps
                     int k = Key(nx, ny);
                     if (Has(k) && _cost[k] <= c)
@@ -641,6 +645,20 @@ public sealed class PathFind
         }
         if (Environment.GetEnvironmentVariable("FD3_DEBUG_CHEMIN") != null)
             Console.WriteLine($"recherche ({sx},{sy}) → ({tx},{ty}) : {guard} cases examinées, {(found >= 0 ? "trouvé" : "non trouvé")}, grille {g.Width}×{g.Height}");
+        // départ dans une petite poche fermée de toutes parts (resté sur un palier d'un autre étage, dans un mur) : il en sort
+        // par la case libre la plus proche hors de la poche, sinon il ne pourrait plus jamais bouger
+        if (found < 0 && seen.Count < PocketMax && !_rescuing && NearestOutside(g, sx, sy, seen.ToHashSet()) is Vector2 way)
+        {
+            _rescuing = true;
+            List<Vector2> rest = FindPath(way, to, out bool restPartial);
+            _rescuing = false;
+            if (rest.Count > 0)
+            {
+                partial = restPartial;
+                rest.Insert(0, way);
+                return rest;
+            }
+        }
         if (found < 0)
         {
             // point inatteignable : on s'arrête à la case explorée la plus proche du point demandé
@@ -666,20 +684,41 @@ public sealed class PathFind
             to = new(((best % g.Width) + 0.5f) * Grid.CellSize, ((best / g.Width) + 0.5f) * Grid.CellSize);
         }
         List<Vector2> cells = new List<Vector2>();
+        List<bool> jump = new List<bool>();   // passage (échelle, escalier) pour arriver à cette case
         for (int k = found; Has(k) && _prev[k] >= 0; k = _prev[k])
+        {
             cells.Add(new(((k % g.Width) + 0.5f) * Grid.CellSize, ((k / g.Width) + 0.5f) * Grid.CellSize));
+            int pk = _prev[k];
+            jump.Add(Links.Any(l => (l.a == pk && l.b == k) || (l.b == pk && l.a == k)));
+        }
         cells.Reverse();
+        jump.Reverse();
         if (cells.Count > 0)
             cells[^1] = to;
+        // passages (échelle, escalier) marqués dans « jump » : le lissage ne les saute jamais (sinon
+        // le pompier filerait en ligne droite à travers le mur ou d'un étage à l'autre, au lieu de prendre l'échelle)
         // lissage : on saute les points intermédiaires quand la ligne droite est libre
         List<Vector2> smooth = new List<Vector2>();
         Vector2 cur = from;
         int i = 0;
         while (i < cells.Count)
         {
-            int j = cells.Count - 1;
-            while (j > i && !LineFree(cur, cells[j]))
-                j--;
+            int j;
+            if (jump[i])
+                j = i;   // le passage lui-même : un pas à part
+            else
+            {
+                int last = cells.Count - 1;
+                for (int k = i + 1; k < cells.Count; k++)
+                    if (jump[k])
+                    {
+                        last = k - 1;   // jamais au-delà du pied du passage
+                        break;
+                    }
+                j = last;
+                while (j > i && !LineFree(cur, cells[j]))
+                    j--;
+            }
             smooth.Add(cells[j]);
             cur = cells[j];
             i = j + 1;
@@ -725,18 +764,68 @@ public sealed class PathFind
     /// <summary>Largeur d'obstacle (unités) par-dessus laquelle passe le jet d'un véhicule.</summary>
     public const float WaterHopMax = 250f;
 
+    /// <param name="ignoreFire">Vue (pas de marche) : ni les feux, ni les marches trop hautes ne l'arrêtent.</param>
     public bool LineFree(Vector2 a, Vector2 b, bool ignoreFire = false)
     {
         if (_s.Grid is not { } g)
             return true;
         int n = (int)(Vector2.Distance(a, b) / 40) + 1;
+        (int ax, int ay) = g.CellOf(new Vector3(a, 0));
+        int prev = g.Inside(ax, ay) ? g.Index(ax, ay) : -1;
         for (int i = 1; i < n; i++)
         {
             Vector2 p = Vector2.Lerp(a, b, (float)i / n);
             (int cx, int cy) = g.CellOf(new Vector3(p, 0));
             if (!Free(cx, cy) || (!ignoreFire && FireCost(cx, cy) > 0))
                 return false;
+            int k = g.Index(cx, cy);
+            if (!ignoreFire && prev >= 0 && k != prev && TooHigh(g, prev, k))
+                return false;
+            prev = k;
         }
         return true;
     }
+
+    /// <summary>
+    /// Différence de hauteur de sol au-delà de laquelle deux cases voisines ne se rejoignent pas à pied (un toit et la rue,
+    /// deux étages) ; les rampes et escaliers dessinés dans la grille montent de moins d'un mètre par case.
+    /// </summary>
+    public const float MaxStep = 200f;
+
+    /// <summary>Poche (cases atteignables depuis le départ) assez petite pour être un piège, pas une pièce fermée.</summary>
+    public const int PocketMax = 40;
+
+    // sauvetage en cours (une seule fois par recherche)
+    private bool _rescuing;
+
+    /// <summary>Case libre la plus proche hors de la poche explorée, à un autre niveau que le départ, à moins de 8 cases.</summary>
+    private Vector2? NearestOutside(Grid g, int cx, int cy, HashSet<int> pocket)
+    {
+        for (int r = 1; r < 8; r++)
+        {
+            Vector2? best = null;
+            float bd = float.MaxValue;
+            for (int dx = -r; dx <= r; dx++)
+                for (int dy = -r; dy <= r; dy++)
+                {
+                    int x = cx + dx, y = cy + dy;
+                    // seulement une case d'un autre niveau : une petite pièce fermée par une porte ne se quitte pas à travers le mur
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dy)) != r || !g.Inside(x, y) || !Free(x, y) || pocket.Contains(g.Index(x, y))
+                        || MathF.Abs(g.GroundHeight[g.Index(x, y)] - g.GroundHeight[g.Index(cx, cy)]) <= MaxStep)
+                        continue;
+                    float d = dx * dx + dy * dy;
+                    if (d < bd)
+                    {
+                        bd = d;
+                        best = new Vector2((x + 0.5f) * Grid.CellSize, (y + 0.5f) * Grid.CellSize);
+                    }
+                }
+            if (best != null)
+                return best;
+        }
+        return null;
+    }
+
+    private bool TooHigh(Grid g, int a, int b) =>
+        MathF.Abs(g.GroundHeight[a] - g.GroundHeight[b]) > MaxStep && !(PathingGrapple && (IsGrappleCell(a) || IsGrappleCell(b)));
 }

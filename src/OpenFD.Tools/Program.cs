@@ -519,9 +519,16 @@ public static class Program
                 SceneAssets assets = new OpenFD.Game.SceneAssets(files);
                 CharacterRig rig = OpenFD.Game.CharacterRig.Build(assets, files, args[2])!;
                 Console.WriteLine($"{rig.Names.Length} nœuds, {rig.Parts.Count} pièces");
-                AnimClip? clip = args.Length > 3 ? AnimClip.Parse(files.Read("Gfx\\Anim\\" + args[3] + ".anim")) : null;
+                AnimClip? clip = args.Length > 3 ? AnimClip.Parse(files.Read(args[3].EndsWith(".anim", StringComparison.OrdinalIgnoreCase) ? args[3] : "Gfx\\Anim\\" + args[3] + ".anim")) : null;
                 if (clip != null)
                     Console.WriteLine($"animation : {clip.Tracks.Count} pistes, {clip.Duration:0.00} s");
+                if (Environment.GetEnvironmentVariable("FD3_PISTES") == "1")
+                    foreach (float t in clip == null ? new[] { 0f } : new[] { 0f, clip.Duration / 2, clip.Duration })
+                    {
+                        System.Numerics.Matrix4x4[] w = rig.Pose(clip, t);
+                        for (int i = 0; i < rig.Names.Length; i++)
+                            Console.WriteLine($"  t={t:0.0} {rig.Names[i],-24} parent {(rig.Parent[i] >= 0 ? rig.Names[rig.Parent[i]] : "-"),-22} pos ({w[i].Translation.X:0},{w[i].Translation.Y:0},{w[i].Translation.Z:0}) haut ({w[i].M31:0.00},{w[i].M32:0.00},{w[i].M33:0.00})");
+                    }
                 foreach (CharacterRig.Part p in rig.Parts)
                 {
                     Console.Write($"  {p.Mesh} nœud {rig.Names[p.Node]} peau {(p.Skin != null ? p.Skin.Bones.Length + " os" : "non")}");
@@ -752,7 +759,7 @@ public static class Program
             case "materiaux":
             {
                 // materiaux <Data> <Mission> <maillage> : matériaux de chaque groupe (toutes leurs textures), uv et couleurs
-                string prefix = "Gfx\\Mission\\" + args[2] + "\\";
+                string prefix = args[2].StartsWith("Gfx\\", StringComparison.OrdinalIgnoreCase) ? args[2] + "\\" : "Gfx\\Mission\\" + args[2] + "\\";
                 Mesh m = Mesh.Load(files.Read(prefix + args[3] + ".mesh"), files.Read(prefix + args[3] + ".meshdata"), args[3]);
                 Console.WriteLine($"{m.VertexCount} sommets ; uv {string.Join(",", Enumerable.Range(0, 8).Select(i => m.Uv[i] != null ? i.ToString() : "-"))} ; couleurs {(m.Colors != null ? "oui" : "non")} ; shader « {m.Shader} »");
                 if (m.Uv[0] is { } u0)
@@ -1062,8 +1069,11 @@ public static class Program
                 // duree <Data> <anim>… : durée des animations (Gfx\Anim\<anim>.anim)
                 foreach (string n in args.Skip(2))
                 {
-                    byte[]? d = files.TryRead("Gfx\\Anim\\" + n + ".anim");
+                    byte[]? d = files.TryRead(n.EndsWith(".anim", StringComparison.OrdinalIgnoreCase) ? n : "Gfx\\Anim\\" + n + ".anim");
                     Console.WriteLine($"{n} : {(d != null ? AnimClip.Parse(d).Duration.ToString("0.00") + " s" : "introuvable")}");
+                    if (d != null && Environment.GetEnvironmentVariable("FD3_PISTES") == "1")
+                        foreach (KeyValuePair<string, AnimClip.Track> kv in AnimClip.Parse(d).Tracks)
+                            Console.WriteLine($"   {kv.Key} : {kv.Value.Pos.Length} pos, {kv.Value.Rot.Length} rot");
                 }
                 return 0;
             }
@@ -1548,6 +1558,112 @@ public static class Program
                 }
                 return 0;
             }
+            case "marches":
+            {
+                // marches <Data> <Mission>… : différences de hauteur entre cases voisines ouvertes (histogramme)
+                foreach (string mis in args.Skip(2))
+                {
+                    Grid gr = Grid.Parse(files.Read(files.List("Design\\Mission\\" + mis + "\\").First(p => p.EndsWith(".grid", StringComparison.OrdinalIgnoreCase))));
+                    int[] bins = new int[12];
+                    for (int y = 0; y < gr.Height; y++)
+                        for (int x = 0; x + 1 < gr.Width; x++)
+                            foreach ((int nx, int ny) in new[] { (x + 1, y), (x, y + 1) })
+                            {
+                                if (!gr.Inside(nx, ny))
+                                    continue;
+                                int a = gr.Index(x, y), b = gr.Index(nx, ny);
+                                if (gr.ZoneA[a] == 0 || gr.ZoneA[b] == 0)
+                                    continue;
+                                float d = MathF.Abs(gr.GroundHeight[a] - gr.GroundHeight[b]);
+                                bins[d < 10 ? 0 : d < 25 ? 1 : d < 50 ? 2 : d < 75 ? 3 : d < 100 ? 4 : d < 125 ? 5 : d < 150 ? 6 : d < 200 ? 7 : d < 300 ? 8 : d < 500 ? 9 : d < 1000 ? 10 : 11]++;
+                            }
+                    Console.WriteLine($"{mis,-12} <10:{bins[0]} <25:{bins[1]} <50:{bins[2]} <75:{bins[3]} <100:{bins[4]} <125:{bins[5]} <150:{bins[6]} <200:{bins[7]} <300:{bins[8]} <500:{bins[9]} <1000:{bins[10]} ≥1000:{bins[11]}");
+                }
+                return 0;
+            }
+            case "atteignables":
+            {
+                // atteignables <Data> <Mission>… : cases ouvertes atteintes à pied depuis le départ des piétons, sans et avec la
+                // règle des marches trop hautes (PathFind.MaxStep)
+                foreach (string mis in args.Skip(2))
+                {
+                    Grid gr = Grid.Parse(files.Read(files.List("Design\\Mission\\" + mis + "\\").First(p => p.EndsWith(".grid", StringComparison.OrdinalIgnoreCase))));
+                    // départ : une case de la plus grande zone ouverte (sans la règle), la plus basse de cette zone (la rue)
+                    bool[] mark = new bool[gr.Width * gr.Height];
+                    int start = -1, bestSize = 0;
+                    for (int s0 = 0; s0 < mark.Length; s0++)
+                    {
+                        if (mark[s0] || gr.ZoneA[s0] == 0)
+                            continue;
+                        List<int> comp = new List<int> { s0 };
+                        mark[s0] = true;
+                        for (int ci = 0; ci < comp.Count; ci++)
+                        {
+                            int k = comp[ci], x = k % gr.Width, y = k / gr.Width;
+                            foreach ((int nx, int ny) in new[] { (x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1) })
+                                if (gr.Inside(nx, ny) && !mark[gr.Index(nx, ny)] && gr.ZoneA[gr.Index(nx, ny)] != 0)
+                                {
+                                    mark[gr.Index(nx, ny)] = true;
+                                    comp.Add(gr.Index(nx, ny));
+                                }
+                        }
+                        if (comp.Count > bestSize)
+                        {
+                            bestSize = comp.Count;
+                            start = comp.OrderBy(k => gr.GroundHeight[k]).ElementAt(comp.Count / 3);
+                        }
+                    }
+                    bool[] lastSeen = new bool[0];
+                    int Fill(bool steps)
+                    {
+                        bool[] seen = new bool[gr.Width * gr.Height];
+                        lastSeen = seen;
+                        Queue<int> q = new Queue<int>();
+                        if (start < 0)
+                            return -1;
+                        seen[start] = true;
+                        q.Enqueue(start);
+                        int n = 0;
+                        while (q.Count > 0)
+                        {
+                            int k = q.Dequeue();
+                            n++;
+                            int x = k % gr.Width, y = k / gr.Width;
+                            foreach ((int nx, int ny) in new[] { (x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1) })
+                            {
+                                if (!gr.Inside(nx, ny))
+                                    continue;
+                                int j = gr.Index(nx, ny);
+                                if (seen[j] || gr.ZoneA[j] == 0 || (steps && MathF.Abs(gr.GroundHeight[j] - gr.GroundHeight[k]) > PathFind.MaxStep))
+                                    continue;
+                                seen[j] = true;
+                                q.Enqueue(j);
+                            }
+                        }
+                        return n;
+                    }
+                    int before = Fill(false);
+                    bool[] all = lastSeen;
+                    int after = Fill(true);
+                    bool[] kept = lastSeen;
+                    if (Environment.GetEnvironmentVariable("FD3_CARTE") == "1")
+                    {
+                        Console.WriteLine($"départ ({start % gr.Width * 100},{start / gr.Width * 100}) h {gr.GroundHeight[start]:0} ; # perdu (chiffre : hauteur/2 m), o gardé");
+                        for (int y = gr.Height - 1; y >= 0; y -= 4)
+                        {
+                            System.Text.StringBuilder line = new System.Text.StringBuilder($"{y * 100,6} ");
+                            for (int x = 0; x < gr.Width; x += 2)
+                            {
+                                int k = gr.Index(x, y);
+                                line.Append(kept[k] ? 'o' : all[k] ? (char)('0' + Math.Clamp((int)(gr.GroundHeight[k] / 200), 0, 9)) : gr.ZoneA[k] == 0 ? ' ' : '.');
+                            }
+                            Console.WriteLine(line.ToString());
+                        }
+                    }
+                    Console.WriteLine($"{mis,-12} {before,7} → {after,7} ({(before > 0 ? 100.0 * after / before : 0):0.0} %)");
+                }
+                return 0;
+            }
             case "relief":
             {
                 // relief <Data> <Mission> [pas] : carte grossière de la grille (. fermé, chiffre : hauteur du sol / 2 m)
@@ -1575,7 +1691,24 @@ public static class Program
                 foreach (Teleport t in ses.Units.Teleports)
                     Console.WriteLine($"{t.Name} ({t.Id}) : actif {t.Active}, {t.Duration} s, ({t.EndA.X:0},{t.EndA.Y:0}) ↔ ({t.EndB.X:0},{t.EndB.Y:0}), entrée « {t.OnEnter} » sortie « {t.OnLeave} » ; cases {t.CellA}/{t.CellB}");
                 Unit? man = ses.Units.Units.FirstOrDefault(u => !u.IsVehicle && !u.OnBoard && !u.Hidden);
+                // escalier encore fermé par le script (Tutorial) : ouvert pour l'essai
+                if (!ses.Units.Teleports.Any(t => t.Active) && ses.Units.Teleports.FirstOrDefault(t => !t.Fake) is { } shut)
+                {
+                    ses.Units.ActivateTeleport(shut.Id, true);
+                    ses.Step();
+                }
                 Teleport? tp = ses.Units.Teleports.FirstOrDefault(t => t.Active);
+                if (tp != null && ses.Grid is { } tg)
+                {
+                    // chemins depuis les deux bouts (et depuis l'ancienne case de sortie, un palier isolé) vers un point plus loin dans la rue
+                    System.Numerics.Vector2 Cc(int k) => new System.Numerics.Vector2((k % tg.Width + 0.5f) * Grid.CellSize, (k / tg.Width + 0.5f) * Grid.CellSize);
+                    System.Numerics.Vector2 street = tp.EndB + new System.Numerics.Vector2(0, 600);
+                    foreach ((string what, System.Numerics.Vector2 from) in new[] { ("bout A", Cc(tp.CellA)), ("bout B", Cc(tp.CellB)), ("palier isolé", ses.Units.Paths.Walkable(tp.EndA)) })
+                    {
+                        List<System.Numerics.Vector2> pth = ses.Units.Paths.FindPath(from, street, out bool part);
+                        Console.WriteLine($"{what} ({from.X:0},{from.Y:0}, sol {ses.Units.GroundZ(from):0}) → rue : {pth.Count} points{(part ? " (partiel)" : "")} {string.Join(" → ", pth.Take(6).Select(p => $"({p.X:0},{p.Y:0})"))}");
+                    }
+                }
                 if (man == null || tp == null)
                     return 0;
                 // posé près de la première icône, envoyé dessus, puis vers un point près de l'autre bout
@@ -1592,6 +1725,15 @@ public static class Program
                     if (man.Stairs == null && man.Path.Count == 0 && System.Numerics.Vector2.Distance(new(man.Position.X, man.Position.Y), tp.EndB) < 300)
                         break;
                 }
+                // retour : un point près du premier bout, sans viser l'icône ; le chemin doit reprendre l'escalier
+                ses.Units.Order(man, tp.EndA + new System.Numerics.Vector2(-300, -100));
+                Console.WriteLine($"retour : {man.Status} · chemin {string.Join(" → ", man.Path.Select(p => $"({p.X:0},{p.Y:0})"))}");
+                for (int i = 0; i < 400 && (man.Path.Count > 0 || man.Stairs != null); i++)
+                {
+                    ses.Step();
+                    if (i % 10 == 0)
+                        Console.WriteLine($"t {ses.Time:0.0} ({man.Position.X:0},{man.Position.Y:0},{man.Position.Z:0}) {man.Status} {(man.Stairs != null ? "[dans l'escalier]" : "")}");
+                }
                 return 0;
             }
             case "composant":
@@ -1607,6 +1749,103 @@ public static class Program
                         Console.WriteLine($"{c.Id:X4} ({b.Length}) {BitConverter.ToString(b, 0, Math.Min(b.Length, 96))}");
                         Console.WriteLine($"      {txt[..Math.Min(txt.Length, 160)]}");
                     }
+                return 0;
+            }
+            case "desinc":
+            {
+                // desinc <Data> <Mission> : le désincarcérateur découpe le portail, d'un côté puis de l'autre
+                Session ses = new Session(files, args[2], "EASY");
+                for (int i = 0; i < 600 && !ses.Units.Active.Any(u => u.CanExtricate); i++)
+                    ses.Step();
+                Unit? man = ses.Units.Active.FirstOrDefault(u => u.CanExtricate);
+                Opening? gate = ses.Units.Openings.FirstOrDefault(o => o.Extricate);
+                if (man == null || gate == null)
+                {
+                    Console.WriteLine($"désincarcérateur {man?.Name ?? "absent"} · portail {gate?.Name ?? "absent"}");
+                    return 0;
+                }
+                System.Numerics.Vector2 c = new System.Numerics.Vector2(gate.Center.X, gate.Center.Y), side = gate.ExtricateSide!.Value;
+                System.Numerics.Vector2 dir = System.Numerics.Vector2.Normalize(side - c);
+                foreach (float k in new[] { -600f, 600f })
+                {
+                    ses.Units.Teleport(man, c + dir * k);
+                    ses.Units.PlayerCommand = true;
+                    ses.Units.WorkOnOpening(man, gate);
+                    ses.Units.PlayerCommand = false;
+                    Console.WriteLine($"côté {(k > 0 ? "icône" : "opposé")} ({man.Position.X:0},{man.Position.Y:0}) : {man.Status}");
+                    for (int i = 0; i < 300 && man.Opening != null; i++)
+                    {
+                        ses.Step();
+                        if (i % 10 == 0)
+                            Console.WriteLine($"  t {ses.Time:0.0} ({man.Position.X:0},{man.Position.Y:0}) {man.Status} vie {gate.Life:0}");
+                    }
+                }
+                Console.WriteLine($"portail {gate.State} · {string.Join(" | ", ses.Units.Log.TakeLast(3))}");
+                return 0;
+            }
+            case "autour":
+            {
+                // autour <Data> <Mission> <x> <y> [r] : cases autour d'un point (hauteur du sol, l : libre, # : fermée)
+                Session ses = new Session(files, args[2], "EASY", false);
+                Grid g = ses.Grid!;
+                (int cx, int cy) = g.CellOf(new System.Numerics.Vector3(float.Parse(args[3]), float.Parse(args[4]), 0));
+                int r = args.Length > 5 ? int.Parse(args[5]) : 4;
+                for (int y = cy + r; y >= cy - r; y--)
+                {
+                    System.Text.StringBuilder line = new System.Text.StringBuilder($"{y * 100,6} ");
+                    for (int x = cx - r; x <= cx + r; x++)
+                        line.Append(g.Inside(x, y) ? $"{g.GroundHeight[g.Index(x, y)],6:0}{(ses.Units.WalkableCell(x, y) ? 'l' : '#')}{(x == cx && y == cy ? '*' : ' ')}" : "   ----  ");
+                    Console.WriteLine(line.ToString());
+                }
+                foreach (Teleport t in ses.Units.Teleports)
+                    Console.WriteLine($"{t.Name} : cases {t.CellA % g.Width},{t.CellA / g.Width} et {t.CellB % g.Width},{t.CellB / g.Width}");
+                return 0;
+            }
+            case "tutorenfort":
+            {
+                // tutorenfort <Data> : étape 19 du tutoriel (renfort accordé), clic sur la caserne, arrivée au garage (objectif)
+                Session ses = new Session(files, "Tutorial", "EASY");
+                for (int i = 0; i < 50; i++)
+                    ses.Step();
+                ses.Scripts?.TryRun("Etap_19_1");
+                for (int i = 0; i < 100; i++)
+                    ses.Step();
+                Console.WriteLine($"accordés {ses.Units.GrantsAvailable} · casernes {string.Join(",", ses.Units.ChoosableTeams)} · unités {ses.Units.Active.Count()}");
+                string? team = ses.Units.ChoosableTeams.FirstOrDefault();
+                if (team != null)
+                    Console.WriteLine($"clic sur {team} : {ses.Units.ChooseReinforcement(team)}");
+                for (int i = 0; i < 1200; i++)
+                {
+                    ses.Step();
+                    if (i % 100 == 0)
+                        Console.WriteLine($"t {ses.Time:0} : {string.Join(" ; ", ses.Units.Active.Where(u => u.IsVehicle).Select(u => $"{u.Name} ({u.Position.X:0},{u.Position.Y:0}) type {ses.Units.UnitType(u)}"))}");
+                }
+                foreach (string l in ses.Units.Log.Where(l => l.Contains("renfort", StringComparison.OrdinalIgnoreCase) || l.Contains("arrivée")))
+                    Console.WriteLine("  " + l);
+                if (ses.Units.Triggers.FirstOrDefault(t => t.Name == "trigger_20") is { } tr)
+                    Console.WriteLine($"trigger_20 ({tr.Position.X:0},{tr.Position.Y:0}) actif {tr.Enabled} script {tr.Script} demi {tr.Half}");
+                foreach ((string key, bool success) in ses.Host?.ObjectiveEvents ?? new List<(string key, bool success)>())
+                    Console.WriteLine($"  objectif {key} : {success}");
+                return 0;
+            }
+            case "capacites":
+            {
+                // capacites <Data> <Mission>… : objets dont le composant A026 (capacités propres à l'objet) n'est pas nul
+                foreach (string mis in args.Skip(2))
+                {
+                    string lvPath = files.List("Design\\Mission\\" + mis + "\\").First(p => p.EndsWith(".level", StringComparison.OrdinalIgnoreCase));
+                    Level level = Level.Parse(files.Read(lvPath));
+                    foreach (LevelObject o in level.Objects)
+                    {
+                        if (o.GetComponent(0xA026) is not { } c)
+                            continue;
+                        byte[] b = o.ComponentBytes(c).ToArray();
+                        int i = 22;
+                        if (b.Length < i + 30 || b.Skip(i).All(x => x == 0 || x == 0xAA || x == 0xFF || x == 0xCC || x == 0xBB || x == 4 || x == 9))
+                            continue;
+                        Console.WriteLine($"{mis,-10} {o.Name,-30} {o.ClassPath,-50} {BitConverter.ToString(b, i, b.Length - i)}");
+                    }
+                }
                 return 0;
             }
             case "visible":

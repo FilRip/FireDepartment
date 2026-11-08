@@ -133,20 +133,15 @@ public sealed partial class UnitManager
     }
 
     /// <summary>
-    /// LEV_GrantReinforcement : un renfort est accordé (voix « renforts accordés »). S'il reste plusieurs casernes possibles,
-    /// le joueur choisit laquelle vient (clic sur son cadre dans le panneau des unités, Institute : E10 ou W7) ; s'il n'en
-    /// reste qu'une, elle part d'elle-même.
+    /// LEV_GrantReinforcement : un renfort est accordé (voix « renforts accordés »). Le joueur choisit toujours la caserne
+    /// qui vient en cliquant sur son cadre dans le panneau des unités (Institute : E10 ou W7), même s'il n'en reste qu'une
+    /// (Tutorial : l'étape 19 attend que le joueur appelle lui-même le renfort).
     /// </summary>
     public void GrantReinforcement()
     {
-        if (_toGrant.Count == 0)
+        if (_toGrant.Count - GrantsAvailable <= 0)
             return;
         Sounds.Add(("VOCAL_REINFORCEMENT_GRANTED", null));
-        if (_toGrant.Count - GrantsAvailable <= 1)
-        {
-            ChooseReinforcement(TeamCode(_toGrant[GrantsAvailable].cfg));
-            return;
-        }
         GrantsAvailable++;
         Log.Add($"{_s.Time,6:0} s : renfort accordé, à choisir ({string.Join(" ou ", _toGrant.Select(t => TeamCode(t.cfg)))})");
     }
@@ -275,7 +270,7 @@ public sealed partial class UnitManager
         t = 0;
         ClassFile? c = Class("Design\\Unit\\" + u.ClassPath + ".class");
         string? type = c?.Get("UNIT", "Type")?.Trim('"', ' ');
-        string? en = c?.Get("UNIT", "Type#TYPE");
+        string? en = c?.TypeOf("UNIT", "Type") ?? c?.Get("UNIT", "Type#TYPE");
         if (type != null && en != null)
         {
             List<string> parts = en.Split(' ', StringSplitOptions.RemoveEmptyEntries).Skip(1).ToList();   // « ENUM UNKNOWN FIREMAN CANON… »
