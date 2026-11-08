@@ -246,6 +246,7 @@ public sealed partial class UnitManager
         c.Leader = null;
         c.Path.Clear();
         c.RunSpeed = run ? 450f : 280f;
+        c.ScriptWalk = true;
         Vector2 from = new Vector2(c.Position.X, c.Position.Y);
         List<Vector2> path = FindPath(from, dest, out _);
         if (path.Count == 0)

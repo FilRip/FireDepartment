@@ -68,6 +68,8 @@ public sealed class PathFind
     public bool FreeCell(int cx, int cy) => _s.Grid is not { } g || (g.Inside(cx, cy) && g.ZoneA[g.Index(cx, cy)] != 0 && (Blocked.Length == 0 || !Blocked[g.Index(cx, cy)])
         && (Water == null ? !PathingBoat : Water[g.Index(cx, cy)] == PathingBoat)   // l'eau : aux bateaux seulement
         && (PathingVehicle || VehicleBlocked.Length == 0 || VehicleBlocked[g.Index(cx, cy)] == 0 || VehicleBlocked[g.Index(cx, cy)] == SelfId)
+        && (Occupied.Length == 0 || Occupied[g.Index(cx, cy)] == 0)   // zone d'occupation posée par le script (Occupations.cs)
+        && (SelfId == 0 || VehicleOccupied.Length == 0 || VehicleOccupied[g.Index(cx, cy)] == 0)   // un véhicule : une case de marge en plus
         && (DoorClosed.Length == 0 || !DoorClosed[g.Index(cx, cy)])
         && (PathingGrapple || !IsGrappleCell(g.Index(cx, cy))));   // mur à franchir au grappin : seulement avec un grappin
 
@@ -75,6 +77,10 @@ public sealed class PathFind
     public bool[] Blocked = Array.Empty<bool>();
     /// <summary>Véhicules garés : numéro du véhicule qui occupe la case (0 : libre).</summary>
     public int[] VehicleBlocked = Array.Empty<int>();
+    /// <summary>Zones d'occupation posées (Occupations.cs) : nombre de zones sur chaque case ; fermée à tous.</summary>
+    public int[] Occupied = Array.Empty<int>();
+    /// <summary>Les mêmes zones, une case plus larges : fermées aux véhicules (pas de passage entre deux wagons).</summary>
+    public int[] VehicleOccupied = Array.Empty<int>();
     /// <summary>Portes fermées (et bâti des portails coulissants).</summary>
     public bool[] DoorClosed = Array.Empty<bool>();
     /// <summary>Murs qu'on ne passe qu'au grappin.</summary>
@@ -361,6 +367,8 @@ public sealed class PathFind
             ClassFile? c = _class("Design\\" + o.ClassPath["design\\".Length..] + ".class");
             if (c == null || c.GetInt("OCCUPATION", "Activated", 1) == 0 || c.GetInt("OCCUPATION", "Background", 0) == 1)
                 continue;
+            if (UnitManager.IsOccupationName(o.Name))
+                continue;   // zone d'occupation : ses cases dessinées, selon sa visibilité (Occupations.cs), pas la forme de l'objet
             string? type = c.Get("OCCUPATION", "Occupation_Type")?.Trim('"', ' ').ToUpperInvariant();
             if (type is "GHOST" or "DOOR" or "WINDOW" or "WAYPOINT")
                 continue;

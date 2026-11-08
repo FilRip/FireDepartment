@@ -137,6 +137,16 @@ public sealed partial class UnitManager
         }
     }
 
+    /// <summary>Escalier actif dont les deux bouts sont les cases de ces deux points (un pas « lien » d'un chemin).</summary>
+    private Teleport? StairsBetween(Vector2 a, Vector2 b)
+    {
+        if (_s.Grid is not { } g)
+            return null;
+        int ca = CellIndex(g, a), cb = CellIndex(g, b);
+        return Teleports.FirstOrDefault(t => t.Active && !t.Fake && t.CellA >= 0 && t.CellB >= 0
+            && ((t.CellA == ca && t.CellB == cb) || (t.CellA == cb && t.CellB == ca)));
+    }
+
     /// <summary>Vitesse dans un escalier extérieur (unités par seconde, le long de la volée).</summary>
     private const float StairsWalkSpeed = 180f;
 

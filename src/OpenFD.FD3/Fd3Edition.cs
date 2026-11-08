@@ -7,6 +7,8 @@ public sealed class Fd3Edition : IEdition
 {
     public string License => "FD3";
 
+    public bool WhiteCampaignArrows => false;
+
     public (int X, int Y, int W, int H) PageRect(PageIcon icon) => icon switch
     {
         PageIcon.TeamHere => (1876, 688, 68, 46),

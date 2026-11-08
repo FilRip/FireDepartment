@@ -115,25 +115,35 @@ public sealed partial class UnitManager
         if (_s.Scripts is not { } scripts || Triggers.Count == 0)
             return;
         foreach (TriggerZone t in Triggers.ToList())
+        {
             foreach (Unit u in Units.ToList())
+                if (Units.Contains(u) && !u.OnBoard && !u.Hidden)
+                    Visit(t, u.Id, u.Position);
+            // civils menés par le script (Port : le conducteur arrive à sa locomotive, le train part)
+            foreach (Civilian c in Civilians.ToList())
+                if (c.ScriptWalk && !c.Hidden && c.Leader == null && c.Carrier == null && c.State is CivilianState.Conscious or CivilianState.Unconscious)
+                    Visit(t, (int)c.Id, c.Position);
+        }
+
+        void Visit(TriggerZone t, int id, Vector3 pos)
+        {
+            if (!t.Enabled || string.IsNullOrEmpty(t.Script))
+                return;
+            Vector3 l = Vector3.Transform(pos, t.Inverse);
+            bool inside = MathF.Abs(l.X) <= t.Half.X && MathF.Abs(l.Y) <= t.Half.Y && MathF.Abs(l.Z) <= t.Half.Z;
+            if (!inside)
             {
-                if (!Units.Contains(u) || u.OnBoard || u.Hidden || !t.Enabled || string.IsNullOrEmpty(t.Script))
-                    continue;
-                Vector3 l = Vector3.Transform(u.Position, t.Inverse);
-                bool inside = MathF.Abs(l.X) <= t.Half.X && MathF.Abs(l.Y) <= t.Half.Y && MathF.Abs(l.Z) <= t.Half.Z;
-                if (!inside)
-                {
-                    // il en sort : ON_LEAVE (Street : le tram repart quand le camion a quitté sa voie)
-                    if (t.Inside.Remove(u.Id) && t.OnLeave.Length > 0)
-                        scripts.TryRun(t.OnLeave, Value.I(u.Id), Value.I(t.Id));
-                    continue;
-                }
-                if (!t.Inside.Add(u.Id))
-                    continue;
-                LastTrigger = t;
-                LastTriggerTime = _s.Time;
-                scripts.TryRun(t.Script, Value.I(u.Id), Value.I(t.Id));
+                // il en sort : ON_LEAVE (Street : le tram repart quand le camion a quitté sa voie)
+                if (t.Inside.Remove(id) && t.OnLeave.Length > 0)
+                    scripts.TryRun(t.OnLeave, Value.I(id), Value.I(t.Id));
+                return;
             }
+            if (!t.Inside.Add(id))
+                return;
+            LastTrigger = t;
+            LastTriggerTime = _s.Time;
+            scripts.TryRun(t.Script, Value.I(id), Value.I(t.Id));
+        }
     }
 
     /// <summary>Civil mis à l'abri : le script de la mission est prévenu ([COMMAND_CALLBACKS] CmdSaveCivilian).</summary>
@@ -143,6 +153,36 @@ public sealed partial class UnitManager
         c.Leader = null;
         string fn = string.IsNullOrEmpty(_saveCivilianScript) ? "OnCivilianSaved" : _saveCivilianScript;
         _s.Scripts?.TryRun(fn, Value.I(c.Id));
+    }
+
+    /// <summary>
+    /// Débogage (F6) : le civil est sauvé tout de suite, comme s'il était arrivé à l'ambulance (compté, script prévenu) ;
+    /// il disparaît sur place. Le pompier qui le portait le lâche.
+    /// </summary>
+    public bool DebugSave(Civilian c)
+    {
+        if (c.State is not (CivilianState.Conscious or CivilianState.Unconscious))
+            return false;
+        if (c.Carrier is { } u)
+        {
+            u.Carrying = null;
+            u.Carry = CarryPhase.None;
+            u.CarryTimer = 0;
+            u.Path.Clear();
+            u.Status = "attend les ordres";
+        }
+        foreach (Unit w in Units.Where(w => w.Carrying == c))
+        {
+            w.Carrying = null;
+            w.Carry = CarryPhase.None;
+            w.CarryTimer = 0;
+        }
+        c.Carrier = null;
+        c.Stairs = null;
+        Save(c);
+        Log.Add($"{_s.Time,6:0} s : {c.Name} sauvé (débogage) ({Rescued} sauvé(s))");
+        Sounds.Add(("VOCAL_CIVILIAN_SAVED", null));
+        return true;
     }
 
     // ---- état de la partie pour les scripts (conditions de défaite) ----

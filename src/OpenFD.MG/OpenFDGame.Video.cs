@@ -20,8 +20,8 @@ public sealed partial class OpenFDGame
     {
         if (_music == null)
             return;
-        if (_intro != null)
-            _music.Want(null, false);
+        if (_intro != null || _splash != null)
+            _music.Want(null, false);   // ni pendant l'écran d'accueil ni pendant l'intro
         else if (_briefing != null)
             _music.Want("Briefing", true);
         else if (_ended && !_menu && Host?.Outcome is bool won)

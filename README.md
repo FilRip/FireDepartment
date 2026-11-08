@@ -9,6 +9,10 @@ Launch exe with in argument the path where Fire Department 2 or 3 is installed, 
 
 OpenFD.exe "C:\Games\Fire Department 3"
 
+You can spécify two path, to set the two games, like that :
+
+OpenFD.exe "C:\Games\Fire Department 3" "C:\Games\Fire Department 2"
+
 
 
 -------------------------

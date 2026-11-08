@@ -83,13 +83,14 @@ public sealed partial class OpenFDGame
             _mPrev = m;
             return;
         }
-        // Ctrl + D : infos de débogage ; les touches F1 à F4 ne marchent que dans ce mode
+        // Ctrl + D : infos de débogage ; les touches F1 à F6 ne marchent que dans ce mode
         bool ctrlKey = k.IsKeyDown(Keys.LeftControl) || k.IsKeyDown(Keys.RightControl);
         if (ctrlKey && Pressed(k, Keys.D))
         {
             _debugAi = !_debugAi;
             _debugExtinguish = false;
             _debugTeleport = false;
+            _debugSave = false;
             Log(_debugAi ? "Débogage : portée des pompiers (vert) et propagation des feux (orange)" : "Débogage : non");
         }
         if (_debugAi && !_netGame)
@@ -139,6 +140,16 @@ public sealed partial class OpenFDGame
                 }
                 Log($"Débogage : {who.Count} unité(s) téléportée(s)");
             }
+        }
+        // débogage (F6) : ce clic sauve le civil visé (compté comme sauvé, il disparaît sans aller à l'ambulance)
+        if (pressL && _debugSave)
+        {
+            _debugSave = false;
+            pressL = false;
+            if (CivilianAt(m.X, m.Y) is { } sc && _session.Units.DebugSave(sc))
+                Log($"Débogage : {sc.Name} sauvé");
+            else
+                Log("Débogage : pas de civil à cet endroit");
         }
         // débogage (F4) : ce clic éteint le feu visé, sans rien sélectionner
         if (pressL && _debugExtinguish)
@@ -272,10 +283,12 @@ public sealed partial class OpenFDGame
         "F3 : remplit l'agent à 100 % des unités choisies",
         "F4 : éteint le prochain feu cliqué",
         "F5 : téléporte les unités choisies au prochain clic",
+        "F6 : sauve le prochain civil cliqué",
     };
 
-    // F4 : le prochain clic gauche sur un feu l'éteint ; F5 : le prochain clic gauche y téléporte les unités choisies
-    private bool _debugExtinguish, _debugTeleport;
+    // F4 : le prochain clic gauche sur un feu l'éteint ; F5 : le prochain clic gauche y téléporte les unités choisies ;
+    // F6 : le prochain clic gauche sur un civil le sauve
+    private bool _debugExtinguish, _debugTeleport, _debugSave;
 
     private void DebugKeys(KeyboardState k)
     {
@@ -307,18 +320,27 @@ public sealed partial class OpenFDGame
         {
             _debugTeleport = !_debugTeleport && _sel.Count > 0;
             _debugExtinguish = false;
+            _debugSave = false;
             Log(_debugTeleport ? "Débogage : cliquez où téléporter les unités choisies" : _sel.Count == 0 ? "Débogage : aucune unité choisie" : "Débogage : téléportation annulée");
         }
         if (Pressed(k, Keys.F4))
         {
             _debugTeleport = false;
+            _debugSave = false;
             _debugExtinguish = !_debugExtinguish;
             Log(_debugExtinguish ? "Débogage : cliquez sur un feu pour l'éteindre" : "Débogage : extinction annulée");
+        }
+        if (Pressed(k, Keys.F6))
+        {
+            _debugTeleport = false;
+            _debugExtinguish = false;
+            _debugSave = !_debugSave;
+            Log(_debugSave ? "Débogage : cliquez sur un civil pour le sauver" : "Débogage : sauvetage annulé");
         }
     }
 
     // flèches du clavier : déplacent la vue (en 3D, dans la direction où regarde la caméra)
-    private float _arrowShift = 1.6f;
+    private float _arrowShift = 4.8f;
 
     // largeur (pixels de la fenêtre) du bord qui fait défiler la caméra (option EdgeScroll)
     private const int EdgeBand = 2;
@@ -349,7 +371,7 @@ public sealed partial class OpenFDGame
         }
         if (x == 0 && y == 0)
             return;
-        // Maj : défilement un peu plus rapide (options : Gameplay.ArrowShiftSpeed)
+        // Maj : défilement plus rapide (options : Gameplay.ArrowShiftSpeed, 4,8 fois par défaut)
         if (k.IsKeyDown(Keys.LeftShift) || k.IsKeyDown(Keys.RightShift))
             dt *= _arrowShift;
         if (_map)
@@ -1029,7 +1051,9 @@ public sealed partial class OpenFDGame
         List<Unit> walkers = _sel.Where(u => !u.IsVehicle).ToList();
         Cur want = Cur.Normal;
         walkers = walkers.Where(u => !u.Unconscious).ToList();
-        if (_debugExtinguish)
+        if (_debugSave)
+            want = CivilianAt(x, y) != null ? Cur.Rescue : Cur.Normal;   // débogage (F6) : viser le civil à sauver
+        else if (_debugExtinguish)
             want = Cur.Target;   // débogage (F4) : viser le feu à éteindre
         else if (_debugTeleport)
             want = Cur.Move;     // débogage (F5) : l'endroit où téléporter

@@ -32,8 +32,8 @@ public partial class OpenFDGame
     private SN.Vector2 _waterScroll0, _waterScroll1;
     private float _waterDensity = 0.6f;
 
-    /// <summary>Uv par seconde pour 1 de ScrollSpeed (estimé : des vaguelettes lentes).</summary>
-    private const float WaterScrollRate = 0.02f;
+    /// <summary>Uv par seconde pour 1 de ScrollSpeed (estimé ; trois fois plus vite qu'au début, à la demande du joueur).</summary>
+    private const float WaterScrollRate = 0.06f;
     /// <summary>Seconde couche : texture plus fine (uv × 1,7), un peu tournée, qui se mêle à la première.</summary>
     private const float WaterLayer2Scale = 1.7f;
     /// <summary>Découpe des grands triangles de l'eau (côtés plus courts que ça, en unités).</summary>

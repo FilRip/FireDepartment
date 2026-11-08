@@ -21,9 +21,9 @@ public sealed partial class OpenFDGame
     private float _uiClock;
 
     // ---- textures de l'interface du jeu ----
-    private Texture2D? OverlayTexture(string file, bool whiteMask = false, bool cropFrame = false)
+    private Texture2D? OverlayTexture(string file, bool whiteMask = false, bool cropFrame = false, bool grayToWhite = false)
     {
-        string key = file + (whiteMask ? "#w" : "") + (cropFrame ? "#c" : "");
+        string key = file + (whiteMask ? "#w" : "") + (cropFrame ? "#c" : "") + (grayToWhite ? "#g" : "");
         if (_overlayTex.TryGetValue(key, out Texture2D? t))
             return t;
         t = null;
@@ -84,6 +84,16 @@ public sealed partial class OpenFDGame
                             Color c = px[i];
                             byte a = (byte)Math.Min(c.A, Math.Max(c.R, Math.Max(c.G, c.B)));
                             px[i] = new Color((byte)255, (byte)255, (byte)255, a);
+                        }
+                    // dessin gris (flèches de FD2) : en blanc, le reste de l'image ne change pas
+                    if (grayToWhite)
+                        for (int i = 0; i < px.Length; i++)
+                        {
+                            Color c = px[i];
+                            int hi = Math.Max(c.R, Math.Max(c.G, c.B));
+                            int lo = Math.Min(c.R, Math.Min(c.G, c.B));
+                            if (c.A > 0 && hi - lo < 16 && hi > 100)
+                                px[i] = new Color((byte)255, (byte)255, (byte)255, c.A);
                         }
                     t = new Texture2D(GraphicsDevice, w, h);
                     t.SetData(px);

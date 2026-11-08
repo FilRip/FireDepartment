@@ -39,6 +39,10 @@ typedef struct FV {
     int pendingStream;
     int eof;
     int outChannels;
+    int outW, outH;       /* taille des images rendues : celle annoncée à l'ouverture (le tableau de l'appelant) */
+    uint8_t *img;         /* image convertie, avec de la marge : swscale écrit parfois un peu après la fin de l'image
+                             (instructions SIMD), il ne faut donc jamais lui donner directement le tableau de l'appelant */
+    int imgStride;
 } FV;
 
 static AVCodecContext *open_codec(AVFormatContext *fmt, int idx)
@@ -63,6 +67,7 @@ EXPORT void fv_close(FV *v)
     if (v->adec) avcodec_free_context(&v->adec);
     if (v->pkt) av_packet_free(&v->pkt);
     if (v->frm) av_frame_free(&v->frm);
+    if (v->img) av_free(v->img);
     if (v->fmt) avformat_close_input(&v->fmt);
     free(v);
 }
@@ -79,7 +84,13 @@ EXPORT FV *fv_open(const char *path)
     v->vdec = open_codec(v->fmt, v->vs);
     if (!v->vdec) { fv_close(v); return NULL; }
     v->adec = open_codec(v->fmt, v->as);
-    v->sws = sws_getContext(v->vdec->width, v->vdec->height, v->vdec->pix_fmt, v->vdec->width, v->vdec->height, AV_PIX_FMT_RGBA, SWS_BILINEAR, NULL, NULL, NULL);
+    v->outW = v->vdec->width;
+    v->outH = v->vdec->height;
+    if (v->outW <= 0 || v->outH <= 0) { fv_close(v); return NULL; }
+    /* lignes alignées sur 64 octets, et 64 lignes de marge en plus à la fin */
+    v->imgStride = (v->outW * 4 + 63) & ~63;
+    v->img = av_mallocz((size_t)v->imgStride * (v->outH + 64));
+    if (!v->img) { fv_close(v); return NULL; }
     if (v->adec) {
         AVChannelLayout out = AV_CHANNEL_LAYOUT_STEREO;
         v->outChannels = v->adec->ch_layout.nb_channels >= 2 ? 2 : 1;
@@ -94,8 +105,8 @@ EXPORT FV *fv_open(const char *path)
     return v;
 }
 
-EXPORT int fv_width(FV *v) { return v ? v->vdec->width : 0; }
-EXPORT int fv_height(FV *v) { return v ? v->vdec->height : 0; }
+EXPORT int fv_width(FV *v) { return v ? v->outW : 0; }
+EXPORT int fv_height(FV *v) { return v ? v->outH : 0; }
 EXPORT double fv_fps(FV *v)
 {
     if (!v) return 0;
@@ -118,12 +129,22 @@ static int receive(FV *v, unsigned char *rgba, double *pts, short *audio, int ca
     int64_t ts = v->frm->best_effort_timestamp != AV_NOPTS_VALUE ? v->frm->best_effort_timestamp : v->frm->pts;
     *pts = ts != AV_NOPTS_VALUE ? ts * av_q2d(st->time_base) : 0;
     if (dec == v->vdec) {
-        uint8_t *dst[4] = { rgba, NULL, NULL, NULL };
-        int stride[4] = { v->vdec->width * 4, 0, 0, 0 };
-        sws_scale(v->sws, (const uint8_t * const *)v->frm->data, v->frm->linesize, 0, v->vdec->height, dst, stride);
+        /* l'image décodée peut changer de taille ou de format en cours de route : elle est toujours mise à la taille
+           annoncée à l'ouverture (outW × outH), jamais plus grande que le tableau de l'appelant */
+        if (v->frm->width <= 0 || v->frm->height <= 0 || !v->frm->data[0]) { av_frame_unref(v->frm); return 0; }
+        v->sws = sws_getCachedContext(v->sws, v->frm->width, v->frm->height, (enum AVPixelFormat)v->frm->format,
+                                      v->outW, v->outH, AV_PIX_FMT_RGBA, SWS_BILINEAR, NULL, NULL, NULL);
+        if (!v->sws) { av_frame_unref(v->frm); return 0; }
+        uint8_t *dst[4] = { v->img, NULL, NULL, NULL };
+        int stride[4] = { v->imgStride, 0, 0, 0 };
+        sws_scale(v->sws, (const uint8_t * const *)v->frm->data, v->frm->linesize, 0, v->frm->height, dst, stride);
+        /* recopie exacte : outW × outH × 4 octets, pas un de plus */
+        for (int y = 0; y < v->outH; y++)
+            memcpy(rgba + (size_t)y * v->outW * 4, v->img + (size_t)y * v->imgStride, (size_t)v->outW * 4);
         av_frame_unref(v->frm);
         return 1;
     }
+    if (!v->swr || cap <= 0) { av_frame_unref(v->frm); *samples = 0; return 2; }
     int max = cap / (v->outChannels > 0 ? v->outChannels : 1);
     uint8_t *out[1] = { (uint8_t *)audio };
     int n = swr_convert(v->swr, out, max, (const uint8_t **)v->frm->extended_data, v->frm->nb_samples);

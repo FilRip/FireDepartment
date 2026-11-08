@@ -215,8 +215,8 @@ public sealed partial class OpenFDGame
         (float mx, float my) = Fb(Mouse.GetState().X, Mouse.GetState().Y);
 
         // flèches : première image au repos, deuxième au survol
-        DrawSprite("BUT_PREVIOUS_CAMPAIGN.png", PrevArrowRect(), new Rectangle(0, 0, 48, 48), 48, Inside(PrevArrowRect(), mx, my) ? 1 : 0, _campaignIndex > 0);
-        DrawSprite("BUT_NEXT_CAMPAIGN.png", NextArrowRect(), new Rectangle(0, 0, 48, 48), 48, Inside(NextArrowRect(), mx, my) ? 1 : 0, _campaignIndex < _campaign.Count - 1);
+        DrawSprite("BUT_PREVIOUS_CAMPAIGN.png", PrevArrowRect(), new Rectangle(0, 0, 48, 48), 48, Inside(PrevArrowRect(), mx, my) ? 1 : 0, _campaignIndex > 0, _edition.WhiteCampaignArrows);
+        DrawSprite("BUT_NEXT_CAMPAIGN.png", NextArrowRect(), new Rectangle(0, 0, 48, 48), 48, Inside(NextArrowRect(), mx, my) ? 1 : 0, _campaignIndex < _campaign.Count - 1, _edition.WhiteCampaignArrows);
         string counter = $"Mission {page.Number} / {_campaign.Count}";
         float ts = _scale * 1.4f;
         _ui.Text((_fbW - _font.Measure(counter) * ts) / 2, CampaignMargin + (ArrowSize - _font.LineHeight * ts) / 2, counter, accent, ts);
@@ -305,10 +305,11 @@ public sealed partial class OpenFDGame
     /// <summary>
     /// Une image d'une planche de boutons empilés : <paramref name="first"/> est la première, les suivantes sont
     /// <paramref name="pitch"/> pixels plus bas (rangée <paramref name="row"/> : 0 au repos, 1 au survol) ; false si la texture manque.
+    /// <paramref name="grayToWhite"/> : le gris du dessin est affiché en blanc (flèches de FD2).
     /// </summary>
-    private bool DrawSprite(string file, (float x, float y, float w, float h) r, Rectangle first, int pitch, int row, bool enabled)
+    private bool DrawSprite(string file, (float x, float y, float w, float h) r, Rectangle first, int pitch, int row, bool enabled, bool grayToWhite = false)
     {
-        Texture2D? t = OverlayTexture(file);
+        Texture2D? t = OverlayTexture(file, grayToWhite: grayToWhite);
         if (t == null)
             return false;
         SN.Vector4 tint = enabled ? SN.Vector4.One : new SN.Vector4(0.35f, 0.35f, 0.35f, 0.6f);

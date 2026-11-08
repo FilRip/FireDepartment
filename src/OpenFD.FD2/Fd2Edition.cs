@@ -7,6 +7,9 @@ public sealed class Fd2Edition : IEdition
 {
     public string License => "FD2";
 
+    // flèches grises sur fond violet : affichées en blanc
+    public bool WhiteCampaignArrows => true;
+
     // la planche d'icônes de FD2 a la même taille que celle de FD3, mais ses icônes sont rangées ailleurs
     // (retrouvées pixel pour pixel : mêmes dessins qu'en FD3)
     public (int X, int Y, int W, int H) PageRect(PageIcon icon) => icon switch

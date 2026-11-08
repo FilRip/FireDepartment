@@ -9,6 +9,7 @@ public static class Program
 {
     public static int Main(string[] args)
     {
+        CrashLog.Start();   // OpenFD.log, et crash_….txt si une exception n'est pas gérée
         List<string> argList = args.ToList();
         string? Opt(string name)
         {
@@ -85,6 +86,11 @@ public static class Program
             using OpenFDGame game = Make();
             game.Run();
             next = game.SwitchTo;
+        }
+        catch (Exception e) when (e is not Microsoft.Xna.Framework.Graphics.NoSuitableGraphicsDeviceException)
+        {
+            CrashLog.Report(e, "exception dans le jeu");
+            throw;
         }
         catch (Microsoft.Xna.Framework.Graphics.NoSuitableGraphicsDeviceException) when (Environment.GetEnvironmentVariable("FD3_SANS_MSAA") == null)
         {

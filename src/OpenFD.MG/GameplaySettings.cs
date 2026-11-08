@@ -19,7 +19,7 @@ public sealed class GameplaySettings
     public float AttackBackOff { get; set; } = 0.5f;       // feu tout proche : recul du pompier (part de sa distance d'arrosage habituelle)
     public float StaminaLoss { get; set; } = 0.25f;        // vitesse de la perte d'endurance des pompiers (chaleur + fumée), multiplie HeatFactor et SmokeFactor
     public float CarrySpeed { get; set; } = 0.6f;          // pompier qui porte un civil inconscient : part de sa vitesse normale
-    public float ArrowShiftSpeed { get; set; } = 1.6f;     // flèches + Maj : vitesse du défilement de la vue (× la vitesse normale)
+    public float ArrowShiftSpeed { get; set; } = 4.8f;     // flèches + Maj : vitesse du défilement de la vue (× la vitesse normale)
     public float FlameSpeed { get; set; } = 10f;           // animation des flammes : images par seconde
     public float FlameSpeedVariation { get; set; } = 4f;   // écart d'une flamme à l'autre (images par seconde en plus, au hasard)
     public float ObjectiveTimeFactor { get; set; } = 2f;   // objectifs « vie d'un objet » (Mriya : générateur, 2 min en facile dans le jeu d'origine) : durée × ce facteur
