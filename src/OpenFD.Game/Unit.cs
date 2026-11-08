@@ -56,6 +56,13 @@ public sealed class Unit
     public Teleport? Stairs;                              // dans un escalier (Teleports.cs) : caché, il ressort à StairsTo
     public float StairsTimer;
     public Vector2 StairsTo;
+    public Vector3 StairsFrom;
+    /// <summary>
+    /// Après un ordre d'attaque du joueur : point du feu demandé, puis du dernier feu éteint. L'IA choisit le feu suivant
+    /// le plus près de ce point (et non de l'unité) : elle finit le foyer commencé avant de passer à un autre. Un simple
+    /// ordre de déplacement l'efface.
+    /// </summary>
+    public Vector2? FireFocus;                            // escalier extérieur (Walk) : point de départ de la montée ou de la descente
     public Teleport? FakeStairs;                          // envoyé sur un faux escalier (Lab) : son message à l'arrivée                            // casse ou ouvre la fenêtre de l'échelle pour passer (chemin en cours)
     public float ClimbSpeed = 133;                        // [MOVING] ClimbGrapplinSpeed (unités par seconde)
     public ClimbPhase Climb;                              // passage d'un mur au grappin (voir Grapple.cs)

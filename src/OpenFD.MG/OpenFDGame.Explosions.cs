@@ -57,8 +57,9 @@ public sealed partial class OpenFDGame
             if (Host?.Visibility.TryGetValue(it.Id, out bool shown) == true && !shown)
                 continue;
             SN.Matrix4x4 w = world;
+            // déplacé par le script : il suit le relief (Street : les tramways, qui sont des véhicules explosifs)
             if (ScriptPos(it.Id) is { } mv)
-                w.Translation += new SN.Vector3(mv.X - it.Position.X, mv.Y - it.Position.Y, 0);
+                w = FollowGround(it.Id, world, it.Position, mv);
             foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in StateModel(model, it.State))
                 DrawMesh(mesh, (part * w).X());
         }

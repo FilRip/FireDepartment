@@ -212,6 +212,7 @@ public sealed partial class OpenFDGame
     {
         ["InvertX"] = "Rotation : inverser l'axe horizontal",
         ["InvertY"] = "Rotation : inverser l'axe vertical",
+        ["EdgeScroll"] = "Déplacer la caméra par la souris aux limites de l'écran",
         ["Brightness"] = "Luminosité", ["Resolution"] = "Résolution de l'écran", ["Fullscreen"] = "Plein écran", ["Windowed"] = "Fenêtre",
         ["Textures"] = "Qualité des textures", ["Language"] = "Langue",
         ["Nationality"] = "Nationalité des unités",
@@ -467,6 +468,11 @@ public sealed partial class OpenFDGame
             new(O("InvertY"), YN(_settings.InvertY), true, _ =>
             {
                 _settings.InvertY = !_settings.InvertY;
+                Changed();
+            }),
+            new(O("EdgeScroll"), YN(_settings.EdgeScroll), true, _ =>
+            {
+                _settings.EdgeScroll = !_settings.EdgeScroll;
                 Changed();
             }),
             new(L("&VolumeMaster", "Volume général"), $"{_settings.Volume} %", true, d =>

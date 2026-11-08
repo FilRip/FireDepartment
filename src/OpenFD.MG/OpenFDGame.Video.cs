@@ -1,4 +1,5 @@
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using SN = System.Numerics;
 
@@ -71,7 +72,12 @@ public sealed partial class OpenFDGame
 
     private float VideoVolume => Math.Clamp(_settings.Volume, 0, 100) / 100f;
 
-    /// <summary>Intro au lancement du jeu (avant le menu principal) ; rien si la vidéo ou la bibliothèque manque.</summary>
+    // écran d'accueil (Data\Overlay\Textures\Splash.png) : 3 s sur fond noir, avant la vidéo d'intro
+    private Texture2D? _splash;
+    private float _splashLeft;
+    public const float SplashTime = 3f;
+
+    /// <summary>Au lancement du jeu : l'écran d'accueil (Splash.png), puis la vidéo d'intro, puis le menu principal.</summary>
     private void StartIntro()
     {
         if (_introDone || Environment.GetEnvironmentVariable("FD3_SANS_INTRO") != null)
@@ -79,6 +85,26 @@ public sealed partial class OpenFDGame
             _introDone = true;
             return;
         }
+        try
+        {
+            if (FindFile(_files.DataDir, "Overlay", "Textures", "Splash.png") is { } sp)
+            {
+                using FileStream fs = File.OpenRead(sp);
+                _splash = Texture2D.FromStream(GraphicsDevice, fs);
+                _splashLeft = SplashTime;
+                return;   // la vidéo d'intro démarre à la fin de l'écran d'accueil
+            }
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("Splash.png : " + e.Message);
+        }
+        StartIntroVideo();
+    }
+
+    /// <summary>Vidéo d'intro (intro.bik) ; rien si la vidéo ou la bibliothèque manque.</summary>
+    private void StartIntroVideo()
+    {
         if (VideoPath("intro.bik") is { } p)
             _intro = VideoScreen.Open(GraphicsDevice, p, false, VideoVolume);
         if (_intro == null)
@@ -94,9 +120,18 @@ public sealed partial class OpenFDGame
         _intro = VideoScreen.Open(GraphicsDevice, p, false, VideoVolume);
     }
 
-    /// <summary>true tant que l'intro passe (le reste du jeu attend).</summary>
+    /// <summary>true tant que l'écran d'accueil ou l'intro passe (le reste du jeu attend).</summary>
     private bool UpdateIntro(float dt)
     {
+        if (_splash != null)
+        {
+            _splashLeft -= MathF.Min(dt, 0.1f);   // la première image peut arriver tard (chargement) : 3 s vraiment visibles
+            if (_splashLeft > 0)
+                return true;
+            _splash.Dispose();
+            _splash = null;
+            StartIntroVideo();
+        }
         if (_intro == null)
             return false;
         KeyboardState k = Keyboard.GetState();
@@ -120,6 +155,16 @@ public sealed partial class OpenFDGame
     private void DrawIntro()
     {
         GraphicsDevice.Clear(Color.Black);
+        if (_splash != null)
+        {
+            // agrandie à la taille de l'écran, proportions gardées (bandes noires sur les côtés en 16/9)
+            float s = MathF.Min((float)_fbW / _splash.Width, (float)_fbH / _splash.Height);
+            float w = _splash.Width * s, h = _splash.Height * s;
+            _ui.Begin();
+            _ui.Image(_splash, (_fbW - w) / 2, (_fbH - h) / 2, w, h, SN.Vector4.One);
+            _ui.End();
+            return;
+        }
         if (_intro == null)
             return;
         _ui.Begin();

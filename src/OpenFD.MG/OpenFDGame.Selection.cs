@@ -225,8 +225,18 @@ public sealed partial class OpenFDGame
     // arrivée) ; les unités choisies sont entourées de vert ; une flamme clignote sur l'image d'une unité dans un feu,
     // un « ? » sur un pompier qui ne fait rien
     private const int PanelMax = 14;
-    private static readonly Rectangle TabOn = new Rectangle(1876, 688, 68, 46), TabOff = new Rectangle(1944, 736, 68, 46), TabChoose = new Rectangle(1876, 736, 68, 46);
-    private static readonly Rectangle FireMark = new Rectangle(1736, 557, 24, 29), IdleMark = new Rectangle(1655, 592, 16, 22);
+    // icônes de la planche : chaque jeu les range ailleurs (IEdition.PageRect)
+    private Rectangle TabOn => Page(PageIcon.TeamHere);
+    private Rectangle TabOff => Page(PageIcon.TeamAway);
+    private Rectangle TabChoose => Page(PageIcon.TeamIncoming);
+    private Rectangle FireMark => Page(PageIcon.FireMark);
+    private Rectangle IdleMark => Page(PageIcon.IdleMark);
+
+    private Rectangle Page(PageIcon icon)
+    {
+        (int x, int y, int w, int h) = _edition.PageRect(icon);
+        return new Rectangle(x, y, w, h);
+    }
 
     /// <summary>Lignes du panneau, de bas en haut : (nom de l'équipe, unités). Les unités sans équipe connue vont à la fin.</summary>
     private List<(string team, List<Unit> units)> PanelRows()

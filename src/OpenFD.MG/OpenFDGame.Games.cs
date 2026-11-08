@@ -21,6 +21,12 @@ public sealed partial class OpenFDGame
     /// <summary>Écran ouvert au démarrage (après un changement de jeu) : 1 campagne, 5 autres missions ; 0 menu principal.</summary>
     public int StartScreen { get; init; }
 
+    /// <summary>Ce qui diffère entre les deux jeux pour les mêmes données (OpenFD.Game.IEdition) : FD3 (OpenFD.FD3) ou FD2 (OpenFD.FD2).</summary>
+    private readonly IEdition _edition;
+
+    private static IEdition MakeEdition(string dataDir) =>
+        (Localization.StartIni(dataDir, "License") ?? "FD3").Equals("FD2", StringComparison.OrdinalIgnoreCase) ? new OpenFD.FD2.Fd2Edition() : new OpenFD.FD3.Fd3Edition();
+
     private int _gameFor;            // écran voulu après le choix : 1 campagne, 5 autres missions
     private int _gameIndex;
     private readonly Dictionary<string, Texture2D?> _gameLogos = new(StringComparer.OrdinalIgnoreCase);

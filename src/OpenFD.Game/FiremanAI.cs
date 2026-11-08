@@ -35,7 +35,8 @@ public sealed partial class UnitManager
             return;   // une fois sur trois pas : assez réactif
         float reach = MathF.Max(150, u.Nozzle!.RangeMax) + ExtraStandoff;
         // il repère les feux bien au-delà de sa lance (AutoAttackRange, réglage du jeu) et s'en approche pour arroser
-        // le plus proche de lui parmi ceux qu'il voit (sauf celui qu'il vient de renoncer à atteindre)
+        // le plus proche de lui parmi ceux qu'il voit (après un ordre d'attaque : le plus proche du dernier feu demandé ou
+        // éteint, FireFocus), sauf celui qu'il vient de renoncer à atteindre
         uint skip = _autoGiveUp.TryGetValue(u.Id, out (uint fire, float until) g0) && g0.until > _s.Time ? g0.fire : uint.MaxValue;
         if (FindVisibleFire(u, reach * MathF.Max(1, AutoAttackRange), float.MaxValue, nearest: true, skip: skip) is not { } best)
             return;
@@ -87,7 +88,10 @@ public sealed partial class UnitManager
                 continue;
             if (angle < MathF.PI && MathF.Abs(MathF.IEEERemainder(MathF.Atan2(f.Y - me.Y, f.X - me.X) - u.Heading, 2 * MathF.PI)) > angle)
                 continue;
-            float score = nearest ? d : d - 200 * MathF.Min(1, h.Intensity / MathF.Max(1, h.Class.IntensityMax));
+            // après un ordre d'attaque : classés selon leur distance au dernier feu demandé ou éteint (FireFocus), pour finir
+            // le même foyer ; sinon selon leur distance à l'unité
+            float rank = u.FireFocus is { } focus ? Vector2.Distance(focus, f) : d;
+            float score = nearest ? rank : rank - 200 * MathF.Min(1, h.Intensity / MathF.Max(1, h.Class.IntensityMax));
             if (score >= bs)
                 continue;
             bool saved = Paths.PathingVehicle;

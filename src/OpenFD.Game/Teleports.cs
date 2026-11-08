@@ -33,6 +33,74 @@ public sealed partial class UnitManager
             t.Fake = Vector2.Distance(t.EndA, t.EndB) < 50;   // « faux escalier » (Lab : Fake_Stair_Message) : les deux icônes au même endroit
             Teleports.Add(t);
         }
+        LoadStreetStairs(level);
+    }
+
+    /// <summary>
+    /// Escaliers extérieurs (« street_stairs », modèle buildvicto_escal : Fire Department 2, Street) : une volée de marches
+    /// entre la rue et l'étage d'un immeuble, fermée dans la grille. Le haut est le point « Dum_use1 » du modèle (sur le
+    /// palier de l'étage) ; le bas, la case libre au pied des marches, de l'autre côté, nettement plus basse (cherchée
+    /// quand la grille est prête : UpdateTeleportLinks). Toujours ouvert ; durée selon la longueur de la volée.
+    /// </summary>
+    private void LoadStreetStairs(Level level)
+    {
+        foreach (LevelObject o in level.Objects.Where(o => o.Kind == EntityKind.Placeable && o.HasTransform && o.ClassPath.EndsWith("street_stairs", StringComparison.OrdinalIgnoreCase)))
+        {
+            ClassFile? c = Class("Design\\" + o.ClassPath["design\\".Length..] + ".class");
+            string? m = c?.Get("DISPLAY", "Model")?.Trim('"', ' ');
+            if (string.IsNullOrEmpty(m))
+                continue;
+            Vector3? top = null;
+            try
+            {
+                CharacterRig? rig = CharacterRig.Build(_assets ??= new SceneAssets(_files), _files, SceneAssets.GfxPath("Placeable", m));
+                int k = rig == null ? -1 : Array.FindIndex(rig.Names, n => n.StartsWith("Dum_use", StringComparison.OrdinalIgnoreCase));
+                if (rig != null && k >= 0)
+                    top = Vector3.Transform(rig.Pose(null, 0)[k].Translation, o.Matrix);
+            }
+            catch { }
+            if (top is not { } tp)
+                continue;
+            Vector2 at = new Vector2(o.Position.X, o.Position.Y), up = new Vector2(tp.X, tp.Y);
+            Teleports.Add(new Teleport
+            {
+                Id = o.Id, Name = o.Name, EndA = up, HeightA = tp.Z, Active = true, Walk = true,
+                Foot = at + (at - up),   // au pied : à l'opposé du palier
+                Duration = 1,
+            });
+        }
+    }
+
+    // pied d'un escalier extérieur : la case libre la plus proche du pied, plus basse que le palier d'au moins une marche,
+    // et du côté opposé au palier
+    private int FootCell(Grid g, Teleport t)
+    {
+        (int cx, int cy) = g.CellOf(new Vector3(t.Foot, 0));
+        Vector2 mid = (t.Foot + t.EndA) / 2;
+        for (int r = 0; r < 10; r++)
+        {
+            int best = -1;
+            float bd = float.MaxValue;
+            for (int dx = -r; dx <= r; dx++)
+                for (int dy = -r; dy <= r; dy++)
+                {
+                    int x = cx + dx, y = cy + dy;
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dy)) != r || !Free(x, y) || g.GroundHeight[g.Index(x, y)] > t.HeightA - PathFind.MaxStep)
+                        continue;
+                    Vector2 p = CellCenter(g, g.Index(x, y));
+                    if (Vector2.Dot(p - mid, t.EndA - mid) > 0)
+                        continue;
+                    float d = Vector2.Distance(p, t.Foot);
+                    if (d < bd)
+                    {
+                        bd = d;
+                        best = g.Index(x, y);
+                    }
+                }
+            if (best >= 0)
+                return best;
+        }
+        return -1;
     }
 
     // bloc A02B : actif (octet), durée (réel), ON_ENTER, ON_LEAVE (chaînes : longueur sur 4 octets, puis le texte)
@@ -69,6 +137,9 @@ public sealed partial class UnitManager
         }
     }
 
+    /// <summary>Vitesse dans un escalier extérieur (unités par seconde, le long de la volée).</summary>
+    private const float StairsWalkSpeed = 180f;
+
     /// <summary>Icône d'un escalier utilisable sous ce point (curseur « entrer »).</summary>
     public bool TeleportEndNear(Vector2 p) => Teleports.Any(t => TeleportUsable(t) && (Vector2.Distance(p, t.EndA) < 130 || Vector2.Distance(p, t.EndB) < 130));
 
@@ -92,7 +163,18 @@ public sealed partial class UnitManager
         {
             if (t.CellA < 0)
                 t.CellA = EndCell(g, t.EndA, t.HeightA);
-            if (t.CellB < 0)
+            if (t.CellB < 0 && t.Walk)
+            {
+                // escalier extérieur : son pied, une fois la grille prête ; durée : la volée à pas de marche
+                t.CellB = FootCell(g, t);
+                if (t.CellB >= 0)
+                {
+                    t.EndB = CellCenter(g, t.CellB);
+                    t.HeightB = g.GroundHeight[t.CellB];
+                    t.Duration = Math.Clamp(Vector3.Distance(new Vector3(t.EndA, t.HeightA), new Vector3(t.EndB, t.HeightB)) / StairsWalkSpeed, 1, 12);
+                }
+            }
+            else if (t.CellB < 0)
                 t.CellB = EndCell(g, t.EndB, t.HeightB);
             if (TeleportUsable(t) && !t.Fake)
                 Paths.Links.Add((t.CellA, t.CellB, false, false, false, false));
@@ -190,6 +272,7 @@ public sealed partial class UnitManager
             u.Stairs = t;
             u.StairsTimer = t.Duration;
             u.StairsTo = ab ? t.EndB : t.EndA;
+            u.StairsFrom = u.Position;
             u.Status = "prend l'escalier";
             if (!string.IsNullOrEmpty(t.OnEnter))
                 _s.Scripts?.TryRun(t.OnEnter, Value.I(u.Id), Value.I(t.Id));
@@ -217,9 +300,21 @@ public sealed partial class UnitManager
     private void UpdateTeleport(Unit u, float dt)
     {
         u.StairsTimer -= dt;
+        Teleport t = u.Stairs!;
+        if (t.Walk && u.StairsTimer > 0)
+        {
+            // escalier extérieur : il suit la volée, du point de départ au bout, en montant ou en descendant
+            float k = 1 - u.StairsTimer / t.Duration;
+            float zTo = u.StairsTo == t.EndA ? t.HeightA : t.HeightB;
+            Vector3 to3 = new Vector3(u.StairsTo, zTo);
+            u.Position = Vector3.Lerp(u.StairsFrom, to3, k);
+            Vector2 d = u.StairsTo - new Vector2(u.StairsFrom.X, u.StairsFrom.Y);
+            if (d.LengthSquared() > 1)
+                u.Heading = MathF.Atan2(d.Y, d.X);
+            return;
+        }
         if (u.StairsTimer > 0)
             return;
-        Teleport t = u.Stairs!;
         // il ressort sur la case du bout d'escalier (au bon étage), pas sur la case libre la plus proche de l'icône
         Vector2 to = Walkable(u.StairsTo);
         if (_s.Grid is { } g && (u.StairsTo == t.EndA ? t.CellA : t.CellB) is int end && end >= 0)
