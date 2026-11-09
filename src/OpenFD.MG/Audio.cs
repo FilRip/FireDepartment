@@ -194,6 +194,12 @@ public sealed class Audio : IDisposable
             l.Inst.Volume = Math.Clamp(l.Gain, 0, 1);
         }
         _touched.Clear();
+        ReleaseFinished();
+    }
+
+    /// <summary>Sons ponctuels terminés : libérés (aussi hors partie, où EndFrame n'est pas appelé : clics dans les menus).</summary>
+    public void ReleaseFinished()
+    {
         _oneShots.RemoveAll(s =>
         {
             if (s.State == Microsoft.Xna.Framework.Audio.SoundState.Stopped)
