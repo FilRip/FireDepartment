@@ -100,6 +100,21 @@ public sealed partial class UnitManager
             d.Life = c.GetFloat("DAMAGE", "LifePoints", d.MaxLife);
             d.SoundLabel = c.Get("SOUND", "Label")?.Trim('"', ' ');
             d.State = InitialState(o) == 1 ? OpeningState.Open : OpeningState.Closed;
+            // vie propre à cette ouverture dans la carte (composant A024, lu comme pour les objets explosifs) : 0 = déjà cassée
+            // au départ (Factory : window_break_villa2153… ; le jeu les montre brisées dès le début)
+            if (o.GetComponent(0xA024) is { } dc && o.ComponentBytes(dc) is ReadOnlySpan<byte> db && db.Length >= 13 && db[4] == 0x0C)
+            {
+                float life = BitConverter.ToSingle(db.Slice(5, 4)), max = BitConverter.ToSingle(db.Slice(9, 4));
+                if (float.IsFinite(max) && max > 0)
+                    d.MaxLife = max;
+                if (float.IsFinite(life) && life >= 0)
+                    d.Life = MathF.Min(life, d.MaxLife);
+            }
+            if (d.Breakable && d.Life <= 0)
+            {
+                d.Life = 0;
+                d.State = OpeningState.Broken;
+            }
             // fonctions du script appelées à l'ouverture et à la fermeture (portails de Jail : First_Gates_Open / _Close)
             if (o.GetComponent(0xA027) is { } ac)
             {
@@ -387,7 +402,7 @@ public sealed partial class UnitManager
     }
 
     // composant A027 : bloc d'en-tête puis l'indice de l'état logique courant
-    private static int InitialState(LevelObject o)
+    public static int InitialState(LevelObject o)
     {
         if (o.GetComponent(0xA027) is not { } comp)
             return 0;
@@ -415,6 +430,8 @@ public sealed partial class UnitManager
         foreach (Opening d in Openings)
             foreach (int i in d.FrameCells)
                 Paths.DoorClosed[i] = true;
+        // fenêtres fermées : la vue et l'eau ne passent qu'une fois la vitre cassée (ou la fenêtre ouverte)
+        Paths.RefreshWindowShut(Openings);
         _s.Smoke.SetOpenings(Environment.GetEnvironmentVariable("FD3_NOOPEN") != null ? Array.Empty<Vector3>() : Openings.Where(d => d.LetsSmokeOut).Select(d => d.Center));
     }
 

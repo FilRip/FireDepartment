@@ -89,8 +89,29 @@ public sealed class PathFind
     public bool IsVehicleBlocked(int index) => index < VehicleBlocked.Length && VehicleBlocked[index] != 0;
     public bool IsClosedDoor(int index) => index < DoorClosed.Length && DoorClosed[index];
     public int BlockedCells => Blocked.Count(b => b);
+    /// <summary>
+    /// Fenêtres : leurs cases (et le trou qu'elles laissent dans un mur de pièce) restent ouvertes à la vue et à l'eau (on
+    /// arrose par une fenêtre), mais on n'y passe pas à pied, cassée ou non ; seule l'échelle d'un camion y mène (Links).
+    /// </summary>
+    public bool[] WindowCell = Array.Empty<bool>();
+    public bool IsWindowCell(int i) => i < WindowCell.Length && WindowCell[i];
+    /// <summary>Fenêtre de chaque case de fenêtre (indice dans la liste des ouvertures, plus 1 ; 0 : aucune).</summary>
+    private int[] _windowOf = Array.Empty<int>();
+    /// <summary>Case d'une fenêtre encore fermée : la vue et le jet s'y arrêtent comme sur un mur.</summary>
+    public bool[] WindowShut = Array.Empty<bool>();
+    public bool IsWindowShut(int i) => i < WindowShut.Length && WindowShut[i];
+
+    /// <summary>Après un changement d'état (vitre cassée, fenêtre ouverte par le script) : cases de fenêtre fermées.</summary>
+    public void RefreshWindowShut(IReadOnlyList<Opening> openings)
+    {
+        if (WindowShut.Length != _windowOf.Length)
+            WindowShut = new bool[_windowOf.Length];
+        for (int i = 0; i < _windowOf.Length; i++)
+            WindowShut[i] = _windowOf[i] > 0 && _windowOf[i] <= openings.Count && openings[_windowOf[i] - 1].State == OpeningState.Closed;
+    }
+
     /// <summary>Case où marche un pompier ordinaire (débogage : grille affichée avec la touche D).</summary>
-    public bool WalkableCell(int cx, int cy) => FreeCell(cx, cy);
+    public bool WalkableCell(int cx, int cy) => FreeCell(cx, cy) && !(_s.Grid is { } g && g.Inside(cx, cy) && IsWindowCell(g.Index(cx, cy)));
     public bool IsBlocked(int index) => index < Blocked.Length && Blocked[index];
     public Dictionary<int, string> BlockedBy { get; } = new();
 
@@ -220,6 +241,31 @@ public sealed class PathFind
         if (Blocked.Length != g.Width * g.Height)
             Blocked = new bool[g.Width * g.Height];
         HashSet<int> doorCells = new HashSet<int>(openings.SelectMany(d => d.Cells));
+        WindowCell = new bool[g.Width * g.Height];
+        _windowOf = new int[g.Width * g.Height];
+        Dictionary<Opening, int> slot = new Dictionary<Opening, int>();
+        for (int k = 0; k < openings.Count; k++)
+            slot[openings[k]] = k + 1;
+        void MarkWindow(int c, Opening w)
+        {
+            WindowCell[c] = true;
+            _windowOf[c] = slot[w];
+        }
+        foreach (Opening w in openings.Where(d => d.IsWindow))
+        {
+            foreach (int c in w.Cells)
+                MarkWindow(c, w);
+            // fenêtre sans case dans la grille (Factory, les villas : le mur s'arrête à la fenêtre) : les cases sous son cadre
+            if (w.BoxMin.X < w.BoxMax.X)
+            {
+                (int x0, int y0) = g.CellOf(new Vector3(w.BoxMin, 0));
+                (int x1, int y1) = g.CellOf(new Vector3(w.BoxMax, 0));
+                for (int y = y0; y <= y1; y++)
+                    for (int x = x0; x <= x1; x++)
+                        if (g.Inside(x, y))
+                            MarkWindow(g.Index(x, y), w);
+            }
+        }
         int n = 0;
         float H(int x, int y) => g.Inside(x, y) && g.ZoneA[g.Index(x, y)] != 0 ? g.GroundHeight[g.Index(x, y)] : float.NaN;
         for (int y = 0; y < g.Height; y++)
@@ -253,18 +299,30 @@ public sealed class PathFind
             _log.Add($"Cloisons fermées dans la grille : {n} case(s)");
         // murs des pièces : la grille du jeu les marque en zone B 0 (zone A gardée), entre deux zones B ; le passage d'une
         // pièce à l'autre ne se fait que par les portes (leurs cases, et autour du centre d'une porte sans case)
-        HashSet<int> nearDoor = new HashSet<int>(doorCells);
+        HashSet<int> nearDoor = new HashSet<int>(openings.Where(d => !d.IsWindow).SelectMany(d => d.Cells));
+        // fenêtres : le mur de pièce reste ouvert (vue, eau) mais ces cases-là sont interdites à pied (WindowCell)
+        HashSet<int> nearWindow = new HashSet<int>(openings.Where(d => d.IsWindow).SelectMany(d => d.Cells));
+        Dictionary<int, Opening> holeOf = new Dictionary<int, Opening>();   // trou d'une fenêtre dans un mur de pièce : sa fenêtre
         foreach (Opening d in openings)
         {
+            HashSet<int> into = d.IsWindow ? nearWindow : nearDoor;
             (int dx, int dy) = g.CellOf(d.Center);
             if (g.Inside(dx, dy))
-                nearDoor.Add(g.Index(dx, dy));
+            {
+                into.Add(g.Index(dx, dy));
+                if (d.IsWindow)
+                    holeOf.TryAdd(g.Index(dx, dy), d);
+            }
             // porte sans case dans la grille (ouverte au départ) : le passage autour de son centre
             if (d.Cells.Count == 0)
                 for (int ox = -1; ox <= 1; ox++)
                     for (int oy = -1; oy <= 1; oy++)
                         if (g.Inside(dx + ox, dy + oy))
-                            nearDoor.Add(g.Index(dx + ox, dy + oy));
+                        {
+                            into.Add(g.Index(dx + ox, dy + oy));
+                            if (d.IsWindow)
+                                holeOf.TryAdd(g.Index(dx + ox, dy + oy), d);
+                        }
         }
         // jamais sous un civil ni sur un point de passage des scripts
         foreach (Vector2 w in keep)
@@ -318,12 +376,22 @@ public sealed class PathFind
                 // une bande mince (3 cases au plus en travers) : un mur ; une grande étendue en zone B 0 reste praticable
                 if (Math.Min(Run(x, y, 1, 0), Run(x, y, 0, 1)) > 3)
                     continue;
+                if (nearWindow.Contains(i))
+                {
+                    // le mur à l'endroit d'une fenêtre : fermé à pied ; ouvert à la vue une fois la vitre cassée
+                    if (holeOf.TryGetValue(i, out Opening? hw))
+                        MarkWindow(i, hw);
+                    else
+                        WindowCell[i] = true;
+                    continue;
+                }
                 Blocked[i] = true;
                 BlockedBy[i] = "mur de pièce";
                 m++;
                 rule.Add(i);
             }
         int reopened = ReconnectRooms(g, rule);
+        RefreshWindowShut(openings);   // fenêtres cassées dès le départ : ouvertes à la vue
         if (m > 0)
         {
             _log.Add($"Murs des pièces (zone B 0) : {m} case(s), {reopened} rouverte(s) pour garder les passages sans porte");
@@ -617,12 +685,14 @@ public sealed class PathFind
         if (_s.Grid is not { } g)
             return p;
         (int cx, int cy) = g.CellOf(new Vector3(p, 0));
-        if (Free(cx, cy))
+        // jamais sur une fenêtre : on s'arrête devant
+        bool Ok(int x, int y) => Free(x, y) && !(g.Inside(x, y) && IsWindowCell(g.Index(x, y)));
+        if (Ok(cx, cy))
             return p;
         for (int r = 1; r < 20; r++)
             for (int dx = -r; dx <= r; dx++)
                 for (int dy = -r; dy <= r; dy++)
-                    if (Math.Max(Math.Abs(dx), Math.Abs(dy)) == r && Free(cx + dx, cy + dy))
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dy)) == r && Ok(cx + dx, cy + dy))
                         return new((cx + dx + 0.5f) * Grid.CellSize, (cy + dy + 0.5f) * Grid.CellSize);
         return p;
     }
@@ -738,6 +808,9 @@ public sealed class PathFind
                         continue;
                     // la case de départ peut être bloquée (unité posée dans un coin) ; on la quitte quand même
                     if (!Free(nx, ny) && !(nx == tx && ny == ty))
+                        continue;
+                    // fenêtre (cassée ou non) : pas un passage à pied, sauf au bout d'une échelle dressée
+                    if (IsWindowCell(Key(nx, ny)) && !(nx == tx && ny == ty) && !(linkAt?.ContainsKey(Key(nx, ny)) ?? false))
                         continue;
                     if (dx != 0 && dy != 0 && (!Free(x + dx, y) || !Free(x, y + dy)))
                         continue;
@@ -856,7 +929,7 @@ public sealed class PathFind
                         break;
                     }
                 j = last;
-                while (j > i && !LineFree(cur, cells[j]))
+                while (j > i && (!LineFree(cur, cells[j]) || CrossesWindow(cur, cells[j])))
                     j--;
             }
             smooth.Add(cells[j]);
@@ -878,7 +951,11 @@ public sealed class PathFind
     /// Feu en hauteur (toit, étage) : le jet monte en cloche jusqu'au bâtiment qui le porte ; il suffit que rien ne l'arrête
     /// avant d'atteindre ce bâtiment (le premier mur ou obstacle épais rencontré est celui du bâtiment).
     /// </param>
-    public bool WaterLineFree(Vector2 a, Vector2 b, bool elevated = false)
+    /// <param name="overObjects">
+    /// Feu en contrebas d'une pente : le jet passe au-dessus des objets (vignes, tonneaux, caisses) quelle que soit leur
+    /// épaisseur, mais pas des murs, portes fermées et vitres intactes.
+    /// </param>
+    public bool WaterLineFree(Vector2 a, Vector2 b, bool elevated = false, bool overObjects = false)
     {
         if (_s.Grid is not { } g)
             return true;
@@ -892,9 +969,9 @@ public sealed class PathFind
             if (!g.Inside(cx, cy))
                 return false;
             int k = g.Index(cx, cy);
-            bool wall = IsClosedDoor(k) || (BlockedBy.TryGetValue(k, out string? by) && by is "mur" or "cloison" or "mur de pièce");
+            bool wall = IsClosedDoor(k) || IsWindowShut(k) || (BlockedBy.TryGetValue(k, out string? by) && by is "mur" or "cloison" or "mur de pièce");
             bool open = !wall && g.ZoneA[k] != 0 && !IsBlocked(k);
-            run = open ? 0 : run + Step;
+            run = open || overObjects ? 0 : run + Step;
             if (wall || run > WaterHopMax)
                 return elevated;
         }
@@ -905,6 +982,21 @@ public sealed class PathFind
     public const float WaterHopMax = 250f;
 
     /// <param name="ignoreFire">Vue (pas de marche) : ni les feux, ni les marches trop hautes ne l'arrêtent.</param>
+    /// <summary>La ligne droite de a à b passe-t-elle par une fenêtre (lissage d'un chemin à pied : on ne la coupe pas) ?</summary>
+    private bool CrossesWindow(Vector2 a, Vector2 b)
+    {
+        if (_s.Grid is not { } g || WindowCell.Length == 0)
+            return false;
+        int n = (int)(Vector2.Distance(a, b) / 40) + 1;
+        for (int i = 1; i < n; i++)
+        {
+            (int cx, int cy) = g.CellOf(new Vector3(Vector2.Lerp(a, b, (float)i / n), 0));
+            if (g.Inside(cx, cy) && IsWindowCell(g.Index(cx, cy)))
+                return true;
+        }
+        return false;
+    }
+
     public bool LineFree(Vector2 a, Vector2 b, bool ignoreFire = false)
     {
         if (_s.Grid is not { } g)
@@ -919,6 +1011,8 @@ public sealed class PathFind
             if (!Free(cx, cy) || (!ignoreFire && FireCost(cx, cy) > 0))
                 return false;
             int k = g.Index(cx, cy);
+            if (IsWindowShut(k))
+                return false;   // vitre intacte : ni vue ni passage
             if (!ignoreFire && prev >= 0 && k != prev && TooHigh(g, prev, k))
                 return false;
             prev = k;

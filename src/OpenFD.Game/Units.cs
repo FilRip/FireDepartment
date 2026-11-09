@@ -485,7 +485,7 @@ public sealed partial class UnitManager
     private List<Vector2> FindPath(Vector2 from, Vector2 to, out bool partial) => Paths.FindPath(from, to, out partial);
     private bool LineFree(Vector2 a, Vector2 b, bool ignoreFire = false) => Paths.LineFree(a, b, ignoreFire);
     private bool IsGrappleCell(int i) => Paths.IsGrappleCell(i);
-    public bool WalkableCell(int cx, int cy) => Paths.FreeCell(cx, cy);
+    public bool WalkableCell(int cx, int cy) => Paths.WalkableCell(cx, cy);
     public bool IsBlocked(int index) => Paths.IsBlocked(index);
     public bool IsVehicleBlocked(int index) => Paths.IsVehicleBlocked(index);
     public bool IsClosedDoor(int index) => Paths.IsClosedDoor(index);
@@ -829,8 +829,8 @@ public sealed partial class UnitManager
             if (!g.Inside(cx, cy))
                 return true;
             int k = g.Index(cx, cy);
-            if (Paths.IsBlocked(k) || Paths.IsClosedDoor(k))
-                return true;
+            if (Paths.IsBlocked(k) || Paths.IsClosedDoor(k) || Paths.IsWindowShut(k))
+                return true;   // une vitre intacte arrête aussi le jet
         }
         return false;
     }

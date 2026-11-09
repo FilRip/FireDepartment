@@ -87,7 +87,10 @@ public sealed partial class UnitManager
                 continue;
             // hauteur : un pompier à pied, son étage ; la lance d'un véhicule porte aussi en hauteur (toits, étages)
             float dz = h.Position.Z - u.Position.Z;
-            if (u.IsVehicle ? dz < -350 || dz > VehicleFireHeight : MathF.Abs(dz) > 350)
+            // lance d'un véhicule ou canon : un feu posé sur une pente (plus bas ou plus haut, sans marche d'étage entre les
+            // deux) se voit comme un feu au même niveau (WineMansion : la pente d'herbe en feu sous le camion)
+            bool slope = (u.IsVehicle || u.IsCanon) && MathF.Abs(dz) > 350 && OnSlope(me, f, h.Position.Z);
+            if (!slope && (u.IsVehicle ? dz < -350 || dz > VehicleFireHeight : MathF.Abs(dz) > 350))
                 continue;
             if (angle < MathF.PI && MathF.Abs(MathF.IEEERemainder(MathF.Atan2(f.Y - me.Y, f.X - me.X) - u.Heading, 2 * MathF.PI)) > angle)
                 continue;
@@ -103,7 +106,8 @@ public sealed partial class UnitManager
             Paths.Clearance = 0;
             Vector2 end = f - Vector2.Normalize(f - me + new Vector2(0.01f, 0)) * 120;
             // feu en hauteur (sur un toit) : le jet passe au-dessus du bâtiment qui le porte (le bout de la ligne peut y être)
-            bool seen = u.IsVehicle ? Paths.WaterLineFree(me, end, elevated: dz > FloorStep) : LineFree(me, end, ignoreFire: true);
+            // en contrebas sur une pente : le jet part d'en haut et passe au-dessus des objets, jamais à travers un mur
+            bool seen = u.IsVehicle || slope ? Paths.WaterLineFree(me, end, elevated: !slope && dz > FloorStep, overObjects: slope && dz < 0) : LineFree(me, end, ignoreFire: true);
             Paths.PathingVehicle = saved;
             Paths.Clearance = savedClear;
             if (!seen)
@@ -116,6 +120,36 @@ public sealed partial class UnitManager
 
     /// <summary>Hauteur maximale (au-dessus du véhicule) d'un feu que la lance d'un véhicule arrose d'elle-même (toits, étages).</summary>
     public const float VehicleFireHeight = 1500f;
+
+    /// <summary>Essais : le feu que l'unité choisirait de lui-même à portée de sa lance, parmi ceux qui ne sont pas écartés.</summary>
+    public HotPoint? VisibleFireForTest(Unit u, IReadOnlyDictionary<uint, float> skip) =>
+        u.Nozzle == null ? null : FindVisibleFire(u, u.Nozzle.RangeMax, float.MaxValue, nearest: true, skip: skip);
+
+    /// <summary>Plus grande remontée du sol entre deux points voisins (50 unités) en descendant une pente : au-delà, un mur.</summary>
+    public const float SlopeStep = 120f;
+
+    /// <summary>
+    /// Le feu (en b, à la hauteur fireZ) est posé sur le sol, et ce sol descend de a jusqu'à lui (ou monte, pour un feu plus
+    /// haut) sans remonter en chemin : une pente (herbe, talus) ou une terrasse vue d'en haut (on arrose par-dessus le muret).
+    /// Un mur de bâtiment entre les deux remonte, et un feu à un autre étage n'est pas posé sur le sol de la carte : refusés.
+    /// </summary>
+    private bool OnSlope(Vector2 a, Vector2 b, float fireZ)
+    {
+        if (MathF.Abs(fireZ - Ground(b)) > 200)
+            return false;
+        // du haut vers le bas
+        (Vector2 hi, Vector2 lo) = Ground(a) >= Ground(b) ? (a, b) : (b, a);
+        int n = (int)(Vector2.Distance(a, b) / 50) + 1;
+        float prev = Ground(hi);
+        for (int i = 1; i <= n; i++)
+        {
+            float z = Ground(Vector2.Lerp(hi, lo, (float)i / n));
+            if (z - prev > SlopeStep)
+                return false;
+            prev = z;
+        }
+        return true;
+    }
 
     // ---- diagnostics (OpenFD.Tools) ----
     /// <summary>Pourquoi le véhicule n'arrose pas le feu h de lui-même (essais).</summary>
