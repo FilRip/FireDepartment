@@ -140,6 +140,22 @@ public sealed class MissionHost : IScriptHost
     /// <summary>Noms des groupes créés par ENT_GroupCreate("nom"), retrouvés ensuite par ENT_FindByName (tutoriel : « group_soldat_8_1 »).</summary>
     private readonly Dictionary<string, long> _groupNames = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>Entités d'un groupe du script (ENT_GroupCreate), ou l'entité elle-même.</summary>
+    /// <summary>
+    /// Groupe que le script modifie (ENT_GroupAddEntity, ENT_GroupRemEntity) : créé par lui, ou groupe du niveau copié à sa
+    /// première retouche (College : « ElectricityDamage », « GroupHPLabo1 » perdent un membre à chaque court-circuit ou
+    /// explosion de gaz ; sans cela le groupe ne se vide jamais et l'événement, avec son message, revient sans fin).
+    /// </summary>
+    private List<long>? EditableGroup(long id)
+    {
+        if (_groups.TryGetValue(id, out List<long>? l))
+            return l;
+        if (!_byId.TryGetValue((uint)id, out LevelObject? g) || g.Kind != EntityKind.Group)
+            return null;
+        l = g.Members.Select(m => (long)m).ToList();
+        _groups[id] = l;
+        return l;
+    }
+
     private IEnumerable<long> Members(long id) => _groups.TryGetValue(id, out List<long>? l) ? l.ToList() : new List<long> { id };
 
     /// <summary>Membres d'un groupe créé par le script ou d'un groupe du niveau (« group_soldat_8_1 ») ; l'entité seule sinon.</summary>
@@ -543,13 +559,12 @@ public sealed class MissionHost : IScriptHost
                 return Value.I(gid);
             }
             case "ENT_GROUPADDENTITY":
-                if (_groups.TryGetValue(V(0).AsInt, out List<long>? gl))
+                if (EditableGroup(V(0).AsInt) is { } gl)
                     gl.Add(V(1).AsInt);
                 return Value.Zero;
             case "ENT_GROUPREMOVEENTITY":
             case "ENT_GROUPREMENTITY":
-                if (_groups.TryGetValue(V(0).AsInt, out List<long>? gr2))
-                    gr2.Remove(V(1).AsInt);
+                EditableGroup(V(0).AsInt)?.Remove(V(1).AsInt);
                 return Value.Zero;
             case "IA_CMDMOVETO":
                 foreach (long id in Members(V(0).AsInt))

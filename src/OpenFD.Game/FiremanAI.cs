@@ -25,7 +25,9 @@ public sealed partial class UnitManager
 
     /// <summary>Pompier inoccupé : il arrose de lui-même le feu qu'il voit à portée de sa lance (plus le recul qu'il garde
     /// devant le feu), sans mur entre eux et à peu près au même étage.</summary>
-    private readonly Dictionary<int, (uint fire, float until)> _autoGiveUp = new();
+    /// <summary>Feux qu'un pompier a renoncé à atteindre (pas de chemin), et jusqu'à quand : tous retenus, sans quoi deux feux
+    /// inaccessibles se relaient et il recherche sans fin un chemin de l'un à l'autre (Petrochemical : la partie se figeait).</summary>
+    private readonly Dictionary<int, Dictionary<uint, float>> _autoGiveUp = new();
 
     private void FiremanAutoAttack(Unit u)
     {
@@ -37,8 +39,11 @@ public sealed partial class UnitManager
         // il repère les feux bien au-delà de sa lance (AutoAttackRange, réglage du jeu) et s'en approche pour arroser
         // le plus proche de lui parmi ceux qu'il voit (après un ordre d'attaque : le plus proche du dernier feu demandé ou
         // éteint, FireFocus), sauf celui qu'il vient de renoncer à atteindre
-        uint skip = _autoGiveUp.TryGetValue(u.Id, out (uint fire, float until) g0) && g0.until > _s.Time ? g0.fire : uint.MaxValue;
-        if (FindVisibleFire(u, reach * MathF.Max(1, AutoAttackRange), float.MaxValue, nearest: true, skip: skip) is not { } best)
+        if (!_autoGiveUp.TryGetValue(u.Id, out Dictionary<uint, float>? given))
+            _autoGiveUp[u.Id] = given = new();
+        foreach (uint old in given.Where(kv => kv.Value <= _s.Time).Select(kv => kv.Key).ToList())
+            given.Remove(old);
+        if (FindVisibleFire(u, reach * MathF.Max(1, AutoAttackRange), float.MaxValue, nearest: true, skip: given) is not { } best)
             return;
         u.GoToVehicle = null;
         float d = Vector2.Distance(new(u.Position.X, u.Position.Y), new(best.Position.X, best.Position.Y));
@@ -49,11 +54,9 @@ public sealed partial class UnitManager
             return;
         }
         // feu hors d'atteinte (pas de chemin) : il n'insiste pas avant 10 s
-        if (_autoGiveUp.TryGetValue(u.Id, out (uint fire, float until) gu) && gu.fire == best.Id && gu.until > _s.Time)
-            return;
         Attack(u, best);
         if (!u.Moving && u.Target == null)
-            _autoGiveUp[u.Id] = (best.Id, _s.Time + 10);
+            given[best.Id] = _s.Time + 10;
     }
 
     /// <summary>Unité libre (ni ordre en cours, ni blessée, ni à bord) qui a encore de l'eau.</summary>
@@ -69,14 +72,14 @@ public sealed partial class UnitManager
     /// dans un angle de ± <paramref name="angle"/> autour de son cap (lance d'un véhicule) ; null s'il n'y en a pas.
     /// L'eau passe par-dessus les véhicules : seuls les murs et les portes fermées cachent le feu.
     /// </summary>
-    private HotPoint? FindVisibleFire(Unit u, float range, float angle, bool nearest = false, uint skip = uint.MaxValue, float? minRange = null)
+    private HotPoint? FindVisibleFire(Unit u, float range, float angle, bool nearest = false, IReadOnlyDictionary<uint, float>? skip = null, float? minRange = null)
     {
         Vector2 me = new Vector2(u.Position.X, u.Position.Y);
         HotPoint? best = null;
         float bs = float.MaxValue;
         foreach (HotPoint h in _s.Fire.HotPoints)
         {
-            if (!h.IsBurning || h.Id == skip || (h.Electrified && !WaterTruck(u)) || !AgentSuits(u, h))   // feu électrique sous tension, ou mauvais agent : jamais de leur plein gré
+            if (!h.IsBurning || skip?.ContainsKey(h.Id) == true || (h.Electrified && !WaterTruck(u)) || !AgentSuits(u, h))   // feu électrique sous tension, ou mauvais agent : jamais de leur plein gré
                 continue;
             Vector2 f = new Vector2(h.Position.X, h.Position.Y);
             float d = Vector2.Distance(me, f);

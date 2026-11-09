@@ -22,6 +22,8 @@ public sealed partial class UnitManager
     public static float VehicleFireFactor = 1.5f;
     /// <summary>Fumée épaisse sur l'endurance des pompiers.</summary>
     public static float SmokeFactor = 0.08f;
+    /// <summary>[DAMAGE] FIREDAMAGECOEF d'un pompier ordinaire (base_fireman.class) : référence de la combinaison ignifugée.</summary>
+    public const float FiremanFireDamageCoef = 5f;
     /// <summary>Soin à l'ambulance : endurance rendue par seconde (le jeu ne donne pas de valeur).</summary>
     public static float AmbulanceHeal = 12f;
     /// <summary>Distance (au centre de l'ambulance) jusqu'à laquelle une unité à pied s'y soigne.</summary>
@@ -87,7 +89,7 @@ public sealed partial class UnitManager
             foreach (Fire.SmokePoint sp in _s.Smoke.Points)
                 if (sp.Intensity > 1 && Vector3.DistanceSquared(sp.Position, u.Position) < sp.Class.InfluenceRange * sp.Class.InfluenceRange)
                     smoke += Math.Min(1, sp.Intensity / Math.Max(1, sp.Max));
-            float loss = (heat * u.HeatCoef * u.ScriptHeatCoef * HeatFactor + smoke * u.SmokeCoef * SmokeFactor * 10) * dt * StaminaLoss;
+            float loss = (heat * u.HeatCoef * u.ScriptHeatCoef * u.SuitHeatCoef * HeatFactor + smoke * u.SmokeCoef * SmokeFactor * 10) * dt * StaminaLoss;
             // près d'une ambulance (ou de l'hélicoptère posé), ou sur un poste de soins du niveau : toutes les unités à pied
             // (pompiers, médecin, chien, désincarcérateur…), arrêtées ou non ; la distance se compte depuis le centre du
             // véhicule, d'où une zone plus large que sa longueur

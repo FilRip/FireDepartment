@@ -329,6 +329,14 @@ public sealed class Interpreter
             case "COS": return Value.F(Math.Cos(V(0).AsNum));
             case "SIN": return Value.F(Math.Sin(V(0).AsNum));
             case "SQRT": return Value.F(Math.Sqrt(V(0).AsNum));
+            case "MOD":
+                // reste de la division : « mod(t, 7*fps) == 0 » fait un test toutes les 7 s (College, Street, Port…) ;
+                // absente, elle rendait 0 et ces tests tournaient à chaque passage
+                if (V(1).AsNum == 0)
+                    return Value.Zero;
+                if (V(0).Kind == VKind.Int && V(1).Kind == VKind.Int)
+                    return Value.I(V(0).AsInt % V(1).AsInt);
+                return Value.F(V(0).AsNum % V(1).AsNum);
         }
         return null;
     }

@@ -630,6 +630,11 @@ public sealed class PathFind
     public List<Vector2> FindPath(Vector2 from, Vector2 to) => FindPath(from, to, out _);
 
     private float[] _cost = Array.Empty<float>();
+    // dernière recherche échouée (voir FindPath) : sa génération, son pas de simulation, sa case de départ, ses règles, sa zone
+    private int _failGen = -1, _failStep = -1, _failStart = -1;
+    private (bool, bool, bool, bool, bool, bool, int, int) _failMode;
+    private List<int> _failSeen = new();
+    private HashSet<int> _failSet = new();
     private int[] _prev = Array.Empty<int>(), _gen = Array.Empty<int>();
     private int _curGen;
 
@@ -656,6 +661,13 @@ public sealed class PathFind
         if (sx == tx && sy == ty)
             return new() { to };
         PriorityQueue<(int x, int y), float> open = new PriorityQueue<(int x, int y), float>();
+        // même départ, même pas de simulation, mêmes règles de passage, juste après une recherche qui a échoué : la zone
+        // atteignable est déjà connue ; si le nouveau but est une case libre hors de cette zone, l'échec est le même
+        // (Petrochemical : un pompier essaie six places autour d'un feu inaccessible, chacune explorait toute la carte)
+        (bool, bool, bool, bool, bool, bool, int, int) mode = (PathingVehicle, PathingGrapple, PathingLadder, PathingBoat, PathingBreak, PathingUse, Clearance, SelfId);
+        int startKey = sy * g.Width + sx;
+        bool reuse = !_rescuing && _failGen == _curGen && _failStep == _s.Steps && _failStart == startKey && _failMode.Equals(mode)
+            && _cost.Length == g.Width * g.Height && Free(tx, ty) && !_failSet.Contains(ty * g.Width + tx);
         // coûts et prédécesseurs dans des tableaux réutilisés (une « génération » par recherche, sans tout remettre à zéro)
         int n = g.Width * g.Height;
         if (_cost.Length != n)
@@ -665,13 +677,13 @@ public sealed class PathFind
             _gen = new int[n];
             _curGen = 0;
         }
-        if (++_curGen == int.MaxValue)
+        if (!reuse && ++_curGen == int.MaxValue)
         {
             Array.Clear(_gen);
             _curGen = 1;
         }
         int gen = _curGen;
-        List<int> seen = new List<int>();
+        List<int> seen = reuse ? _failSeen : new List<int>();
         bool Has(int k) => _gen[k] == gen;
         void Set(int k, float c, int p)
         {
@@ -682,9 +694,31 @@ public sealed class PathFind
             _prev[k] = p;
         }
         int Key(int x, int y) => y * g.Width + x;
-        open.Enqueue((sx, sy), 0);
-        Set(Key(sx, sy), 0, -1);
+        // passages (escaliers, échelles) rangés par case : sans cela chaque case examinée parcourt toute la liste, et une
+        // recherche qui échoue sur une grande carte prenait une demi-seconde (Petrochemical)
+        Dictionary<int, List<int>>? linkAt = null;
+        if (!PathingVehicle && Links.Count > 0)
+        {
+            linkAt = new();
+            for (int li = 0; li < Links.Count; li++)
+            {
+                AddLink(Links[li].a, li);
+                if (Links[li].b != Links[li].a)
+                    AddLink(Links[li].b, li);
+            }
+        }
+        void AddLink(int cell, int li)
+        {
+            if (!linkAt!.TryGetValue(cell, out List<int>? l))
+                linkAt[cell] = l = new();
+            l.Add(li);
+        }
         int found = -1, guard = 0;
+        if (!reuse)
+        {
+            open.Enqueue((sx, sy), 0);
+            Set(Key(sx, sy), 0, -1);
+        }
         while (open.Count > 0 && guard++ < 200000)
         {
             (int x, int y) = open.Dequeue();
@@ -718,13 +752,14 @@ public sealed class PathFind
                     Set(k, c, Key(x, y));
                     open.Enqueue((nx, ny), c + MathF.Sqrt((tx - nx) * (tx - nx) + (ty - ny) * (ty - ny)));
                 }
-            if (PathingVehicle || Links.Count == 0)
-                continue;
             // échelle (pompiers qui y montent) ou escalier (tous les piétons) : de son pied à l'autre bout d'un seul pas,
             // compté comme une vingtaine de cases (la montée est lente)
             int here = Key(x, y);
-            foreach ((int la, int lb, bool closed, bool breakable, bool usable, bool ladder) in Links)
+            if (linkAt == null || !linkAt.TryGetValue(here, out List<int>? linksHere))
+                continue;
+            foreach (int li in linksHere)
             {
+                (int la, int lb, bool closed, bool breakable, bool usable, bool ladder) = Links[li];
                 int other = la == here ? lb : lb == here ? la : -1;
                 if (other < 0 || (ladder && !PathingLadder))
                     continue;
@@ -739,7 +774,17 @@ public sealed class PathFind
             }
         }
         if (Environment.GetEnvironmentVariable("FD3_DEBUG_CHEMIN") != null)
-            Console.WriteLine($"recherche ({sx},{sy}) → ({tx},{ty}) : {guard} cases examinées, {(found >= 0 ? "trouvé" : "non trouvé")}, grille {g.Width}×{g.Height}");
+            Console.WriteLine($"recherche ({sx},{sy}) → ({tx},{ty}) : {guard} cases examinées, {(found >= 0 ? "trouvé" : "non trouvé")}{(reuse ? " (zone déjà connue)" : "")}, grille {g.Width}×{g.Height}");
+        // échec sur une grande zone (toute la zone atteignable explorée) : retenu pour les recherches suivantes du même pas
+        if (found < 0 && !reuse && !_rescuing && seen.Count >= PocketMax && guard < 200000)
+        {
+            _failGen = gen;
+            _failStep = _s.Steps;
+            _failStart = startKey;
+            _failMode = mode;
+            _failSeen = seen;
+            _failSet = seen.ToHashSet();
+        }
         // départ dans une petite poche fermée de toutes parts (resté sur un palier d'un autre étage, dans un mur) : il en sort
         // par la case libre la plus proche hors de la poche, sinon il ne pourrait plus jamais bouger
         if (found < 0 && seen.Count < PocketMax && !_rescuing && NearestOutside(g, sx, sy, seen.ToHashSet()) is Vector2 way)
