@@ -17,6 +17,8 @@ public sealed class Teleport
     public float HeightA, HeightB;
     public int CellA = -1, CellB = -1;
     public bool Active;
+    /// <summary>Caché au départ dans la carte : utilisable une fois que le script le montre (Suburb : ENT_SetVisibility(ent_tp1, 1)).</summary>
+    public bool StartHidden;
     /// <summary>Faux escalier (Lab : les deux icônes au même endroit) : il n'emmène nulle part, il affiche un message (ON_ENTER).</summary>
     public bool Fake;
     public float Duration = 1;

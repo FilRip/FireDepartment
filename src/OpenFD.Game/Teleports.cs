@@ -27,7 +27,7 @@ public sealed partial class UnitManager
                 Id = o.Id, Name = o.Name,
                 EndA = new Vector2(a.Position.X, a.Position.Y), EndB = new Vector2(b.Position.X, b.Position.Y),
                 HeightA = a.Position.Z, HeightB = b.Position.Z,
-                Active = o.StartVisible,
+                Active = true, StartHidden = !o.StartVisible,
             };
             ReadTeleportBlock(o, t);
             t.Fake = Vector2.Distance(t.EndA, t.EndB) < 50;   // « faux escalier » (Lab : Fake_Stair_Message) : les deux icônes au même endroit
@@ -80,7 +80,7 @@ public sealed partial class UnitManager
             Vector2 foot = new Vector2(b.X, b.Y), up = new Vector2(ex.X, ex.Y);
             Teleports.Add(new Teleport
             {
-                Id = o.Id, Name = o.Name, EndA = up, HeightA = ex.Z, Active = o.StartVisible, Walk = true, Vertical = true,
+                Id = o.Id, Name = o.Name, EndA = up, HeightA = ex.Z, Active = true, StartHidden = !o.StartVisible, Walk = true, Vertical = true,
                 Foot = foot, LadderBottom = b, LadderTop = tp, LadderHeading = MathF.Atan2(up.Y - foot.Y, up.X - foot.X),
                 Duration = 1,
             });
@@ -216,9 +216,10 @@ public sealed partial class UnitManager
             t.Active = on;
     }
 
-    // escalier utilisable : actif, et visible (le script peut le cacher ou le montrer : ENT_SetVisibility)
+    // escalier utilisable : actif, et visible (le script peut le cacher ou le montrer : ENT_SetVisibility ; sans ordre du
+    // script, comme dans la carte)
     private bool TeleportUsable(Teleport t) =>
-        t.Active && t.CellA >= 0 && t.CellB >= 0 && !(_s.Host?.Visibility.TryGetValue(t.Id, out bool vis) == true && !vis);
+        t.Active && t.CellA >= 0 && t.CellB >= 0 && (_s.Host?.Visibility.TryGetValue(t.Id, out bool vis) == true ? vis : !t.StartHidden);
 
     /// <summary>À chaque pas : cases des bouts (une fois) et passages des escaliers utilisables pour la recherche de chemin.</summary>
     private void UpdateTeleportLinks()

@@ -1745,6 +1745,26 @@ public static class Program
                 }
                 return 0;
             }
+            case "escaliersvisibles":
+            {
+                // escaliersvisibles <Data> <Mission> <secondes> : quand chaque escalier devient utilisable (icône sous le curseur),
+                // sans rien forcer : le script le montre ou le cache
+                Session ses = new Session(files, args[2], "EASY");
+                float until = float.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture);
+                Dictionary<string, bool> last = new();
+                while (ses.Time < until)
+                {
+                    ses.Step();
+                    foreach (Teleport t in ses.Units.Teleports)
+                    {
+                        bool ok = ses.Units.TeleportEndNear(t.EndA);
+                        if (!last.TryGetValue(t.Name, out bool was) || was != ok)
+                            Console.WriteLine($"{ses.Time,6:0.0} s {t.Name} : {(ok ? "utilisable" : "inutilisable")} (caché au départ {t.StartHidden})");
+                        last[t.Name] = ok;
+                    }
+                }
+                return 0;
+            }
             case "escaliers":
             {
                 // escaliers <Data> <Mission> : escaliers du niveau ; un pompier envoyé sur la première icône de chacun
@@ -1876,7 +1896,8 @@ public static class Program
                 // octetsfenetres <Data> <Mission> : octets des composants de chaque fenêtre ; les positions qui diffèrent d'une fenêtre à l'autre
                 Session ses = new Session(files, args[2], "EASY", false);
                 Dictionary<uint, LevelObject> byId = ses.Level.Objects.ToDictionary(o => o.Id);
-                List<LevelObject> wins = ses.Units.Openings.Where(o => o.IsWindow).Select(o => byId[o.Id]).ToList();
+                bool doors = Environment.GetEnvironmentVariable("OPENFD_PORTES") != null;   // les portes au lieu des fenêtres
+                List<LevelObject> wins = ses.Units.Openings.Where(o => o.IsWindow != doors).Select(o => byId[o.Id]).ToList();
                 foreach (ushort cid in wins.SelectMany(w => w.Components.Select(c => c.Id)).Distinct().OrderBy(x => x))
                 {
                     List<byte[]> all = wins.Where(w => w.GetComponent(cid) != null).Select(w => w.ComponentBytes(w.GetComponent(cid)!).ToArray()).ToList();
