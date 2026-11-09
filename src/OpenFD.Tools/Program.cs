@@ -1745,6 +1745,64 @@ public static class Program
                 }
                 return 0;
             }
+            case "vehicules":
+            {
+                // vehicules <Data> <Mission> <secondes> : état des véhicules à la fin (roule, garé, équipage encore à bord)
+                Session ses = new Session(files, args[2], "EASY");
+                float until = float.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture);
+                while (ses.Time < until)
+                    ses.Step();
+                foreach (Unit v in ses.Units.Units.Where(u => u.IsVehicle))
+                    Console.WriteLine($"{v.Name,-28} ({v.Position.X:0},{v.Position.Y:0}) {(v.Moving ? "roule" : "arrêté")} · {v.Status} · équipage à bord {v.Crew.Count} · manœuvres {v.TurnTries}");
+                Console.WriteLine($"unités {ses.Units.Units.Count}");
+                return 0;
+            }
+            case "virage":
+            {
+                // virage <Data> <Mission> : un camion à l'arrêt envoyé vers un point sur son côté (3 à 12 m), devant ou derrière ;
+                // arrive-t-il, en combien de temps, de combien a-t-il tourné (tourner en rond : plusieurs tours)
+                Session ses = new Session(files, args[2], "EASY", false);
+                Unit truck = ses.Units.Units.First(u => u.IsVehicle && !u.Fixed);
+                Grid g = ses.Grid!;
+                // grande place libre : un carré de 20 m sans obstacle pour un véhicule
+                System.Numerics.Vector2? open = null;
+                for (int y = 20; y < g.Height - 20 && open == null; y += 3)
+                    for (int x = 20; x < g.Width - 20 && open == null; x += 3)
+                    {
+                        bool ok = true;
+                        for (int dy = -10; dy <= 10 && ok; dy++)
+                            for (int dx = -10; dx <= 10 && ok; dx++)
+                                ok = ses.Units.Paths.WalkableCell(x + dx, y + dy) && MathF.Abs(g.GroundHeight[g.Index(x + dx, y + dy)] - g.GroundHeight[g.Index(x, y)]) < 50;
+                        if (ok)
+                            open = new System.Numerics.Vector2((x + 0.5f) * Grid.CellSize, (y + 0.5f) * Grid.CellSize);
+                    }
+                if (open is not { } c)
+                {
+                    Console.WriteLine("pas de grande place libre");
+                    return 1;
+                }
+                Console.WriteLine($"{truck.Name} rayon de braquage {truck.TurnRadius:0} ; place libre ({c.X:0},{c.Y:0})");
+                foreach ((float sx, float sy) in new[] { (0f, 300f), (0f, 500f), (0f, 800f), (0f, 1200f), (300f, 400f), (-300f, 500f), (-200f, 0f) })
+                {
+                    ses.Units.Teleport(truck, c);
+                    truck.Heading = 0;
+                    truck.Path.Clear();
+                    truck.CurSpeed = 0;
+                    truck.Reversing = 0;
+                    System.Numerics.Vector2 goal = c + new System.Numerics.Vector2(sx, sy);
+                    bool ok = ses.Units.Drive(truck, goal);
+                    float turned = 0, prevH = truck.Heading, t0 = ses.Time;
+                    while (truck.Moving && ses.Time - t0 < 40)
+                    {
+                        ses.Step();
+                        turned += MathF.Abs(MathF.IEEERemainder(truck.Heading - prevH, 2 * MathF.PI));
+                        prevH = truck.Heading;
+                    }
+                    float dist = System.Numerics.Vector2.Distance(new(truck.Position.X, truck.Position.Y), goal);
+                    Console.WriteLine($"  but ({sx:0},{sy:0}) ordre {ok} : {(truck.Moving ? "TOURNE ENCORE après 40 s" : $"arrêté en {ses.Time - t0:0.0} s")} à {dist:0} du but, a tourné de {turned * 180 / MathF.PI:0}°");
+                }
+                return 0;
+            }
             case "escaliersvisibles":
             {
                 // escaliersvisibles <Data> <Mission> <secondes> : quand chaque escalier devient utilisable (icône sous le curseur),

@@ -123,6 +123,7 @@ public sealed class Unit
     public string? Icon;                                  // [UNIT] Icon : image de l'unité (Data\Overlay\Textures)
     public float Reversing, ManeuverLeft;                 // véhicule : marche arrière restante ; longueur de la manœuvre en cours
     public int ManeuverDir;                               // -1 recule, 1 avance
+    public int TurnTries;                                 // véhicule : manœuvres pour sortir un point du cercle de braquage
     /// <summary>Unité créée par le script de la mission (ENT_CreateUnitPath) : son nom dans le script.</summary>
     public string? ScriptName;
     /// <summary>Cachée par le script (ENT_SetVisibility 0) : ni dessinée, ni choisie, ni comptée.</summary>

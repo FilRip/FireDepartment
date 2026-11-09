@@ -145,6 +145,22 @@ public sealed partial class UnitManager
     /// <summary>Vitesse minimale d'un véhicule en route (unités par seconde).</summary>
     public const float MinCreep = 150f;
 
+    /// <summary>Dernier point du chemin dans le cercle de braquage, à moins de cette distance : le véhicule est arrivé.</summary>
+    public const float ArriveSlack = 350f;
+    /// <summary>Manœuvres (marche arrière) au plus pour sortir un point du cercle de braquage ; ensuite il s'arrête là.</summary>
+    public const int MaxTurnTries = 3;
+
+    /// <summary>
+    /// Point t dans le cercle que décrit le véhicule en braquant à fond du côté où il est (diff : son angle par rapport au
+    /// cap) : en avant, il tournerait autour sans jamais l'atteindre.
+    /// </summary>
+    private static bool InsideTurnCircle(Unit v, Vector2 p, Vector2 t, float diff)
+    {
+        float side = MathF.Sign(diff);
+        Vector2 center = p + new Vector2(-MathF.Sin(v.Heading), MathF.Cos(v.Heading)) * v.TurnRadius * side;
+        return Vector2.Distance(center, t) < v.TurnRadius * 0.9f;
+    }
+
     private void VehicleMove(Unit v, float dt)
     {
         if (v.Path.Count == 0)
@@ -179,11 +195,27 @@ public sealed partial class UnitManager
             if (len < 40)
             {
                 v.Path.Dequeue();
+                v.TurnTries = 0;
                 if (v.Reversing < 0)
                     v.Reversing = 0;
                 continue;
             }
             float diff = MathF.IEEERemainder(MathF.Atan2(d.Y, d.X) - v.Heading, 2 * MathF.PI);
+            bool inCircle = MathF.Abs(diff) > 0.3f && InsideTurnCircle(v, p, t, diff);
+            // point dans le cercle de braquage (sur le côté, trop près) : il tournerait en rond autour. Tout près du bout
+            // du chemin, il est arrivé ; sinon il recule en braquant pour le sortir du cercle, puis repart en avant ;
+            // après quelques essais, il s'arrête là
+            if (v.Reversing == 0 && inCircle)
+            {
+                if ((v.Path.Count == 1 && len < ArriveSlack) || v.TurnTries >= MaxTurnTries)
+                {
+                    v.Path.Clear();
+                    v.TurnTries = 0;
+                    break;
+                }
+                v.TurnTries++;
+                v.Reversing = 700;
+            }
             // cible derrière : marche arrière en braquant (7 m au plus), jusqu'à pouvoir repartir en avant
             // (Reversing < 0 : marche arrière finie ou impossible, on repart en avant)
             if (v.Reversing > 0 || (v.Reversing == 0 && MathF.Abs(diff) > 2.0f && len > 250))
@@ -191,7 +223,7 @@ public sealed partial class UnitManager
                 if (v.Reversing <= 0)
                     v.Reversing = 700;
                 float s = MathF.Min(step, (v.BackSpeed > 0 ? v.BackSpeed : v.Speed * 0.5f) * dt);   // marche arrière : BackwardSpeed
-                if (MathF.Abs(diff) < 1.0f)
+                if (MathF.Abs(diff) < 1.0f && !inCircle)
                     v.Reversing = -1;
                 else if (!DriveArc(v, s, -1, MathF.Sign(diff)))
                     v.Reversing = -1;
