@@ -366,10 +366,28 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         }
     }
 
+    private MouseState _clickPrev;
+
+    /// <summary>Chaque bouton de la souris enfoncé, partout (menus, briefing, partie) : le clic du jeu (UI_GAME_cLIC).</summary>
+    private void ClickSound()
+    {
+        MouseState m = Mouse.GetState();
+        bool inside = m.X >= 0 && m.Y >= 0 && m.X < Window.ClientBounds.Width && m.Y < Window.ClientBounds.Height;
+        bool pressed = (m.LeftButton == ButtonState.Pressed && _clickPrev.LeftButton == ButtonState.Released)
+            || (m.RightButton == ButtonState.Pressed && _clickPrev.RightButton == ButtonState.Released)
+            || (m.MiddleButton == ButtonState.Pressed && _clickPrev.MiddleButton == ButtonState.Released);
+        _clickPrev = m;
+        if (!pressed || !inside || !IsActive || _audio == null)
+            return;
+        _audio.Play("UI_GAME_cLIC");
+        _audio.ReleaseFinished();
+    }
+
     protected override void Update(GameTime gameTime)
     {
         float dt = (float)Math.Min(0.1, gameTime.ElapsedGameTime.TotalSeconds);
         AltEnter();
+        ClickSound();
         _fbW = GraphicsDevice.PresentationParameters.BackBufferWidth;
         _fbH = GraphicsDevice.PresentationParameters.BackBufferHeight;
         _winW = Math.Max(1, Window.ClientBounds.Width);
@@ -1328,6 +1346,12 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _dist = MathF.Max(_sceneMax.X - _sceneMin.X, _sceneMax.Y - _sceneMin.Y) * 0.75f;
         _mapCenter = new(_target.X, _target.Y);
         _mapScale = 0;
+        // caméra de départ prévue par la carte : repère de la classe « cam_startpos » (Mriya : cam_startpos1 ; Factory :
+        // cam_startpos, l'autre, cam_renfort, sert à la cinématique ; London : cat1_cam_0) ; sinon toute la carte
+        LevelObject? start = _session.Level.Objects.Where(o => o.Kind == EntityKind.Waypoint && o.ClassName.Equals("cam_startpos", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(o => o.Name.Equals("cam_startpos", StringComparison.OrdinalIgnoreCase) ? 0 : 1).FirstOrDefault();
+        if (start != null)
+            ApplyPose(WaypointPose(start));
         BuildGridTexture();
         LoadMinimap();
         Window.Title = $"Open Fire Department - {mission} ({DiffName})";
