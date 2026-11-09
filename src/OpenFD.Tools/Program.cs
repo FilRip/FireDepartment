@@ -1745,6 +1745,40 @@ public static class Program
                 }
                 return 0;
             }
+            case "renfortsaccordes":
+            {
+                // renfortsaccordes <Data> <Mission> <secondes> : renforts proposés, choisis (5 s après) et arrivés, au fil du temps
+                Session ses = new Session(files, args[2], "EASY");
+                float until = float.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture);
+                string lastTeams = "";
+                int logSeen = 0, units = -1;
+                float? offeredAt = null;
+                while (ses.Time < until)
+                {
+                    ses.Step();
+                    string teams = string.Join(",", ses.Units.ChoosableTeams);
+                    if (teams != lastTeams)
+                    {
+                        Console.WriteLine($"{ses.Time,6:0} s casernes à choisir : [{teams}]");
+                        lastTeams = teams;
+                        offeredAt = teams.Length > 0 ? ses.Time : null;
+                    }
+                    if (offeredAt is { } at && ses.Time - at > 5 && ses.Units.ChoosableTeams.FirstOrDefault() is { } pick)
+                    {
+                        ses.Units.ChooseReinforcement(pick);
+                        offeredAt = null;
+                    }
+                    for (; logSeen < ses.Units.Log.Count; logSeen++)
+                        if (ses.Units.Log[logSeen].Contains("renfort", StringComparison.OrdinalIgnoreCase) || ses.Units.Log[logSeen].Contains("arriv", StringComparison.OrdinalIgnoreCase))
+                            Console.WriteLine("   " + ses.Units.Log[logSeen].Trim());
+                    if (ses.Units.Units.Count != units)
+                    {
+                        Console.WriteLine($"{ses.Time,6:0} s unités sur la carte : {ses.Units.Units.Count}");
+                        units = ses.Units.Units.Count;
+                    }
+                }
+                return 0;
+            }
             case "vehicules":
             {
                 // vehicules <Data> <Mission> <secondes> : état des véhicules à la fin (roule, garé, équipage encore à bord)

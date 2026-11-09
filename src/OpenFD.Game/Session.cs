@@ -79,7 +79,8 @@ public sealed class Session
         // le script fait-il venir lui-même les équipes ?
         string text = string.Concat(dirs.Skip(1).Where(Directory.Exists).SelectMany(d => Directory.EnumerateFiles(d, "*.scp")).Select(f => File.ReadAllText(f, System.Text.Encoding.Latin1)));
         bool Calls(string fn) => System.Text.RegularExpressions.Regex.IsMatch(text, @"^[^/\r\n]*\b" + fn + @"\s*\(", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        Units.ScriptDispatch(Calls("LEV_CallInitialDispatch"), Calls("LEV_GrantReinforcement") || Calls("LEV_CallReinforcement") || Calls("LEV_GrantReinforcementSet"));
+        Units.ScriptDispatch(Calls("LEV_CallInitialDispatch"), Calls("LEV_GrantReinforcement") || Calls("LEV_CallReinforcement") || Calls("LEV_GrantReinforcementSet")
+            || Calls("LEV_GrantSpecificReinforcement"));
         _mainLoops = new[] { mis.Get("SCRIPT", "MissionScript1"), mis.Get("SCRIPT", "MissionScript2") }
             .Where(x => !string.IsNullOrEmpty(x)).Select(x => x!).ToArray();
         string? autoexec = mis.Get("SCRIPT", "AutoExecScript");

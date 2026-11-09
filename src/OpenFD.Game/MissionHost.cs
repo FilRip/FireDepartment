@@ -695,6 +695,10 @@ public sealed class MissionHost : IScriptHost
                 if (Units?.Openings.FirstOrDefault(d => d.Id == (uint)V(0).AsInt) is { } st)
                     return Value.T(st.State switch { OpeningState.Open => "Open", OpeningState.Broken => "Broken", _ => "Close" });
                 return Value.T(SwitchedStates.TryGetValue((uint)V(0).AsInt, out bool sw) && sw ? "Open" : "Close");
+            // LEV_GrantSpecificReinforcement(n) : le renfort n (1, 2, 3…) est proposé au joueur, seul (Train : le renfort mousse)
+            case "LEV_GRANTSPECIFICREINFORCEMENT":
+                Units?.GrantSpecificReinforcement((int)V(0).AsInt);
+                return Value.Zero;
             // LEV_CallReinforcement(n) / LEV_GrantReinforcementSet(n) : envoie le renfort n (1, 2, 3…)
             case "LEV_CALLREINFORCEMENT": case "LEV_GRANTREINFORCEMENTSET":
                 Units?.CallReinforcement((int)V(0).AsInt);
