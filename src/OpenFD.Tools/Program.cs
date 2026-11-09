@@ -1871,6 +1871,213 @@ public static class Program
                 Console.WriteLine($"{found.Count} matériau(x) avec reflet");
                 return 0;
             }
+            case "octetsfenetres":
+            {
+                // octetsfenetres <Data> <Mission> : octets des composants de chaque fenêtre ; les positions qui diffèrent d'une fenêtre à l'autre
+                Session ses = new Session(files, args[2], "EASY", false);
+                Dictionary<uint, LevelObject> byId = ses.Level.Objects.ToDictionary(o => o.Id);
+                List<LevelObject> wins = ses.Units.Openings.Where(o => o.IsWindow).Select(o => byId[o.Id]).ToList();
+                foreach (ushort cid in wins.SelectMany(w => w.Components.Select(c => c.Id)).Distinct().OrderBy(x => x))
+                {
+                    List<byte[]> all = wins.Where(w => w.GetComponent(cid) != null).Select(w => w.ComponentBytes(w.GetComponent(cid)!).ToArray()).ToList();
+                    int len = all.Max(b => b.Length);
+                    List<int> diff = Enumerable.Range(0, len).Where(i => all.Select(b => i < b.Length ? b[i] : -1).Distinct().Count() > 1).ToList();
+                    Console.WriteLine($"{cid:X4} : {all.Count} fenêtres, {all.Select(b => b.Length).Distinct().Count()} longueur(s) ({string.Join("/", all.Select(b => b.Length).Distinct())}), octets qui varient : {string.Join(",", diff.Take(40))}");
+                    if (args.Length > 3 && args[3].Equals(cid.ToString("X4"), StringComparison.OrdinalIgnoreCase))
+                        foreach ((LevelObject w, byte[] b) in wins.Zip(all).Take(int.Parse(args.Length > 4 ? args[4] : "12")))
+                            Console.WriteLine($"   {w.Name,-30} {BitConverter.ToString(b).Replace("-", " ")}");
+                }
+                return 0;
+            }
+            case "etatsfenetres":
+            {
+                // etatsfenetres <Data> : état de départ (composant A027) des fenêtres de chaque mission, et états logiques de leur classe
+                foreach (string dir in Directory.GetDirectories(Path.Combine(args[1], "Script", "Mission")).OrderBy(d => d))
+                {
+                    string mission = Path.GetFileName(dir);
+                    try
+                    {
+                        Session ses = new Session(files, mission, "EASY", false);
+                        Dictionary<uint, LevelObject> byId = ses.Level.Objects.ToDictionary(o => o.Id);
+                        List<Opening> wins = ses.Units.Openings.Where(o => o.IsWindow).ToList();
+                        string counts = $"{wins.Count(w => w.State == OpeningState.Broken)} cassée(s) au départ ; portes cassées au départ : {ses.Units.Openings.Count(o => !o.IsWindow && o.State == OpeningState.Broken)}";
+                        string ex = string.Join(", ", wins.Where(w => w.State == OpeningState.Broken).Take(4).Select(w => w.Name)
+                            .Concat(ses.Units.Openings.Where(o => !o.IsWindow && o.State == OpeningState.Broken).Take(4).Select(o => "porte " + o.Name)));
+                        Console.WriteLine($"{mission,-14} {wins.Count,4} fenêtres : {counts}{(ex.Length > 0 ? " · ex. " + ex : "")}");
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine($"{mission,-14} impossible : {e.Message}");
+                    }
+                }
+                return 0;
+            }
+            case "pente":
+            {
+                // pente <Data> <Mission> : chaque camion à lance et chaque canon, posé tour à tour en haut d'une pente au-dessus d'un feu
+                // (sol plus haut de 3,6 m au moins), à portée de lance : voit-il les feux plus de 3,5 m plus bas que lui ?
+                Session ses = new Session(files, args[2], "EASY");
+                for (int i = 0; i < (int)(30 / Session.Dt); i++)
+                    ses.Step();
+                Unit? truck = ses.Units.Units.FirstOrDefault(u => u.IsVehicle && u.Nozzle != null && !u.Destroyed);
+                if (truck == null)
+                {
+                    Console.WriteLine("pas de camion à lance");
+                    return 1;
+                }
+                int tried = 0, seen = 0;
+                foreach (Fire.HotPoint h in ses.Fire.HotPoints.Where(h => h.IsBurning && truck.Nozzle!.Suits(h.Class.FireType)))
+                {
+                    System.Numerics.Vector2 f = new System.Numerics.Vector2(h.Position.X, h.Position.Y);
+                    for (int k = 0; k < 24; k++)
+                    {
+                        System.Numerics.Vector2 p = f + new System.Numerics.Vector2(MathF.Cos(k * MathF.PI / 12), MathF.Sin(k * MathF.PI / 12)) * truck.Nozzle!.RangeMax * 0.6f;
+                        (int cx, int cy) = ses.Grid!.CellOf(new System.Numerics.Vector3(p, 0));
+                        if (ses.Units.GroundZ(p) - h.Position.Z < 360 || !ses.Units.Paths.WalkableCell(cx, cy))
+                            continue;
+                        ses.Units.Teleport(truck, p);
+                        Dictionary<uint, float> skip = ses.Fire.HotPoints.Where(o => o.Position.Z - truck.Position.Z >= -350).ToDictionary(o => o.Id, o => float.MaxValue);
+                        Fire.HotPoint? got = ses.Units.VisibleFireForTest(truck, skip);
+                        tried++;
+                        seen += got != null ? 1 : 0;
+                        if (tried <= 6)
+                        {
+                            float step = 0, prevZ = ses.Units.GroundZ(p);
+                            int nn = (int)(System.Numerics.Vector2.Distance(p, f) / 50) + 1;
+                            for (int q = 1; q <= nn; q++)
+                            {
+                                float z = ses.Units.GroundZ(System.Numerics.Vector2.Lerp(p, f, (float)q / nn));
+                                step = MathF.Max(step, MathF.Abs(z - prevZ));
+                                prevZ = z;
+                            }
+                            Console.WriteLine($"  camion à ({p.X:0},{p.Y:0}) hauteur {truck.Position.Z:0} ; {h.Name} à {h.Position.Z:0} (sol {ses.Units.GroundZ(f):0}, plus grande marche {step:0}, jet libre {ses.Units.Paths.WaterLineFree(p, f - System.Numerics.Vector2.Normalize(f - p) * 120)}, obstacles {string.Join("/", Enumerable.Range(1, (int)(System.Numerics.Vector2.Distance(p, f) / 40)).Select(q => ses.Grid!.CellOf(new System.Numerics.Vector3(System.Numerics.Vector2.Lerp(p, f, q * 40 / System.Numerics.Vector2.Distance(p, f)), 0))).Select(c => ses.Grid!.Index(c.Item1, c.Item2)).Distinct().Select(k => ses.Units.Paths.BlockedBy.TryGetValue(k, out string? bb) ? bb : ses.Grid!.ZoneA[k] == 0 ? "zoneA0" : "").Where(x => x != "").Distinct())}) : voit {(got == null ? "rien" : $"{got.Name} (dz {got.Position.Z - truck.Position.Z:0})")}");
+                        }
+                        break;
+                    }
+                }
+                Console.WriteLine($"{tried} essais en haut d'une pente : un feu plus bas vu {seen} fois");
+                return 0;
+            }
+            case "vuefenetre":
+            {
+                // vuefenetre <Data> <Mission> : pour chaque fenêtre au sol, vue d'un point à 3 m devant elle vers un point à 3 m derrière,
+                // vitre intacte puis cassée (on n'arrose par une fenêtre qu'une fois la vitre cassée)
+                Session ses = new Session(files, args[2], "EASY", false);
+                Grid g = ses.Grid!;
+                int tried = 0, seenShut = 0, seenBroken = 0;
+                foreach (Opening w in ses.Units.Openings.Where(o => o.IsWindow && o.State == OpeningState.Closed))
+                    foreach (System.Numerics.Vector2 dir in new[] { System.Numerics.Vector2.UnitX, System.Numerics.Vector2.UnitY })
+                    {
+                        System.Numerics.Vector2 c = new System.Numerics.Vector2(w.Center.X, w.Center.Y), a = c - dir * 300, b = c + dir * 300;
+                        (int ax, int ay) = g.CellOf(new System.Numerics.Vector3(a, 0));
+                        (int bx, int by) = g.CellOf(new System.Numerics.Vector3(b, 0));
+                        if (!ses.Units.Paths.WalkableCell(ax, ay) || !ses.Units.Paths.WalkableCell(bx, by))
+                            continue;
+                        tried++;
+                        bool shut = ses.Units.Paths.LineFree(a, b, ignoreFire: true) && !ses.Units.WallBetween(a, b + (b - a) * 0.5f);
+                        ses.Units.SetOpeningState(w, OpeningState.Broken);
+                        bool broken = ses.Units.Paths.LineFree(a, b, ignoreFire: true) && !ses.Units.WallBetween(a, b + (b - a) * 0.5f);
+                        ses.Units.SetOpeningState(w, OpeningState.Closed);
+                        seenShut += shut ? 1 : 0;
+                        seenBroken += broken ? 1 : 0;
+                    }
+                Console.WriteLine($"{tried} vues au travers d'une fenêtre : {seenShut} dégagées vitre intacte, {seenBroken} dégagées vitre cassée");
+                return 0;
+            }
+            case "passefenetres":
+            {
+                // passefenetres <Data> <Mission> : chemins à pied d'un côté à l'autre de chaque fenêtre (2,5 m de part et d'autre) ;
+                // combien passent par une fenêtre, avec et sans l'interdiction (PathFind.WindowCell)
+                Session ses = new Session(files, args[2], "EASY", false);
+                Grid g = ses.Grid!;
+                PathFind pf = ses.Units.Paths;
+                List<Opening> windows = ses.Units.Openings.Where(o => o.IsWindow).ToList();
+                bool Through(List<System.Numerics.Vector2> path, System.Numerics.Vector2 from, bool[] win)
+                {
+                    System.Numerics.Vector2 cur = from;
+                    foreach (System.Numerics.Vector2 q in path)
+                    {
+                        int n = (int)(System.Numerics.Vector2.Distance(cur, q) / 30) + 1;
+                        for (int i = 1; i <= n; i++)
+                        {
+                            (int cx, int cy) = g.CellOf(new System.Numerics.Vector3(System.Numerics.Vector2.Lerp(cur, q, (float)i / n), 0));
+                            if (g.Inside(cx, cy) && win[g.Index(cx, cy)])
+                                return true;
+                        }
+                        cur = q;
+                    }
+                    return false;
+                }
+                bool[] marks = pf.WindowCell;
+                foreach (bool forbid in new[] { false, true })
+                {
+                    pf.WindowCell = forbid ? marks : new bool[marks.Length];
+                    int tried = 0, through = 0;
+                    foreach (Opening w in windows)
+                        foreach (System.Numerics.Vector2 dir in new[] { System.Numerics.Vector2.UnitX, System.Numerics.Vector2.UnitY })
+                        {
+                            System.Numerics.Vector2 c = new System.Numerics.Vector2(w.Center.X, w.Center.Y), a = c - dir * 250, b = c + dir * 250;
+                            (int ax, int ay) = g.CellOf(new System.Numerics.Vector3(a, 0));
+                            (int bx, int by) = g.CellOf(new System.Numerics.Vector3(b, 0));
+                            if (!pf.WalkableCell(ax, ay) || !pf.WalkableCell(bx, by))
+                                continue;
+                            List<System.Numerics.Vector2> path = pf.FindPath(a, b, out bool partial);
+                            if (path.Count == 0 || partial)
+                                continue;
+                            tried++;
+                            if (Through(path, a, marks))
+                            {
+                                through++;
+                                if (forbid)
+                                {
+                                    (int wx, int wy) = g.CellOf(w.Center);
+                                    Console.WriteLine("    cases autour : " + string.Join(" ", Enumerable.Range(-2, 5).SelectMany(oy => Enumerable.Range(-2, 5).Select(ox => (ox, oy)))
+                                        .Where(o => g.Inside(wx + o.ox, wy + o.oy)).Select(o => { int k = g.Index(wx + o.ox, wy + o.oy); return $"{o.ox},{o.oy}:{(pf.IsWindowCell(k) ? "F" : pf.WalkableCell(wx + o.ox, wy + o.oy) ? "." : "#")}{(pf.Links.Any(l => l.a == k || l.b == k) ? "L" : "")}"; })));
+                                }
+                                if (forbid)
+                                    Console.WriteLine($"  {w.Name} ({c.X:0},{c.Y:0}) cases {w.Cells.Count} emprise ({w.BoxMin.X:0},{w.BoxMin.Y:0})-({w.BoxMax.X:0},{w.BoxMax.Y:0}) : ({a.X:0},{a.Y:0}) → " + string.Join(" → ", path.Select(q => $"({q.X:0},{q.Y:0})")));
+                            }
+                        }
+                    Console.WriteLine($"{(forbid ? "avec" : "sans")} l'interdiction : {windows.Count} fenêtres, {marks.Count(x => x)} cases de fenêtre, {tried} chemins d'un côté à l'autre, {through} passent par une fenêtre");
+                }
+                return 0;
+            }
+            case "ciblesauto":
+            {
+                // ciblesauto <Data> <Mission> <secondes> : feux que les unités à lance arrosent sans ordre (type de feu, agent)
+                Session ses = new Session(files, args[2], "EASY");
+                float until = float.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture);
+                Dictionary<int, uint> last = new();
+                bool placed = args.Length <= 4;   // ciblesauto … carburant : à 40 s, un camion à lance posé près des feux du mauvais type
+                while (ses.Time < until)
+                {
+                    ses.Step();
+                    if (!placed && ses.Time > 40)
+                    {
+                        placed = true;
+                        Unit? truck = ses.Units.Units.FirstOrDefault(u => u.IsVehicle && u.Nozzle != null && !u.Destroyed);
+                        Fire.HotPoint? wrong = truck == null ? null : ses.Fire.HotPoints.Where(h => h.IsBurning && !truck.Nozzle!.Suits(h.Class.FireType)).OrderByDescending(h => h.Intensity).FirstOrDefault();
+                        if (truck != null && wrong != null)
+                        {
+                            ses.Units.Teleport(truck, ses.Units.Paths.Walkable(new System.Numerics.Vector2(wrong.Position.X - truck.Nozzle!.RangeMax * 0.6f, wrong.Position.Y)));
+                            truck.Path.Clear();
+                            truck.Target = null;
+                            Console.WriteLine($"{truck.Name} posé à {System.Numerics.Vector3.Distance(truck.Position, wrong.Position):0} de {wrong.Name} (type {wrong.Class.FireType}) ; feux B en feu : {ses.Fire.HotPoints.Count(h => h.IsBurning && h.Class.FireType == 'B')}");
+                        }
+                        else
+                            Console.WriteLine("pas de camion à lance ou pas de feu du mauvais type");
+                    }
+                    foreach (Unit u in ses.Units.Units.Where(u => u.Nozzle != null && u.Target != null))
+                    {
+                        if (last.TryGetValue(u.Id, out uint seen) && seen == u.Target!.Id)
+                            continue;
+                        last[u.Id] = u.Target!.Id;
+                        bool ok = u.IsCanon || u.Nozzle!.Suits(u.Target.Class.FireType);
+                        Console.WriteLine($"{ses.Time,6:0.0} s {(u.IsVehicle ? "véhicule" : "pompier")} {u.Name} ({u.Nozzle!.Agent}) → {u.Target.Name} type {u.Target.Class.FireType} classe {u.Target.Class.Name} {(ok ? "" : "  <<< MAUVAIS AGENT")} · {u.Status}");
+                    }
+                }
+                return 0;
+            }
             case "ignifuge":
             {
                 // ignifuge <Data> <Mission> : un pompier ordinaire et le pompier ignifugé posés côte à côte près d'un feu ; endurance
