@@ -386,36 +386,60 @@ public sealed partial class OpenFDGame
         return false;
     }
 
+    // ---- écran de fin de mission : fond noir, image du jeu (BACKGROUND_VICTORY_800 / BACKGROUND_DEFEAT_800) et ses cadres ----
+    // cadres de ces images (800 × 600) : en haut le titre, dessous le compte rendu
+    private static readonly (float x, float y, float w, float h) EndTitleBox = (140, 91, 518, 97);
+    private static readonly (float x, float y, float w, float h) EndTextBox = (140, 196, 518, 314);
+    private const float EndBigBoxBottom = 521;
+    private const int MedalW = 13, MedalH = 24;   // WID_MEDAL.png : 4 médailles côte à côte ; la 1re gagnée, la 2e (sombre) pas gagnée
+
     private void RenderEndScreen()
     {
         if (!_ended || Host is not { } h || _loc == null)
             return;
         bool win = h.Outcome == true;
-        float w = MathF.Min(_fbW * 0.6f, 900 * _scale), pad = 24 * _scale, lh = _ui.LineHeight + 6 * _scale;
-        List<(string s, SN.Vector4 c)> lines = new List<(string s, SN.Vector4 c)>();
+        // l'écran du jeu est fermé : fond noir, image au centre (proportions gardées)
+        _ui.Rect(0, 0, _fbW, _fbH, new SN.Vector4(0, 0, 0, 1));
+        float s = MathF.Min(_fbW / 800f, _fbH / 600f), ox = (_fbW - 800 * s) / 2, oy = (_fbH - 600 * s) / 2;
+        if (OverlayTexture(win ? "BACKGROUND_VICTORY_800.png" : "BACKGROUND_DEFEAT_800.png") is { } back)
+            _ui.Image(back, ox, oy, 800 * s, 600 * s, SN.Vector4.One);
+        // titre : VICTOIRE / DEFAITE, grand (plus de la moitié de la hauteur du cadre), centré dans le petit cadre
+        string title = L(win ? "&ScoringVictory" : "&ScoringDefeat", win ? "Victoire" : "Défaite").ToUpperInvariant();
+        float bw = EndTitleBox.w * s, bh = EndTitleBox.h * s;
+        float ts = MathF.Min(bh * 0.6f / _font.LineHeight, bw * 0.9f / MathF.Max(1, _font.Measure(title)));
+        float tx = ox + EndTitleBox.x * s + (bw - _font.Measure(title) * ts) / 2;
+        float ty = oy + EndTitleBox.y * s + (bh - _font.LineHeight * ts) / 2;
+        _ui.Text(tx, ty, title, win ? new SN.Vector4(1f, 0.88f, 0.3f, 1) : new SN.Vector4(1f, 0.4f, 0.35f, 1), ts);
+        // compte rendu, en taille normale, aligné à gauche dans le grand cadre ; scores avec 5 médailles chacun
+        float pad = 14 * s, lh = _ui.LineHeight + 6 * _scale;
+        float x = ox + EndTextBox.x * s + pad, w = EndTextBox.w * s - 2 * pad, y = oy + EndTextBox.y * s + pad;
         if (!string.IsNullOrEmpty(h.DebriefText))
-            foreach (string l in Wrap(_loc.Get(h.DebriefText!), w - 2 * pad, _scale))
-                lines.Add((l, new SN.Vector4(0.92f, 0.92f, 0.9f, 1)));
+            foreach (string l in Wrap(_loc.Get(h.DebriefText!), w, _scale))
+            {
+                _ui.Text(x, y, l, new SN.Vector4(0.95f, 0.95f, 0.92f, 1));
+                y += lh;
+            }
         if (h.Scoring.Count > 0)
-            lines.Add(("", default));
+            y += lh / 2;
+        Texture2D? medal = OverlayTexture("WID_MEDAL.png");
+        float mh = _ui.LineHeight * 1.7f, mw = mh * MedalW / MedalH, gap = 4 * _scale;
         foreach ((string? label, double value, int medals) in h.Scoring)
-            lines.Add(($"{_loc.Get(label)} : {value:0}   ({Math.Clamp(medals, 0, 5)} médaille{(Math.Clamp(medals, 0, 5) > 1 ? "s" : "")} sur 5)", new SN.Vector4(0.98f, 0.85f, 0.4f, 1)));
-        lines.Add(("", default));
-        lines.Add(("Entrée : rejouer · Échap : menu des missions", new SN.Vector4(0.65f, 0.65f, 0.65f, 1)));
-        float ts = _scale * 2f, hgt = _font.LineHeight * ts + lines.Count * lh + 3 * pad;
-        float x = (_fbW - w) / 2, y = (_fbH - hgt) / 2;
-        _ui.Rect(0, 0, _fbW, _fbH, new SN.Vector4(0, 0, 0, 0.45f));
-        _ui.Rect(x, y, w, hgt, new SN.Vector4(0.08f, 0.08f, 0.1f, 0.95f));
-        _ui.Frame(x, y, w, hgt, win ? new SN.Vector4(0.4f, 0.9f, 0.4f, 1) : new SN.Vector4(0.95f, 0.35f, 0.3f, 1), 2 * _scale);
-        string title = win ? "Mission réussie" : "Mission échouée";
-        _ui.Text(x + (w - _font.Measure(title) * ts) / 2, y + pad, title, win ? new SN.Vector4(0.45f, 0.95f, 0.45f, 1) : new SN.Vector4(1f, 0.4f, 0.35f, 1), ts);
-        float yy = y + pad + _font.LineHeight * ts + pad;
-        foreach ((string? s, SN.Vector4 c) in lines)
         {
-            if (s.Length > 0)
-                _ui.Text(x + pad, yy, s, c);
-            yy += lh;
+            float row = MathF.Max(lh, mh + 4 * _scale);
+            _ui.Text(x, y + (row - _ui.LineHeight) / 2, $"{_loc.Get(label)} : {value:0}", new SN.Vector4(0.98f, 0.85f, 0.4f, 1));
+            int won = Math.Clamp(medals, 0, 5);
+            if (medal != null)
+                for (int m = 0; m < 5; m++)
+                {
+                    float mx = x + w - (5 - m) * (mw + gap);
+                    Rectangle src = new Rectangle((m < won ? 0 : 1) * MedalW, 0, MedalW, MedalH);
+                    _ui.Image(medal, mx, y + (row - mh) / 2, mw, mh, src, SN.Vector4.One);
+                }
+            y += row;
         }
+        // en bas, sous le grand cadre, centré
+        string help = O("HelpEnd");
+        _ui.Text((_fbW - _ui.Measure(help)) / 2, oy + EndBigBoxBottom * s + 14 * s, help, new SN.Vector4(0.75f, 0.75f, 0.75f, 1));
     }
 
     // ---------------------------------------------------------------- icône « faire descendre » au-dessus du véhicule choisi

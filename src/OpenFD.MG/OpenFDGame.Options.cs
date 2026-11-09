@@ -227,6 +227,7 @@ public sealed partial class OpenFDGame
         ["NoSave"] = "Aucune sauvegarde", ["HelpLoad"] = "Haut / Bas · Entrée : charger · Suppr : effacer · Échap : retour",
         ["HelpMain"] = "Haut / Bas · Entrée · Échap", ["HelpPause"] = "Haut / Bas · Entrée · Échap / Espace : reprendre",
         ["HelpOptions"] = "Haut / Bas · < > · Échap : retour",
+        ["HelpEnd"] = "Entrée : rejouer · Échap : menu des missions",
         ["OptionsNote"] = "Textures, langue des textes et nationalité : à la prochaine mission chargée.",
     };
     public const string DefaultLanguage = "FRA";

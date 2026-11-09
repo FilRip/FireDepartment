@@ -30,6 +30,21 @@ public sealed class Audio : IDisposable
     public float VoiceVolume = 1, EffectsVolume = 1, MusicVolume = 1;
     private float GroupVolume(SoundDb.Entry e) => e.Group switch { "voice" => VoiceVolume, "music" => MusicVolume, _ => EffectsVolume };
     public bool Enabled { get; private set; }
+    /// <summary>Sons enregistrés trop bas dans le jeu (on ne les entend pas sous la vidéo) : remontés à NormalizePeak au chargement.</summary>
+    private static readonly HashSet<string> Louder = new(StringComparer.OrdinalIgnoreCase) { "UI_BRIEFING_TEXT_DISPLAY" };
+    private const float NormalizePeak = 0.7f;
+
+    private static void Normalize(short[] samples)
+    {
+        int peak = 1;
+        foreach (short v in samples)
+            peak = Math.Max(peak, Math.Abs((int)v));
+        float gain = NormalizePeak * short.MaxValue / peak;
+        if (gain <= 1)
+            return;
+        for (int i = 0; i < samples.Length; i++)
+            samples[i] = (short)Math.Clamp(samples[i] * gain, short.MinValue, short.MaxValue);
+    }
     public int Count => _db.Entries.Count;
 
     public Audio(SoundDb db)
@@ -56,6 +71,8 @@ public sealed class Audio : IDisposable
         {
             if (SoundData.LoadWav(e.File) is { } d && d.Samples.Length > 0)
             {
+                if (Louder.Contains(e.Label))
+                    Normalize(d.Samples);
                 byte[] bytes = new byte[d.Samples.Length * 2];
                 Buffer.BlockCopy(d.Samples, 0, bytes, 0, bytes.Length);
                 fx = new Microsoft.Xna.Framework.Audio.SoundEffect(bytes, d.Rate, d.Channels == 2 ? Microsoft.Xna.Framework.Audio.AudioChannels.Stereo : Microsoft.Xna.Framework.Audio.AudioChannels.Mono);

@@ -17,6 +17,12 @@ public sealed record HotPointClass(
     public float UnitHeatDamage { get; init; } = 2f;
     /// <summary>Type de feu A (ordinaire), B (liquides : essence…), C (électrique), D (métaux).</summary>
     public char FireType { get; init; } = 'A';
+    /// <summary>[DISPLAY_COMMON] : volume occupé par les flammes.</summary>
+    public FireVolume Volume { get; init; } = new FireVolume(1, 0.1f, 1, 0.5f, "cylinder", 0.2f);
+    /// <summary>[DISPLAY_FIRE1] : la couche principale de flammes (null : pas de flammes dessinées par la classe).</summary>
+    public FireLook? Fire1 { get; init; }
+    /// <summary>[DISPLAY_FIRE2] : une seconde couche (grandes flammes, arcs électriques…), souvent absente.</summary>
+    public FireLook? Fire2 { get; init; }
     public static HotPointClass From(string name, ClassFile c)
     {
         const string P = "HOTPOINT_PROPS", T = "HOTPOINT_TAGS";
@@ -31,6 +37,9 @@ public sealed record HotPointClass(
             UnitLifeDamage = c.GetFloat("HOTPOINT_DAMAGE", "UnitLifeDamage", 2),
             UnitHeatDamage = c.GetFloat("HOTPOINT_DAMAGE", "UnitHeatDamage", 2),
             FireType = (c.Get(T, "Type") ?? "FireType_A").Trim('"', ' ').ToUpperInvariant() is string t && t.Length > 0 ? t[^1] : 'A',
+            Volume = FireVolume.From(c),
+            Fire1 = FireLook.From(c, "DISPLAY_FIRE1"),
+            Fire2 = FireLook.From(c, "DISPLAY_FIRE2"),
         };
     }
 }
