@@ -305,9 +305,12 @@ public sealed class SceneAssets
 
     public byte[]? Texture(string mission, string name) => ResolveTex(mission, name) is { } p ? _files.Read(p) : null;
 
+    // le masque d'opacité est aussi nommé « opa_<nom> » (fx_trash_6opa_fx_trash_6), « <nom>opa_1 », voire « 0pa_<nom> »
+    // avec un zéro (fx_trash_50pa_fx_trash_5)
     private static bool IsSecondMap(string n, string rest) =>
         rest.StartsWith(n, StringComparison.OrdinalIgnoreCase) ||
-        (rest.Length > 3 && char.IsLetter(rest[0]) && Regex.IsMatch(rest, @"(_spec?|_opa| chb|_ch)$", RegexOptions.IgnoreCase));
+        rest.StartsWith("0pa_", StringComparison.OrdinalIgnoreCase) ||
+        (rest.Length > 3 && char.IsLetter(rest[0]) && (Regex.IsMatch(rest, @"(_spec?|_opa| chb|_ch)$", RegexOptions.IgnoreCase) || rest.Contains("opa", StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>Transparence par découpe seulement si la texture est combinée à un masque.</summary>
     private bool CutOut(string mission, string? name)
@@ -315,6 +318,6 @@ public sealed class SceneAssets
         if (name == null || ResolveTex(mission, name) is not { } p)
             return false;
         string e = p[(p.LastIndexOf('\\') + 1)..].ToLowerInvariant();
-        return e.Contains("_opa") || e.Contains(" chb") || e.EndsWith("_ch");
+        return e.Contains("opa") || e.Contains("0pa_") || e.Contains(" chb") || e.EndsWith("_ch");
     }
 }

@@ -18,6 +18,14 @@ public sealed partial class OpenFDGame
     private bool _briefFrozen;   // essais (captures) : la vidéo reste sur l'image choisie
     // cadres d'informations à droite de la vidéo : titre (blanc) et lignes (jaune)
     private readonly List<(string title, List<string> lines)> _briefInfo = new();
+    // les lignes jaunes s'écrivent lettre par lettre, cadre après cadre, avec le son UI_BRIEFING_TEXT_DISPLAY ; tout est
+    // écrit au bout de BriefTypeMax secondes au plus
+    private const float BriefTypeRate = 50;   // lettres par seconde au moins
+    private const float BriefTypeMax = 5;     // secondes
+    private int _briefChars;                  // nombre de lettres des lignes jaunes
+
+    /// <summary>Nombre de lettres jaunes déjà écrites, au temps t du briefing.</summary>
+    private int BriefTyped(double t) => (int)Math.Min(_briefChars, t * MathF.Max(BriefTypeRate, _briefChars / BriefTypeMax));
 
     /// <summary>
     /// Informations du briefing, tirées du fichier .mis ([BRIEFING] OBJECTIVEn, LocationDatan, FireTypen, SpecificHazardn ;
@@ -83,6 +91,7 @@ public sealed partial class OpenFDGame
             reinf.Add(string.IsNullOrEmpty(name) ? r! : _loc.Get(name!));
         }
         _briefInfo.Add((_loc.Get("&AvailableReinforcements"), reinf));
+        _briefChars = _briefInfo.Sum(b => b.lines.Sum(l => l.Length));
     }
 
     private ClassFile? StationFile(string name)
@@ -131,6 +140,7 @@ public sealed partial class OpenFDGame
         // hauteurs selon le contenu ; l'espace qui reste se répartit entre les cadres
         float total = boxes.Sum(b => b.h), gap = MathF.Max(6 * _scale, (_fbH - 2 * margin - total) / (boxes.Count - 1));
         float y = margin;
+        int typed = _briefing != null ? BriefTyped(_briefing.Time) : int.MaxValue;
         foreach ((List<string> title, List<string> lines, float h) in boxes)
         {
             _ui.Rect(x, y, w, h, back);
@@ -144,7 +154,10 @@ public sealed partial class OpenFDGame
             ty += 4 * _scale;
             foreach (string l in lines)
             {
-                _ui.Text(x + pad + 8 * _scale, ty, l, yellow);
+                // la ligne s'écrit : seulement les lettres déjà tapées
+                if (typed > 0)
+                    _ui.Text(x + pad + 8 * _scale, ty, typed >= l.Length ? l : l.Substring(0, typed), yellow);
+                typed = Math.Max(0, typed - l.Length);
                 ty += lh;
             }
             y += h + gap;
@@ -258,6 +271,10 @@ public sealed partial class OpenFDGame
             _audio?.Play(_briefSubs[_briefNext].key.TrimStart('&'));
             _briefNext++;
         }
+        // son de l'écriture, tant que les lignes jaunes s'écrivent
+        if (!skip && BriefTyped(_briefing.Time) < _briefChars)
+            _audio?.Keep("briefing-texte", "UI_BRIEFING_TEXT_DISPLAY", SN.Vector3.Zero);
+        _audio?.EndFrame(dt);
         if (!skip && !_briefing.Finished)
             return true;
         _briefing.Dispose();

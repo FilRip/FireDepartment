@@ -27,6 +27,7 @@ public sealed class Settings
     public string Nationality { get; set; } = "";   // vide : celle de la mission ; sinon us, fr, gb, gr, ua
     public string PlayerName { get; set; } = "";    // pseudo en multijoueur
     public string LastMission { get; set; } = "";   // dernière mission jouée : page affichée en ouvrant la campagne
+    public string LastDifficulty { get; set; } = "";   // sa difficulté (EASY, NORMAL, HARD) : choisie d'office dans les menus
 
     /// <summary>Dossier « Save » du jeu (à côté de Data) : options.json y est enregistré.</summary>
     public static string SaveDir = "";

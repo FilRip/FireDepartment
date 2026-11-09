@@ -176,6 +176,9 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         LoadCursors();
         _settings = Settings.Load(_files.DataDir);
         ApplySettings();
+        // difficulté de la dernière mission jouée (options) : celle choisie d'office dans les menus
+        if (CapturePath == null && Array.IndexOf(Diffs, _settings.LastDifficulty) >= 0)
+            _difficulty = _settings.LastDifficulty;
 
         if (StartMenu && StartScreen == 0 && (CapturePath == null || Environment.GetEnvironmentVariable("FD3_INTRO") != null))
             StartIntro();
@@ -989,9 +992,10 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         StopMenuVideo();
         _mission = mission;
         _difficulty = difficulty;
-        if (CapturePath == null && !mission.Equals(_settings.LastMission, StringComparison.OrdinalIgnoreCase))
+        if (CapturePath == null && (!mission.Equals(_settings.LastMission, StringComparison.OrdinalIgnoreCase) || difficulty != _settings.LastDifficulty))
         {
             _settings.LastMission = mission;   // la campagne s'ouvrira sur cette mission au prochain lancement
+            _settings.LastDifficulty = difficulty;   // avec cette difficulté
             _settings.Save();
         }
         Status($"Chargement de {mission}...", 0);
@@ -2010,11 +2014,14 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             }
         }
         ExplosionSmoke(right, up);
+        Texture2D? flames = FlameTexture(DefaultFlameModel);
+        if (flames != null)
+            Soot(right, up);
         int smokeCount = _pv.Count;
         ExplosionFire(right, up);
         int hpIndex = 0;
-        Texture2D? flames = FlameTexture();
-        _fv.Clear();
+        foreach (List<VertexPositionColorTexture> batch in _fv.Values.Concat(_fvSoot.Values))
+            batch.Clear();
         // véhicule à moitié détruit (ou plus) : un petit feu sur la carrosserie, qui grandit avec les dégâts
         if (flames != null)
             foreach (Unit v in _session.Units.Active.Where(v => v.IsVehicle && v.LifeMax > 0 && v.Life > 0 && v.Life <= v.LifeMax * 0.5f))   // détruit : carcasse noire, sans feu
@@ -2022,7 +2029,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 float dmg = 1 - v.Life / (v.LifeMax * 0.5f);   // 0 à mi-vie, 1 détruit
                 SN.Vector3 vp = PoseOf(v, v.Position, v.Heading).p;
                 P(vp + new SN.Vector3(0, 0, 260), 300 + 200 * dmg, new SN.Vector4(0.9f, 0.35f, 0.08f, 0.06f), right, up);
-                FlamesAt(vp + new SN.Vector3(0, 0, 230), (1000f, SN.Vector2.Zero), 7919 + v.Id, 0.2f + 0.35f * dmg, time, right);   // posé vers le toit, sinon caché dans la carrosserie
+                FlamesAt(vp + new SN.Vector3(0, 0, 230), (1000f, SN.Vector2.Zero), 7919 + v.Id, 0.2f + 0.35f * dmg, time, right, up, 'A', 160, VehicleFireVolume, null);   // posé vers le toit, sinon caché dans la carrosserie
             }
         foreach (HotPoint h in _session.Fire.HotPoints)
         {
@@ -2033,13 +2040,13 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             (float clr0, _) = FireRoom(h);
             bool chem = h.Class.FireType == 'D';   // feu chimique (type D, agent anti-métal) : flammes vertes
             bool foam = h.Class.FireType == 'B';   // feu à la mousse (type B, hydrocarbures) : flammes très rouges
-            SN.Vector4 glow = chem ? new SN.Vector4(0.2f, 0.85f, 0.25f, flames != null ? 0.07f : 0.45f)
-                : foam ? new SN.Vector4(1f, 0.08f, 0.04f, flames != null ? 0.09f : 0.5f)
-                : new SN.Vector4(0.9f, 0.35f, 0.08f, flames != null ? 0.07f : 0.45f);
+            SN.Vector4 glow = chem ? new SN.Vector4(0.2f, 0.85f, 0.25f, flames != null ? 0.035f : 0.45f)
+                : foam ? new SN.Vector4(1f, 0.08f, 0.04f, flames != null ? 0.045f : 0.5f)
+                : new SN.Vector4(0.9f, 0.35f, 0.08f, flames != null ? 0.035f : 0.45f);
             P(h.Position + new SN.Vector3(0, 0, 60), MathF.Min(260 + 500 * k, clr0 * 1.6f + 120), glow, right, up);
             if (flames != null)
             {
-                Flames(h, hpIndex, k, time, right);
+                Flames(h, hpIndex, k, time, right, up);
                 continue;
             }
             for (int q = 0; q < 7; q++)
@@ -2056,7 +2063,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 P(h.Position + new SN.Vector3(ox, oy, 20 + t * (120 + 380 * k)), (90 + 240 * k) * (1 - 0.7f * t), col, right, up);
             }
         }
-        if (_pv.Count == 0 && _fv.Count == 0)
+        if (_pv.Count == 0 && _fv.Values.All(b => b.Count == 0))
             return;
         GraphicsDevice gd = GraphicsDevice;
         gd.DepthStencilState = DepthStencilState.DepthRead;
@@ -2082,19 +2089,32 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 gd.DrawUserPrimitives(PrimitiveType.TriangleList, arr, smokeCount, (arr.Length - smokeCount) / 3);
             }
         }
-        if (_fv.Count > 0 && FlameTexture() is { } ft)
+        // flammes : images animées du jeu (Gfx\Effect\Shaders\<modèle>0.dds), d'abord posées (teintées, un peu transparentes),
+        // puis leur lumière ajoutée : là où beaucoup de flammes se superposent, le feu devient jaune puis presque blanc
+        foreach (KeyValuePair<string, List<VertexPositionColorTexture>> batch in _fv)
         {
-            // flammes : images animées du jeu (Gfx\Effect\Shaders\fire_classic*.dds), opaques, puis un peu de lumière ajoutée
-            VertexPositionColorTexture[] fa = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_fv).ToArray();
+            if (batch.Value.Count == 0 || FlameTexture(batch.Key) is not { } ft)
+                continue;
+            VertexPositionColorTexture[] fa = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(batch.Value).ToArray();
             _part.Texture = ft;
             gd.BlendState = BlendState.NonPremultiplied;
+            // d'abord la suie : une copie sombre de chaque flamme, un peu plus grande, qui dépasse en bords et en pointes sombres
+            if (_fvSoot.TryGetValue(batch.Key, out List<VertexPositionColorTexture>? soot) && soot.Count > 0)
+            {
+                VertexPositionColorTexture[] sa = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(soot).ToArray();
+                foreach (EffectPass pass in _part.CurrentTechnique.Passes)
+                {
+                    pass.Apply();
+                    gd.DrawUserPrimitives(PrimitiveType.TriangleList, sa, 0, sa.Length / 3);
+                }
+            }
             foreach (EffectPass pass in _part.CurrentTechnique.Passes)
             {
                 pass.Apply();
                 gd.DrawUserPrimitives(PrimitiveType.TriangleList, fa, 0, fa.Length / 3);
             }
             gd.BlendState = BlendState.Additive;
-            _part.Alpha = 0.2f;
+            _part.Alpha = FlameGlow;
             foreach (EffectPass pass in _part.CurrentTechnique.Passes)
             {
                 pass.Apply();
@@ -2107,103 +2127,191 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     }
 
     // ---- flammes animées ----
-    private readonly List<VertexPositionColorTexture> _fv = new();
-    private Texture2D? _flameTex;
-    private bool _flameTried;
+    // Comme dans le jeu : chaque classe de foyer dit, dans [DISPLAY_FIRE1] et [DISPLAY_COMMON], combien de flammes poser
+    // (densité par m²), leur taille (rayon min, max), leur décalage en hauteur, l'étendue du feu (par rapport à sa portée,
+    // au départ et à pleine intensité) et son opacité minimale. Les flammes remplissent toute l'étendue du foyer : celles des
+    // foyers voisins se chevauchent et forment un seul tapis de feu. Chaque flamme est une image animée tournée vers la
+    // caméra (comme les particules du jeu) : elle ne paraît plus plate quand la vue plonge.
+    private readonly Dictionary<string, List<VertexPositionColorTexture>> _fv = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, List<VertexPositionColorTexture>> _fvSoot = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Texture2D?> _flameTex = new(StringComparer.OrdinalIgnoreCase);
     private const int FlameCols = 4, FlameRows = 8;   // 32 images de 128 × 128 dans une texture de 512 × 1024
+    private const string DefaultFlameModel = "fire_classic1";
+    private const float FlameGlow = 0.1f;            // part de lumière ajoutée par chaque flamme (plus : les feux denses tournent au blanc)
+    private const int MaxFlamesPerFire = 30;
+    private const float FlameMinOpacity = 0.6f;      // même un feu naissant reste assez opaque (comme dans le jeu)
+    private const float SootAlpha = 0.6f;            // opacité de la copie sombre de chaque flamme
+    private static readonly SN.Vector3 SootColor = new SN.Vector3(0.09f, 0.05f, 0.03f);
+    private const float FlameScale = 3f;             // largeur de l'image d'une flamme / rayon de la flamme (la flamme n'occupe pas toute l'image)
+    private static readonly FireLook DefaultFireLook = new FireLook(DefaultFlameModel, 1.5f, 50, 100, -30, true);
+    private static readonly FireVolume VehicleFireVolume = new FireVolume(0.6f, 0, 1, 0, "cylinder", 0.4f);
 
-    private Texture2D? FlameTexture()
+    /// <summary>Images d'un modèle de flammes (Gfx\Effect\Shaders\&lt;modèle&gt;0.dds) ; à défaut celles de fire_classic1.</summary>
+    private Texture2D? FlameTexture(string model)
     {
-        if (_flameTried)
-            return _flameTex;
-        _flameTried = true;
-        if (Environment.GetEnvironmentVariable("FD3_FEU_SIMPLE") != null)
-            return null;
-        foreach (string name in new[] { "fire_classic10", "fire_classic20" })
+        if (_flameTex.TryGetValue(model, out Texture2D? known))
+            return known;
+        Texture2D? tex = null;
+        if (Environment.GetEnvironmentVariable("FD3_FEU_SIMPLE") == null)
             try
             {
-                if (_files.TryRead($"Gfx\\Effect\\Shaders\\{name}.dds") is { } d && Tex.Dds(GraphicsDevice, d) is { } t)
-                {
-                    _flameTex = t;
-                    break;
-                }
+                if (_files.TryRead($"Gfx\\Effect\\Shaders\\{model}0.dds") is { } d)
+                    tex = Tex.Dds(GraphicsDevice, d);
             } catch { }
-        Console.WriteLine(_flameTex != null ? $"Flammes : images du jeu {_flameTex.Width}×{_flameTex.Height}" : "Flammes : images du jeu absentes (dessin simple)");
-        return _flameTex;
+        if (tex == null && !model.Equals(DefaultFlameModel, StringComparison.OrdinalIgnoreCase))
+            tex = FlameTexture(DefaultFlameModel);
+        else
+            Console.WriteLine(tex != null ? $"Flammes {model} : images du jeu {tex.Width}×{tex.Height}" : $"Flammes {model} : images du jeu absentes");
+        _flameTex[model] = tex;
+        return tex;
     }
 
-    // plusieurs langues de feu par foyer : debout (toujours verticales), chacune avec son image de départ, sa vitesse,
-    // sa taille et sa teinte (rouge, orange, jaune), qui ondulent un peu ; plus le feu est fort, plus elles sont grandes et nombreuses
-    private void Flames(HotPoint h, int seed, float k, float time, SN.Vector3 right) => FlamesAt(h.Position, FireRoom(h), seed, k, time, right, h.Class.FireType);
+    private void Flames(HotPoint h, int seed, float k, float time, SN.Vector3 right, SN.Vector3 camUp) =>
+        FlamesAt(h.Position, FireRoom(h), seed, k, time, right, camUp, h.Class.FireType, h.Class.LifeDamageRange, h.Class.Volume, h.Class.Fire1);
 
     /// <summary>Flammes d'un foyer (ou d'un véhicule en feu) posées en <paramref name="pos"/> ; room : place libre autour (murs).</summary>
-    private void FlamesAt(SN.Vector3 pos, (float clear, SN.Vector2 away) room0, int seed, float k, float time, SN.Vector3 right, char fireType = 'A')
+    private void FlamesAt(SN.Vector3 pos, (float clear, SN.Vector2 away) room0, int seed, float k, float time, SN.Vector3 right, SN.Vector3 camUp,
+        char fireType, float reach, FireVolume vol, FireLook? look)
     {
+        look ??= DefaultFireLook;
+        // arcs électriques : dessinés à part ; éclats (fire_burst*) : leurs images finissent en boule de feu, qui tournerait en boucle
+        if (look.Model.StartsWith("electric", StringComparison.OrdinalIgnoreCase) || look.Model.StartsWith("fire_burst", StringComparison.OrdinalIgnoreCase))
+            look = look with { Model = DefaultFlameModel };
         SN.Vector3 flat = new SN.Vector3(right.X, right.Y, 0);
         flat = flat.LengthSquared() > 1e-6f ? SN.Vector3.Normalize(flat) : SN.Vector3.UnitX;
-        int n = 3 + (int)(5 * k);
-        float spread = 40 + 110 * k;
+        // haut de l'image : le haut de l'écran (la flamme se redresse vers la caméra quand la vue plonge)
+        SN.Vector3 upDir = camUp.Z > 0.05f ? SN.Vector3.Normalize(camUp) : SN.Vector3.UnitZ;
+        float spread = MathF.Max(30, reach * Lerp(vol.StartXY, vol.SizeXY, k));
+        float tall = MathF.Max(0, reach * Lerp(vol.StartZ, vol.SizeZ, k));
         // foyer près d'un mur : les flammes sont poussées vers l'intérieur de la pièce et ne dépassent pas trop le mur
         (float clear, SN.Vector2 away) = room0;
         float shift = MathF.Min(140, MathF.Max(0, 120 - clear));
         SN.Vector3 centre0 = pos + new SN.Vector3(away * shift, 0);
         float room = clear + shift;
-        spread = MathF.Min(spread, MathF.Max(15, room - 70));
+        spread = MathF.Min(spread, MathF.Max(20, room - 40));
+        bool box = vol.Shape == "box";
+        float areaM2 = (box ? 4 * spread * spread : MathF.PI * spread * spread) / 10000f;
+        int n = Math.Clamp((int)MathF.Round(look.Density * areaM2 * (0.4f + 0.6f * k)), 2, MaxFlamesPerFire);
+        float opacity = Lerp(MathF.Max(vol.MinOpacity, FlameMinOpacity), 1, k);
+        if (!_fv.TryGetValue(look.Model, out List<VertexPositionColorTexture>? list))
+            _fv[look.Model] = list = new List<VertexPositionColorTexture>();
+        if (!_fvSoot.TryGetValue(look.Model, out List<VertexPositionColorTexture>? sootList))
+            _fvSoot[look.Model] = sootList = new List<VertexPositionColorTexture>();
         for (int q = 0; q < n; q++)
         {
-            float ph = Frac(q * 0.618f + seed * 0.137f), ph2 = Frac(q * 0.379f + seed * 0.71f);
-            SN.Vector3 off = q == 0 ? SN.Vector3.Zero : new SN.Vector3(MathF.Sin(ph * 40) * spread, MathF.Cos(ph * 53) * spread, 0);   // la première au centre
-            float size = (150 + 330 * k) * (0.7f + 0.6f * ph2);
-            size = MathF.Min(size, MathF.Max(140, 2 * (room - off.Length()) + 120));
-            float w = size, hgt = size * 1.25f;
-            // animation lente (6 à 9 images par seconde) et fondue : l'image suivante apparaît pendant que l'autre s'efface
-            float ft = time * (_flameFps + _flameFpsVar * ph) + ph * 32;
+            float r1 = Rnd(seed, q, 1), r2 = Rnd(seed, q, 2), r3 = Rnd(seed, q, 3), r4 = Rnd(seed, q, 4), r5 = Rnd(seed, q, 5);
+            SN.Vector2 off;
+            if (q == 0)
+                off = SN.Vector2.Zero;   // la première au centre
+            else if (box)
+                off = new SN.Vector2((r1 * 2 - 1) * spread, (r2 * 2 - 1) * spread);
+            else
+                off = new SN.Vector2(MathF.Cos(r2 * MathF.Tau), MathF.Sin(r2 * MathF.Tau)) * MathF.Sqrt(r1) * spread;
+            float rad = Lerp(look.MinRadius, look.MaxRadius, r4) * (0.7f + 0.3f * k);
+            rad *= 1 + 0.06f * MathF.Sin(time * (1.5f + r5) + r3 * 9);   // la flamme respire un peu
+            rad = MathF.Min(rad, MathF.Max(40, room - off.Length()));
+            float w = rad * FlameScale, hgt = rad * FlameScale * 1.15f;
+            // animation fondue : l'image suivante apparaît pendant que l'autre s'efface
+            float ft = time * (_flameFps + _flameFpsVar * r5) + r3 * 32;
             int f0 = (int)MathF.Floor(ft);
             float blend = ft - f0;
-            // teintes variées : jaune vif, orange, rouge profond
-            // au centre du foyer : rouge profond ; vers le bord : orange puis jaune (avec un peu de variété)
-            float centre = 1 - Math.Clamp(off.Length() / MathF.Max(1, spread), 0, 1);
-            SN.Vector3 edge = (q % 2) == 0 ? new SN.Vector3(1f, 0.92f, 0.6f) : new SN.Vector3(1f, 0.7f, 0.35f);
-            SN.Vector3 core = new SN.Vector3(1f, 0.32f, 0.14f);
-            if (fireType == 'D')
-            {
-                // feu chimique : vert-jaune pâle au bord, vert profond au centre
-                edge = (q % 2) == 0 ? new SN.Vector3(0.8f, 1f, 0.55f) : new SN.Vector3(0.5f, 1f, 0.4f);
-                core = new SN.Vector3(0.12f, 0.8f, 0.2f);
-            }
-            else if (fireType == 'B')
-            {
-                // feu à la mousse (hydrocarbures) : rouge vif au bord, rouge sombre au centre, sans jaune
-                edge = (q % 2) == 0 ? new SN.Vector3(1f, 0.32f, 0.18f) : new SN.Vector3(1f, 0.18f, 0.1f);
-                core = new SN.Vector3(0.85f, 0.03f, 0.02f);
-            }
-            SN.Vector3 tintRgb = SN.Vector3.Lerp(edge, core, centre * centre * 0.9f + 0.1f * ph2);
-            float sway = MathF.Sin(time * 1.6f + ph * 17) * 0.1f;
-            SN.Vector3 bottom = centre0 + off + new SN.Vector3(0, 0, -10);
+            // faible : rouge et pâle ; fort, et vers le centre du foyer : orange puis jaune
+            float hot = Math.Clamp(0.2f + 0.6f * k + 0.35f * (0.4f + 0.6f * k) * (1 - off.Length() / spread) - 0.2f * r5, 0, 1);
+            SN.Vector3 tintRgb = FlameTint(fireType, hot);
+            // pas enfoncée dans le sol (HeightOffset négatif) : le sol couperait la flamme d'un trait net ; le bas en fondu suffit
+            SN.Vector3 bottom = centre0 + new SN.Vector3(off, r1 * tall + MathF.Max(0, look.HeightOffset) + 5);
             SN.Vector3 r = flat * (w / 2);
-            SN.Vector3 up = new SN.Vector3(flat.Y * sway, -flat.X * sway, 1) * hgt;
+            SN.Vector3 up = upDir * hgt;
             Vector3 a = (bottom - r).X();
             Vector3 b = (bottom + r).X();
             Vector3 c = (bottom + r + up).X();
             Vector3 d = (bottom - r + up).X();
+            // la copie sombre : plus large et plus haute (la fumée noire monte au-dessus des flammes)
+            SN.Vector3 sr = r * 1.15f;
+            SN.Vector3 su = up * 1.3f;
+            Vector3 sa = (bottom - sr).X();
+            Vector3 sb = (bottom + sr).X();
+            Vector3 sc = (bottom + sr + su).X();
+            Vector3 sd = (bottom - sr + su).X();
+            bool mirror = r4 > 0.5f;   // une flamme sur deux retournée : moins de répétition
             for (int layer = 0; layer < 2; layer++)
             {
                 int frame = ((f0 + layer) % (FlameCols * FlameRows) + FlameCols * FlameRows) % (FlameCols * FlameRows);
-                float alpha = layer == 0 ? 1 - blend : blend;
+                float alpha = (layer == 0 ? 1 - blend : blend) * opacity;
                 if (alpha < 0.02f)
                     continue;
                 float u0 = (frame % FlameCols) / (float)FlameCols, v0 = (frame / FlameCols) / (float)FlameRows;
                 float u1 = u0 + 1f / FlameCols, v1 = v0 + 1f / FlameRows;
-                Color tint = new Color(tintRgb.X, tintRgb.Y, tintRgb.Z, alpha);
-                _fv.Add(new(a, tint, new Vector2(u0, v1)));
-                _fv.Add(new(b, tint, new Vector2(u1, v1)));
-                _fv.Add(new(c, tint, new Vector2(u1, v0)));
-                _fv.Add(new(a, tint, new Vector2(u0, v1)));
-                _fv.Add(new(c, tint, new Vector2(u1, v0)));
-                _fv.Add(new(d, tint, new Vector2(u0, v0)));
+                if (mirror)
+                    (u0, u1) = (u1, u0);
+                Quad(sootList, sa, sb, sc, sd, new Color(SootColor.X, SootColor.Y, SootColor.Z, alpha * SootAlpha), u0, v0, u1, v1);
+                Quad(list, a, b, c, d, new Color(tintRgb.X, tintRgb.Y, tintRgb.Z, alpha), u0, v0, u1, v1);
             }
         }
     }
+
+    /// <summary>
+    /// Une image de flamme (a, b en bas ; c, d en haut). Le bas s'efface en fondu : pas d'arête droite là où l'image
+    /// coupe le sol.
+    /// </summary>
+    private static void Quad(List<VertexPositionColorTexture> list, Vector3 a, Vector3 b, Vector3 c, Vector3 d, Color tint, float u0, float v0, float u1, float v1)
+    {
+        const float Fade = 0.25f;   // part basse de l'image en fondu
+        Vector3 ma = Vector3.Lerp(a, d, Fade);
+        Vector3 mb = Vector3.Lerp(b, c, Fade);
+        float vm = v1 + (v0 - v1) * Fade;
+        Color clear = new Color(tint.R, tint.G, tint.B, (byte)0);
+        list.Add(new(a, clear, new Vector2(u0, v1)));
+        list.Add(new(b, clear, new Vector2(u1, v1)));
+        list.Add(new(mb, tint, new Vector2(u1, vm)));
+        list.Add(new(a, clear, new Vector2(u0, v1)));
+        list.Add(new(mb, tint, new Vector2(u1, vm)));
+        list.Add(new(ma, tint, new Vector2(u0, vm)));
+        list.Add(new(ma, tint, new Vector2(u0, vm)));
+        list.Add(new(mb, tint, new Vector2(u1, vm)));
+        list.Add(new(c, tint, new Vector2(u1, v0)));
+        list.Add(new(ma, tint, new Vector2(u0, vm)));
+        list.Add(new(c, tint, new Vector2(u1, v0)));
+        list.Add(new(d, tint, new Vector2(u0, v0)));
+    }
+
+    /// <summary>
+    /// Teinte d'une flamme selon le type de feu : chimique (D) vert, carburant (B) rouge vif, sinon rouge, orange, puis
+    /// jaune pâle au cœur des feux forts.
+    /// </summary>
+    private static SN.Vector3 FlameTint(char fireType, float hot)
+    {
+        (SN.Vector3 cold, SN.Vector3 warm, SN.Vector3 core) = fireType switch
+        {
+            'D' => (new SN.Vector3(0.15f, 0.7f, 0.2f), new SN.Vector3(0.45f, 1f, 0.35f), new SN.Vector3(0.8f, 1f, 0.65f)),
+            'B' => (new SN.Vector3(0.85f, 0.06f, 0.03f), new SN.Vector3(1f, 0.24f, 0.1f), new SN.Vector3(1f, 0.42f, 0.22f)),
+            _ => (new SN.Vector3(0.95f, 0.3f, 0.1f), new SN.Vector3(1f, 0.5f, 0.16f), new SN.Vector3(1f, 0.8f, 0.45f)),
+        };
+        return hot < 0.65f ? SN.Vector3.Lerp(cold, warm, hot / 0.65f) : SN.Vector3.Lerp(warm, core, (hot - 0.65f) / 0.35f);
+    }
+
+    // suie : des volutes sombres, basses, entre les flammes des foyers forts (comme dans le jeu)
+    private void Soot(SN.Vector3 right, SN.Vector3 up)
+    {
+        int index = 0;
+        foreach (HotPoint h in _session.Fire.HotPoints)
+        {
+            index++;
+            if (!h.IsBurning)
+                continue;
+            float k = Math.Min(1, h.Intensity / h.Class.IntensityMax);
+            if (k < 0.45f || h.Class.Fire1 == null)
+                continue;
+            float reach = MathF.Max(60, h.Class.LifeDamageRange * Lerp(h.Class.Volume.StartXY, h.Class.Volume.SizeXY, k));
+            SN.Vector2 off = new SN.Vector2(Rnd(index, 0, 7) * 2 - 1, Rnd(index, 0, 8) * 2 - 1) * reach * 0.5f;
+            P(h.Position + new SN.Vector3(off, 110 + 60 * k), reach * 1.4f, new SN.Vector4(0.07f, 0.06f, 0.05f, 0.32f * (k - 0.35f)), right, up);
+        }
+    }
+
+    private static float Lerp(float a, float b, float t) => a + (b - a) * t;
+
+    /// <summary>Nombre pseudo-aléatoire stable (0 à 1) pour la flamme q du foyer seed.</summary>
+    private static float Rnd(int seed, int q, int salt) => Frac(MathF.Sin(seed * 12.9898f + q * 78.233f + salt * 37.719f) * 43758.547f);
     private static float Frac(float x) => x - MathF.Floor(x);
 
     // place libre autour d'un foyer : distance au mur le plus proche (cases fermées de la grille) et direction qui s'en éloigne
