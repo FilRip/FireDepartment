@@ -11,9 +11,6 @@ public interface IEdition
     /// <summary>« FD3 » ou « FD2 ».</summary>
     string License { get; }
 
-    /// <summary>Rectangle (x, y, largeur, hauteur) d'une icône sur la planche de l'interface : chaque jeu range ses icônes ailleurs.</summary>
-    (int X, int Y, int W, int H) PageRect(PageIcon icon);
-
     /// <summary>
     /// Texte de droite de la page de campagne, en paragraphes. FD3 : l'histoire de la mission (StoryTextKey du .mis) ;
     /// FD2, qui n'a pas d'histoire : les lignes du briefing.

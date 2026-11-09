@@ -26,6 +26,9 @@ public sealed class Unit
     public string SupplyAgent = "WATER";                  // véhicule : agent qu'il fournit ([CAPACITIES_RESERVE] FireAgent, voir Agents.cs)
     public OpenFD.Fire.HotPoint? WarnedAgent;             // feu pour lequel « mauvais agent » a déjà été annoncé
     public bool IsAmbulance;
+    /// <summary>Bruit du moteur en marche et sirène (étiquettes de SoundDB_Vehicle.INI), volume de la sirène (0 à 1).</summary>
+    public string? RunSound, SirenSound;
+    public float SirenVolume = 1;
     /// <summary>Véhicule posé dans le niveau (LevelVehicles.cs) : dessiné pièce par pièce, animé par le script (ANM_Play).</summary>
     public bool FromLevel;
     /// <summary>Ne roule pas (l'hélicoptère sanitaire : le script le fait atterrir et décoller).</summary>

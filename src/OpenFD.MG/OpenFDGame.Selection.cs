@@ -231,22 +231,23 @@ public sealed partial class OpenFDGame
     }
 
     // ---- panneau des unités : une ligne par équipe (« H7 », puis les renforts au-dessus), toutes les unités ----
-    // devant chaque ligne, le cadre de l'équipe (Overlay\Pages : vert quand elle est là, gris tant qu'elle n'est pas
-    // arrivée) ; les unités choisies sont entourées de vert ; une flamme clignote sur l'image d'une unité dans un feu,
-    // un « ? » sur un pompier qui ne fait rien
+    // devant chaque ligne, le cadre de l'équipe (StationSymbol.png : vert quand elle est là, gris tant qu'elle n'est pas
+    // arrivée) ; les unités choisies sont entourées de vert ; sur l'image d'une unité clignote (WID_UNIT_SYMBOLS.png) une
+    // flamme si elle est dans un feu, un volant pour un pompier dans un véhicule, un « ? » sur un pompier qui ne fait rien
     private const int PanelMax = 14;
-    // icônes de la planche : chaque jeu les range ailleurs (IEdition.PageRect)
-    private Rectangle TabOn => Page(PageIcon.TeamHere);
-    private Rectangle TabOff => Page(PageIcon.TeamAway);
-    private Rectangle TabChoose => Page(PageIcon.TeamIncoming);
-    private Rectangle FireMark => Page(PageIcon.FireMark);
-    private Rectangle IdleMark => Page(PageIcon.IdleMark);
-
-    private Rectangle Page(PageIcon icon)
-    {
-        (int x, int y, int w, int h) = _edition.PageRect(icon);
-        return new Rectangle(x, y, w, h);
-    }
+    // cadres des casernes : Data\Overlay\Textures\StationSymbol.png, 68 × 46 chacun, les uns sous les autres (les mêmes
+    // dans FD2 et FD3) : 0 vert (là), 1 jaune à fente noire (renfort en route), 2 gris clair, 3 gris foncé (pas là)
+    private const string StationSymbols = "StationSymbol.png";
+    private static Rectangle TabOn => new Rectangle(0, 0, 68, 46);
+    private static Rectangle TabChoose => new Rectangle(0, 46, 68, 46);
+    private static Rectangle TabOff => new Rectangle(0, 138, 68, 46);
+    // symboles sur l'image d'une unité : Data\Overlay\Textures\WID_UNIT_SYMBOLS.png, 32 × 32 chacun, côte à côte (les
+    // mêmes dans FD2 et FD3) : « ? », croix rouge, flamme, volant
+    private const string UnitSymbols = "WID_UNIT_SYMBOLS.png";
+    private static Rectangle IdleMark => new Rectangle(0, 0, 32, 32);
+    private static Rectangle LostMark => new Rectangle(32, 0, 32, 32);
+    private static Rectangle FireMark => new Rectangle(64, 0, 32, 32);
+    private static Rectangle WheelMark => new Rectangle(96, 0, 32, 32);
 
     /// <summary>Lignes du panneau, de bas en haut : (nom de l'équipe, unités). Les unités sans équipe connue vont à la fin.</summary>
     private List<(string team, List<Unit> units)> PanelRows()
@@ -277,7 +278,8 @@ public sealed partial class OpenFDGame
     {
         if (SelectionPanelRect() is not { } pr)
             return;
-        Texture2D? pages = PagesTexture();
+        Texture2D? pages = OverlayTexture(StationSymbols);
+        Texture2D? symbols = OverlayTexture(UnitSymbols);
         Texture2D? lifeTex = OverlayTexture("WID_PRO_LIFE.png");
         Texture2D? stamTex = OverlayTexture("WID_PRO_STAMINA.png");
         Texture2D? waterTex = OverlayTexture("WID_PRO_RESERVE.png");
@@ -330,16 +332,20 @@ public sealed partial class OpenFDGame
                 }
                 else
                     _ui.Text(x + 4 * _scale, y + 4 * _scale, UnitLabel(u), new SN.Vector4(0.9f, 0.9f, 0.9f, 1));
-                if (u.Destroyed)
-                    _ui.Text(x + 4 * _scale, y + pr.iconH - _ui.LineHeight, "X", new SN.Vector4(1f, 0.3f, 0.3f, 1));
-                // dans un feu : flamme ; pompier qui ne fait rien : « ? » (une demi-seconde sur deux, sur l'image seulement)
-                Rectangle? mark = !blink || u.Destroyed ? null
+                // détruit : croix rouge (fixe) ; dans un feu : flamme ; pompier dans un véhicule : volant ; pompier qui ne
+                // fait rien : « ? » (ces trois-là une demi-seconde sur deux, sur l'image seulement)
+                Rectangle? mark = u.Destroyed ? LostMark
+                    : !blink ? null
                     : u.InFire ? FireMark
-                    : !u.IsVehicle && !u.Unconscious && !u.OnBoard && !Busy(u) ? IdleMark : null;
-                if (mark is { } mk && pages != null)
+                    : !u.IsVehicle && u.OnBoard ? WheelMark
+                    : !u.IsVehicle && !u.Unconscious && !Busy(u) ? IdleMark : null;
+                if (mark is { } mk)
                 {
                     float ms = MathF.Min(pr.iconH * 0.62f / mk.Height, iw * 0.62f / mk.Width);
-                    _ui.Image(pages, x + (iw - mk.Width * ms) / 2, y + (pr.iconH - mk.Height * ms) / 2, mk.Width * ms, mk.Height * ms, mk, SN.Vector4.One);
+                    if (symbols != null)
+                        _ui.Image(symbols, x + (iw - mk.Width * ms) / 2, y + (pr.iconH - mk.Height * ms) / 2, mk.Width * ms, mk.Height * ms, mk, SN.Vector4.One);
+                    else if (u.Destroyed)
+                        _ui.Text(x + 4 * _scale, y + pr.iconH - _ui.LineHeight, "X", new SN.Vector4(1f, 0.3f, 0.3f, 1));
                 }
                 // vie (véhicule) ou endurance (pompier), puis réserve d'agent
                 float k = u.IsVehicle ? u.Life / Math.Max(1, u.LifeMax) : u.Stamina / Math.Max(1, u.StaminaMax);
@@ -383,39 +389,6 @@ public sealed partial class OpenFDGame
         }
     }
 
-    // planche d'icônes du jeu (Data\Overlay\Pages\TextureDefinitions0__32bpp.dds : 2048 × 1024, BGRA non compressé)
-    private Texture2D? _pages;
-    private bool _pagesTried;
-    private Texture2D? PagesTexture()
-    {
-        if (_pagesTried)
-            return _pages;
-        _pagesTried = true;
-        try
-        {
-            string path = Path.Combine(_files.DataDir, "Overlay", "Pages", "TextureDefinitions0__32bpp.dds");
-            if (!File.Exists(path))
-                return null;
-            byte[] b = File.ReadAllBytes(path);
-            int h = BitConverter.ToInt32(b, 12), w = BitConverter.ToInt32(b, 16), bits = BitConverter.ToInt32(b, 88);
-            if (bits != 32 || b.Length < 128 + w * h * 4)
-                return null;
-            Color[] px = new Color[w * h];
-            for (int i = 0; i < px.Length; i++)
-            {
-                int o = 128 + 4 * i;
-                px[i] = new Color(b[o + 2], b[o + 1], b[o], b[o + 3]);   // BGRA → RGBA
-            }
-            _pages = new Texture2D(GraphicsDevice, w, h);
-            _pages.SetData(px);
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine($"Planche d'icônes : {e.Message}");
-        }
-        return _pages;
-    }
-
     private void Bar(float x, float y, float w, float h, float k, Texture2D? tex, SN.Vector4 col)
     {
         _ui.Rect(x - 1, y - 1, w + 2, h + 2, new SN.Vector4(0, 0, 0, 0.85f));
@@ -429,6 +402,11 @@ public sealed partial class OpenFDGame
 
     /// <summary>Clic gauche sur le panneau : une image → cette unité seule (la caméra y va si elle était déjà choisie ;
     /// Ctrl ou Maj : l'ajoute ou la retire) ; le cadre d'une équipe → toutes ses unités.</summary>
+    // dernier clic sur une image d'unité du panneau (pour reconnaître le double clic)
+    private Unit? _panelClick;
+    private float _panelClickAt;
+    private const float DoubleClickTime = 0.4f;
+
     private bool SelectionPanelPress(double x, double y)
     {
         if (SelectionPanelRect() is not { } pr)
@@ -475,11 +453,13 @@ public sealed partial class OpenFDGame
                     _sel.Add(pick);
                 return true;
             }
-            // la caméra ne va sur l'unité que si elle était déjà choisie (second clic)
-            bool already = _sel.Contains(pick);
+            // double clic sur son image : la caméra va sur l'unité
+            bool twice = ReferenceEquals(_panelClick, pick) && _uiClock - _panelClickAt < DoubleClickTime;
+            _panelClick = twice ? null : pick;
+            _panelClickAt = _uiClock;
             _sel.Clear();
             _sel.Add(pick);
-            if (already)
+            if (twice)
             {
                 _target.X = pick.Position.X;
                 _target.Y = pick.Position.Y;

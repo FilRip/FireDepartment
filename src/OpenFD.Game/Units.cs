@@ -457,6 +457,15 @@ public sealed partial class UnitManager
         u.FireDamageCoef = c.GetFloat("DAMAGE", "FireDamageCoef", vehicle ? 3 : 5);
         u.HealsUnits = vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanHeal");
         u.Icon = c.Get("UNIT", "Icon")?.Trim('"', ' ');
+        // bruits du véhicule ([VEHICLE_SOUND] de la classe, celle de sa nationalité : SIREN_FRA_01, SIREN_UK_03…)
+        if (vehicle)
+        {
+            static string? Label(string? s) => string.IsNullOrWhiteSpace(s) || float.TryParse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _) ? null : s;
+            u.RunSound = Label(c.Get("VEHICLE_SOUND", "RUN")?.Trim('"', ' '));
+            // (klaxon du bulldozer, du bateau-pompe, du camion bonus : pas une sirène à faire tourner pendant tout le trajet)
+            u.SirenSound = Label(c.Get("VEHICLE_SOUND", "SIREN")?.Trim('"', ' ')) is { } siren && !siren.Contains("HORN", StringComparison.OrdinalIgnoreCase) ? siren : null;
+            u.SirenVolume = c.GetFloat("VEHICLE_SOUND", "Siren_Volume", 100) / 100f;
+        }
         Units.Add(u);
         return u;
     }

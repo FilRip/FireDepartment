@@ -536,8 +536,13 @@ public sealed partial class OpenFDGame
             {
                 if (u.IsVehicle)
                 {
+                    // en route : le moteur, et la sirène de sa nationalité (pompe, échelle, ambulance : chacune la sienne)
                     if (u.Moving)
-                        _audio.Keep(u, "VEHICLE_1_RUN", u.Position);
+                    {
+                        _audio.Keep(u, u.RunSound ?? "VEHICLE_1_RUN", u.Position);
+                        if (u.SirenSound != null)
+                            _audio.Keep((u.Id, "sirène"), u.SirenSound, u.Position, u.SirenVolume);
+                    }
                     continue;
                 }
                 if (u.Target != null && !u.Moving)
