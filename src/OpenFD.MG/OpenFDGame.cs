@@ -2141,6 +2141,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             }
         }
         ExplosionSmoke(right, up);
+        if (_smokeOn)
+            SmokeColumns(time, right, up);
         Texture2D? flames = FlameTexture(DefaultFlameModel);
         if (flames != null)
             Soot(right, up);
@@ -2436,6 +2438,56 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     }
 
     private static float Lerp(float a, float b, float t) => a + (b - a) * t;
+
+    /// <summary>Taille des zones (unités) où les foyers voisins sont réunis en une colonne de fumée.</summary>
+    private const float SmokeCell = 500f;
+    private readonly Dictionary<(int x, int y), (float sum, SN.Vector3 at, float top)> _smokeCells = new();
+
+    /// <summary>
+    /// Colonnes de fumée au-dessus des feux (comme dans le jeu : grises, elles montent haut et dérivent avec le vent).
+    /// Les foyers voisins sont réunis par zones : plus la zone brûle fort, plus il y a de bouffées, plus elles sont épaisses
+    /// et plus elles montent haut. Chaque bouffée part foncée du haut des flammes, s'éclaircit, grossit et s'efface en montant.
+    /// </summary>
+    private void SmokeColumns(float time, SN.Vector3 right, SN.Vector3 up)
+    {
+        _smokeCells.Clear();
+        foreach (HotPoint h in _session.Fire.HotPoints)
+        {
+            if (!h.IsBurning)
+                continue;
+            float k = Math.Min(1, h.Intensity / MathF.Max(1, h.Class.IntensityMax));
+            if (k < 0.15f)
+                continue;
+            (int, int) key = ((int)MathF.Floor(h.Position.X / SmokeCell), (int)MathF.Floor(h.Position.Y / SmokeCell));
+            _smokeCells.TryGetValue(key, out (float sum, SN.Vector3 at, float top) c);
+            _smokeCells[key] = (c.sum + k, c.at + h.Position * k, MathF.Max(c.top, h.Position.Z));
+        }
+        SN.Vector3 wind = _session.Fire.Settings.WindDirection;
+        if (Environment.GetEnvironmentVariable("FD3_DEBUG_FUMEE") != null && _frame % 120 == 0)
+            Console.WriteLine($"fumée : {_smokeCells.Count} zones, {_smokeCells.Count(c => c.Value.sum >= 0.4f)} colonnes, somme max {(_smokeCells.Count > 0 ? _smokeCells.Max(c => c.Value.sum) : 0):0.00} en {(_smokeCells.Count > 0 ? _smokeCells.MaxBy(c => c.Value.sum).Value.at / _smokeCells.MaxBy(c => c.Value.sum).Value.sum : SN.Vector3.Zero)}");
+        foreach (((int x, int y) key, (float sum, SN.Vector3 at, float top) c) in _smokeCells)
+        {
+            if (c.sum < 0.4f)
+                continue;
+            float dense = MathF.Min(1, c.sum / 3);
+            SN.Vector3 baseAt = c.at / c.sum;
+            int seed = key.x * 7919 + key.y * 104729;
+            int n = Math.Clamp((int)MathF.Round(3 + 4 * c.sum), 3, 14);
+            float rise = 900 + 1600 * dense, drift = 300 + 500 * dense;
+            for (int q = 0; q < n; q++)
+            {
+                float ph = Rnd(seed, q, 11), life = 6 + 3 * Rnd(seed, q, 12);
+                float t = Frac(time / life + ph);
+                SN.Vector2 spread = new SN.Vector2(Rnd(seed, q, 13) * 2 - 1, Rnd(seed, q, 14) * 2 - 1) * SmokeCell * 0.35f;
+                SN.Vector3 p = new SN.Vector3(baseAt.X + spread.X, baseAt.Y + spread.Y, c.top + 250 + t * rise)
+                    + wind * (t * t * drift) + new SN.Vector3(MathF.Sin(time * 0.7f + q) * 40 * t, MathF.Cos(time * 0.6f + q) * 40 * t, 0);
+                float size = (250 + 350 * dense) * (0.7f + 1.8f * t);
+                float g = 0.3f + 0.18f * t;
+                float alpha = (0.45f + 0.35f * dense) * MathF.Min(1, t * 4) * MathF.Pow(1 - t, 0.9f);
+                P(p, size, new SN.Vector4(g, g, g * 1.04f, alpha), right, up);
+            }
+        }
+    }
 
     /// <summary>Nombre pseudo-aléatoire stable (0 à 1) pour la flamme q du foyer seed.</summary>
     private static float Rnd(int seed, int q, int salt) => Frac(MathF.Sin(seed * 12.9898f + q * 78.233f + salt * 37.719f) * 43758.547f);

@@ -1745,6 +1745,28 @@ public static class Program
                 }
                 return 0;
             }
+            case "ravitaillement":
+            {
+                // ravitaillement <Data> <Mission> : points de ravitaillement de la carte (bouches d'incendie, eau de la rivière…) ;
+                // un camion à lance posé à côté du premier, réserve vide : se recharge-t-il ?
+                Session ses = new Session(files, args[2], "EASY", false);
+                foreach (SupplyPoint sp in ses.Units.Supplies)
+                    Console.WriteLine($"{sp.Name,-26} ({sp.Position.X:0},{sp.Position.Y:0},{sp.Position.Z:0}) rayon {sp.Radius:0} puissance {sp.Power:0} agent « {sp.Agent} »");
+                Unit? truck = ses.Units.Units.FirstOrDefault(u => u.IsVehicle && u.Nozzle is { InfiniteReserve: false });
+                SupplyPoint? first = ses.Units.Supplies.FirstOrDefault();
+                if (truck == null || first == null)
+                {
+                    Console.WriteLine($"camion à réserve : {truck?.Name ?? "aucun"} · point : {first?.Name ?? "aucun"}");
+                    return 0;
+                }
+                ses.Units.Teleport(truck, ses.Units.Paths.Walkable(new System.Numerics.Vector2(first.Position.X + first.Radius * 0.5f, first.Position.Y)));
+                truck.Path.Clear();
+                truck.Nozzle!.Reserve = 0;
+                for (int i = 0; i < 50; i++)
+                    ses.Step();
+                Console.WriteLine($"{truck.Name} ({truck.Nozzle.Agent}) à {System.Numerics.Vector2.Distance(new(truck.Position.X, truck.Position.Y), new(first.Position.X, first.Position.Y)):0} de {first.Name} : réserve {truck.Nozzle.Reserve:0}/{truck.Nozzle.ReserveMax:0} après 5 s · {truck.Status}");
+                return 0;
+            }
             case "renfortsaccordes":
             {
                 // renfortsaccordes <Data> <Mission> <secondes> : renforts proposés, choisis (5 s après) et arrivés, au fil du temps
