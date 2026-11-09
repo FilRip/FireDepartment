@@ -455,6 +455,10 @@ public sealed partial class UnitManager
         u.LifeMax = c.GetFloat("DAMAGE", "MaxLifePoints", 500);
         u.Life = MathF.Min(u.LifeMax, c.GetFloat("DAMAGE", "LifePoints", u.LifeMax));
         u.FireDamageCoef = c.GetFloat("DAMAGE", "FireDamageCoef", vehicle ? 3 : 5);
+        // pompier ignifugé ([CAPACITIES_PROPS] FIRE_RESISTANCE_MAX = 30, [DAMAGE] FIREDAMAGECOEF = 1 contre 5 pour un pompier) :
+        // la chaleur l'épuise 5 fois moins vite
+        if (!vehicle && c.GetFloat("CAPACITIES_PROPS", "FIRE_RESISTANCE_MAX", 0) > 0)
+            u.SuitHeatCoef = Math.Clamp(u.FireDamageCoef / FiremanFireDamageCoef, 0, 1);
         u.HealsUnits = vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanHeal");
         u.Icon = c.Get("UNIT", "Icon")?.Trim('"', ' ');
         // bruits du véhicule ([VEHICLE_SOUND] de la classe, celle de sa nationalité : SIREN_FRA_01, SIREN_UK_03…)

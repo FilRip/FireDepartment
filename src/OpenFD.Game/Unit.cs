@@ -117,6 +117,7 @@ public sealed class Unit
     public float Stamina = 100, StaminaMax = 100, StaminaRegen = 0.5f, HeatCoef = 1, SmokeCoef = 0.7f;
     public float Life = 500, LifeMax = 500, FireDamageCoef = 3;
     public float ScriptHeatCoef = 1;                      // ENT_SetFireDamageCoef sur un pompier (0 : insensible au feu)
+    public float SuitHeatCoef = 1;                        // combinaison ignifugée : chaleur × FireDamageCoef / celui d'un pompier (1/5)
     public bool Destroyed;                                // véhicule détruit : inutilisable jusqu'à la fin de la partie
     public bool HealsUnits;                               // ambulance : soigne les pompiers venus à elle
     public string? Icon;                                  // [UNIT] Icon : image de l'unité (Data\Overlay\Textures)

@@ -23,6 +23,9 @@ public sealed partial class OpenFDGame
     private readonly Dictionary<object, CharAnim> _chars = new();
     private readonly List<(uint id, string model, SN.Matrix4x4 world)> _scriptShown = new();
     private readonly List<(uint id, string model, SN.Matrix4x4 world, SN.Vector3 origin, float yaw)> _scriptMoved = new();
+    // battants de portail que le script fait glisser (Factory) : ils restent à leur hauteur ; le sol de la carte, à côté,
+    // est le haut du mur ou du bâtiment où ils se rangent, et ils y monteraient
+    private readonly HashSet<uint> _slideFlat = new();
 
     // objets déplacés par le script (ENT_SetPosition : l'avion et le camion de Mriya avancent de 80 unités à chaque tour
     // de la boucle principale) : on les fait glisser d'une position à la suivante pendant un tour, au lieu de sauter
@@ -434,7 +437,7 @@ public sealed partial class OpenFDGame
             if (Host?.TurnedObjects.TryGetValue(id, out float turn) == true)
                 w = w * SN.Matrix4x4.CreateTranslation(-origin) * SN.Matrix4x4.CreateRotationZ(turn - yaw) * SN.Matrix4x4.CreateTranslation(origin);
             if (ScriptPos(id) is { } mv)
-                w = FollowGround(id, world, origin, mv);
+                w = _slideFlat.Contains(id) ? w * SN.Matrix4x4.CreateTranslation(mv.X - origin.X, mv.Y - origin.Y, 0) : FollowGround(id, world, origin, mv);
             foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(model))
                 DrawMesh(mesh, (part * w).X());
         }

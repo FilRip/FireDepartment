@@ -1185,6 +1185,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         // (ENT_SetVisibility(numéro, …) : la porte fixe du hangar de Mriya, remplacée par la porte animée) : dessinés à part,
         // à leur place du moment et seulement s'ils sont visibles
         _scriptMoved.Clear();
+        _slideFlat.Clear();
         _scriptRoofs.Clear();
         _glide.Clear();
         string scriptDir = Path.Combine(_files.DataDir, "Script", "Mission", mission);
@@ -1208,6 +1209,22 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                         into.Add(uint.Parse(mm.Groups[2].Value));
                     else if (name != null && byName.TryGetValue(name, out LevelObject? no) && no.Kind == EntityKind.Placeable)
                         into.Add(no.Id);
+                }
+            // objet déplacé ou tourné sous un nom assemblé par morceaux (Factory : ENT_SetPosition(SCR_GetVarS32("Grid_" + NumGrid + "_" + NumPiece), …), les
+            // battants des grilles automatiques qui glissent sur le côté) : chaque morceau de texte doit s'y retrouver, dans
+            // l'ordre, les variables remplacées par n'importe quoi (« Grid_1_1 » … « Grid_4_2 »)
+            foreach (string t in texts)
+                foreach (System.Text.RegularExpressions.Match cm in System.Text.RegularExpressions.Regex.Matches(t, @"ENT_Set(Position|Orientation)\s*\(\s*(?:SCR_GetVarS32|ENT_FindByName)\s*\(\s*((?:""[^""]*""|\w+)(?:\s*\+\s*(?:""[^""]*""|\w+))+)\s*\)", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                {
+                    string[] parts = System.Text.RegularExpressions.Regex.Split(cm.Groups[2].Value, @"\s*\+\s*");
+                    if (!parts.Any(x => x.StartsWith('"') && x.Length > 3))
+                        continue;   // il faut au moins un vrai morceau de nom
+                    string rx = "^" + string.Concat(parts.Select(x => x.StartsWith('"') ? System.Text.RegularExpressions.Regex.Escape(x.Trim('"')) : ".+")) + "$";
+                    foreach (LevelObject no in _session.Level.Objects.Where(o => o.Kind == EntityKind.Placeable && System.Text.RegularExpressions.Regex.IsMatch(o.Name, rx, System.Text.RegularExpressions.RegexOptions.IgnoreCase)))
+                    {
+                        movedIds.Add(no.Id);
+                        _slideFlat.Add(no.Id);
+                    }
                 }
             // objets que le script cache et montre : cachés au départ si le niveau le dit (Mriya : le camion de la
             // cinématique 3, la porte animée du hangar), tant que le script n'a rien dit d'autre

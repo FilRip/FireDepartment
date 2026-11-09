@@ -1871,6 +1871,107 @@ public static class Program
                 Console.WriteLine($"{found.Count} matériau(x) avec reflet");
                 return 0;
             }
+            case "ignifuge":
+            {
+                // ignifuge <Data> <Mission> : un pompier ordinaire et le pompier ignifugé posés côte à côte près d'un feu ; endurance
+                Session ses = new Session(files, args[2], "EASY");
+                for (int i = 0; i < (int)(20 / Session.Dt); i++)
+                    ses.Step();
+                Unit? igni = ses.Units.Units.FirstOrDefault(u => u.ClassPath.Contains("igni", StringComparison.OrdinalIgnoreCase));
+                Unit? sp = ses.Units.Units.FirstOrDefault(u => !u.IsVehicle && u.Nozzle != null && u != igni && u.SuitHeatCoef == 1);
+                Fire.HotPoint? fire = ses.Fire.HotPoints.Where(h => h.IsBurning).OrderByDescending(h => h.Intensity).FirstOrDefault();
+                if (igni == null || sp == null || fire == null)
+                {
+                    Console.WriteLine($"ignifugé {igni?.Name ?? "absent"} · pompier {sp?.Name ?? "absent"} · feu {fire?.Name ?? "aucun"}");
+                    return 1;
+                }
+                Console.WriteLine($"ignifugé {igni.ClassPath} chaleur ×{igni.SuitHeatCoef} · pompier {sp.ClassPath} · feu {fire.Name} {fire.Intensity:0}");
+                foreach (Unit u in new[] { igni, sp })
+                {
+                    ses.Units.Teleport(u, new System.Numerics.Vector2(fire.Position.X + 60, fire.Position.Y));
+                    u.Stamina = u.StaminaMax;
+                }
+                for (int k = 0; k < 12; k++)
+                {
+                    for (int i = 0; i < (int)(5 / Session.Dt); i++)
+                    {
+                        foreach (Unit u in new[] { igni, sp })
+                        {
+                            u.Path.Clear();
+                            u.Target = null;
+                        }
+                        ses.Step();
+                    }
+                    Console.WriteLine($"  {ses.Time:0} s · ignifugé {igni.Stamina:0.0} ({(igni.Unconscious ? "évanoui" : "debout")}) · pompier {sp.Stamina:0.0} ({(sp.Unconscious ? "évanoui" : "debout")}) · feu {fire.Intensity:0}");
+                }
+                return 0;
+            }
+            case "grilles":
+            {
+                // grilles <Data> <Mission> <secondes> : Factory, grilles automatiques (zones TGrid_n, battants Grid_n_1 et Grid_n_2)
+                Session ses = new Session(files, args[2], "EASY");
+                float until = float.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture);
+                string last = "";
+                foreach (TriggerZone tz in ses.Units.Triggers.Where(t => t.Name.StartsWith("tgrid", StringComparison.OrdinalIgnoreCase)))
+                    Console.WriteLine($"zone {tz.Name} ({tz.Position.X:0},{tz.Position.Y:0}) demi-taille ({tz.Half.X:0},{tz.Half.Y:0},{tz.Half.Z:0}) entrée {tz.Script} sortie {tz.OnLeave} active {tz.Enabled}");
+                bool sent = false;
+                while (ses.Time < until)
+                {
+                    ses.Step();
+                    // à 15 s : le pompier le plus proche de la première zone y va, puis en repart à 60 s
+                    if (!sent && ses.Time > 15 && ses.Units.Triggers.FirstOrDefault(t => t.Name.Equals("tgrid_1", StringComparison.OrdinalIgnoreCase)) is { } z1
+                        && ses.Units.Units.Where(u => !u.IsVehicle && !u.Hidden && !u.OnBoard).OrderBy(u => System.Numerics.Vector3.Distance(u.Position, z1.Position)).FirstOrDefault() is { } man)
+                    {
+                        sent = true;
+                        Console.WriteLine($"{man.Name} ({man.Position.X:0},{man.Position.Y:0}) envoyé à la zone : {ses.Units.Order(man, new System.Numerics.Vector2(z1.Position.X, z1.Position.Y))}");
+                    }
+                    Dictionary<string, OpenFD.Script.Value> gl = ses.Scripts!.Globals;
+                    string line = string.Join(" | ", Enumerable.Range(1, 4).Select(n =>
+                    {
+                        string pieces = string.Join(" ", new[] { 1, 2 }.Select(k => gl.TryGetValue($"Grid_{n}_{k}", out OpenFD.Script.Value id)
+                            && ses.Host!.MovedObjects.TryGetValue((uint)id.AsInt, out System.Numerics.Vector2 p) ? $"({p.X:0},{p.Y:0})" : "-"));
+                        return $"{n}: {(gl.TryGetValue($"NbCibleGrid{n}", out OpenFD.Script.Value c) ? c.AsInt : -9)} {(gl.TryGetValue($"GridStatut{n}", out OpenFD.Script.Value st) ? st.AsInt : -9)} {pieces}";
+                    }));
+                    if (line != last)
+                    {
+                        Console.WriteLine($"{ses.Time,6:0.0} s {line}");
+                        last = line;
+                    }
+                }
+                return 0;
+            }
+            case "messages":
+            {
+                // messages <Data> <Mission> <secondes> [fonction,secondes] : messages du script au fil du temps (une fonction du script
+                // peut être appelée en cours de route : College « TransitionS2,20 » lance le court-circuit)
+                Session ses = new Session(files, args[2], "EASY");
+                float until = float.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture);
+                string[]? call = args.Length > 4 ? args[4].Split(',') : null;
+                bool called = false;
+                int seen = 0;
+                Dictionary<string, int> counts = new();
+                System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
+                while (ses.Time < until && ses.Host?.Outcome == null)
+                {
+                    ses.Step();
+                    if (call != null && !called && ses.Time > float.Parse(call[1], System.Globalization.CultureInfo.InvariantCulture))
+                    {
+                        called = true;
+                        ses.Scripts?.TryRun(call[0]);
+                        Console.WriteLine($"{ses.Time,6:0} s appel {call[0]}");
+                    }
+                    if (ses.Steps % 300 == 0)
+                        Console.WriteLine($"{ses.Time,6:0} s · calcul {watch.Elapsed.TotalSeconds:0.0} s · foyers en feu {ses.Fire.HotPoints.Count(h => h.IsBurning)}/{ses.Fire.HotPoints.Count}");
+                    List<(string vocal, string text, float x, float y)> msgs = ses.Host!.Messages;
+                    for (; seen < msgs.Count; seen++)
+                    {
+                        counts[msgs[seen].text] = counts.GetValueOrDefault(msgs[seen].text) + 1;
+                        Console.WriteLine($"{ses.Time,6:0} s {msgs[seen].text}");
+                    }
+                }
+                Console.WriteLine("total : " + string.Join(" · ", counts.Select(kv => $"{kv.Key} ×{kv.Value}")));
+                return 0;
+            }
             case "suivreveh":
             {
                 // suivreveh <Data> <Mission> : des pompiers vont au camion (monter, recharger), le camion part ailleurs entre-temps
