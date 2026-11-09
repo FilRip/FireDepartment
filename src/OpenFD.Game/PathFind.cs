@@ -283,6 +283,29 @@ public sealed class PathFind
                 r++;
             return r;
         }
+        // marche d'escalier entre deux pièces : dans un même axe, une case de 0,5 à 1,1 m plus haute que sa voisine d'une pièce
+        // et plus basse d'autant que celle de l'autre, la pente se poursuivant au moins une case plus loin (College, la bibliothèque :
+        // 1 m, 1,75 m, 2,5 m, 3,25 m… jusqu'au balcon). Un mur de pièce est au niveau du sol ; celui qui sépare la rue d'un
+        // plancher surélevé fait un saut de plus d'un mètre de chaque côté : ni l'un ni l'autre n'est une marche.
+        bool Stair(int x, int y)
+        {
+            float H(int cx, int cy) => g.Inside(cx, cy) && g.ZoneA[g.Index(cx, cy)] != 0 ? g.GroundHeight[g.Index(cx, cy)] : float.NaN;
+            bool Rise(float lo, float hi) => hi - lo >= 50 && hi - lo <= 110;
+            bool Slope(int dx, int dy)
+            {
+                float a2 = H(x - 2 * dx, y - 2 * dy), a = H(x - dx, y - dy), h = H(x, y), b = H(x + dx, y + dy), b2 = H(x + 2 * dx, y + 2 * dy);
+                if (float.IsNaN(a) || float.IsNaN(b))
+                    return false;
+                // entre deux pièces (zones B différentes) : pas une pente du terrain dehors
+                int za = g.ZoneB[g.Index(x - dx, y - dy)], zb = g.ZoneB[g.Index(x + dx, y + dy)];
+                if (za == 0 || zb == 0 || za == zb)
+                    return false;
+                if (a > b)
+                    (a2, a, b, b2) = (b2, b, a, a2);   // toujours en montant : a2, a, h, b, b2
+                return Rise(a, h) && Rise(h, b) && (Rise(b, b2) || Rise(a2, a));
+            }
+            return Slope(1, 0) || Slope(0, 1);
+        }
         int m = 0;
         HashSet<int> rule = new HashSet<int>();
         if (Environment.GetEnvironmentVariable("FD3_SANS_MURSPIECES") == null)
@@ -290,7 +313,7 @@ public sealed class PathFind
             for (int x = 0; x < g.Width; x++)
             {
                 int i = g.Index(x, y);
-                if (g.ZoneA[i] == 0 || g.ZoneB[i] != 0 || Blocked[i] || nearDoor.Contains(i))
+                if (g.ZoneA[i] == 0 || g.ZoneB[i] != 0 || Blocked[i] || nearDoor.Contains(i) || Stair(x, y))
                     continue;
                 // une bande mince (3 cases au plus en travers) : un mur ; une grande étendue en zone B 0 reste praticable
                 if (Math.Min(Run(x, y, 1, 0), Run(x, y, 0, 1)) > 3)

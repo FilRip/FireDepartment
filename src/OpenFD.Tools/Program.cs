@@ -1893,6 +1893,20 @@ public static class Program
                 Console.WriteLine($"fin ({w.Position.X:0},{w.Position.Y:0},{w.Position.Z:0}) {w.Status}");
                 return 0;
             }
+            case "bloquepar":
+            {
+                // bloquepar <Data> <Mission> x y [x y …] : ce qui ferme ces cases de la grille (objet et modèle, mur, hauteur)
+                Session ses = new Session(files, args[2], "EASY", false);
+                Grid g = ses.Grid!;
+                for (int a = 3; a + 1 < args.Length; a += 2)
+                {
+                    (int cx, int cy) = g.CellOf(new System.Numerics.Vector3(float.Parse(args[a]), float.Parse(args[a + 1]), 0));
+                    int i = g.Index(cx, cy);
+                    string who = ses.Units.BlockedBy.TryGetValue(i, out string? b) ? b : "-";
+                    Console.WriteLine($"({args[a]},{args[a + 1]}) case {cx},{cy} : bloquée {ses.Units.Paths.IsBlocked(i)} par {who} · zone A {g.ZoneA[i]} · zone B {g.ZoneB[i]} · sol {g.GroundHeight[i]:0}");
+                }
+                return 0;
+            }
             case "solgrille":
             {
                 // solgrille <Data> <Mission> x0 y0 x1 y1 : hauteur du sol de chaque case (en mètres ; « -- » hors zone)
