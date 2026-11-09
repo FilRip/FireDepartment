@@ -111,6 +111,13 @@ public sealed partial class OpenFDGame
             if (vocal.Length > 0)
                 _audio?.Play(vocal);
             string shown = _loc.Get(text.Length > 0 ? text : vocal);
+            int last = _messages.Count - 1;
+            if (last >= 0 && _messages[last].text == shown)
+            {
+                // même texte que le dernier message : pas de doublon, il reste affiché aussi longtemps que s'il venait d'arriver
+                _messages[last] = (shown, _session!.Time);
+                continue;
+            }
             _messages.Add((shown, _session!.Time));
             if (_messages.Count > MaxMessages)
                 _messages.RemoveAt(0);
