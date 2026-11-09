@@ -17,7 +17,8 @@ public sealed class Settings
     public int VolumeVoice { get; set; } = 100;     // % interface et voix (VOCAL_…)
     public int VolumeEffects { get; set; } = 80;    // % effets (tout le reste)
     public int VolumeMusic { get; set; } = 50;      // % ambiance (musiques)
-    public int Brightness { get; set; } = 150;      // % (150 : réglage habituel)
+    public int Brightness { get; set; } = 100;      // % (100 : comme le jeu d'origine)
+    public bool BrightnessNeutral { get; set; }     // réglage déjà passé de l'ancienne valeur par défaut (150 %) à 100 %
     public string Resolution { get; set; } = "";    // « 1920x1080 » ; vide : fenêtre à la taille de l'écran
     public bool Fullscreen { get; set; }
     /// <summary>Réglages du jeu sans place dans le menu : modifiables à la main dans ce fichier.</summary>
@@ -28,6 +29,7 @@ public sealed class Settings
     public string PlayerName { get; set; } = "";    // pseudo en multijoueur
     public string LastMission { get; set; } = "";   // dernière mission jouée : page affichée en ouvrant la campagne
     public string LastDifficulty { get; set; } = "";   // sa difficulté (EASY, NORMAL, HARD) : choisie d'office dans les menus
+    public bool Reflections { get; set; } = true;   // reflets des vitres et carrosseries (réglage caché : seulement dans le fichier)
 
     /// <summary>Dossier « Save » du jeu (à côté de Data) : options.json y est enregistré.</summary>
     public static string SaveDir = "";

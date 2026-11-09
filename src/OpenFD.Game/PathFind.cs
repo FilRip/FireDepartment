@@ -383,6 +383,8 @@ public sealed class PathFind
         Blocked = new bool[g.Width * g.Height];
         SceneAssets assets = _assets;
         Dictionary<string, List<Vector2>> shapes = new Dictionary<string, List<Vector2>>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, List<Vector2>> gaps = new Dictionary<string, List<Vector2>>(StringComparer.OrdinalIgnoreCase);
+        HashSet<int> passages = new HashSet<int>();
         Dictionary<int, int> cover = new Dictionary<int, int>();
         Dictionary<int, string> names = new Dictionary<int, string>();
         foreach (LevelObject o in level.Objects.Where(o => o.Kind == EntityKind.Placeable && o.HasTransform))
@@ -414,17 +416,29 @@ public sealed class PathFind
                 continue;
             string path = SceneAssets.GfxPath("Placeable", model);
             if (!shapes.TryGetValue(path, out pts!))
+            {
                 shapes[path] = pts = Footprint(assets, path);
+                gaps[path] = Gaps(pts);
+            }
             Mark(o, pts, model);
+            foreach (Vector2 p in gaps[path])
+            {
+                (int cx, int cy) = g.CellOf(Vector3.Transform(new Vector3(p, 0), o.Matrix));
+                if (g.Inside(cx, cy))
+                    passages.Add(g.Index(cx, cy));
+            }
         }
 
-        // une case n'est bloquée que si l'objet en couvre plus de la moitié (rangées de sièges, tables : on passe entre)
+        // une case n'est bloquée que si l'objet en couvre plus de la moitié (rangées de sièges, tables : on passe entre) ;
+        // l'espace entre deux wagons reste ouvert à pied (voir Gaps)
         foreach ((int i, int n) in cover)
-            if (n > CoverMin)
+            if (n > CoverMin && !passages.Contains(i))
             {
                 Blocked[i] = true;
                 BlockedBy[i] = names[i];
             }
+        if (passages.Count > 0)
+            Console.WriteLine($"Passages entre wagons (objets très longs) : {passages.Count} case(s) ouverte(s) · {string.Join(", ", gaps.Where(kv => kv.Value.Count > 0).Select(kv => Path.GetFileName(kv.Key)))}");
 
         void Mark(LevelObject o, List<Vector2> local, string model)
         {
@@ -444,6 +458,56 @@ public sealed class PathFind
         }
     }
     private const int CoverMin = 8;   // sur 16 carrés de 25 cm par case
+
+    /// <summary>
+    /// Passages à pied à travers un objet très long fait de plusieurs corps (Port : la rame de wagons, un seul modèle) :
+    /// entre deux wagons, l'empreinte n'a plus que l'attelage, au milieu (moins d'un mètre de long). Avec des cases d'un
+    /// mètre, chaque case de cet espace touche aussi un bout de wagon et resterait fermée ; dans le jeu, on y passe. On
+    /// rend donc les points (repère du modèle) d'une rangée de cases qui traverse l'objet à cet endroit. Seulement pour un
+    /// objet d'au moins 10 m sur 2 m, trois fois plus long que large, dont l'espace presque vide (50 cm à 2 m) sépare
+    /// deux corps pleins.
+    /// </summary>
+    public static List<Vector2> Gaps(List<Vector2> pts)
+    {
+        const float Step = 25;
+        List<Vector2> result = new List<Vector2>();
+        if (pts.Count == 0)
+            return result;
+        float minX = pts.Min(p => p.X), maxX = pts.Max(p => p.X), minY = pts.Min(p => p.Y), maxY = pts.Max(p => p.Y);
+        bool alongY = maxY - minY >= maxX - minX;
+        float lo = alongY ? minY : minX, hi = alongY ? maxY : maxX, wLo = alongY ? minX : minY, wHi = alongY ? maxX : maxY;
+        float length = hi - lo + Step, width = wHi - wLo + Step;
+        if (length < 1000 || length < 3 * width || width < 200)
+            return result;   // pas un banc (Subway : fentes de 25 cm entre les sièges du quai)
+        int rows = (int)MathF.Round(length / Step), across = (int)MathF.Round(width / Step);
+        int[] count = new int[rows];
+        foreach (Vector2 p in pts)
+        {
+            int r = Math.Clamp((int)MathF.Floor(((alongY ? p.Y : p.X) - lo) / Step + 0.5f), 0, rows - 1);
+            count[r]++;
+        }
+        bool Thin(int r) => count[r] <= Math.Max(2, across / 5);
+        bool Full(int r) => count[r] >= across * 3 / 4;
+        for (int r = 1; r < rows - 1; r++)
+        {
+            if (!Thin(r) || Thin(r - 1))
+                continue;
+            int end = r;
+            while (end + 1 < rows && Thin(end + 1))
+                end++;
+            // un corps plein juste avant et juste après (à moins d'un mètre) : un espace entre deux wagons
+            bool before = Enumerable.Range(Math.Max(0, r - 4), r - Math.Max(0, r - 4)).Any(Full);
+            bool after = Enumerable.Range(end + 1, Math.Min(rows, end + 5) - (end + 1)).Any(Full);
+            if (before && after && end - r >= 1 && end - r < 8)
+            {
+                float mid = lo + (r + end) / 2f * Step;
+                for (float w = wLo - Step; w <= wHi + Step; w += Step)
+                    result.Add(alongY ? new Vector2(w, mid) : new Vector2(mid, w));
+            }
+            r = end;
+        }
+        return result;
+    }
 
     /// <summary>Empreinte au sol d'un modèle (repère du modèle) : points tous les 25 cm sous ses faces à hauteur d'homme.</summary>
     public static List<Vector2> Footprint(SceneAssets assets, string path, float Low = 30, float High = 170, Func<string, Matrix4x4, Matrix4x4>? pose = null)

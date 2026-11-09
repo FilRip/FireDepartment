@@ -28,6 +28,44 @@ public static class Tex
         Soft.SetData(px);
     }
 
+    /// <summary>
+    /// Décor de reflet en 6 faces (DDS « cube », DXT1/3/5 : …_cube.dds du jeu), dans l'ordre +X, −X, +Y, −Y, +Z, −Z.
+    /// null si le fichier n'est pas un cube compressé lisible.
+    /// </summary>
+    public static TextureCube? DdsCube(GraphicsDevice gd, byte[] d)
+    {
+        if (d.Length < 128 || d[0] != 'D' || d[1] != 'D' || d[2] != 'S' || (BitConverter.ToUInt32(d, 112) & 0x200) == 0)
+            return null;
+        int size = BitConverter.ToInt32(d, 16), mips = Math.Max(1, BitConverter.ToInt32(d, 28));
+        (SurfaceFormat fmt, int block) = BitConverter.ToUInt32(d, 84) switch
+        {
+            0x31545844 => (SurfaceFormat.Dxt1, 8),
+            0x33545844 => (SurfaceFormat.Dxt3, 16),
+            0x35545844 => (SurfaceFormat.Dxt5, 16),
+            _ => (SurfaceFormat.Color, 0),
+        };
+        if (block == 0 || size <= 0)
+            return null;
+        int full = 1 + (int)MathF.Floor(MathF.Log2(size));
+        int LevelBytes(int l) => Math.Max(1, ((size >> l) + 3) / 4) * Math.Max(1, ((size >> l) + 3) / 4) * block;
+        int faceBytes = Enumerable.Range(0, mips).Sum(LevelBytes);
+        if (128 + 6 * faceBytes > d.Length)
+            return null;
+        // toute la chaîne de niveaux dans le fichier : on la garde ; sinon le premier niveau seul
+        bool chain = mips >= full;
+        TextureCube t = new TextureCube(gd, size, chain, fmt);
+        for (int f = 0; f < 6; f++)
+        {
+            int off = 128 + f * faceBytes;
+            for (int l = 0; l < (chain ? full : 1); l++)
+            {
+                t.SetData((CubeMapFace)f, l, null, d, off, LevelBytes(l));
+                off += LevelBytes(l);
+            }
+        }
+        return t;
+    }
+
     public static Texture2D? Dds(GraphicsDevice gd, byte[] d)
     {
         if (d.Length < 128 || d[0] != 'D' || d[1] != 'D' || d[2] != 'S')
