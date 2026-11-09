@@ -38,6 +38,7 @@ public sealed class Unit
     public CarryPhase Carry;
     public float CarryTimer;
     public Unit? GoToVehicle;                             // véhicule vers lequel l'unité se dirige (remplir, déposer des civils)
+    public Vector2 GoToVehicleAim;                        // où était (ou allait) ce véhicule quand le chemin a été tracé
     public float HealTimer;
     public bool CanBreak, CanUse;                         // hache (portes, fenêtres) ; ouvrir une porte
     public bool CanDemolish;                              // bulldozer : dégage les débris « CouldBeDemolish »

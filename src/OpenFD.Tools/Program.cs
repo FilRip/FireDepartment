@@ -1146,9 +1146,20 @@ public static class Program
                 }
                 ses.Units.FetchCivilian(man, civ);
                 string last = "";
+                bool moveAmb = args.Length > 3 && args[3] == "bouge";   // porter <Data> <Mission> bouge : l'ambulance part pendant le trajet
                 for (int t = 0; t < 240 && civ.State != CivilianState.Rescued; t++)
                 {
                     Run(1);
+                    if (moveAmb && man.Carry == CarryPhase.Walking && man.GoToVehicle is { } amb)
+                    {
+                        moveAmb = false;
+                        foreach (System.Numerics.Vector2 d in new[] { new System.Numerics.Vector2(2500, 0), new System.Numerics.Vector2(-2500, 0), new System.Numerics.Vector2(0, 2500), new System.Numerics.Vector2(0, -2500) })
+                            if (ses.Units.Drive(amb, new System.Numerics.Vector2(amb.Position.X, amb.Position.Y) + d))
+                            {
+                                Console.WriteLine($"{ses.Time,6:0} s ambulance ({amb.Position.X:0},{amb.Position.Y:0}) envoyée vers ({amb.Path.Last().X:0},{amb.Path.Last().Y:0})");
+                                break;
+                            }
+                    }
                     string line = $"{man.Status} · {man.Carry}";
                     if (line != last)
                     {
@@ -1858,6 +1869,35 @@ public static class Program
                 foreach ((string k, string v) in found.OrderBy(kv => kv.Key))
                     Console.WriteLine($"{k,-50} {v}");
                 Console.WriteLine($"{found.Count} matériau(x) avec reflet");
+                return 0;
+            }
+            case "suivreveh":
+            {
+                // suivreveh <Data> <Mission> : des pompiers vont au camion (monter, recharger), le camion part ailleurs entre-temps
+                Session ses = new Session(files, args[2], "EASY");
+                for (int i = 0; i < (int)(30 / Session.Dt); i++)
+                    ses.Step();
+                Unit truck = ses.Units.Units.First(u => u.IsVehicle && !u.Fixed && !u.Moving && (u.Seats > 0 || u.ResupplyPower > 0));
+                List<Unit> men = ses.Units.Units.Where(u => !u.IsVehicle && u.Nozzle != null).OrderByDescending(u => System.Numerics.Vector3.Distance(u.Position, truck.Position)).Take(2).ToList();
+                men[0].Nozzle!.Reserve = 0;
+                ses.Units.GoToVehicle(men[0], truck);
+                if (men.Count > 1)
+                    ses.Units.BoardVehicle(men[1], truck);
+                Console.WriteLine($"camion {truck.Name} ({truck.Position.X:0},{truck.Position.Y:0}) ; " + string.Join(" | ", men.Select(m => $"{m.Name} à {System.Numerics.Vector3.Distance(m.Position, truck.Position):0} : {m.Status}")));
+                for (int i = 0; i < (int)(1 / Session.Dt); i++)
+                    ses.Step();
+                bool driven = false;
+                foreach (System.Numerics.Vector2 d in new[] { new System.Numerics.Vector2(2500, 0), new System.Numerics.Vector2(-2500, 0), new System.Numerics.Vector2(0, 2500), new System.Numerics.Vector2(0, -2500) })
+                    if (!driven && ses.Units.Drive(truck, new System.Numerics.Vector2(truck.Position.X, truck.Position.Y) + d))
+                        driven = true;
+                Console.WriteLine($"camion envoyé : {driven} → ({(truck.Moving ? truck.Path.Last().X : truck.Position.X):0},{(truck.Moving ? truck.Path.Last().Y : truck.Position.Y):0})");
+                for (int k = 0; k < 30; k++)
+                {
+                    for (int i = 0; i < (int)(1 / Session.Dt); i++)
+                        ses.Step();
+                    if (k % 3 == 2)
+                        Console.WriteLine($"  {ses.Time:0} s camion ({truck.Position.X:0},{truck.Position.Y:0}) {(truck.Moving ? "roule" : "arrêté")} ; " + string.Join(" | ", men.Select(m => m.OnBoard ? "à bord" : $"à {System.Numerics.Vector3.Distance(m.Position, truck.Position):0} : {m.Status} ({m.Nozzle!.Reserve:0})")));
+                }
                 return 0;
             }
             case "soinambu":

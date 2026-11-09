@@ -842,15 +842,58 @@ public sealed partial class UnitManager
         if (!Order(u, v + dir * (VehicleReach * 0.6f)))
             return;
         u.GoToVehicle = vehicle;
+        u.GoToVehicleAim = VehicleAim(vehicle);
         u.Status = vehicle.IsAmbulance ? "va à l'ambulance" : "va remplir sa réserve";
         // les civils qui le suivent l'accompagnent
+    }
+
+    /// <summary>Distance (cm) dont le but d'un véhicule doit changer pour que ceux qui le rejoignent refassent leur chemin.</summary>
+    public const float VehicleFollowStep = 300f;
+
+    // là où il faut rejoindre le véhicule : sa destination s'il roule, sinon sa place
+    private static Vector2 VehicleAim(Unit v)
+    {
+        if (v.Moving)
+            return v.Path.Last();
+        return new Vector2(v.Position.X, v.Position.Y);
+    }
+
+    /// <summary>
+    /// Le véhicule qu'une unité à pied rejoint a reçu l'ordre de se déplacer : elle repart vers sa nouvelle destination,
+    /// en gardant ce qu'elle allait y faire (monter à bord, se recharger, se soigner, déposer des civils).
+    /// </summary>
+    private void FollowVehicle(Unit u)
+    {
+        if (u.GoToVehicle is not { } v || u.IsVehicle || u.OnBoard)
+            return;
+        if (v.Destroyed || v.Hidden)
+            return;
+        Vector2 aim = VehicleAim(v);
+        if (Vector2.Distance(aim, u.GoToVehicleAim) < VehicleFollowStep)
+            return;
+        bool boarding = u.Boarding;
+        string status = u.Status;
+        Vector2 me = new Vector2(u.Position.X, u.Position.Y);
+        Vector2 dir = Vector2.Distance(me, aim) > 1 ? Vector2.Normalize(me - aim) : Vector2.UnitX;
+        if (!Order(u, aim + dir * (VehicleReach * 0.6f)))
+        {
+            u.Boarding = false;
+            return;
+        }
+        u.GoToVehicle = v;
+        u.GoToVehicleAim = aim;
+        u.Boarding = boarding;
+        u.Status = status;
     }
 
     private void Rescue(Unit u, float dt)
     {
         RescueCivilian(u, dt);   // voir CivilianAI.cs
+        FollowVehicle(u);
         if (u.GoToVehicle is { } v && !u.Moving)
         {
+            if (v.Moving)
+                return;   // arrivé avant le véhicule : il l'attend à sa destination
             if (Vector3.Distance(u.Position, v.Position) > VehicleReach * 1.5f)
             {
                 u.GoToVehicle = null;
