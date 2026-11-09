@@ -155,8 +155,31 @@ public sealed partial class UnitManager
     /// <summary>Renforts accordés que le joueur n'a pas encore choisis.</summary>
     public int GrantsAvailable { get; private set; }
 
-    /// <summary>Casernes que le joueur peut choisir maintenant (vide s'il n'a pas de renfort accordé).</summary>
-    public IEnumerable<string> ChoosableTeams => GrantsAvailable > 0 ? _toGrant.Select(t => TeamCode(t.cfg)) : Enumerable.Empty<string>();
+    /// <summary>Casernes que le joueur peut choisir maintenant : toutes s'il a un renfort accordé, et celles proposées une à une.</summary>
+    public IEnumerable<string> ChoosableTeams => (GrantsAvailable > 0 ? _toGrant : _offered).Concat(_offered).Select(t => TeamCode(t.cfg)).Distinct();
+
+    // renforts proposés un à un par le script (LEV_GrantSpecificReinforcement), pas encore choisis
+    private readonly List<(float eta, string cfg, int spawn)> _offered = new();
+
+    /// <summary>
+    /// LEV_GrantSpecificReinforcement(n) : le renfort n de la mission est proposé (voix « renforts accordés ») ; le joueur
+    /// clique sur son cadre pour l'appeler, il arrive au bout de son délai (Train : renfort mousse, puis les suivants).
+    /// </summary>
+    public void GrantSpecificReinforcement(int n)
+    {
+        _allReinforcements ??= _toGrant.ToList();
+        if (n < 1 || n > _allReinforcements.Count)
+        {
+            GrantReinforcement();
+            return;
+        }
+        (float eta, string cfg, int spawn) r = _allReinforcements[n - 1];
+        if (!_toGrant.Contains(r) || _offered.Contains(r))
+            return;   // déjà proposé ou envoyé
+        _offered.Add(r);
+        Sounds.Add(("VOCAL_REINFORCEMENT_GRANTED", null));
+        Log.Add($"{_s.Time,6:0} s : renfort {n} accordé, à choisir ({TeamCode(r.cfg)})");
+    }
 
     // renforts choisis, en route : équipe → (moment du choix, durée)
     private readonly Dictionary<string, (float start, float duration)> _incoming = new();
@@ -173,7 +196,7 @@ public sealed partial class UnitManager
             return false;
         (float eta, string cfg, int spawn) r = _toGrant[i];
         _toGrant.RemoveAt(i);
-        if (GrantsAvailable > 0)
+        if (!_offered.Remove(r) && GrantsAvailable > 0)
             GrantsAvailable--;
         _granted.Add(r);
         float delay = r.eta > 0 ? r.eta : ReinforcementCallTime;
@@ -221,6 +244,7 @@ public sealed partial class UnitManager
         if (i < 0)
             return;   // déjà envoyé
         _toGrant.RemoveAt(i);
+        _offered.Remove(r);
         _granted.Add(r);
         _pending.Add((_s.Time + r.eta, r.cfg, r.spawn));
         Log.Add($"{_s.Time,6:0} s : renfort {n} appelé ({r.cfg}, dans {r.eta:0} s)");
