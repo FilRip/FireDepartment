@@ -1820,6 +1820,75 @@ public static class Program
                 }
                 return 0;
             }
+            case "empreinte":
+            {
+                // empreinte <Data> <modèle> [bas haut] : empreinte au sol du modèle (points tous les 25 cm sous ses faces entre
+                // ces hauteurs), en rangées le long de son axe Y : # occupé, . libre
+                SceneAssets assets = new OpenFD.Game.SceneAssets(files);
+                float lo = args.Length > 4 ? float.Parse(args[3]) : 30, hi = args.Length > 4 ? float.Parse(args[4]) : 170;
+                List<System.Numerics.Vector2> pts = PathFind.Footprint(assets, SceneAssets.GfxPath("Placeable", args[2]), lo, hi);
+                HashSet<(int, int)> set = pts.Select(p => ((int)MathF.Floor(p.X / 25), (int)MathF.Floor(p.Y / 25))).ToHashSet();
+                int x0 = set.Min(p => p.Item1), x1 = set.Max(p => p.Item1), y0 = set.Min(p => p.Item2), y1 = set.Max(p => p.Item2);
+                for (int y = y1; y >= y0; y--)
+                {
+                    System.Text.StringBuilder sb = new System.Text.StringBuilder();
+                    for (int x = x0; x <= x1; x++)
+                        sb.Append(set.Contains((x, y)) ? '#' : '.');
+                    Console.WriteLine($"{y * 25,7} {sb}");
+                }
+                return 0;
+            }
+            case "reflets":
+            {
+                // reflets <Data> <Mission> : matériaux du décor et des objets posés qui ont un reflet (image simple ou 6 faces)
+                SceneAssets assets = new OpenFD.Game.SceneAssets(files);
+                Dictionary<string, string> found = new Dictionary<string, string>();
+                foreach (SceneAssets.Node n in assets.Scenery(args[2]))
+                    foreach (SceneAssets.Group gr in assets.LoadMesh(args[2], n.Mesh, null).Groups.Where(g => g.Env != null || g.Cube != null))
+                        found.TryAdd("décor " + gr.Material, gr.Env ?? gr.Cube!);
+                string lvRef = files.List("Design\\Mission\\" + args[2] + "\\").First(p => p.EndsWith(".level", StringComparison.OrdinalIgnoreCase));
+                foreach (SceneAssets.Placed pl in assets.Placeables(Level.Parse(files.Read(lvRef))))
+                    try
+                    {
+                        foreach (SceneAssets.Node part in assets.ModelParts(pl.Model))
+                            foreach (SceneAssets.Group gr in assets.LoadMesh(args[2], part.Mesh, "gfx").Groups.Where(g => g.Env != null || g.Cube != null))
+                                found.TryAdd("objet " + gr.Material, gr.Env ?? gr.Cube!);
+                    }
+                    catch { }
+                foreach ((string k, string v) in found.OrderBy(kv => kv.Key))
+                    Console.WriteLine($"{k,-50} {v}");
+                Console.WriteLine($"{found.Count} matériau(x) avec reflet");
+                return 0;
+            }
+            case "soinambu":
+            {
+                // soinambu <Data> <Mission> : chaque unité à pied, épuisée (20 %), posée à 2 m de l'ambulance : endurance après 10 s
+                Session ses = new Session(files, args[2], "EASY");
+                while (ses.Time < 300 && !ses.Units.Active.Any(u => u.HealsUnits && !u.OnBoard))
+                    ses.Step();
+                for (int i = 0; i < (int)(20 / Session.Dt); i++)
+                    ses.Step();
+                Unit? amb = ses.Units.Active.FirstOrDefault(u => u.HealsUnits && !u.OnBoard);
+                if (amb == null)
+                    return 1;
+                List<Unit> walkers = ses.Units.Active.Where(u => !u.IsVehicle).ToList();
+                foreach (Unit v in ses.Units.Active.Where(v => v.IsVehicle).ToList())
+                    ses.Units.UnloadPassengers(v);
+                for (int i = 0; i < (int)(5 / Session.Dt); i++)
+                    ses.Step();
+                int n = 0;
+                foreach (Unit u in walkers)
+                {
+                    ses.Units.Teleport(u, new System.Numerics.Vector2(amb.Position.X + 200 + 60 * n, amb.Position.Y + 150));
+                    u.Stamina = u.StaminaMax * 0.2f;
+                    n++;
+                }
+                for (int i = 0; i < (int)(10 / Session.Dt); i++)
+                    ses.Step();
+                foreach (Unit u in walkers)
+                    Console.WriteLine($"{u.Name,-28} à bord {u.OnBoard} · bouge {u.Moving} · endurance {100 * u.Stamina / u.StaminaMax:0} % · {u.Status} · {System.Numerics.Vector3.Distance(u.Position, amb.Position):0} cm");
+                return 0;
+            }
             case "appel":
             {
                 // appel <Data> <Mission> <fonction> [secondes] : la fonction du script est appelée à 3 s ; puis, pendant ce temps,

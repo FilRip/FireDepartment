@@ -25,7 +25,9 @@ public sealed class SceneAssets
     public sealed record Placed(string Model, string Name, bool Civilian, Matrix4x4 World);
     public sealed record TreeInfo(string Model, string Name, float Height, int Seed, string? Bark, string? Leaves, Matrix4x4 World);
     /// <summary>Groupe de faces : matériau, texture de couleur, texture de saleté (seconde texture des shaders sol / bâtiment), détourage.</summary>
-    public sealed record Group(int Start, int Count, string Material, string? Diffuse, bool Alpha, string? Dirt = null);
+    /// <param name="Env">image de reflet simple (voitures garées : veh_c_envmap1), selon l'orientation face à la caméra</param>
+    /// <param name="Cube">décor de reflet en 6 faces (chemin dans Gfx\Textures : vitres, carrosseries de nos véhicules)</param>
+    public sealed record Group(int Start, int Count, string Material, string? Diffuse, bool Alpha, string? Dirt = null, string? Env = null, string? Cube = null);
     public sealed class MeshAsset
     {
         public required Mesh Mesh { get; init; }
@@ -235,7 +237,8 @@ public sealed class SceneAssets
                 Material? mat = matBytes != null ? Material.Load(matBytes, gr.material) : null;
                 // saleté : première texture après la couleur qui n'est ni brûlure, ni éclairage, ni reflet, ni brillance
                 string? dirt = mat?.Textures.Skip(1).FirstOrDefault(t => !Regex.IsMatch(t, "burn|light|refl|_spe|_opa|dummy", RegexOptions.IgnoreCase));
-                return new Group(gr.start, gr.count, gr.material, mat?.Diffuse, CutOut(mission, mat?.Diffuse), dirt);
+                (string? env, string? cube) = Reflection(mission, mat);
+                return new Group(gr.start, gr.count, gr.material, mat?.Diffuse, CutOut(mission, mat?.Diffuse), dirt, env, cube);
             }).ToList();
             // uv0 = couleur (premier emplacement) ; uv1 = éclairage précalculé (dernier emplacement présent)
             int uvA = Array.FindIndex(m.Uv, u => u != null), uvB = Array.FindLastIndex(m.Uv, u => u != null);
@@ -311,6 +314,37 @@ public sealed class SceneAssets
         rest.StartsWith(n, StringComparison.OrdinalIgnoreCase) ||
         rest.StartsWith("0pa_", StringComparison.OrdinalIgnoreCase) ||
         (rest.Length > 3 && char.IsLetter(rest[0]) && (Regex.IsMatch(rest, @"(_spec?|_opa| chb|_ch)$", RegexOptions.IgnoreCase) || rest.Contains("opa", StringComparison.OrdinalIgnoreCase)));
+
+    // faces d'un décor de reflet : reflection_buildings01, VH_refl_SKY, Set1_RT, cub1_UP, env_toxic, noir_ref…
+    private static readonly Regex CubeFaceRx = new(@"refl|^sky\.|^set1|^cub1|env_toxic|noir_ref|_ref\.|_cub1", RegexOptions.IgnoreCase);
+    private static readonly Regex SphereRx = new(@"envmap|reflec_casque", RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Reflet d'un matériau, comme dans les shaders du jeu (FD2Item, FD2Vehicle, FD2ReflectionBuilding) : il s'ajoute à la
+    /// couleur, dosé par l'alpha de la texture de couleur, qui est alors un masque de brillance (texture combinée à son
+    /// « _spe »). Décor en 6 faces si le matériau en cite les faces, sinon image simple (envmap).
+    /// </summary>
+    private (string? env, string? cube) Reflection(string mission, Material? mat)
+    {
+        if (mat?.Diffuse is not { } diff || ResolveTex(mission, diff) is not { } dp || !Leaf(dp).Contains("spe", StringComparison.OrdinalIgnoreCase))
+            return (null, null);
+        List<string> faces = mat.Textures.Skip(1).Where(t => CubeFaceRx.IsMatch(Leaf(t)) && !SphereRx.IsMatch(t)).ToList();
+        if (faces.Count >= 2)
+            return (null, ResolveCube(mission, Path.GetFileNameWithoutExtension(Leaf(faces[0])).Trim()));
+        string? sphere = mat.Textures.Skip(1).FirstOrDefault(t => SphereRx.IsMatch(t));
+        return (sphere != null && ResolveTex(mission, sphere) != null ? sphere : null, null);
+    }
+
+    /// <summary>Décor de reflet (« …_cube ») qui commence par cette face : celui de la mission, sinon d'une autre.</summary>
+    public string? ResolveCube(string mission, string face)
+    {
+        _cubes ??= _files.List("Gfx\\Textures\\").Where(p => Regex.IsMatch(p, @"_cube(\.dds)?$", RegexOptions.IgnoreCase)).ToList();
+        List<string> match = _cubes.Where(p => Leaf(p).StartsWith(face, StringComparison.OrdinalIgnoreCase)).ToList();
+        return match.FirstOrDefault(p => p.Split('\\')[2].Equals(mission, StringComparison.OrdinalIgnoreCase)) ?? match.FirstOrDefault();
+    }
+    private List<string>? _cubes;
+
+    private static string Leaf(string p) => p[(Math.Max(p.LastIndexOf('\\'), p.LastIndexOf('/')) + 1)..];
 
     /// <summary>Transparence par découpe seulement si la texture est combinée à un masque.</summary>
     private bool CutOut(string mission, string? name)

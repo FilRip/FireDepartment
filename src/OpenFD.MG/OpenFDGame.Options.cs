@@ -144,6 +144,7 @@ public sealed partial class OpenFDGame
             UseGameFont(_settings.Language);
         }
         _files.TextureQuality = _settings.Textures;
+        _reflections = _settings.Reflections && Environment.GetEnvironmentVariable("FD3_SANS_REFLETS") == null;   // essai : comparer sans reflets
         if (Localization.Forced != _settings.Language)
         {
             Localization.Forced = _settings.Language;
@@ -153,6 +154,14 @@ public sealed partial class OpenFDGame
         }
         UnitManager.Nationality = _settings.Nationality;
         _audio?.Db.ApplyLanguage(_files.DataDir, string.IsNullOrEmpty(_settings.Language) ? null : _settings.Language);
+        // l'ancienne valeur par défaut (150 %) délavait l'image : 100 % donne les mêmes couleurs que le jeu d'origine
+        if (!_settings.BrightnessNeutral)
+        {
+            if (_settings.Brightness == 150)
+                _settings.Brightness = 100;
+            _settings.BrightnessNeutral = true;
+            _settings.Save();
+        }
         _bright = Math.Clamp(_settings.Brightness, 40, 200) / 100f;
         ApplyGameplay(_settings.Gameplay ?? new GameplaySettings());
         if (_audio != null)

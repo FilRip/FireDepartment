@@ -45,8 +45,8 @@ public static class GlslEffect
 
         // shaders : 0 = sommets, 1 = pixels
         w.Write(2);
-        WriteShader(w, true, vs, Array.Empty<(string, int, int)>(), 0, attributes);
-        WriteShader(w, false, ps, textures.Select((t, k) => ($"ps_s{k}", k, parameters.Length + k)).ToArray(), 1, Array.Empty<(string, VertexElementUsage, int)>());
+        WriteShader(w, true, vs, Array.Empty<(string, int, int, bool)>(), 0, attributes);
+        WriteShader(w, false, ps, textures.Select((t, k) => ($"ps_s{k}", k, parameters.Length + k, t.Contains("Cube"))).ToArray(), 1, Array.Empty<(string, VertexElementUsage, int)>());
 
         // paramètres : flottants puis textures
         w.Write(parameters.Length + textures.Length);
@@ -93,7 +93,8 @@ public static class GlslEffect
         return new Effect(gd, ms.ToArray());
     }
 
-    private static void WriteShader(BinaryWriter w, bool vertex, string glsl, (string name, int slot, int param)[] samplers, byte cbuffer,
+    // textures dont le nom contient « Cube » : décor en 6 faces (samplerCube)
+    private static void WriteShader(BinaryWriter w, bool vertex, string glsl, (string name, int slot, int param, bool cube)[] samplers, byte cbuffer,
         (string name, VertexElementUsage usage, int index)[] attributes)
     {
         w.Write(vertex);
@@ -101,9 +102,9 @@ public static class GlslEffect
         w.Write(code.Length);
         w.Write(code);
         w.Write((byte)samplers.Length);
-        foreach ((string? name, int slot, int param) in samplers)
+        foreach ((string? name, int slot, int param, bool cube) in samplers)
         {
-            w.Write((byte)0);
+            w.Write((byte)(cube ? 1 : 0));
             w.Write((byte)slot);
             w.Write((byte)slot);
             w.Write(false);

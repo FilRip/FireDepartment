@@ -17,7 +17,7 @@ public sealed class SceneEffect
 {
     public const int ModePlain = 0, ModeGround = 1, ModeBuilding = 2;
     public Effect Fx { get; }
-    private readonly EffectParameter _wvp, _world, _eye, _fog, _shadowVp, _params, _fogColor, _shadow, _sun, _tint, _diff, _dirt, _light, _shadowMap, _roofMask, _roofMaskTex;
+    private readonly EffectParameter _wvp, _world, _eye, _fog, _shadowVp, _params, _fogColor, _shadow, _sun, _tint, _diff, _dirt, _light, _shadowMap, _roofMask, _roofMaskTex, _refl, _reflTex;
 
     private const string Vs = @"
 uniform vec4 vs_uniforms_vec4[14];
@@ -32,6 +32,7 @@ varying vec4 vTex1;
 varying vec4 vShadow;
 varying vec4 vNormal;
 varying vec4 vWorld;
+varying vec4 vRefl;
 void main()
 {
     vec4 p = vec4(vs_v0.xyz, 1.0);
@@ -43,22 +44,26 @@ void main()
     vTex0 = vec4(vs_v1.xy, vs_v2.xy);
     vTex1 = vec4(vs_v3.xy, fog, 0.0);
     vWorld = w;
-    vNormal = vec4(dot(vs_v4.xyz, vs_uniforms_vec4[4].xyz), dot(vs_v4.xyz, vs_uniforms_vec4[5].xyz), dot(vs_v4.xyz, vs_uniforms_vec4[6].xyz), 0.0);" + GlslEffect.PosFixup + @"
+    vNormal = vec4(dot(vs_v4.xyz, vs_uniforms_vec4[4].xyz), dot(vs_v4.xyz, vs_uniforms_vec4[5].xyz), dot(vs_v4.xyz, vs_uniforms_vec4[6].xyz), 0.0);
+    // reflet (vitres) : direction du regard réfléchie sur la surface (FD2ReflectionBuilding.fx)
+    vRefl = vec4(reflect(normalize(w.xyz - vs_uniforms_vec4[8].xyz), normalize(vNormal.xyz + vec3(0.0, 0.0, 1e-5))), 0.0);" + GlslEffect.PosFixup + @"
 }
 ";
 
     private const string Ps = @"
-uniform vec4 ps_uniforms_vec4[6];
+uniform vec4 ps_uniforms_vec4[7];
 uniform sampler2D ps_s0;
 uniform sampler2D ps_s1;
 uniform sampler2D ps_s2;
 uniform sampler2D ps_s3;
 uniform sampler2D ps_s4;
+uniform samplerCube ps_s5;
 varying vec4 vTex0;
 varying vec4 vTex1;
 varying vec4 vShadow;
 varying vec4 vNormal;
 varying vec4 vWorld;
+varying vec4 vRefl;
 void main()
 {
     // toit par pièce : la carte des pièces découvertes (une case de grille par texel) efface le toit au-dessus
@@ -74,6 +79,8 @@ void main()
         if (mode < 1.5) c = mix(dirt, diff.rgb, 0.5);
         else c = diff.rgb * dirt;
     }
+    // reflet du décor en 6 faces, dosé par l'alpha de la couleur (masque de brillance), avant l'éclairage précalculé
+    if (ps_uniforms_vec4[6].x > 0.5) c += textureCube(ps_s5, vRefl.xyz).rgb * diff.a * ps_uniforms_vec4[6].y;
     vec3 light = vec3(1.0);
     if (ps_uniforms_vec4[0].w > 0.0) light = texture2D(ps_s2, vTex1.xy).rgb * ps_uniforms_vec4[0].w;
     // ombres portées (carte de profondeur vue du soleil) : 4 échantillons pour adoucir le bord.
@@ -95,10 +102,14 @@ void main()
             shade += (s.z - sh.x > texture2D(ps_s3, uv + vec2( t,  t)).r) ? 0.25 : 0.0;
         }
     }
-    // comme le shader d'ombre du jeu (1 - (lumière - ambiante)) : l'ombre marque surtout les endroits bien éclairés ;
-    // là où l'éclairage précalculé est déjà sombre (ombre déjà « cuite »), elle ne s'ajoute presque pas
-    float lit = (ps_uniforms_vec4[0].w > 0.0) ? smoothstep(0.35, 0.85, dot(light, vec3(0.3333))) : 1.0;
-    vec3 col = c * light * ps_uniforms_vec4[0].x * ps_uniforms_vec4[4].rgb * (1.0 - sh.y * shade * facing * lit);
+    // comme le shader d'ombre du jeu (FD2Ground.fx) : dans l'ombre, 1 - éclairage précalculé, couleur par couleur
+    // (mesuré sur le jeu d'origine, Mriya : l'ombre d'une voiture garde 45 % de la lumière du sol). L'ombre marque
+    // surtout les endroits bien éclairés, un peu bleutée (l'éclairage du soleil est un peu jaune) ; là où l'éclairage
+    // précalculé est déjà sombre (ombre déjà « cuite »), elle ne s'ajoute presque pas
+    vec3 keep = vec3(1.0 - sh.y);
+    if (ps_uniforms_vec4[0].w > 0.0)
+        keep = clamp(1.0 - light / ps_uniforms_vec4[0].w, 0.0, 1.0);
+    vec3 col = c * light * ps_uniforms_vec4[0].x * ps_uniforms_vec4[4].rgb * mix(vec3(1.0), keep, shade * facing);
     gl_FragColor = vec4(mix(col, ps_uniforms_vec4[1].rgb, vTex1.z), 1.0);
 }
 ";
@@ -110,9 +121,9 @@ void main()
                 new GlslEffect.Param("WorldViewProj", 4, true), new GlslEffect.Param("World", 4, true), new GlslEffect.Param("Eye", 1, true),
                 new GlslEffect.Param("Fog", 1, true), new GlslEffect.Param("ShadowViewProj", 4, true),
                 new GlslEffect.Param("Params", 1, false), new GlslEffect.Param("FogColor", 1, false), new GlslEffect.Param("Shadow", 1, false), new GlslEffect.Param("SunDir", 1, false), new GlslEffect.Param("Tint", 1, false),
-                new GlslEffect.Param("RoofMask", 1, false),
+                new GlslEffect.Param("RoofMask", 1, false), new GlslEffect.Param("Refl", 1, false),
             },
-            new[] { "DiffTex", "DirtTex", "LightTex", "ShadowMap", "RoofMaskTex" },
+            new[] { "DiffTex", "DirtTex", "LightTex", "ShadowMap", "RoofMaskTex", "ReflCube" },
             new[] { ("vs_v0", VertexElementUsage.Position, 0), ("vs_v1", VertexElementUsage.TextureCoordinate, 0), ("vs_v2", VertexElementUsage.TextureCoordinate, 1), ("vs_v3", VertexElementUsage.TextureCoordinate, 2), ("vs_v4", VertexElementUsage.Normal, 0) });
         EffectParameterCollection p = Fx.Parameters;
         _wvp = p["WorldViewProj"];
@@ -131,6 +142,8 @@ void main()
         _shadowMap = p["ShadowMap"];
         _roofMask = p["RoofMask"];
         _roofMaskTex = p["RoofMaskTex"];
+        _refl = p["Refl"];
+        _reflTex = p["ReflCube"];
         _roofMaskTex.SetValue(Tex.White);
     }
 
@@ -156,7 +169,10 @@ void main()
         _shadow.SetValue(Vector4.Zero);
     }
 
-    /// <summary>Carte d'ombres du soleil (null : pas d'ombres). opacity : part de lumière retirée dans l'ombre.</summary>
+    /// <summary>
+    /// Carte d'ombres du soleil (null : pas d'ombres). opacity : part de lumière retirée dans l'ombre, sur les surfaces
+    /// sans éclairage précalculé (sur les autres, l'ombre dépend de cet éclairage, comme dans le jeu).
+    /// </summary>
     public void SetShadow(Texture2D? map, Matrix lightViewProj, float opacity, float bias, Vector3 sunDir)
     {
         _sun.SetValue(new Vector4(sunDir, 1));
@@ -166,8 +182,11 @@ void main()
     }
 
     /// <param name="lightScale">multiplicateur de l'éclairage précalculé (FD2_LIGHT du soleil : 2 le jour à London, 1,1 la nuit à Fireworks)</param>
-    public void Set(Matrix world, Texture2D? diff, Texture2D? dirt, Texture2D? light, int mode, bool alpha, float bright, float lightScale = 2f)
+    /// <param name="cube">décor de reflet (vitres) ; null : pas de reflet. empty : décor noir à lier sinon (OpenGL)</param>
+    public void Set(Matrix world, Texture2D? diff, Texture2D? dirt, Texture2D? light, int mode, bool alpha, float bright, float lightScale, TextureCube? cube, TextureCube empty)
     {
+        _reflTex.SetValue(cube ?? empty);
+        _refl.SetValue(new Vector4(cube != null ? 1 : 0, 1, 0, 0));
         _wvp.SetValue(world * _vp);
         _world.SetValue(world);
         _diff.SetValue(diff ?? Tex.White);

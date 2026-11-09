@@ -62,7 +62,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     private SN.Vector3 _eye;
     private int _fbW, _fbH, _winW, _winH;
     private float _scale = 1;   // échelle de l'écran (100 % = 1)
-    private float _bright = 1.5f;    // luminosité (1 = textures telles quelles)
+    private float _bright = 1f;      // luminosité (1 = comme le jeu d'origine : mêmes calculs que ses shaders)
 
     // temps
     private float _speed = 1;
@@ -162,6 +162,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _alphaFx = new AlphaTestEffect(gd) { AlphaFunction = CompareFunction.Greater, ReferenceAlpha = 102, FogEnabled = true, DiffuseColor = new Vector3(0.95f) };
         _part = new BasicEffect(gd) { TextureEnabled = true, VertexColorEnabled = true, LightingEnabled = false, Texture = Tex.Soft };
         _scene = new SceneEffect(gd);
+        _refl = new ReflectionEffect(gd);
         _depth = new DepthEffect(gd);
         try
         {
@@ -716,11 +717,59 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         return _texCache[name] = t;
     }
 
+    // ---- reflets (vitres, carrosseries) : image ou décor en 6 faces attachés à la texture de couleur ----
+    private ReflectionEffect _refl = null!;
+    private bool _reflections = true;
+    private const float ReflStrength = 1f;
+    // le reflet redessine la même surface avec un autre shader : la profondeur calculée diffère d'un rien, et sans ce léger
+    // décalage vers la caméra des lignes de pixels perdent leur reflet
+    private static readonly RasterizerState[] ReflRaster = new[] { CullMode.None, CullMode.CullClockwiseFace, CullMode.CullCounterClockwiseFace }
+        .Select(c => new RasterizerState { CullMode = c, DepthBias = -1e-6f, SlopeScaleDepthBias = -1f }).ToArray();
+    private readonly Dictionary<Texture2D, (Texture2D? env, TextureCube? cube)> _texRefl = new();
+    private readonly Dictionary<string, TextureCube?> _cubeCache = new(StringComparer.OrdinalIgnoreCase);
+
+    private TextureCube? CubeOf(string? path)
+    {
+        if (string.IsNullOrEmpty(path))
+            return null;
+        if (_cubeCache.TryGetValue(path, out TextureCube? c))
+            return c;
+        c = null;
+        try
+        {
+            byte[]? b = _files.TryRead(path);
+            if (b != null)
+                c = Tex.DdsCube(GraphicsDevice, b);
+        }
+        catch (Exception e) { Console.WriteLine($"{path} : {e.Message}"); }
+        return _cubeCache[path] = c;
+    }
+
+    /// <summary>Texture de couleur d'un groupe ; son reflet éventuel est noté pour le dessin.</summary>
+    private Texture2D? GroupTex(SceneAssets.Group gr)
+    {
+        Texture2D? tex = TexOf(gr.Diffuse);
+        if (tex == null || (gr.Env == null && gr.Cube == null) || _texRefl.ContainsKey(tex))
+            return tex;
+        TextureCube? cube = CubeOf(gr.Cube);
+        Texture2D? env = cube == null ? TexOf(gr.Env) : null;
+        if (cube != null || env != null)
+            _texRefl[tex] = (env, cube);
+        return tex;
+    }
+
+    private TextureCube? SceneCube(Texture2D? tex)
+    {
+        if (!_reflections || tex == null || !_texRefl.TryGetValue(tex, out (Texture2D? env, TextureCube? cube) r))
+            return null;
+        return r.cube;
+    }
+
     private MeshGpu Upload(SceneAssets.MeshAsset a, bool dynamic = false)
     {
         MeshGpu g = MeshGpu.Create(GraphicsDevice, a.Mesh.Positions, a.Mesh.Normals, a.Uv0, a.Mesh.Indices, dynamic);
         foreach (SceneAssets.Group gr in a.Groups)
-            g.Groups.Add((gr.Start, gr.Count, TexOf(gr.Diffuse), null, gr.Alpha));
+            g.Groups.Add((gr.Start, gr.Count, GroupTex(gr), null, gr.Alpha));
         return g;
     }
 
@@ -834,7 +883,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         };
         foreach (SceneAssets.Group gr in a.Groups)
         {
-            Texture2D? tex = TexOf(gr.Diffuse);
+            Texture2D? tex = GroupTex(gr);
             Texture2D? dirt = mode != SceneEffect.ModePlain ? TexOf(gr.Dirt) : null;
             for (int k = gr.Start; k + 2 < gr.Start + gr.Count && k + 2 < m.Indices.Length; k += 3)
             {
@@ -912,7 +961,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         int[] map = new int[m.VertexCount];
         foreach (SceneAssets.Group gr in a.Groups)
         {
-            Texture2D? tex = TexOf(gr.Diffuse);
+            Texture2D? tex = GroupTex(gr);
             Array.Fill(map, -1);
             if (lm != null)
             {
@@ -926,7 +975,9 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                     {
                         map[v] = b.V.Count;
                         SN.Vector3 p = SN.Vector3.Transform(new SN.Vector3(m.Positions[3 * v], m.Positions[3 * v + 1], m.Positions[3 * v + 2]), world);
-                        b.V.Add(new VertexDual { Position = p.X(), Uv0 = new Vector2(a.Uv0[2 * v], a.Uv0[2 * v + 1]), Uv1 = new Vector2(a.Uv1![2 * v], a.Uv1[2 * v + 1]) });
+                        SN.Vector3 nd = SN.Vector3.TransformNormal(new SN.Vector3(m.Normals[3 * v], m.Normals[3 * v + 1], m.Normals[3 * v + 2]), world);
+                        nd = nd.LengthSquared() > 1e-12f ? SN.Vector3.Normalize(nd) : SN.Vector3.UnitZ;
+                        b.V.Add(new VertexDual { Position = p.X(), Uv0 = new Vector2(a.Uv0[2 * v], a.Uv0[2 * v + 1]), Uv1 = new Vector2(a.Uv1![2 * v], a.Uv1[2 * v + 1]), Normal = nd.X() });
                     }
                     b.I.Add(map[v]);
                 }
@@ -1024,6 +1075,10 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _draw.Clear();
         _fireRoom.Clear();
         _texCache.Clear();
+        _texRefl.Clear();
+        foreach (TextureCube? c in _cubeCache.Values)
+            c?.Dispose();
+        _cubeCache.Clear();
         _log.Clear();
         _unitModels.Clear();
         _sel.Clear();
@@ -1497,7 +1552,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         }
     }
 
-    // carte d'ombres : profondeur, vue du soleil, de ce qui n'a pas d'ombre précalculée (personnes, véhicules, arbres)
+    // carte d'ombres : profondeur, vue du soleil, de ce qui n'a pas d'ombre précalculée (personnes, véhicules, objets, arbres)
     // et des bâtiments (l'éclairage précalculé du sol ne contient pas toujours leur ombre : banque de London)
     private void RenderShadowMap()
     {
@@ -1541,11 +1596,14 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                     gd.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, d.count / 3);
                 }
             }
+            // objets du décor (voitures garées, tonneaux, lampadaires…) et arbres : leur ombre n'est pas dans l'éclairage
+            // précalculé du sol (Mriya : le parking) ; le jeu d'origine la calcule en temps réel
             foreach ((MeshGpu? mesh, bool roof, int layer) in _draw)
-                if (layer == 2 && _objects)
-                    DrawMesh(mesh, Matrix.Identity);   // arbres
+                if ((layer == 0 || _objects) && !(roof && !_roofs))
+                    DrawMesh(mesh, Matrix.Identity);
             if (_objects)
                 DrawTrees(new BoundingFrustum(_lightVp));
+            RenderExplosives();   // voitures garées, tonneaux… (objets qui peuvent exploser)
             RenderUnits();
         }
         finally
@@ -1610,6 +1668,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
 
         // décor : effet « sol / bâtiment » d'après les shaders du jeu
         _scene.SetFrame((_viewProj).X(), _eye.X(), 30000, 90000, Sky.X(), _tint.X());
+        _refl.SetFrame(_view.X(), _viewProj.X(), _eye.X());
         _scene.SetShadow(_shadowsOn && _shadowOpacity > 0 ? _shadowMap : null, _lightVp, _shadowOpacity, 0.0008f, _sunDir.X());
         // cinématique : comme le moteur d'origine, les faces vues de dos ne sont pas dessinées ; une caméra placée
         // dans un bâtiment (London : plan sur les boutiques depuis le cinéma) voit ainsi au travers du mur
@@ -1618,7 +1677,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         {
             if (d.roof && !RoofShown(d.bld))
                 continue;
-            _scene.Set(Matrix.Identity, d.tex, d.dirt, d.lm, d.mode, d.alpha, _bright, _lmScale);
+            _scene.Set(Matrix.Identity, d.tex, d.dirt, d.lm, d.mode, d.alpha, _bright, _lmScale, SceneCube(d.tex), _refl.Empty);
             gd.SetVertexBuffer(d.vb);
             gd.Indices = d.ib;
             foreach (EffectPass pass in _scene.Fx.CurrentTechnique.Passes)
@@ -1668,8 +1727,6 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         if (_shadowPass)
         {
             // carte d'ombres : seulement la profondeur vue du soleil (détourage pour les feuillages)
-            if (mesh.Dual)
-                return;
             foreach ((int start, int count, Texture2D? tex, _, bool alpha) in mesh.Groups)
             {
                 _depth.Set(world * _lightVp, alpha ? tex : null);
@@ -1736,7 +1793,36 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 pass.Apply();
                 gd.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, start, count / 3);
             }
+            if (!_charred)
+                DrawReflection(world, start, count, tex);
         }
+    }
+
+    /// <summary>Reflet ajouté par-dessus le groupe qui vient d'être dessiné (même profondeur, couleurs additionnées).</summary>
+    private void DrawReflection(Matrix world, int start, int count, Texture2D? tex)
+    {
+        if (!_reflections || tex == null || !_texRefl.TryGetValue(tex, out (Texture2D? env, TextureCube? cube) r))
+            return;
+        GraphicsDevice gd = GraphicsDevice;
+        BlendState blend = gd.BlendState;
+        DepthStencilState depth = gd.DepthStencilState;
+        RasterizerState raster = gd.RasterizerState;
+        gd.BlendState = BlendState.Additive;
+        gd.DepthStencilState = DepthStencilState.DepthRead;
+        gd.RasterizerState = ReflRaster[(int)raster.CullMode];   // même faces cachées que le dessin d'origine
+        _refl.Set(world, tex, r.env, r.cube, ReflStrength);
+        foreach (EffectPass pass in _refl.Fx.CurrentTechnique.Passes)
+        {
+            pass.Apply();
+            gd.SamplerStates[1] = SamplerState.LinearClamp;
+            gd.SamplerStates[2] = SamplerState.LinearClamp;
+            gd.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, start, count / 3);
+        }
+        gd.BlendState = blend;
+        gd.DepthStencilState = depth;
+        gd.RasterizerState = raster;
+        gd.SamplerStates[1] = SamplerState.AnisotropicWrap;
+        gd.SamplerStates[2] = SamplerState.LinearWrap;
     }
 
     private bool _charred;   // DrawMesh : dessin d'une carcasse calcinée

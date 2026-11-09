@@ -24,6 +24,8 @@ public sealed partial class UnitManager
     public static float SmokeFactor = 0.08f;
     /// <summary>Soin à l'ambulance : endurance rendue par seconde (le jeu ne donne pas de valeur).</summary>
     public static float AmbulanceHeal = 12f;
+    /// <summary>Distance (au centre de l'ambulance) jusqu'à laquelle une unité à pied s'y soigne.</summary>
+    public const float AmbulanceHealReach = 750f;
     /// <summary>Endurance rendue (part de l'endurance maximale) quand un collègue ranime un pompier évanoui.</summary>
     public static float ReviveStamina = 0.35f;
     /// <summary>Alerte « pompier en danger » à cette part de l'endurance ; de nouveau possible au-dessus de CriticalRearm.</summary>
@@ -86,8 +88,10 @@ public sealed partial class UnitManager
                 if (sp.Intensity > 1 && Vector3.DistanceSquared(sp.Position, u.Position) < sp.Class.InfluenceRange * sp.Class.InfluenceRange)
                     smoke += Math.Min(1, sp.Intensity / Math.Max(1, sp.Max));
             float loss = (heat * u.HeatCoef * u.ScriptHeatCoef * HeatFactor + smoke * u.SmokeCoef * SmokeFactor * 10) * dt * StaminaLoss;
-            // près d'une ambulance (ou de l'hélicoptère posé), ou sur un poste de soins du niveau (pompiers seulement)
-            bool healing = !u.Moving && (Units.Any(a => a.HealsUnits && !a.Destroyed && !a.OnBoard && !a.Hidden && Vector3.Distance(a.Position, u.Position) < VehicleReach)
+            // près d'une ambulance (ou de l'hélicoptère posé), ou sur un poste de soins du niveau : toutes les unités à pied
+            // (pompiers, médecin, chien, désincarcérateur…), arrêtées ou non ; la distance se compte depuis le centre du
+            // véhicule, d'où une zone plus large que sa longueur
+            bool healing = (Units.Any(a => a.HealsUnits && !a.Destroyed && !a.OnBoard && !a.Hidden && Vector3.Distance(a.Position, u.Position) < AmbulanceHealReach)
                 || (!u.IsVehicle && HealPoints.Any(p => HealPointActive(p) && Vector2.Distance(new(p.Position.X, p.Position.Y), new(u.Position.X, u.Position.Y)) < HealPointReach)));
             if (loss > 0)
                 u.Stamina -= loss;

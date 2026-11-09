@@ -21,7 +21,7 @@ public sealed partial class OpenFDGame
     // les lignes jaunes s'écrivent lettre par lettre, cadre après cadre, avec le son UI_BRIEFING_TEXT_DISPLAY ; tout est
     // écrit au bout de BriefTypeMax secondes au plus
     private const float BriefTypeRate = 50;   // lettres par seconde au moins
-    private const float BriefTypeMax = 5;     // secondes
+    private const float BriefTypeMax = 3;     // secondes
     private int _briefChars;                  // nombre de lettres des lignes jaunes
 
     /// <summary>Nombre de lettres jaunes déjà écrites, au temps t du briefing.</summary>
