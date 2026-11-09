@@ -122,10 +122,10 @@ public sealed partial class UnitManager
     /// Où mettre un civil à l'abri : les ambulances (et l'hélicoptère posé), à VehicleReach ; les postes de soins du niveau
     /// (Ch_Plant : « un poste médical dans lequel nous pouvons emmener les victimes secourues »), sur leur flèche.
     /// </summary>
-    private List<(Vector3 pos, float reach)> Shelters()
+    private List<(Vector3 pos, float reach, Unit? vehicle)> Shelters()
     {
-        List<(Vector3 pos, float reach)> list = Units.Where(v => v.IsAmbulance && !v.Destroyed && !v.Hidden).Select(v => (v.Position, VehicleReach)).ToList();
-        list.AddRange(HealPoints.Where(HealPointActive).Select(p => (p.Position, HealPointReach)));
+        List<(Vector3 pos, float reach, Unit? vehicle)> list = Units.Where(v => v.IsAmbulance && !v.Destroyed && !v.Hidden).Select(v => (v.Position, VehicleReach, (Unit?)v)).ToList();
+        list.AddRange(HealPoints.Where(HealPointActive).Select(p => (p.Position, HealPointReach, (Unit?)null)));
         return list;
     }
 
@@ -133,12 +133,18 @@ public sealed partial class UnitManager
     private bool GoToNearestAmbulance(Unit u)
     {
         Vector2 me = new Vector2(u.Position.X, u.Position.Y);
-        foreach ((Vector3 pos, float reach) in Shelters().OrderBy(s => Vector2.Distance(me, new(s.pos.X, s.pos.Y))))
+        foreach ((Vector3 pos, float reach, Unit? vehicle) in Shelters().OrderBy(s => Vector2.Distance(me, new(s.pos.X, s.pos.Y))))
         {
             Vector2 ap = new Vector2(pos.X, pos.Y);
             Vector2 spot = Walkable(ap + Vector2.Normalize(me - ap + new Vector2(0.01f, 0)) * reach * 0.8f);
             if (Order(u, spot))
             {
+                // ambulance : retenue comme pour un ordre du joueur, pour la rejoindre si elle part ailleurs (FollowVehicle)
+                if (vehicle != null)
+                {
+                    u.GoToVehicle = vehicle;
+                    u.GoToVehicleAim = VehicleAim(vehicle);
+                }
                 u.Status = $"porte {u.Carrying?.Name} vers l'ambulance";
                 return true;
             }
@@ -176,7 +182,7 @@ public sealed partial class UnitManager
                 c.Heading = u.Heading;
                 if (u.Moving)
                     break;
-                (Vector3 pos, float reach)? amb = Shelters().OrderBy(s => Vector3.Distance(s.pos, u.Position)).Cast<(Vector3 pos, float reach)?>().FirstOrDefault();
+                (Vector3 pos, float reach, Unit? vehicle)? amb = Shelters().OrderBy(s => Vector3.Distance(s.pos, u.Position)).Cast<(Vector3 pos, float reach, Unit? vehicle)?>().FirstOrDefault();
                 if (amb is { } sh && Vector3.Distance(sh.pos, u.Position) < sh.reach * 1.5f)
                 {
                     u.Carry = CarryPhase.Dropping;
@@ -239,7 +245,7 @@ public sealed partial class UnitManager
         if (c.Leader is not { } l || c.State != CivilianState.Conscious)
             return;
         // arrivé à une ambulance (ou un poste de soins) avec son guide : il est mis à l'abri
-        foreach ((Vector3 pos, float reach) in Shelters())
+        foreach ((Vector3 pos, float reach, _) in Shelters())
             if (Vector3.Distance(l.Position, pos) < reach * 1.5f && Vector3.Distance(c.Position, pos) < reach * 1.5f)
             {
                 Save(c);
