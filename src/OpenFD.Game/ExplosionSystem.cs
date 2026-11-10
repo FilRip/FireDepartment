@@ -29,6 +29,11 @@ public sealed class ExplosionSystem
     /// ObjectiveTimeFactor (réglage « Gameplay » du fichier d'options, 2 par défaut : 4 minutes).
     /// </summary>
     public const float WatchedDamageFactor = 2.53f;
+    /// <summary>
+    /// Objet qui brûle sans exploser, dont la carte nomme une fonction du script à sa destruction (Stadium : l'armoire
+    /// électrique en feu au départ lâche vers 10 à 20 s après la cinématique d'ouverture, comme dans le jeu d'origine).
+    /// </summary>
+    public const float DestroyScriptDamageFactor = 2f;
     public static float ObjectiveTimeFactor = 2f;
     // part du souffle (LP_Explode_Power) reçue par les autres objets explosifs : limite les réactions en chaîne
     public static float BlastOnItems = float.TryParse(Environment.GetEnvironmentVariable("FD3_SOUFFLE"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float b) ? b : 0.5f;   // taille d'une voiture autour de son centre
@@ -47,7 +52,10 @@ public sealed class ExplosionSystem
                 can = expl[0] != 0;
             // objet qui ne fait que s'abîmer au feu, quand un script suit sa vie (Mriya : le générateur, objectif 1)
             bool watchedOnly = !can && watched != null && watched.Contains(o.Id) && c.GetBool("DAMAGE", "UseDamage", false);
-            if (!can && !watchedOnly)
+            // objet dont la carte nomme une fonction du script à appeler à sa destruction (Stadium : les armoires électriques)
+            // (pas les repères : icônes de hache, de scie… n'ont pas à brûler)
+            string? onDestroy = o.GetComponent(0xA024) is { } sc && !o.ClassPath.EndsWith("_symbol", StringComparison.OrdinalIgnoreCase) ? ScriptNameIn(o.ComponentBytes(sc).ToArray()) : null;
+            if (!can && !watchedOnly && onDestroy == null)
                 continue;
             ExplosiveItem it = new ExplosiveItem
             {
@@ -59,6 +67,7 @@ public sealed class ExplosionSystem
                 StaminaPower = c.GetFloat("EXPLOSION", "Stamina_Explode_Power", 20), StaminaRadius = c.GetFloat("EXPLOSION", "Stamina_Explode_Radius", 1100),
                 Sound = c.Get("SOUND_EXPLOSION", "Label")?.Trim('"', ' '),
                 CanExplode = can,
+                OnDestroy = can ? null : onDestroy,
             };
             int n = c.GetInt("DAMAGE", "NbDamageSteps", 0);
             it.Thresholds = Enumerable.Range(0, Math.Max(n, 0)).Select(i => c.GetFloat("DAMAGE", $"DamageTresholdStep{i}", 0)).ToArray();
@@ -92,7 +101,11 @@ public sealed class ExplosionSystem
             {
                 it.Life = 0;
                 it.Exploded = true;
+                it.DestroyRun = true;
             }
+            // le feu ne l'abîme pas (Stadium : les éboulis et les tuyaux à découper, FireDamageCoef 0) : rien à suivre
+            if (!can && !watchedOnly && it.FireDamageCoef <= 0)
+                continue;
             foreach (HotPoint h in fire.HotPoints)
                 if (Vector3.Distance(h.Position, it.Position) < ItemRadius + h.Class.HeatRangeMax + 100)
                     it.NearFires.Add(h);
@@ -100,6 +113,23 @@ public sealed class ExplosionSystem
             sys.ById[it.Id] = it;
         }
         return sys;
+    }
+
+    /// <summary>Premier texte du composant précédé de sa longueur (entier) : nom d'une fonction du script.</summary>
+    private static string? ScriptNameIn(byte[] b)
+    {
+        for (int i = 0; i + 4 < b.Length; i++)
+        {
+            int n = BitConverter.ToInt32(b, i);
+            if (n < 3 || n > 64 || i + 4 + n > b.Length || b[i + 4 + n - 1] != 0)
+                continue;
+            bool ok = true;
+            for (int k = 0; k < n - 1 && ok; k++)
+                ok = b[i + 4 + k] is (>= (byte)'A' and <= (byte)'Z') or (>= (byte)'a' and <= (byte)'z') or (>= (byte)'0' and <= (byte)'9') or (byte)'_';
+            if (ok)
+                return System.Text.Encoding.ASCII.GetString(b, i + 4, n - 1);
+        }
+        return null;
     }
 
     // données d'un composant après son en-tête (« … CC CC BB BB »)
@@ -132,7 +162,7 @@ public sealed class ExplosionSystem
                     max = MathF.Max(max, d);
                 }
             // (objet qui ne fait que s'abîmer, suivi par un script : voir WatchedDamageFactor et ObjectiveTimeFactor)
-            float dmg = (max + OtherFiresShare * (sum - max)) * (it.CanExplode ? FireDamageFactor : WatchedDamageFactor / MathF.Max(0.1f, ObjectiveTimeFactor));
+            float dmg = (max + OtherFiresShare * (sum - max)) * (it.CanExplode ? FireDamageFactor : it.OnDestroy != null ? DestroyScriptDamageFactor : WatchedDamageFactor / MathF.Max(0.1f, ObjectiveTimeFactor));
             if (dmg > 0)
                 it.Life -= dmg * it.FireDamageCoef * dt;
             if (!it.CanExplode)

@@ -22,6 +22,12 @@ public sealed class ExplosiveItem
     /// <summary>Faux : objet qui s'abîme au feu sans exploser (Mriya : le générateur, dont le script suit la vie).</summary>
     public bool CanExplode = true;
     public readonly List<HotPoint> NearFires = new();
+    /// <summary>
+    /// Fonction du script appelée quand le feu l'a détruit (composant A024 : Stadium, les armoires électriques du paddock,
+    /// « ElecOnDestruction1 » : le câble prend feu) ; DestroyRun : déjà appelée.
+    /// </summary>
+    public string? OnDestroy;
+    public bool DestroyRun;
 
     /// <summary>État d'affichage : « e1 » intact, « e2 », « e3 » de plus en plus abîmé, « dead » après l'explosion.</summary>
     public string State
