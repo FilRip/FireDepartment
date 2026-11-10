@@ -28,6 +28,8 @@ public sealed class ExplosiveItem
     /// </summary>
     public string? OnDestroy;
     public bool DestroyRun;
+    /// <summary>Réparé par un technicien : comme neuf tant que le feu ne l'a pas de nouveau entamé d'un point de vie.</summary>
+    public bool Repaired;
 
     /// <summary>État d'affichage : « e1 » intact, « e2 », « e3 » de plus en plus abîmé, « dead » après l'explosion.</summary>
     public string State

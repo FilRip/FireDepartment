@@ -255,8 +255,17 @@ public sealed class PathFind
         {
             foreach (int c in w.Cells)
                 MarkWindow(c, w);
-            // fenêtre sans case dans la grille (Factory, les villas : le mur s'arrête à la fenêtre) : les cases sous son cadre
-            if (w.BoxMin.X < w.BoxMax.X)
+            // fenêtre sans case dans la grille (Factory, les villas : le mur s'arrête à la fenêtre) : les cases sous son cadre.
+            // Grande vitrine de plus de 6 m (Maidan : la façade vitrée de l'entrée, 50 m de long) : seulement ses cases de mur ;
+            // les passages que la grille du jeu laisse ouverts le long d'elle (sous les porches) restent des passages
+            bool longGlass = MathF.Max(w.BoxMax.X - w.BoxMin.X, w.BoxMax.Y - w.BoxMin.Y) > 600;
+            if (longGlass && w.FootCells.Count > 0)
+            {
+                foreach (int c in w.FootCells)
+                    if (g.ZoneA[c] == 0)
+                        MarkWindow(c, w);
+            }
+            else if (w.BoxMin.X < w.BoxMax.X)
             {
                 (int x0, int y0) = g.CellOf(new Vector3(w.BoxMin, 0));
                 (int x1, int y1) = g.CellOf(new Vector3(w.BoxMax, 0));
