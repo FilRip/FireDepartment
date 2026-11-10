@@ -164,12 +164,23 @@ public sealed partial class UnitManager
                                 }
                         d.OnGround = d.Position.Z < ground + 200;
                         if (d.OnGround && !d.IsWindow)
+                        {
+                            Dictionary<int, int> zeroCover = new Dictionary<int, int>();
                             foreach (Vector2 p in pts)
                             {
                                 (int cx, int cy) = g.CellOf(Vector3.Transform(new Vector3(p, 0), o.Matrix));
-                                if (g.Inside(cx, cy) && g.ZoneA[g.Index(cx, cy)] != 0 && !d.Cells.Contains(g.Index(cx, cy)))
-                                    d.Cells.Add(g.Index(cx, cy));
+                                if (!g.Inside(cx, cy))
+                                    continue;
+                                if (g.ZoneA[g.Index(cx, cy)] != 0)
+                                {
+                                    if (!d.Cells.Contains(g.Index(cx, cy)))
+                                        d.Cells.Add(g.Index(cx, cy));
+                                }
+                                else
+                                    zeroCover[g.Index(cx, cy)] = zeroCover.GetValueOrDefault(g.Index(cx, cy)) + 1;
                             }
+                            OpenZeroLine(g, d, zeroCover);
+                        }
                         // portail animé : une fois ouvert, seuls les battants ont bougé ; le reste du modèle (montants, caisson)
                         // et les battants à leur place d'arrivée bloquent toujours le passage
                         if (d.OnGround && !d.IsWindow && d.OpenAnim != null && _files.TryRead("Gfx\\Anim\\" + d.OpenAnim + ".anim") is { } ab2)
@@ -228,6 +239,50 @@ public sealed partial class UnitManager
         LoadObstacles(level, assets);
         LoadExtricable(level, assets);
         RefreshDoorCells();
+    }
+
+    /// <summary>
+    /// Grillage ou porte posé pile sur une ligne de cases « mur » de la grille (ZoneA = 0) : Stadium, le grillage autour des
+    /// armoires électriques du paddock est sur la limite de deux colonnes ; la grille ferme l'une (mur), l'objet l'autre. Une
+    /// case mur bien couverte par l'objet (au moins un quart de ses points), avec une case libre de part et d'autre, fait
+    /// partie du passage : elle prend la zone de sa voisine et suit l'état de l'objet (fermée tant qu'il est intact).
+    /// </summary>
+    private static void OpenZeroLine(Grid g, Opening d, Dictionary<int, int> zeroCover)
+    {
+        foreach ((int i, int n) in zeroCover)
+        {
+            if (n < 4 || d.Cells.Contains(i))
+                continue;
+            int cx = i % g.Width, cy = i / g.Width;
+            ushort zone = 0;
+            foreach ((int dx, int dy) in new[] { (1, 0), (0, 1) })
+                if (g.Inside(cx - dx, cy - dy) && g.Inside(cx + dx, cy + dy)
+                    && g.ZoneA[g.Index(cx - dx, cy - dy)] != 0 && g.ZoneA[g.Index(cx + dx, cy + dy)] != 0)
+                    zone = g.ZoneA[g.Index(cx + dx, cy + dy)];
+            if (zone == 0)
+                continue;
+            g.PatchZoneA(i, zone);
+            d.Cells.Add(i);
+        }
+        // l'objet est juste à côté de la ligne de murs (Stadium : le grand grillage, dans la colonne voisine) : la case mur
+        // collée à l'une de ses cases, entre elle et une case libre, fait aussi partie du passage
+        foreach (int i in d.Cells.ToList())
+        {
+            int cx = i % g.Width, cy = i / g.Width;
+            foreach ((int dx, int dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+            {
+                int nx = cx + dx, ny = cy + dy, bx = cx + 2 * dx, by = cy + 2 * dy, ox = cx - dx, oy = cy - dy;
+                if (!g.Inside(bx, by) || !g.Inside(ox, oy) || g.ZoneA[g.Index(nx, ny)] != 0)
+                    continue;
+                int n = g.Index(nx, ny);
+                ushort beyond = g.ZoneA[g.Index(bx, by)];
+                if (beyond == 0 || g.ZoneA[g.Index(ox, oy)] == 0 || d.Cells.Contains(n))
+                    continue;
+                // la ligne de murs longe l'objet : ses cases voisines le long de l'objet sont des murs aussi
+                g.PatchZoneA(n, beyond);
+                d.Cells.Add(n);
+            }
+        }
     }
 
     /// <summary>
