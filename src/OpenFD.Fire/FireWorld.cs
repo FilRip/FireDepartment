@@ -263,7 +263,13 @@ public sealed class FireWorld
         foreach (HotPoint hp in HotPoints)
         {
             if (!hp.Enabled)
+            {
+                // désactivé par le script (FIR_HPEnable 0) pendant qu'il brûlait : il ne grandit plus et ne s'allume plus,
+                // mais l'eau l'éteint encore (College : foyers du groupe électrique, désactivés quand on coupe le courant)
+                if (hp.PendingAttack > 0)
+                    ApplyAttack(hp, false);
                 continue;
+            }
             if (hp.PendingAttack > 0)
             {
                 ApplyAttack(hp);
@@ -353,7 +359,7 @@ public sealed class FireWorld
         _ => 1f,
     };
 
-    private void ApplyAttack(HotPoint hp)
+    private void ApplyAttack(HotPoint hp, bool grow = true)
     {
         float a = hp.PendingAttack;
         hp.PendingAttack = 0;
@@ -361,7 +367,8 @@ public sealed class FireWorld
         {
             // [mesuré, sauvegardes Eau0–3] le feu continue de croître pendant l'arrosage :
             // perte nette = attaque − croissance. Le temps de combustion s'arrête à l'extinction.
-            Burn(hp, LastDt);
+            if (grow)
+                Burn(hp, LastDt);
             hp.SetIntensity(hp.Intensity - a);
             if (hp.Intensity <= 0f)
             {
