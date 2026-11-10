@@ -12,6 +12,18 @@ public sealed class Grid
     public ushort[] ZoneA = Array.Empty<ushort>(), ZoneB = Array.Empty<ushort>();
 
     public int Index(int cx, int cy) => cy * Width + cx;
+
+    /// <summary>Zones changées pendant la partie (case de grillage rouverte, voir le jeu), avec leur valeur d'origine.</summary>
+    private readonly Dictionary<int, ushort> _zoneAOriginal = new();
+
+    /// <summary>Change la zone d'une case pour la partie seulement : le fichier enregistré garde la valeur d'origine.</summary>
+    public void PatchZoneA(int index, ushort zone)
+    {
+        _zoneAOriginal.TryAdd(index, ZoneA[index]);
+        ZoneA[index] = zone;
+    }
+
+    private ushort SavedZoneA(int k) => _zoneAOriginal.TryGetValue(k, out ushort z) ? z : ZoneA[k];
     public bool Inside(int cx, int cy) => cx >= 0 && cy >= 0 && cx < Width && cy < Height;
     public (int cx, int cy) CellOf(Vector3 p) => ((int)MathF.Floor(p.X / CellSize), (int)MathF.Floor(p.Y / CellSize));
 
@@ -43,7 +55,7 @@ public sealed class Grid
                     {
                         int e = Chunks.NodeEnd(d, p);
                         int k = Index(i / Height, i % Height);
-                        BitConverter.TryWriteBytes(d.AsSpan(p + 5), ZoneA[k]);
+                        BitConverter.TryWriteBytes(d.AsSpan(p + 5), SavedZoneA(k));
                         BitConverter.TryWriteBytes(d.AsSpan(p + 7), ZoneB[k]);
                         BitConverter.TryWriteBytes(d.AsSpan(p + 9), GroundHeight[k]);
                         p = e;
@@ -78,7 +90,7 @@ public sealed class Grid
         {
             int k = Index(i / Height, i % Height);   // colonne par colonne
             Begin(5);
-            w.Write(ZoneA[k]);
+            w.Write(SavedZoneA(k));
             w.Write(ZoneB[k]);
             w.Write(GroundHeight[k]);
             End();
