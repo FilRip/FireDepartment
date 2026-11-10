@@ -104,6 +104,9 @@ public sealed class MissionHost : IScriptHost
         }
     }
 
+    /// <summary>La mission a un vent (repère « winddirection » : Forest, Mriya) ; sinon pas de vent (manche à air au repos).</summary>
+    public bool HasWind => _windId != null;
+
     /// <summary>Le vent souffle vers cet angle (radians, 0 : vers +X) : le feu se propage plus vite dans ce sens.</summary>
     private void SetWindDirection(float angle) =>
         _fire.Settings.WindDirection = new System.Numerics.Vector3(MathF.Cos(angle), MathF.Sin(angle), 0);
