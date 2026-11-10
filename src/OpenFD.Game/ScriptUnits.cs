@@ -114,9 +114,11 @@ public sealed partial class UnitManager
         }
         if (reinforcementsByScript)
         {
+            // numéros 1, 2, 3… de LEV_GrantSpecificReinforcement / LEV_CallReinforcement : l'ordre du .mis
+            // (REINFORCEMENT1, 2, 3…), pas celui des délais (Stadium : le renfort 3 a le plus court délai)
+            _allReinforcements = _pending.ToList();
             _toGrant.AddRange(_pending.OrderBy(p => p.eta));
             _pending.Clear();
-            _allReinforcements = _toGrant.ToList();
         }
     }
 
