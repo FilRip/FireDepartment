@@ -170,6 +170,11 @@ public sealed partial class UnitManager
                 v.Status = "garé";
             return;
         }
+        if (v.IsWaterTower && !v.BoomStowed)
+        {
+            v.CurSpeed = 0;   // camion d'attaque : il replie d'abord son échelle (WaterTower.cs), puis il roule
+            return;
+        }
         // vitesse du moment : il accélère jusqu'à sa vitesse, et freine pour s'arrêter au bout du chemin
         float left = 0;
         Vector2 from = new Vector2(v.Position.X, v.Position.Y);
