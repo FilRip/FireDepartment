@@ -7,7 +7,8 @@ using SN = System.Numerics;
 namespace OpenFD.MG;
 
 // liaison d'eau : un camion à lance garé à portée d'une bouche d'incendie (ResupplyRadius, 20 m) est relié à elle par une
-// ligne de petites flèches vertes posées sur le sol, de la bouche vers le camion, qui défilent doucement ;
+// ligne de petites flèches vertes posées sur le sol, de la bouche vers le camion, qui défilent doucement ; de même un camion
+// dans le rayon d'action d'un camion-citerne du même agent (30 m), de la citerne vers lui ;
 // un pompier « canon » est relié de même à son camion, par des flèches bleues
 public sealed partial class OpenFDGame
 {
@@ -96,18 +97,27 @@ public sealed partial class OpenFDGame
             return;
         SN.Vector4 green = new SN.Vector4(0.25f, 1f, 0.35f, 0.95f);
         SN.Vector4 greenShade = new SN.Vector4(0, 0.15f, 0, 0.6f);
-        foreach (Unit v in _session.Units.Active.Where(u => u.IsVehicle && u.Nozzle is { InfiniteReserve: false } && !u.Moving))
+        foreach (Unit v in _session.Units.Active.Where(u => u.IsVehicle && (u.Nozzle is { InfiniteReserve: false } || (u.Nozzle == null && u.TankMax > 0)) && !u.Moving))
         {
             SN.Vector2 vp = new SN.Vector2(v.Position.X, v.Position.Y);
+            bool hydrant = false;
             foreach (SupplyPoint sp in _session.Units.Supplies)
             {
-                if (sp.Agent != v.Nozzle!.Agent)
+                if (sp.Agent != UnitManager.SupplyAgentOf(v))
                     continue;
                 SN.Vector2 hp = new SN.Vector2(sp.Position.X, sp.Position.Y);
                 float d = SN.Vector2.Distance(vp, hp);
                 if (d > sp.Radius || d < 50)
                     continue;
                 Chevrons(hp, vp, 200, green, greenShade, time);
+                hydrant = true;
+            }
+            // sans bouche d'incendie à portée : le camion-citerne (ou le bateau-pompe) qui le ravitaille, de lui vers le camion
+            if (!hydrant && _session.Units.VehicleDonor(v) is { } donor)
+            {
+                SN.Vector2 dp = new SN.Vector2(donor.Position.X, donor.Position.Y);
+                if (SN.Vector2.Distance(dp, vp) > 300)
+                    Chevrons(dp, vp, 200, green, greenShade, time);
             }
         }
         // pompier « canon » : flèches bleues du camion qui l'alimente jusqu'à lui

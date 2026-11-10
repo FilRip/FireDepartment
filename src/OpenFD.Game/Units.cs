@@ -452,6 +452,20 @@ public sealed partial class UnitManager
             u.TurnRadius = TurnRadiusRef * 7f / MathF.Max(1f, c.GetFloat("MOVING", "TurnSpeed", 7));
             u.ResupplyPower = c.GetFloat("CAPACITIES_RESERVE", "ResupplyPower", 0);
             u.SupplyAgent = (c.Get("CAPACITIES_RESERVE", "FireAgent") ?? "WATER").Trim('"', ' ').ToUpperInvariant();
+            // ravitaillement des autres véhicules : seulement ceux qui ont un rayon d'action (citernes, bateau-pompe)
+            u.SupplyRadius = c.GetFloat("CAPACITIES_RESERVE", "ResupplyRadius", 0);
+            u.VehicleSupplyPower = u.SupplyRadius > 0 ? u.ResupplyPower : 0;
+            string? utype = c.Get("UNIT", "Type")?.Trim('"', ' ').ToUpperInvariant();
+            u.IsTanker = utype is "TANKER" or "FOAMTANKER";
+            if (u.IsTanker)
+            {
+                u.ResupplyPower = 0;   // les pompiers à pied ne s'y remplissent pas
+                if (u.Nozzle == null && !c.GetBool("CAPACITIES_RESERVE", "InfiniteReserve"))
+                {
+                    u.TankMax = c.GetFloat("CAPACITIES_RESERVE", "ReserveMax", 0);
+                    u.TankReserve = MathF.Min(u.TankMax, c.GetFloat("CAPACITIES_RESERVE", "ReservePoints", u.TankMax));
+                }
+            }
         }
         u.StaminaMax = c.GetFloat("CAPACITIES_PROPS", "StaminaMax", 100);
         u.Stamina = MathF.Min(u.StaminaMax, c.GetFloat("CAPACITIES_PROPS", "StaminaPoints", u.StaminaMax));

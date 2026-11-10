@@ -24,6 +24,12 @@ public sealed class Unit
     public bool CanHeal;                                  // médecin : peut réanimer un civil inconscient
     public float ResupplyPower;                           // véhicule : eau rendue par seconde aux pompiers (0 = aucune)
     public string SupplyAgent = "WATER";                  // véhicule : agent qu'il fournit ([CAPACITIES_RESERVE] FireAgent, voir Agents.cs)
+    /// <summary>Camion-citerne ([UNIT] Type=TANKER ou FOAMTANKER) : il ne ravitaille que les camions, pas les pompiers à pied.</summary>
+    public bool IsTanker;
+    /// <summary>Véhicule qui ravitaille les autres véhicules ([CAPACITIES_RESERVE] ResupplyRadius) : rayon et débit (0 : aucun).</summary>
+    public float SupplyRadius, VehicleSupplyPower;
+    /// <summary>Réserve d'une citerne sans lance ([CAPACITIES_RESERVE] ReservePoints, ReserveMax) ; elle se remplit aux bouches d'incendie.</summary>
+    public float TankReserve, TankMax;
     public OpenFD.Fire.HotPoint? WarnedAgent;             // feu pour lequel « mauvais agent » a déjà été annoncé
     public bool IsAmbulance;
     /// <summary>Bruit du moteur en marche et sirène (étiquettes de SoundDB_Vehicle.INI), volume de la sirène (0 à 1).</summary>

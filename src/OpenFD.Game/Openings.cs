@@ -324,9 +324,14 @@ public sealed partial class UnitManager
             .Select(o => o.Position).ToList();
         if (saws.Count == 0)
             return;
+        List<(LevelObject o, ClassFile c)> found = new List<(LevelObject o, ClassFile c)>();
         foreach (LevelObject o in level.Objects.Where(o => o.Kind == EntityKind.Placeable && o.HasTransform))
         {
-            if (Openings.Any(d => d.Id == o.Id) || o.ClassPath.EndsWith("saw_symbol", StringComparison.OrdinalIgnoreCase))
+            if (o.ClassPath.EndsWith("saw_symbol", StringComparison.OrdinalIgnoreCase))
+                continue;
+            // déjà une ouverture : seulement une « porte » qui ne s'ouvre ni ne se casse (Stadium : les tuyaux à découper,
+            // « stadium_breakable_pipe », qui barrent le passage comme une porte fermée)
+            if (Openings.FirstOrDefault(d => d.Id == o.Id) is { } od && (od.Extricate || od.IsWindow || od.Usable || od.Breakable || od.ScriptGate || od.IsObstacle))
                 continue;
             ClassFile? c = Class("Design\\" + o.ClassPath["design\\".Length..] + ".class");
             if (c == null)
@@ -338,12 +343,21 @@ public sealed partial class UnitManager
                 if (b.Length > 38 && b[22] == 0xAA && b[26] == 0x09 && b[38] == 1)
                     mark = true;
             }
-            if (!mark)
-                continue;
-            Vector3? saw = saws.Where(p => Vector2.Distance(new(p.X, p.Y), new(o.Position.X, o.Position.Y)) < 800)
-                .OrderBy(p => Vector3.Distance(p, o.Position)).Cast<Vector3?>().FirstOrDefault();
-            if (saw == null)
-                continue;
+            if (mark && saws.Any(p => Vector2.Distance(new(p.X, p.Y), new(o.Position.X, o.Position.Y)) < 800))
+                found.Add((o, c));
+        }
+        // chaque icône de scie désigne l'objet à découper le plus proche (Stadium : un tuyau par icône ; les éboulis de la
+        // scène n'ont pas d'icône à eux)
+        Dictionary<uint, Vector3> sawOf = new Dictionary<uint, Vector3>();
+        foreach (Vector3 sp in saws)
+            if (found.Count > 0)
+            {
+                (LevelObject o, ClassFile c) near = found.OrderBy(f => Vector2.Distance(new(sp.X, sp.Y), new(f.o.Position.X, f.o.Position.Y))).First();
+                if (Vector2.Distance(new(sp.X, sp.Y), new(near.o.Position.X, near.o.Position.Y)) < 800 && !sawOf.ContainsKey(near.o.Id))
+                    sawOf[near.o.Id] = sp;
+            }
+        foreach ((LevelObject o, ClassFile c) in found)
+        {
             float life = c.GetFloat("DAMAGE", "LifePoints", 100), max = c.GetFloat("DAMAGE", "MaxLifePoints", 100);
             string? onDestroy = null;
             if (o.GetComponent(0xA024) is { } dc && dc.Size > 13)
@@ -358,15 +372,27 @@ public sealed partial class UnitManager
             }
             if (life <= 0)
                 continue;
-            Opening d = AddObstacle(o, c, life, assets);
+            Opening? existing = Openings.FirstOrDefault(x => x.Id == o.Id);
+            if (existing != null && !sawOf.ContainsKey(o.Id))
+                continue;   // tuyau du décor sans icône de scie à lui : il reste tel quel
+            Opening d = existing ?? AddObstacle(o, c, life, assets);
             d.Breakable = false;
             d.Demolish = false;
             d.Extricate = true;
+            d.Life = life;
             d.MaxLife = MathF.Max(max, life);
-            d.ExtricateSide = new Vector2(saw.Value.X, saw.Value.Y);
+            d.State = OpeningState.Closed;
             d.OnDestroy = onDestroy;
             d.FallAnim = d.Model != null && _files.TryRead("Gfx\\" + d.Model + ".anim") != null ? "Gfx\\" + d.Model : null;
-            Log.Add($"À désincarcérer : {o.Name} ({d.Cells.Count} case(s), {life:0} points de vie, côté ({saw.Value.X:0},{saw.Value.Y:0}), script « {onDestroy} »)");
+            // côté imposé (Fireworks : le portail se découpe de l'intérieur) : seulement si l'icône est à l'écart de l'objet
+            Vector2 c2 = new Vector2(d.Center.X, d.Center.Y);
+            if (sawOf.TryGetValue(o.Id, out Vector3 saw))
+            {
+                d.SawMark = saw;
+                if (Vector2.Distance(new(saw.X, saw.Y), c2) > 150)
+                    d.ExtricateSide = new Vector2(saw.X, saw.Y);
+            }
+            Log.Add($"À désincarcérer : {o.Name} ({d.Cells.Count} case(s), {life:0} points de vie{(d.ExtricateSide is { } sd ? $", côté ({sd.X:0},{sd.Y:0})" : "")}, script « {onDestroy} »)");
         }
     }
 

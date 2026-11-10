@@ -2776,7 +2776,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         lines.Add(($"Civils : {civs.Count(c => c.State == CivilianState.Rescued)} sauvé(s) sur {civs.Count} · {civs.Count(c => c.State == CivilianState.Unconscious)} inconscient(s)", txt));
         lines.Add(($"{_session.Units.Active.Count} unités · {_sel.Count} sélectionnée(s)", txt));
         foreach (Unit u in _sel.Take(6))
-            lines.Add(($"  {UnitLabel(u)} : {u.Status}{(u.IsCanon ? (u.FeedTruck != null ? " · relié à un camion" : " · aucun camion à portée") : u.Nozzle != null ? $" · {UnitManager.AgentName(u.Nozzle.Agent)} {u.Nozzle.Reserve:0}/{u.Nozzle.ReserveMax:0}" : "")}{(u.Seats > 0 ? $" · à bord {u.Passengers.Count}/{u.Seats}" : "")}", new SN.Vector4(0.45f, 0.75f, 1, 1)));
+            lines.Add(($"  {UnitLabel(u)} : {u.Status}{(u.IsCanon ? (u.FeedTruck != null ? " · relié à un camion" : " · aucun camion à portée") : u.Nozzle != null ? $" · {UnitManager.AgentName(u.Nozzle.Agent)} {u.Nozzle.Reserve:0}/{u.Nozzle.ReserveMax:0}" : u.TankMax > 0 ? $" · citerne {UnitManager.AgentName(u.SupplyAgent)} {u.TankReserve:0}/{u.TankMax:0}" : "")}{(u.Seats > 0 ? $" · à bord {u.Passengers.Count}/{u.Seats}" : "")}", new SN.Vector4(0.45f, 0.75f, 1, 1)));
         if (_debugAi)
         {
             // commandes de débogage (seulement dans ce mode)

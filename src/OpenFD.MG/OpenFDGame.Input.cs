@@ -546,6 +546,12 @@ public sealed partial class OpenFDGame
                 DoFetch(who, civ);
                 Log($"{UnitLabel(who)} : {who.Status}");
             }
+            else if (LedgeTruck(new SN.Vector2(civ.Position.X, civ.Position.Y)) is { } ct)
+            {
+                // civil en haut d'un lieu sans fenêtre (Stadium : le haut des gradins) : le camion échelle y dresse son échelle
+                DoLedge(ct, new SN.Vector2(civ.Position.X, civ.Position.Y));
+                Log($"{UnitLabel(ct)} : {ct.Status}");
+            }
             return;
         }
         Unit? veh = _sel.Any(u => !u.IsVehicle) ? VehicleAt(x, y) : null;
@@ -637,6 +643,13 @@ public sealed partial class OpenFDGame
                 DoOpening(who, door);
                 Log($"{UnitLabel(who)} : {who.Status}");
             }
+            return;
+        }
+        // haut lieu sans fenêtre (le haut des gradins de Stadium) : le camion échelle choisi y dresse son échelle
+        if (Ground(x, y) is { } lg && LedgeTruck(lg) is { } lt)
+        {
+            DoLedge(lt, lg);
+            Log($"{UnitLabel(lt)} : {lt.Status}");
             return;
         }
         HotPoint? fire = FireAt(x, y);
@@ -842,13 +855,36 @@ public sealed partial class OpenFDGame
         return best;
     }
 
+    /// <summary>Ouverture visible (le script peut cacher des éboulis jusqu'à l'effondrement).</summary>
+    private bool ShownOpening(Opening o) => Host?.Visibility.TryGetValue(o.Id, out bool v) != true || v;
+
+    /// <summary>Objet à découper sous la souris : son icône de scie (à l'écran), ou une case de la grille qu'il couvre.</summary>
+    private Opening? ExtricableAt(SN.Vector2 m, double x, double y)
+    {
+        List<Opening> cut = _session.Units.Openings.Where(o => o.Extricate && o.State != OpeningState.Broken && ShownOpening(o)).ToList();
+        foreach (Opening o in cut)
+            if (o.SawMark is { } sm && Project(sm) is { } q && SN.Vector2.Distance(q, m) < Tol(30))
+                return o;
+        if (Ground(x, y) is not { } g || _session.Grid is not { } grid)
+            return null;
+        (int cx, int cy) = grid.CellOf(new SN.Vector3(g, 0));
+        if (!grid.Inside(cx, cy))
+            return null;
+        int i = grid.Index(cx, cy);
+        return cut.FirstOrDefault(o => o.Cells.Contains(i));
+    }
+
+    /// <summary>Camion échelle choisi, si <paramref name="p"/> est en haut d'un lieu sans fenêtre où dresser l'échelle ; sinon null.</summary>
+    private Unit? LedgeTruck(SN.Vector2 p) =>
+        _sel.FirstOrDefault(u => u.IsAerial && !u.Destroyed) is { } t && _session.Units.FindLedge(p, out _, out _, out _) ? t : null;
+
     private Opening? OpeningAt(double x, double y)
     {
         (float sx, float sy) = Fb(x, y);
         SN.Vector2 m = new SN.Vector2(sx, sy);
         Opening? best = null;
         float bd = Tol(26);
-        foreach (Opening o in _session.Units.Openings.Where(o => (o.State != OpeningState.Broken || _session.Units.LadderAt(o) != null) && (o.OnGround || o.IsWindow)))
+        foreach (Opening o in _session.Units.Openings.Where(o => (o.State != OpeningState.Broken || _session.Units.LadderAt(o) != null) && (o.OnGround || o.IsWindow) && ShownOpening(o)))
         {
             if (Project(o.Center - new SN.Vector3(0, 0, 90)) is not { } a || Project(o.Center + new SN.Vector3(0, 0, 90)) is not { } b)
                 continue;
@@ -892,10 +928,12 @@ public sealed partial class OpenFDGame
                     break;
                 }
             }
+        // objet à découper (Stadium : les tuyaux, les éboulis de la scène) : son icône de scie, ou une case qu'il couvre
+        best ??= ExtricableAt(m, x, y);
         if (best == null && Ground(x, y) is { } g)
         {
             float gd = 90;
-            foreach (Opening o in _session.Units.Openings.Where(o => o.OnGround && !o.IsWindow && o.State != OpeningState.Broken))
+            foreach (Opening o in _session.Units.Openings.Where(o => o.OnGround && !o.IsWindow && o.State != OpeningState.Broken && ShownOpening(o)))
                 if (SN.Vector2.Distance(new(o.Center.X, o.Center.Y), g) is float d && d < gd)
                 {
                     gd = d;
@@ -1083,6 +1121,8 @@ public sealed partial class OpenFDGame
             want = Cur.Bulldozer;   // débris : le bulldozer les dégage
         else if (_sel.Any(u => u.IsAerial && !u.Destroyed) && OpeningAt(x, y) is { } hw && _session.Units.IsHighWindow(hw))
             want = Cur.Ladder;      // fenêtre d'étage : dresser l'échelle
+        else if (_sel.Any(u => u.IsAerial && !u.Destroyed) && (CivilianAt(x, y) is { } lc ? (walkers.Count == 0 ? LedgeTruck(new SN.Vector2(lc.Position.X, lc.Position.Y)) : null) : Ground(x, y) is { } lp ? LedgeTruck(lp) : null) != null)
+            want = Cur.Ladder;      // haut lieu sans fenêtre : dresser l'échelle
         else if (walkers.Count > 0 && Ground(x, y) is { } stairAt && _session.Units.TeleportEndNear(stairAt))
             want = Cur.Enter;       // icône d'escalier : y entrer (il ressort par l'autre)
         else if (walkers.Count == 0)

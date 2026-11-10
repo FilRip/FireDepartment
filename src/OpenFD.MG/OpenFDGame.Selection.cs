@@ -354,6 +354,9 @@ public sealed partial class OpenFDGame
                 if (u.Nozzle is { } n && !n.InfiniteReserve)
                     Bar(x, y + pr.iconH + 11 * _scale, iw, 5 * _scale, Math.Clamp(n.Reserve / Math.Max(1, n.ReserveMax), 0, 1),
                         n.Agent is "WATER" or "" ? waterTex : null, AgentColor(n.Agent));   // autre agent : couleur pleine (l'image de l'eau est bleue)
+                else if (u.Nozzle == null && u.TankMax > 0)   // camion-citerne sans lance : sa citerne
+                    Bar(x, y + pr.iconH + 11 * _scale, iw, 5 * _scale, Math.Clamp(u.TankReserve / u.TankMax, 0, 1),
+                        u.SupplyAgent is "WATER" or "" ? waterTex : null, AgentColor(u.SupplyAgent));
                 x += pr.cell;
             }
         }
