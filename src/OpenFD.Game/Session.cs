@@ -127,6 +127,13 @@ public sealed class Session
         Fire.Step(Dt);
         Smoke.Step(Fire, Dt);
         Explosions.Step(Fire, Time, Dt);
+        // objet détruit par le feu dont la carte nomme une fonction du script (Stadium : « ElecOnDestruction1 »)
+        foreach (ExplosiveItem it in Explosions.Items.Where(i => i.OnDestroy != null && !i.DestroyRun && i.Life <= 0))
+        {
+            it.DestroyRun = true;
+            Host?.FireLog.Add($"{Time,6:0.0} {it.Name} détruit par le feu : {it.OnDestroy}");
+            Scripts?.TryRun(it.OnDestroy!, Script.Value.I(it.Id));
+        }
         Units.UpdateBackdrafts(Time, Dt);
         _steps++;
     }
