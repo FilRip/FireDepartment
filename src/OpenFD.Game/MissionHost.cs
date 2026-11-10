@@ -326,7 +326,9 @@ public sealed class MissionHost : IScriptHost
                 FireLog.Add($"{GameTime,6:0.0} FIR_HPEnable {NameOf(V(0).AsInt)} {V(1).AsInt}");
                 return Value.Zero;
             case "FIR_HPISENABLE": return Value.I(HotPointsOf(V(0).AsInt).Count(h => h.Enabled));
-            case "FIR_HPGETINTENSITY": return Value.F(HotPointsOf(V(0).AsInt).Sum(h => (double)h.Intensity));
+            // (seulement les foyers allumés : un foyer consumé auquel le script a rajouté de l'intensité ne brûle pas ; Stadium
+            // attend que tous ses foyers soient à 0 pour finir la mission)
+            case "FIR_HPGETINTENSITY": return Value.F(HotPointsOf(V(0).AsInt).Where(h => h.Lit).Sum(h => (double)h.Intensity));
             case "FIR_HPGETACTIVEINTENSITY": return Value.F(HotPointsOf(V(0).AsInt).Where(h => h.IsBurning).Sum(h => (double)h.Intensity));
             case "FIR_HPADDINTENSITY":
             {
