@@ -124,6 +124,97 @@ public sealed partial class UnitManager
         return true;
     }
 
+    /// <summary>
+    /// Bord d'un haut lieu sans fenêtre (Stadium : le haut des gradins, à 14 m, où deux civils attendent) : depuis le point
+    /// <paramref name="p"/>, posé sur une case libre en hauteur, la direction la plus courte (à moins de 12 m) vers une case
+    /// libre du sol bien plus bas ; le bord est la dernière case à la hauteur de <paramref name="p"/> dans cette direction.
+    /// false : pas un haut lieu (ou pas de sol en dessous à portée).
+    /// </summary>
+    public bool FindLedge(Vector2 p, out Vector2 edge, out Vector2 outward, out float height)
+    {
+        edge = p;
+        outward = Vector2.Zero;
+        height = 0;
+        if (_s.Grid is not { } g)
+            return false;
+        (int px, int py) = g.CellOf(new Vector3(p, 0));
+        if (!FreeCell(px, py))
+            return false;
+        float h = Ground(p);
+        float best = float.MaxValue;
+        for (int k = 0; k < 16; k++)
+        {
+            Vector2 dir = new Vector2(MathF.Cos(k * MathF.PI / 8), MathF.Sin(k * MathF.PI / 8));
+            Vector2 last = p;
+            float lastR = 0;
+            for (float r = 50; r <= 1200 && r < best; r += 50)
+            {
+                Vector2 q = p + dir * r;
+                (int qx, int qy) = g.CellOf(new Vector3(q, 0));
+                if (!g.Inside(qx, qy))
+                    break;
+                bool free = FreeCell(qx, qy);
+                float z = Ground(q);
+                if (free && MathF.Abs(z - h) < 100)
+                {
+                    last = q;
+                    lastR = r;
+                    continue;
+                }
+                // le sol en dessous, juste derrière le bord (un parapet d'une case au plus, pas tout un bâtiment)
+                if (free && z < h - 2 * ReachHeight && r - lastR <= 250)
+                {
+                    best = r;
+                    edge = last;
+                    outward = dir;
+                }
+                else if (free || r - lastR > 250)
+                    break;   // autre niveau, ou mur épais : pas un bord
+            }
+        }
+        if (best == float.MaxValue)
+            return false;
+        height = h;
+        return true;
+    }
+
+    /// <summary>
+    /// « Fenêtre » sans modèle posée au bord d'un haut lieu (FindLedge), pour y dresser l'échelle : ouverte, on y monte et on
+    /// en descend comme par une fenêtre. La même pour un même bord (son numéro vient de la case). null : pas de bord ici.
+    /// </summary>
+    public Opening? LedgeAt(Vector2 p)
+    {
+        if (_s.Grid is not { } g || !FindLedge(p, out Vector2 edge, out Vector2 outward, out float h))
+            return null;
+        (int ex, int ey) = g.CellOf(new Vector3(edge, 0));
+        uint id = 0xFE000000u + (uint)g.Index(ex, ey);
+        if (Openings.FirstOrDefault(o => o.Id == id) is { } known)
+            return known;
+        Vector2 c = new Vector2((ex + 0.5f) * Grid.CellSize, (ey + 0.5f) * Grid.CellSize) + outward * 50;
+        Opening d = new Opening
+        {
+            Id = id, Name = $"bord {ex},{ey}", IsWindow = true, Model = null, World = Matrix4x4.CreateTranslation(c.X, c.Y, h),
+            State = OpeningState.Broken, Breakable = false, Usable = false, OnGround = false,
+        };
+        d.Center = new Vector3(c, h + LadderTipBelow);
+        Openings.Add(d);
+        return d;
+    }
+
+    /// <summary>Clic droit du camion échelle sur un haut lieu sans fenêtre : il dresse son échelle jusqu'au bord (LedgeAt).</summary>
+    public bool DeployLadderToLedge(Unit truck, Vector2 p)
+    {
+        if (!truck.IsAerial || truck.Destroyed)
+            return false;
+        if (LedgeAt(p) is not { } d)
+        {
+            truck.Status = "l'échelle ne sert pas ici";
+            Sounds.Add(("VOCAL_IMPOSSIBLE_TO_ACCESS", null));
+            return false;
+        }
+        return DeployLadder(truck, d);
+    }
+
     /// <summary>Clic droit du camion échelle sur une fenêtre d'étage : il va se garer devant et dresser son échelle.</summary>
     public bool DeployLadder(Unit truck, Opening d)
     {

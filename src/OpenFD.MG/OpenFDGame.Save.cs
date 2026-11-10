@@ -90,6 +90,13 @@ public sealed partial class OpenFDGame
         Rec("ladder", truck.Id, d.Id);
         _session.Units.DeployLadder(truck, d);
     }
+    private void DoLedge(Unit truck, SN.Vector2 p)
+    {
+        if (NetSubmit("ledge", truck.Id, 0, p.X, p.Y))
+            return;
+        Rec("ledge", truck.Id, 0, p.X, p.Y);
+        _session.Units.DeployLadderToLedge(truck, p);
+    }
     private void DoAttack(Unit u, OpenFD.Fire.HotPoint h)
     {
         if (NetSubmit("attack", u.Id, h.Id))
@@ -201,6 +208,10 @@ public sealed partial class OpenFDGame
             case "ladder":
                 if (U(e.A) is { } aL && um.Openings.FirstOrDefault(o => o.Id == e.B) is { } dL)
                     um.DeployLadder(aL, dL);
+                break;
+            case "ledge":
+                if (U(e.A) is { } aE)
+                    um.DeployLadderToLedge(aE, new SN.Vector2(e.X, e.Y));
                 break;
             case "attack":
                 if (U(e.A) is { } a7 && _session.Fire.HotPoints.FirstOrDefault(h => h.Id == e.B) is { } h7)

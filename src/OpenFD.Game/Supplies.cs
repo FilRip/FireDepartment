@@ -28,43 +28,82 @@ public sealed partial class UnitManager
     }
 
     /// <summary>
-    /// Véhicule à lance dont la réserve est entamée, à l'arrêt : il se recharge près d'une bouche d'incendie (à moins de son
-    /// ResupplyRadius, 20 m) ou près d'un véhicule d'un autre type qui recharge (camion-citerne…).
+    /// Véhicule dont la réserve est entamée, à l'arrêt : il se recharge près d'une bouche d'incendie (à moins de son
+    /// ResupplyRadius, 20 m), sinon dans le rayon d'action d'un véhicule qui ravitaille les autres (camion-citerne, 30 m ;
+    /// bateau-pompe), du même agent. Une citerne sans lance se remplit aussi aux bouches d'incendie.
     /// </summary>
     private void VehicleResupply(Unit v, float dt)
     {
-        if (v.Nozzle is not { InfiniteReserve: false } n || n.Reserve >= n.ReserveMax || v.Moving || v.OnBoard || v.Destroyed)
+        string agent;
+        float have, max;
+        if (v.Nozzle is { InfiniteReserve: false } n)
+        {
+            agent = n.Agent;
+            have = n.Reserve;
+            max = n.ReserveMax;
+        }
+        else if (v.Nozzle == null && v.TankMax > 0)
+        {
+            agent = v.SupplyAgent;
+            have = v.TankReserve;
+            max = v.TankMax;
+        }
+        else
+            return;
+        if (have >= max || v.Moving || v.OnBoard || v.Destroyed)
             return;
         float power = 0;
         foreach (SupplyPoint sp in Supplies)
-            if (sp.Agent == n.Agent && Vector2.Distance(new(sp.Position.X, sp.Position.Y), new(v.Position.X, v.Position.Y)) <= sp.Radius)
+            if (sp.Agent == agent && Vector2.Distance(new(sp.Position.X, sp.Position.Y), new(v.Position.X, v.Position.Y)) <= sp.Radius)
                 power = MathF.Max(power, sp.Power);
         Unit? donor = null;
         if (power <= 0)
         {
-            donor = Units.Where(w => w.IsVehicle && w != v && w.ResupplyPower > 0 && !w.Moving && !w.Destroyed
-                    && !string.Equals(w.ClassPath, v.ClassPath, StringComparison.OrdinalIgnoreCase)
-                    && (w.Nozzle == null || w.Nozzle.InfiniteReserve || w.Nozzle.Reserve > 0)
-                    && Vector3.Distance(w.Position, v.Position) < VehicleReach * 2.5f)
-                .OrderByDescending(w => w.ResupplyPower).FirstOrDefault();
+            donor = VehicleDonor(v);
             if (donor != null)
-                power = donor.ResupplyPower;
+                power = donor.VehicleSupplyPower;
         }
         if (power <= 0)
             return;
-        float give = MathF.Min(n.ReserveMax - n.Reserve, power * ResupplyScale * 4 * dt);   // un camion se remplit 4 fois plus vite qu'un pompier
-        if (donor?.Nozzle is { InfiniteReserve: false } dn)
+        float give = MathF.Min(max - have, power * ResupplyScale * 4 * dt);   // un camion se remplit 4 fois plus vite qu'un pompier
+        if (donor != null)
         {
-            give = MathF.Min(give, dn.Reserve);
-            dn.Reserve -= give;
+            give = MathF.Min(give, SupplyStock(donor));
+            if (donor.Nozzle is { InfiniteReserve: false } dn)
+                dn.Reserve -= give;
+            else if (donor.Nozzle == null && donor.TankMax > 0)
+                donor.TankReserve -= give;
         }
-        n.Reserve += give;
-        if (n.Reserve > n.ReserveMax - 0.01f)
-            n.Reserve = n.ReserveMax;
+        have = MathF.Min(max, have + give);
+        if (have > max - 0.01f)
+            have = max;
+        if (v.Nozzle is { } vn)
+            vn.Reserve = have;
+        else
+            v.TankReserve = have;
         if (v.Target == null && !v.Status.StartsWith("arrose"))
-            v.Status = $"se recharge en eau ({n.Reserve:0}/{n.ReserveMax:0})";
-        if (n.Reserve >= n.ReserveMax && v.Status.StartsWith("se recharge"))
+            v.Status = $"se recharge ({AgentName(agent)} {have:0}/{max:0})";
+        if (have >= max && v.Status.StartsWith("se recharge"))
             v.Status = "réserve pleine";
+    }
+
+    /// <summary>Ce qu'un véhicule peut encore donner (sans fin : bateau-pompe, réserve infinie).</summary>
+    private static float SupplyStock(Unit w) =>
+        w.Nozzle is { InfiniteReserve: false } wn ? wn.Reserve : w.Nozzle == null && w.TankMax > 0 ? w.TankReserve : float.MaxValue;
+
+    /// <summary>
+    /// Véhicule qui ravitaille <paramref name="v"/> (garé dans son rayon d'action, même agent, pas vide) ; null s'il n'y en a
+    /// pas. Une citerne ou un bateau-pompe ne se ravitaille pas auprès d'un autre.
+    /// </summary>
+    public Unit? VehicleDonor(Unit v)
+    {
+        if (!v.IsVehicle || v.SupplyRadius > 0)
+            return null;
+        string agent = SupplyAgentOf(v);
+        Vector2 me = new Vector2(v.Position.X, v.Position.Y);
+        return Units.Where(w => w != v && w.IsVehicle && w.VehicleSupplyPower > 0 && !w.Moving && !w.Destroyed && !w.OnBoard && !w.Hidden
+                && SupplyAgentOf(w) == agent && SupplyStock(w) > 0 && Vector2.Distance(me, new(w.Position.X, w.Position.Y)) <= w.SupplyRadius)
+            .OrderBy(w => Vector2.Distance(me, new(w.Position.X, w.Position.Y))).FirstOrDefault();
     }
 
     // ---- zones de déclenchement (scripts de la mission : toits, masques, événements) ----
@@ -188,7 +227,7 @@ public sealed partial class UnitManager
     // ---- état de la partie pour les scripts (conditions de défaite) ----
     public bool AnyDispatched => Units.Any(u => !u.FromLevel) && !(_initialDeferred && !_initialCalled);   // (les véhicules posés dans le niveau ne sont pas des secours envoyés)
     public bool HealVehicleRemaining => !AnyDispatched || Units.Any(u => u.IsAmbulance && !u.Fixed);
-    public bool SupplierRemaining => !AnyDispatched || Units.Any(u => u.IsVehicle && u.ResupplyPower > 0);
+    public bool SupplierRemaining => !AnyDispatched || Units.Any(u => u.IsVehicle && (u.ResupplyPower > 0 || u.VehicleSupplyPower > 0));
     public int Victims => Civilians.Count(c => c.State == CivilianState.Dead && !_deadAtStart.Contains(c));
     private HashSet<Civilian>? _deadAtStartSet;
     private HashSet<Civilian> _deadAtStart => _deadAtStartSet ??= Civilians.Where(c => c.State == CivilianState.Dead).ToHashSet();

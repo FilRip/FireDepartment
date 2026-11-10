@@ -27,6 +27,7 @@ public sealed class Opening
     public bool OnGround;           // au niveau de la grille (les portes des étages ne touchent pas le chemin)
     public bool Extricate;          // portail à découper : seul le désincarcérateur (CanExtricate) l'ouvre
     public Vector2? ExtricateSide;  // icône de scie : le désincarcérateur travaille de ce côté-là
+    public Vector3? SawMark;        // icône de scie qui désigne cet objet (on peut cliquer dessus)
     public string? OnDestroy;       // fonction du script appelée quand l'obstacle est dégagé (composant A024)
     public float BrokenAt = -1;     // instant (s) où il a été dégagé : départ de l'animation de chute
     public string? FallAnim;        // animation du modèle (Gfx\<modèle>.anim) : les battants s'ouvrent, tombent et restent au sol
