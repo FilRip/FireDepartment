@@ -224,6 +224,8 @@ public sealed partial class OpenFDGame
         public SN.Vector2 Min, Max;
         public readonly List<int> Rooms = new();
         public bool Shown = true;
+        /// <summary>Objet posé qui porte ce couvercle (0 : décor de la mission).</summary>
+        public uint Owner;
     }
     private readonly List<RoomLid> _lids = new();
     private BasicEffect? _lidFx;
@@ -236,64 +238,103 @@ public sealed partial class OpenFDGame
         _lids.Clear();
         _revealedWindows.Clear();
         _lidFx ??= new BasicEffect(GraphicsDevice) { LightingEnabled = false, VertexColorEnabled = false, TextureEnabled = false, DiffuseColor = Vector3.Zero };
-        Formats.Grid? g = _session.Grid;
-        const float Cell = OpenFD.Formats.Grid.CellSize;
         foreach (SceneAssets.Node node in _assets.Masks(mission))
         {
-            Formats.Mesh m;
             try
             {
-                m = _assets.LoadMesh(mission, node.Mesh, null).Mesh;
+                AddLid(node.Mesh, _assets.LoadMesh(mission, node.Mesh, null).Mesh, node.World, 0);
+            }
+            catch
+            {
+            }
+        }
+        if (_lids.Count > 0)
+            Console.WriteLine($"Couvercles des pièces : {_lids.Count} ({_lids.Count(l => l.Rooms.Count > 0)} liés à une pièce de la grille)");
+    }
+
+    /// <summary>Un couvercle noir : ses triangles (en coordonnées du monde) et les pièces de la grille qu'il recouvre.</summary>
+    private void AddLid(string name, Formats.Mesh m, SN.Matrix4x4 world, uint owner)
+    {
+        Formats.Grid? g = _session.Grid;
+        const float Cell = OpenFD.Formats.Grid.CellSize;
+        if (m.Indices.Length < 3)
+            return;
+        VertexPosition[] v = new VertexPosition[m.Indices.Length];
+        SN.Vector2 mn = new(float.MaxValue), mx = new(float.MinValue);
+        for (int k = 0; k < m.Indices.Length; k++)
+        {
+            int i = (int)m.Indices[k];
+            SN.Vector3 p = SN.Vector3.Transform(new SN.Vector3(m.Positions[3 * i], m.Positions[3 * i + 1], m.Positions[3 * i + 2]), world);
+            v[k] = new VertexPosition(new Vector3(p.X, p.Y, p.Z + 2));
+            mn = SN.Vector2.Min(mn, new(p.X, p.Y));
+            mx = SN.Vector2.Max(mx, new(p.X, p.Y));
+        }
+        VertexBuffer vb = new VertexBuffer(GraphicsDevice, VertexPosition.VertexDeclaration, v.Length, BufferUsage.WriteOnly);
+        vb.SetData(v);
+        RoomLid lid = new RoomLid { Name = name, Vb = vb, Tris = v.Length / 3, Min = mn, Max = mx, Owner = owner };
+        // pièces dont au moins un tiers des cases est sous le couvercle (vu de dessus)
+        if (g != null && _roomOf.Length == g.Width * g.Height)
+        {
+            Dictionary<int, int> under = new Dictionary<int, int>(), total = new Dictionary<int, int>();
+            for (int c = 0; c < _roomOf.Length; c++)
+            {
+                int r = _roomOf[c];
+                if (r < 0)
+                    continue;
+                total[r] = total.GetValueOrDefault(r) + 1;
+                SN.Vector2 cp = new SN.Vector2((c % g.Width + 0.5f) * Cell, (c / g.Width + 0.5f) * Cell);
+                if (!Inside(cp, mn, mx, 0))
+                    continue;
+                for (int t = 0; t + 2 < v.Length; t += 3)
+                    if (InTri(cp, v[t].Position, v[t + 1].Position, v[t + 2].Position))
+                    {
+                        under[r] = under.GetValueOrDefault(r) + 1;
+                        break;
+                    }
+            }
+            foreach ((int r, int cnt) in under)
+                if (cnt * 3 >= total[r])
+                    lid.Rooms.Add(r);
+        }
+        _lids.Add(lid);
+        if (Environment.GetEnvironmentVariable("FD3_DEBUG_COUVERCLES") != null)
+            Console.WriteLine($"  couvercle {lid.Name} ({mn.X:0},{mn.Y:0})-({mx.X:0},{mx.Y:0}) pièces [{string.Join(", ", lid.Rooms)}]");
+    }
+
+    /// <summary>
+    /// Couvercles noirs des objets posés (modèle avec un nœud « …_MASK », comme le toit du hangar de Mriya, ou le masque
+    /// de toit de l'éditeur) : comme ceux du décor ; ENT_SetVisibility sur l'objet les cache ou les remontre.
+    /// </summary>
+    private void LoadPlacedLids(string mission, IEnumerable<SceneAssets.Placed> placed)
+    {
+        Dictionary<string, uint> ids = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+        foreach (Formats.LevelObject o in _session.Level.Objects)
+            ids.TryAdd(o.Name, o.Id);
+        int before = _lids.Count;
+        foreach (SceneAssets.Placed p in placed)
+        {
+            List<SceneAssets.Node> masks;
+            try
+            {
+                masks = _assets.ModelMasks(p.Model);
             }
             catch
             {
                 continue;
             }
-            if (m.Indices.Length < 3)
-                continue;
-            VertexPosition[] v = new VertexPosition[m.Indices.Length];
-            SN.Vector2 mn = new(float.MaxValue), mx = new(float.MinValue);
-            for (int k = 0; k < m.Indices.Length; k++)
+            foreach (SceneAssets.Node node in masks)
             {
-                int i = (int)m.Indices[k];
-                SN.Vector3 p = SN.Vector3.Transform(new SN.Vector3(m.Positions[3 * i], m.Positions[3 * i + 1], m.Positions[3 * i + 2]), node.World);
-                v[k] = new VertexPosition(new Vector3(p.X, p.Y, p.Z + 2));
-                mn = SN.Vector2.Min(mn, new(p.X, p.Y));
-                mx = SN.Vector2.Max(mx, new(p.X, p.Y));
-            }
-            VertexBuffer vb = new VertexBuffer(GraphicsDevice, VertexPosition.VertexDeclaration, v.Length, BufferUsage.WriteOnly);
-            vb.SetData(v);
-            RoomLid lid = new RoomLid { Name = node.Mesh, Vb = vb, Tris = v.Length / 3, Min = mn, Max = mx };
-            // pièces dont au moins un tiers des cases est sous le couvercle (vu de dessus)
-            if (g != null && _roomOf.Length == g.Width * g.Height)
-            {
-                Dictionary<int, int> under = new Dictionary<int, int>(), total = new Dictionary<int, int>();
-                for (int c = 0; c < _roomOf.Length; c++)
+                try
                 {
-                    int r = _roomOf[c];
-                    if (r < 0)
-                        continue;
-                    total[r] = total.GetValueOrDefault(r) + 1;
-                    SN.Vector2 cp = new SN.Vector2((c % g.Width + 0.5f) * Cell, (c / g.Width + 0.5f) * Cell);
-                    if (!Inside(cp, mn, mx, 0))
-                        continue;
-                    for (int t = 0; t + 2 < v.Length; t += 3)
-                        if (InTri(cp, v[t].Position, v[t + 1].Position, v[t + 2].Position))
-                        {
-                            under[r] = under.GetValueOrDefault(r) + 1;
-                            break;
-                        }
+                    AddLid(node.Mesh, _assets.LoadMesh(mission, node.Mesh, "gfx").Mesh, node.World * p.World, ids.GetValueOrDefault(p.Name));
                 }
-                foreach ((int r, int cnt) in under)
-                    if (cnt * 3 >= total[r])
-                        lid.Rooms.Add(r);
+                catch
+                {
+                }
             }
-            _lids.Add(lid);
-            if (Environment.GetEnvironmentVariable("FD3_DEBUG_COUVERCLES") != null)
-                Console.WriteLine($"  couvercle {lid.Name} ({mn.X:0},{mn.Y:0})-({mx.X:0},{mx.Y:0}) pièces [{string.Join(", ", lid.Rooms)}]");
         }
-        if (_lids.Count > 0)
-            Console.WriteLine($"Couvercles des pièces : {_lids.Count} ({_lids.Count(l => l.Rooms.Count > 0)} liés à une pièce de la grille)");
+        if (_lids.Count > before)
+            Console.WriteLine($"Couvercles des objets posés : {_lids.Count - before}");
     }
 
     private static bool InTri(SN.Vector2 p, Vector3 a, Vector3 b, Vector3 c)
@@ -317,7 +358,7 @@ public sealed partial class OpenFDGame
         gd.DepthStencilState = DepthStencilState.Default;
         gd.BlendState = BlendState.Opaque;
         gd.RasterizerState = RasterizerState.CullNone;
-        foreach (RoomLid lid in _lids.Where(l => l.Shown))
+        foreach (RoomLid lid in _lids.Where(l => l.Shown && !(l.Owner != 0 && Host?.Visibility.TryGetValue(l.Owner, out bool vis) == true && !vis)))
         {
             gd.SetVertexBuffer(lid.Vb);
             foreach (EffectPass pass in _lidFx.CurrentTechnique.Passes)

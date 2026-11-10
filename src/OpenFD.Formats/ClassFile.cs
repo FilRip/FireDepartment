@@ -57,6 +57,24 @@ public sealed class ClassFile
 
     public static ClassFile FromText(string text) => Parse(text, out _);
 
+    /// <summary>Classe pas encore écrite sur le disque (éditeur de missions) : son texte, ses inclusions lues comme pour Load.</summary>
+    public static ClassFile Load(GameFiles files, string relPath, string text)
+    {
+        relPath = Pak.Normalize(relPath);
+        Dictionary<string, ClassFile> cache = new(StringComparer.OrdinalIgnoreCase);
+        ClassFile result = new ClassFile { Path = relPath };
+        string dir = relPath.Contains('\\') ? relPath[..relPath.LastIndexOf('\\')] : "";
+        ClassFile own = Parse(text, out List<string>? includes);
+        foreach (string inc in includes)
+        {
+            string incPath = Combine(dir, inc);
+            if (files.TryRead(incPath) != null)
+                result.Merge(Load(files, incPath, cache));
+        }
+        result.Merge(own);
+        return result;
+    }
+
     private static string Combine(string dir, string rel)
     {
         List<string> parts = new List<string>(dir.Split('\\', StringSplitOptions.RemoveEmptyEntries));

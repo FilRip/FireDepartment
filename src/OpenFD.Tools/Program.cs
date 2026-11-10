@@ -17,6 +17,58 @@ public static class Program
 
         switch (args[0])
         {
+            case "ecritureniveau":
+            {
+                // ecritureniveau <Data> : réécritures de l'éditeur de missions (LevelEdit) sans changement — même nom, même
+                // place, même visibilité, même feu : le niveau réécrit doit rester identique, octet pour octet (place : à 1e-3 près)
+                int bad = 0;
+                foreach (string path in files.List("Design\\Mission\\").Where(p => p.EndsWith(".level", StringComparison.OrdinalIgnoreCase)))
+                {
+                    byte[] d = files.Read(path);
+                    Level L;
+                    try
+                    {
+                        L = Level.Parse(d);
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine($"{Path.GetFileName(path),-22} illisible : {e.Message}");
+                        continue;
+                    }
+                    int moved = 0, sameName = 0, fires = 0, near = 0;
+                    for (int i = 0; i < L.Objects.Count; i++)
+                    {
+                        LevelObject o = L.Objects[i];
+                        LevelObject n = LevelEdit.WithName(o, o.Name);
+                        n = LevelEdit.WithStartVisible(n, o.StartVisible);
+                        if (LevelEdit.FireState(o) is { } fs)
+                        {
+                            n = LevelEdit.WithFire(n, fs.lit, fs.intensity);
+                            fires++;
+                        }
+                        if (n.Raw.AsSpan().SequenceEqual(o.Raw))
+                            sameName++;
+                        if (o.HasTransform)
+                        {
+                            LevelObject t = LevelEdit.WithTransform(n, o.Position, o.Rotation);
+                            System.Numerics.Matrix4x4 a = o.Matrix, b = t.Matrix;
+                            bool ok = true;
+                            for (int r = 0; r < 4; r++)
+                                for (int c = 0; c < 4; c++)
+                                    ok &= MathF.Abs(a[r, c] - b[r, c]) < 1e-3f;
+                            if (ok)
+                                near++;
+                            moved++;
+                        }
+                        L.Objects[i] = n;
+                    }
+                    bool same = L.Serialize().AsSpan().SequenceEqual(d);
+                    if (!same || sameName != L.Objects.Count || near != moved)
+                        bad++;
+                    Console.WriteLine($"{Path.GetFileName(path),-22} {L.Objects.Count,5} objets : réécrits identiques {sameName}, foyers {fires}, places relues {near}/{moved}, fichier {(same ? "identique" : "DIFFÉRENT")}");
+                }
+                return bad == 0 ? 0 : 2;
+            }
             case "roundtrip":
             {
                 int bad = 0;

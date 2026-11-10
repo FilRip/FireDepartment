@@ -101,6 +101,18 @@ public sealed partial class OpenFDGame
 
     private bool InCampaign(string dir) => _campaign.Any(p => p.Dir.Equals(dir, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>Mission à lancer tout de suite (« -test=Mission », bouton « Tester » de l'éditeur de missions).</summary>
+    public string? TestMission { get; init; }
+
+    /// <summary>Comme un clic sur la mission dans l'écran « Campagne » : son briefing, puis la partie.</summary>
+    private void StartTestMission(string dir)
+    {
+        EnsureCampaign();
+        CampaignPage? page = _campaign.FirstOrDefault(p => p.Dir.Equals(dir, StringComparison.OrdinalIgnoreCase));
+        Console.WriteLine($"Essai de la mission {dir} (éditeur)");
+        StartBriefing(page?.Dir ?? dir, _difficulty, page?.Briefing);
+    }
+
     private void OpenCampaign()
     {
         EnsureCampaign();

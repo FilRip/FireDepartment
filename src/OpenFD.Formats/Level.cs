@@ -94,7 +94,7 @@ public sealed class Level
         return p;
     }
 
-    private static LevelObject ParseObject(byte[] raw, int nodeLen, string cls, EntityKind kind, int extra, int list)
+    internal static LevelObject ParseObject(byte[] raw, int nodeLen, string cls, EntityKind kind, int extra, int list)
     {
         int p = 0;
         while (Chunks.IsBegin(raw, p))
@@ -126,6 +126,32 @@ public sealed class Level
                 members[i] = BitConverter.ToUInt32(raw, nodeLen + 4 + 4 * i);
         }
         return new LevelObject { Id = id, Kind = kind, ClassPath = cls, Extra = extra, Raw = raw, NodeLength = nodeLen, Name = name, Components = comps, List = list, Members = members, TransformOffset = tOff };
+    }
+
+    /// <summary>
+    /// Enlève les liens entre foyers (propagation du feu) de la fin du fichier : niveau neuf fait à partir d'un autre
+    /// (éditeur de missions), dont les foyers n'existent pas. Le reste de la fin du fichier est gardé tel quel.
+    /// </summary>
+    public void ClearHotPointLinks()
+    {
+        byte[] s = Suffix;
+        int p = 8;
+        for (int k = 0; k < 4; k++)
+        {
+            if (!Chunks.IsBegin(s, p))
+                return;
+            p += 5;
+        }
+        int count = p + 4;
+        int n = BitConverter.ToInt32(s, count);
+        p += 8;
+        for (int i = 0; i < n; i++)
+            p = Chunks.NodeEnd(s, p + 8);
+        byte[] res = new byte[count + 4 + (s.Length - p)];
+        Array.Copy(s, res, count);
+        Array.Copy(s, p, res, count + 4, s.Length - p);
+        Suffix = res;
+        HotPointLinks.Clear();
     }
 
     private static List<(uint, uint, byte[])> ParseLinks(byte[] s)

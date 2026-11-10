@@ -249,11 +249,14 @@ public sealed partial class OpenFDGame
         d = new(StringComparer.OrdinalIgnoreCase);
         string dir = Path.Combine(AppContext.BaseDirectory, "languages");
         string? file = Directory.Exists(dir) ? Directory.EnumerateFiles(dir, "*.ini").FirstOrDefault(f => Path.GetFileNameWithoutExtension(f).Equals(lang, StringComparison.OrdinalIgnoreCase)) : null;
+        bool editor = false;   // section [EDITOR] : textes de l'éditeur de missions, pas ceux du jeu
         if (file != null)
             foreach (string raw in File.ReadAllLines(file, System.Text.Encoding.UTF8))
             {
                 string line = raw.Trim();
-                if (line.Length == 0 || line.StartsWith(';') || line.StartsWith('['))
+                if (line.StartsWith('['))
+                    editor = line.Equals("[EDITOR]", StringComparison.OrdinalIgnoreCase);
+                if (editor || line.Length == 0 || line.StartsWith(';') || line.StartsWith('['))
                     continue;
                 int eq = line.IndexOf('=');
                 if (eq <= 0)
@@ -409,7 +412,18 @@ public sealed partial class OpenFDGame
         new(L("&Exit", "Quitter"), null, true, _ => Exit()),
     };
 
-    private List<Row> PauseRows() => _netGame ? NetPauseRows() : new()
+    private List<Row> PauseRows()
+    {
+        if (_netGame)
+            return NetPauseRows();
+        List<Row> rows = SoloPauseRows();
+        // mission lancée par l'éditeur (-test=) : pas d'« Abandonner la mission »
+        if (TestMission != null)
+            rows.RemoveAll(r => r.Label == L("&AbortMission", "Abandonner la mission"));
+        return rows;
+    }
+
+    private List<Row> SoloPauseRows() => new()
     {
         new(L("&ResumeGame", "Reprendre"), null, true, _ => ClosePause()),
         new(_savedNote ? L("&Save", "Sauver") + " - OK" : L("&Save", "Sauver"), null, !_ended, _ => { _savedNote = SaveGame() != null; }),

@@ -15,6 +15,92 @@ public sealed class Grid
     public bool Inside(int cx, int cy) => cx >= 0 && cy >= 0 && cx < Width && cy < Height;
     public (int cx, int cy) CellOf(Vector3 p) => ((int)MathF.Floor(p.X / CellSize), (int)MathF.Floor(p.Y / CellSize));
 
+    /// <summary>Nouvelle grille (mission créée par l'éditeur) : toutes les cases praticables (zone 1), au niveau 0.</summary>
+    public static Grid Flat(int width, int height)
+    {
+        int n = width * height;
+        Grid g = new Grid { Width = width, Height = height, GroundHeight = new float[n], ZoneA = new ushort[n], ZoneB = new ushort[n] };
+        Array.Fill(g.ZoneA, (ushort)1);
+        return g;
+    }
+
+    /// <summary>
+    /// Fichier .grid : <paramref name="original"/> (même taille) recopié avec les hauteurs et les zones de cette grille, sa fin
+    /// (tables du jeu d'origine) gardée telle quelle ; sans original, un fichier neuf (en-tête, cases, fin vide).
+    /// </summary>
+    public byte[] Serialize(byte[]? original = null)
+    {
+        if (original != null)
+        {
+            try
+            {
+                Grid o = Parse(original);
+                if (o.Width == Width && o.Height == Height)
+                {
+                    byte[] d = (byte[])original.Clone();
+                    int p = FirstCell(d);
+                    for (int i = 0; i < Width * Height; i++)
+                    {
+                        int e = Chunks.NodeEnd(d, p);
+                        int k = Index(i / Height, i % Height);
+                        BitConverter.TryWriteBytes(d.AsSpan(p + 5), ZoneA[k]);
+                        BitConverter.TryWriteBytes(d.AsSpan(p + 7), ZoneB[k]);
+                        BitConverter.TryWriteBytes(d.AsSpan(p + 9), GroundHeight[k]);
+                        p = e;
+                    }
+                    return d;
+                }
+            }
+            catch (InvalidDataException)
+            {
+            }
+        }
+        using MemoryStream ms = new MemoryStream();
+        using BinaryWriter w = new BinaryWriter(ms);
+        void Str(string s)
+        {
+            w.Write(s.Length + 1);
+            w.Write(Encoding.Latin1.GetBytes(s));
+            w.Write((byte)0);
+        }
+        void Begin(byte version) => w.Write(new byte[] { 0xAA, 0xAA, 0xFF, 0xFF, version });
+        void End() => w.Write(new byte[] { 0xCC, 0xCC, 0xBB, 0xBB });
+        Str("GRD");
+        Str("18");
+        Str("1.04c");
+        w.Write((ushort)Width);
+        w.Write((ushort)Height);
+        Begin(3);
+        w.Write((ushort)Width);
+        w.Write((ushort)Height);
+        Begin(4);
+        for (int i = 0; i < Width * Height; i++)
+        {
+            int k = Index(i / Height, i % Height);   // colonne par colonne
+            Begin(5);
+            w.Write(ZoneA[k]);
+            w.Write(ZoneB[k]);
+            w.Write(GroundHeight[k]);
+            End();
+        }
+        w.Write(0);   // tables du jeu d'origine : vides
+        End();
+        End();
+        w.Write(0L);
+        w.Flush();
+        return ms.ToArray();
+    }
+
+    /// <summary>Position de la première case dans le fichier (même lecture que Parse).</summary>
+    private static int FirstCell(byte[] d)
+    {
+        int p = 0;
+        Chunks.ReadString(d, ref p);
+        Chunks.ReadString(d, ref p);
+        Chunks.ReadString(d, ref p);
+        return p + 4 + 5 + 4 + 5;
+    }
+
     public static Grid Parse(byte[] d)
     {
         int p = 0;

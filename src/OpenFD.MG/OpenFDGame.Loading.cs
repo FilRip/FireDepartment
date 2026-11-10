@@ -69,6 +69,10 @@ public sealed partial class OpenFDGame
         _fbW = gd.PresentationParameters.BackBufferWidth;
         _fbH = gd.PresentationParameters.BackBufferHeight;
         gd.Clear(Color.Black);
+        bool drawn = false;
+        EditorLoading(ref drawn);
+        if (drawn)
+            return;
         _ui.Begin();
         // l'image 800 × 600 agrandie au plus grand qui tient dans l'écran, centrée
         float s = MathF.Min(_fbW / 800f, _fbH / 600f);

@@ -15,6 +15,16 @@ public sealed class GameFiles
     public GameFiles(string dataDir)
     {
         DataDir = dataDir;
+        Rescan();
+    }
+
+    /// <summary>Relit la liste des archives (après l'écriture d'une mission par l'éditeur : nouvelles .pak et .bank).</summary>
+    public void Rescan()
+    {
+        _paks.Clear();
+        _cache = null;
+        _banks.Clear();
+        string dataDir = DataDir;
         void Add(string rel, string prefix)
         {
             string p = System.IO.Path.Combine(dataDir, rel);
