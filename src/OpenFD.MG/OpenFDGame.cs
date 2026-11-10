@@ -2208,7 +2208,9 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 if (s.Intensity < 0.5f)
                     continue;
                 float k = Math.Min(1, s.Intensity / s.Max);
-                P(s.Position + new SN.Vector3(0, 0, 250), s.Class.InfluenceRange * (0.95f + k), new SN.Vector4(0.36f, 0.36f, 0.38f, 0.5f * k + 0.16f), right, up);
+                float hs = s.Class.InfluenceRange * (0.95f + k);
+                SN.Vector3 hp = s.Position + new SN.Vector3(0, 0, 250);
+                P(hp, hs, new SN.Vector4(0.36f, 0.36f, 0.38f, (0.32f * k + 0.1f) * NearFade(hp, hs)), right, up);
             }
         // cercle d'action sous les rouages d'un portail (clic droit dessus : ouvrir / fermer)
         foreach (Opening o in _session.Units.Openings.Where(o => o.Lever != null && o.State != OpeningState.Broken))
@@ -2568,6 +2570,9 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         SN.Vector3 wind = _session.Fire.Settings.WindDirection;
         if (Environment.GetEnvironmentVariable("FD3_DEBUG_FUMEE") != null && _frame % 120 == 0)
             Console.WriteLine($"fumée : {_smokeCells.Count} zones, {_smokeCells.Count(c => c.Value.sum >= 0.4f)} colonnes, somme max {(_smokeCells.Count > 0 ? _smokeCells.Max(c => c.Value.sum) : 0):0.00} en {(_smokeCells.Count > 0 ? _smokeCells.MaxBy(c => c.Value.sum).Value.at / _smokeCells.MaxBy(c => c.Value.sum).Value.sum : SN.Vector3.Zero)}");
+        // beaucoup de colonnes (Paris, Port : tout un quartier en feu) : chacune plus légère, pour que l'on voie encore la scène
+        int columns = _smokeCells.Count(c => c.Value.sum >= 0.4f);
+        float budget = Math.Clamp(16f / MathF.Max(1, columns), 0.6f, 1f);
         foreach (((int x, int y) key, (float sum, SN.Vector3 at, float top) c) in _smokeCells)
         {
             if (c.sum < 0.4f)
@@ -2586,11 +2591,16 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                     + wind * (t * t * drift) + new SN.Vector3(MathF.Sin(time * 0.7f + q) * 40 * t, MathF.Cos(time * 0.6f + q) * 40 * t, 0);
                 float size = (250 + 350 * dense) * (0.7f + 1.8f * t);
                 float g = 0.3f + 0.18f * t;
-                float alpha = (0.45f + 0.35f * dense) * MathF.Min(1, t * 4) * MathF.Pow(1 - t, 0.9f);
+                float alpha = (0.3f + 0.25f * dense) * budget * MathF.Min(1, t * 4) * MathF.Pow(1 - t, 0.9f) * NearFade(p, size);
                 P(p, size, new SN.Vector4(g, g, g * 1.04f, alpha), right, up);
             }
         }
     }
+
+    /// <summary>
+    /// Fumée tout près de la caméra (vue rapprochée, ou caméra dans une colonne) : elle s'efface au lieu de couvrir l'écran.
+    /// </summary>
+    private float NearFade(SN.Vector3 p, float size) => Math.Clamp((SN.Vector3.Distance(p, _eye) - size * 0.6f) / (size * 1.2f), 0f, 1f);
 
     /// <summary>Nombre pseudo-aléatoire stable (0 à 1) pour la flamme q du foyer seed.</summary>
     private static float Rnd(int seed, int q, int salt) => Frac(MathF.Sin(seed * 12.9898f + q * 78.233f + salt * 37.719f) * 43758.547f);
