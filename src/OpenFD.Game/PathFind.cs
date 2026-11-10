@@ -298,6 +298,10 @@ public sealed class PathFind
                     for (int a = 1; a <= 2 && !wall; a++)
                         for (int b = 1; b <= 2 && !wall; b++)
                         {
+                            // (une case mur de la grille entre les deux : de vrais murs bordent déjà la case ; Paris, le couloir
+                            // de la vanne de gaz sous la butte n'est pas une cloison entre les deux pentes)
+                            if ((a == 2 && float.IsNaN(H(x - dx, y - dy))) || (b == 2 && float.IsNaN(H(x + dx, y + dy))))
+                                continue;
                             float h1 = H(x - dx * a, y - dy * a), h2 = H(x + dx * b, y + dy * b);
                             if (h1 >= h + 150 && h2 >= h + 150 && MathF.Abs(h1 - h2) < 60 && Floor(x - dx * a, y - dy * a) && Floor(x + dx * b, y + dy * b))
                                 wall = true;
