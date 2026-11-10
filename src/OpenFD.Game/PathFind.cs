@@ -268,6 +268,14 @@ public sealed class PathFind
         }
         int n = 0;
         float H(int x, int y) => g.Inside(x, y) && g.ZoneA[g.Index(x, y)] != 0 ? g.GroundHeight[g.Index(x, y)] : float.NaN;
+        // case haute qui est un plancher (étendu dans les deux sens) et non le haut d'une cloison (une ligne d'une case
+        // d'épaisseur) : l'entre-deux des cloisons de la banque (passage d'une porte, petit bureau) n'est pas un mur
+        bool Floor(int x, int y)
+        {
+            float hh = H(x, y);
+            bool Near(int ax, int ay) => MathF.Abs(H(ax, ay) - hh) < 60;
+            return (Near(x - 1, y) || Near(x + 1, y)) && (Near(x, y - 1) || Near(x, y + 1));
+        }
         for (int y = 0; y < g.Height; y++)
             for (int x = 0; x < g.Width; x++)
             {
@@ -282,7 +290,7 @@ public sealed class PathFind
                         for (int b = 1; b <= 2 && !wall; b++)
                         {
                             float h1 = H(x - dx * a, y - dy * a), h2 = H(x + dx * b, y + dy * b);
-                            if (h1 >= h + 150 && h2 >= h + 150 && MathF.Abs(h1 - h2) < 60)
+                            if (h1 >= h + 150 && h2 >= h + 150 && MathF.Abs(h1 - h2) < 60 && Floor(x - dx * a, y - dy * a) && Floor(x + dx * b, y + dy * b))
                                 wall = true;
                         }
                     if (wall)
