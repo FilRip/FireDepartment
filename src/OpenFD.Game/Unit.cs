@@ -90,6 +90,10 @@ public sealed class Unit
     public HotPoint? Target;                              // feu à éteindre
     public string Status = "";
     public bool Moving => Path.Count > 0;
+    /// <summary>Retenu par le script (IA_CmdStop, répété par la boucle de la mission) jusqu'à cet instant : l'IA ne le fait pas arroser.</summary>
+    public float ScriptHold = -1;
+    /// <summary>Portes fermées sur le chemin d'un IA_CmdMoveTo : il les ouvre en arrivant devant.</summary>
+    public readonly List<Opening> ScriptDoors = new();
     /// <summary>Blessé (backdraft, explosion) : au sol, ne peut rien faire pendant ce temps (s).</summary>
     public float InjuredTimer;
     public int Wounds;

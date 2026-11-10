@@ -68,12 +68,172 @@ public sealed partial class UnitManager
         u.GoTo = null;
         u.GoToVehicle = null;
         u.Boarding = false;
+        u.ScriptHold = -1;
+        u.ScriptDoors.Clear();
         if (!Order(u, dest, null, drive: u.IsVehicle, refuseUnreachable: false))
         {
             u.Path.Clear();
             u.Path.Enqueue(dest);
         }
+        else if (!u.IsVehicle && !Reaches(u, dest))
+            ScriptMoveThroughDoors(u, dest);
         u.Status = u.IsVehicle ? "roule" : "se déplace";
+    }
+
+    // le chemin trouvé mène-t-il au but (et pas seulement au point atteignable le plus proche) ?
+    private bool Reaches(Unit u, Vector2 dest)
+    {
+        Vector2 end = u.Path.Count > 0 ? u.Path.Last() : new Vector2(u.Position.X, u.Position.Y);
+        return Vector2.Distance(end, Walkable(dest)) <= 150;
+    }
+
+    /// <summary>
+    /// IA_CmdMoveTo vers une pièce derrière une porte fermée (London, cinématique cat_3 : le pompier entre dans la pièce
+    /// 10 par door226) : le chemin passe par les portes qui s'ouvrent à la main, et il les ouvre en arrivant devant.
+    /// </summary>
+    private void ScriptMoveThroughDoors(Unit u, Vector2 dest)
+    {
+        List<Opening> doors = Openings.Where(d => !d.IsWindow && d.Usable && !d.ScriptGate && d.OnGround && d.State == OpeningState.Closed).ToList();
+        if (doors.Count == 0)
+            return;
+        List<Vector2> before = u.Path.ToList();
+        foreach (Opening d in doors)
+            foreach (int i in d.Cells)
+                if (i < Paths.DoorClosed.Length)
+                    Paths.DoorClosed[i] = false;
+        Paths.ForgetFailure();
+        try
+        {
+            Order(u, dest, null, drive: false, refuseUnreachable: false);
+        }
+        finally
+        {
+            RefreshDoorCells();
+            Paths.ForgetFailure();
+        }
+        if (!Reaches(u, dest))
+        {
+            u.Path.Clear();
+            foreach (Vector2 p in before)
+                u.Path.Enqueue(p);
+            return;
+        }
+        List<Vector2> pts = new List<Vector2> { new(u.Position.X, u.Position.Y) };
+        pts.AddRange(u.Path);
+        foreach (Opening d in doors)
+        {
+            Vector2 c = new Vector2(d.Center.X, d.Center.Y);
+            for (int i = 0; i + 1 < pts.Count; i++)
+                if (SegmentDistance(c, pts[i], pts[i + 1]) < 120)
+                {
+                    u.ScriptDoors.Add(d);
+                    break;
+                }
+        }
+    }
+
+    private static float SegmentDistance(Vector2 p, Vector2 a, Vector2 b)
+    {
+        Vector2 ab = b - a;
+        float len2 = ab.LengthSquared();
+        float t = len2 < 1e-6f ? 0 : Math.Clamp(Vector2.Dot(p - a, ab) / len2, 0, 1);
+        return Vector2.Distance(p, a + ab * t);
+    }
+
+    /// <summary>Déplacement du script : il ouvre la porte fermée qu'il atteint (ScriptMoveThroughDoors).</summary>
+    private void OpenScriptDoors(Unit u)
+    {
+        if (u.ScriptDoors.Count == 0)
+            return;
+        if (!u.Moving)
+        {
+            u.ScriptDoors.Clear();
+            return;
+        }
+        Vector2 me = new Vector2(u.Position.X, u.Position.Y);
+        foreach (Opening d in u.ScriptDoors.ToList())
+        {
+            if (d.State != OpeningState.Closed)
+            {
+                u.ScriptDoors.Remove(d);
+                continue;
+            }
+            if (Vector2.Distance(me, new Vector2(d.Center.X, d.Center.Y)) > 130)
+                continue;
+            SetOpeningState(d, OpeningState.Open);
+            Log.Add($"{_s.Time,6:0} s : {d.Name} ouverte par {u.Name} (script)");
+            u.ScriptDoors.Remove(d);
+            foreach ((string action, string script) in d.Actions.Where(a => a.action.Equals("open", StringComparison.OrdinalIgnoreCase)).Take(1))
+                _s.Scripts?.TryRun(script, Script.Value.I(u.Id), Script.Value.I(d.Id), Script.Value.T(action));
+        }
+    }
+
+    /// <summary>
+    /// Animations des états logiques d'un objet du décor ([LOGICAL_STATE] S01_ANIM, S02_ANIM…), dans l'ordre des états
+    /// (null : état sans animation). London : les gravats « bank_zaval_anim » (S01 damage, S02 damage2 : ils s'éboulent).
+    /// </summary>
+    public List<string?> StateAnims(LevelObject o)
+    {
+        List<string?> list = new List<string?>();
+        if (!o.ClassPath.StartsWith("design\\", StringComparison.OrdinalIgnoreCase) || Class("Design\\" + o.ClassPath["design\\".Length..] + ".class") is not { } c)
+            return list;
+        for (int k = 1; k <= 9; k++)
+        {
+            if (string.IsNullOrWhiteSpace(c.Get("LOGICAL_STATE", $"S{k:00}__NAME")?.Trim('"', ' ')))
+                break;
+            string? anim = c.Get("LOGICAL_STATE", $"S{k:00}_ANIM")?.Trim('"', ' ');
+            list.Add(string.IsNullOrEmpty(anim) ? null : anim.Replace('/', '\\'));
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// Objet du décor qui change de forme en changeant d'état (ENT_SwitchState) : ses pièces, posées comme à la fin de
+    /// l'animation, ferment les cases qu'elles couvrent à hauteur d'homme (London, cat_3 : les gravats tombés devant
+    /// door226 enferment le pompier dans la pièce ; il en sort par la fenêtre, avec l'échelle du camion).
+    /// </summary>
+    public void SettleStateObject(LevelObject o, string anim)
+    {
+        if (Class("Design\\" + o.ClassPath["design\\".Length..] + ".class") is not { } c)
+            return;
+        if (c.GetInt("OCCUPATION", "Activated", 1) == 0 || c.GetInt("OCCUPATION", "Background", 0) == 1)
+            return;
+        string mode = c.Get("OCCUPATION", "Occupation_Mode")?.Trim('"', ' ').ToUpperInvariant() ?? "AGO";
+        string? model = c.Get("DISPLAY", "Model")?.Trim('"', ' ');
+        if (mode != "AGO" || string.IsNullOrEmpty(model))
+            return;
+        string path = SceneAssets.GfxPath("Placeable", model);
+        CharacterRig? rig;
+        AnimClip? clip;
+        try
+        {
+            rig = CharacterRig.Build(_assets!, _files, path);
+            clip = _files.TryRead("Gfx\\Anim\\" + anim + ".anim") is { } ab ? AnimClip.Parse(ab) : null;
+        }
+        catch (Exception)
+        {
+            return;
+        }
+        if (rig == null || clip == null)
+            return;
+        Matrix4x4[] world = rig.Pose(clip, clip.Duration);
+        Dictionary<string, int> nodeOf = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (CharacterRig.Part part in rig.Parts)
+            nodeOf.TryAdd(part.Mesh, part.Node);
+        List<Vector2> pts = PathFind.Footprint(_assets!, path, pose: (mesh, pw) => nodeOf.TryGetValue(mesh, out int n) ? world[n] : pw);
+        int closed = Paths.BlockShape(o, pts, model);
+        if (closed > 0)
+            Log.Add($"{_s.Time,6:0} s : {o.Name} change de forme, {closed} case(s) fermée(s)");
+    }
+
+    /// <summary>IA_CmdStop : l'unité s'arrête, et l'IA la laisse en place un moment (la boucle de la mission le répète).</summary>
+    public void ScriptStop(Unit u)
+    {
+        u.Path.Clear();
+        u.Target = null;
+        u.Opening = null;
+        u.ScriptDoors.Clear();
+        u.ScriptHold = _s.Time + 0.5f;
     }
 
     /// <summary>IA_CmdEmbark : le pompier va monter dans le véhicule.</summary>

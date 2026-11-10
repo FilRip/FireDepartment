@@ -438,6 +438,8 @@ public sealed partial class OpenFDGame
                 w = w * SN.Matrix4x4.CreateTranslation(-origin) * SN.Matrix4x4.CreateRotationZ(turn - yaw) * SN.Matrix4x4.CreateTranslation(origin);
             if (ScriptPos(id) is { } mv)
                 w = _slideFlat.Contains(id) ? w * SN.Matrix4x4.CreateTranslation(mv.X - origin.X, mv.Y - origin.Y, 0) : FollowGround(id, world, origin, mv);
+            if (DrawPlayedProp(id, model, w))
+                continue;
             foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(model))
                 DrawMesh(mesh, (part * w).X());
         }
@@ -468,6 +470,38 @@ public sealed partial class OpenFDGame
             }
             _charred = false;
         }
+    }
+
+    /// <summary>
+    /// Objet du décor animé par le script (ENT_SwitchState sur un objet à états, ANM_Play) : ses pièces suivent l'animation,
+    /// jouée une fois, puis restent sur la dernière image (London : les gravats qui tombent du plafond, cinématique cat_3).
+    /// false : pas d'animation lancée, ou modèle sans pièce animée (dessin ordinaire).
+    /// </summary>
+    private bool DrawPlayedProp(uint id, string model, SN.Matrix4x4 place)
+    {
+        if (Host?.PlayedAnims.TryGetValue(id, out (string anim, float start, bool loop) pa) != true || Clip(pa.anim) is not { } clip || clip.Duration <= 0)
+            return false;
+        if (!_propRigs.TryGetValue(model, out CharacterRig? rig))
+        {
+            try { rig = CharacterRig.Build(_assets, _files, model); } catch { rig = null; }
+            _propRigs[model] = rig;
+        }
+        if (rig == null || !rig.Parts.Any(p => clip.Tracks.ContainsKey(rig.Names[p.Node])))
+            return false;
+        float now = (float)(_session.Time + (_paused ? 0 : _owed * Session.Dt));
+        float t = pa.loop ? (now - pa.start) % clip.Duration : Math.Clamp(now - pa.start, 0, clip.Duration);
+        SN.Matrix4x4[] world = rig.Pose(clip, t);
+        foreach (CharacterRig.Part part in rig.Parts)
+        {
+            if (!_partMeshes.TryGetValue(part.Mesh, out MeshGpu? mesh))
+            {
+                try { mesh = Upload(_assets.LoadMesh(_mission, part.Mesh, "gfx")); } catch { mesh = null; }
+                _partMeshes[part.Mesh] = mesh;
+            }
+            if (mesh != null)
+                DrawMesh(mesh, (world[part.Node] * place).X());
+        }
+        return true;
     }
 
     /// <summary>
