@@ -699,9 +699,14 @@ public sealed class MissionHost : IScriptHost
             case "LEV_GRANTSPECIFICREINFORCEMENT":
                 Units?.GrantSpecificReinforcement((int)V(0).AsInt);
                 return Value.Zero;
-            // LEV_CallReinforcement(n) / LEV_GrantReinforcementSet(n) : envoie le renfort n (1, 2, 3…)
-            case "LEV_CALLREINFORCEMENT": case "LEV_GRANTREINFORCEMENTSET":
+            // LEV_CallReinforcement(n) : envoie le renfort n (1, 2, 3…)
+            case "LEV_CALLREINFORCEMENT":
                 Units?.CallReinforcement((int)V(0).AsInt);
+                return Value.Zero;
+            // LEV_GrantReinforcementSet(1, 1, 0, 0) : les renforts marqués 1 (ici le 1 et le 2) sont proposés ensemble ; le
+            // joueur en choisit un (Suburb : W5 ou W6) ; l'appel suivant propose ceux qui restent
+            case "LEV_GRANTREINFORCEMENTSET":
+                Units?.GrantReinforcementSet(Enumerable.Range(0, a.Count).Where(i => V(i).AsInt != 0).Select(i => i + 1).ToList());
                 return Value.Zero;
             // PANEL_SetInterfaceMode(« SCORING ») : écran des scores de fin (affiché par le jeu à la fin de mission)
             case "PANEL_SETINTERFACEMODE":

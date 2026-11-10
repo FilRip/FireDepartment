@@ -1615,7 +1615,7 @@ public static class Program
                 {
                     if (i % 50 == 0)
                         ses.Host?.EndCinematic();
-                    if (ses.Units.GrantsAvailable > 0 && !chosen && pick != null)
+                    if ((ses.Units.GrantsAvailable > 0 || ses.Units.ChoosableTeams.Contains(pick)) && !chosen && pick != null)
                     {
                         Console.WriteLine($"t {ses.Time:0} : à choisir {string.Join("/", ses.Units.ChoosableTeams)} ; aperçu {pick} : {string.Join(", ", ses.Units.TeamComposition(pick).Select(c => c.cls + (c.icon != null ? $" [{c.icon}]" : "")))}");
                         chosen = ses.Units.ChooseReinforcement(pick);

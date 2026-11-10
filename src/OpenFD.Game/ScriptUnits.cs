@@ -160,8 +160,27 @@ public sealed partial class UnitManager
     /// <summary>Casernes que le joueur peut choisir maintenant : toutes s'il a un renfort accordé, et celles proposées une à une.</summary>
     public IEnumerable<string> ChoosableTeams => (GrantsAvailable > 0 ? _toGrant : _offered).Concat(_offered).Select(t => TeamCode(t.cfg)).Distinct();
 
-    // renforts proposés un à un par le script (LEV_GrantSpecificReinforcement), pas encore choisis
+    // renforts proposés par le script (LEV_GrantSpecificReinforcement, LEV_GrantReinforcementSet), pas encore choisis
     private readonly List<(float eta, string cfg, int spawn)> _offered = new();
+    // proposés ensemble (LEV_GrantReinforcementSet) : choisir l'un retire les autres de ce choix
+    private readonly List<List<(float eta, string cfg, int spawn)>> _offerSets = new();
+
+    /// <summary>
+    /// LEV_GrantReinforcementSet(1, 1, 0, 0) : les renforts marqués (numéros de la mission) sont proposés ensemble (voix
+    /// « renforts accordés ») ; le joueur en choisit un ; ceux qu'il n'a pas pris restent pour un prochain appel.
+    /// </summary>
+    public void GrantReinforcementSet(List<int> numbers)
+    {
+        _allReinforcements ??= _toGrant.ToList();
+        List<(float eta, string cfg, int spawn)> set = numbers.Where(n => n >= 1 && n <= _allReinforcements.Count).Select(n => _allReinforcements[n - 1])
+            .Where(r => _toGrant.Contains(r) && !_offered.Contains(r)).ToList();
+        if (set.Count == 0)
+            return;   // déjà proposés ou envoyés
+        _offered.AddRange(set);
+        _offerSets.Add(set);
+        Sounds.Add(("VOCAL_REINFORCEMENT_GRANTED", null));
+        Log.Add($"{_s.Time,6:0} s : renfort accordé, à choisir ({string.Join(" ou ", set.Select(r => TeamCode(r.cfg)))})");
+    }
 
     /// <summary>
     /// LEV_GrantSpecificReinforcement(n) : le renfort n de la mission est proposé (voix « renforts accordés ») ; le joueur
@@ -198,7 +217,14 @@ public sealed partial class UnitManager
             return false;
         (float eta, string cfg, int spawn) r = _toGrant[i];
         _toGrant.RemoveAt(i);
-        if (!_offered.Remove(r) && GrantsAvailable > 0)
+        if (_offerSets.FirstOrDefault(set => set.Contains(r)) is { } chosenSet)
+        {
+            // proposé avec d'autres : ces autres ne sont plus à choisir (ils restent pour un prochain renfort)
+            foreach ((float eta, string cfg, int spawn) other in chosenSet)
+                _offered.Remove(other);
+            _offerSets.Remove(chosenSet);
+        }
+        else if (!_offered.Remove(r) && GrantsAvailable > 0)
             GrantsAvailable--;
         _granted.Add(r);
         float delay = r.eta > 0 ? r.eta : ReinforcementCallTime;
@@ -247,6 +273,9 @@ public sealed partial class UnitManager
             return;   // déjà envoyé
         _toGrant.RemoveAt(i);
         _offered.Remove(r);
+        foreach (List<(float eta, string cfg, int spawn)> set in _offerSets)
+            set.Remove(r);
+        _offerSets.RemoveAll(set => set.Count == 0);
         _granted.Add(r);
         _pending.Add((_s.Time + r.eta, r.cfg, r.spawn));
         Log.Add($"{_s.Time,6:0} s : renfort {n} appelé ({r.cfg}, dans {r.eta:0} s)");
