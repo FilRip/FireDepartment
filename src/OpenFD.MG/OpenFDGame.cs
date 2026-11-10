@@ -180,8 +180,14 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         // difficulté de la dernière mission jouée (options) : celle choisie d'office dans les menus
         if (CapturePath == null && Array.IndexOf(Diffs, _settings.LastDifficulty) >= 0)
             _difficulty = _settings.LastDifficulty;
+        if (EditorMode)
+        {
+            _introDone = true;
+            EditorStart();
+            return;
+        }
 
-        if (StartMenu && StartScreen == 0 && (CapturePath == null || Environment.GetEnvironmentVariable("FD3_INTRO") != null))
+        if (StartMenu && StartScreen == 0 && TestMission == null && (CapturePath == null || Environment.GetEnvironmentVariable("FD3_INTRO") != null))
             StartIntro();
         else
             _introDone = true;
@@ -192,6 +198,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 OpenScreenOfGame(StartScreen);   // relancé sur l'autre jeu : son écran « Campagne » ou « Autres missions »
             else if (int.TryParse(Environment.GetEnvironmentVariable("FD3_ECRAN"), out int e0))
                 _screen = e0;
+            if (TestMission != null)
+                StartTestMission(TestMission);
         }
         else
             LoadMission(_mission, _difficulty);
@@ -394,6 +402,13 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _winH = Math.Max(1, Window.ClientBounds.Height);
         if (_frame % 15 == 0)
             RefreshScale();
+        if (EditorMode)
+        {
+            EditorUpdate(dt);
+            _frame++;
+            base.Update(gameTime);
+            return;
+        }
         NetUpdate();
         NetTestHooks();
         UpdateMusic();
@@ -465,6 +480,17 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         if (_fbW == 0 || _fbH == 0)
             return;
         float time = _visTime;   // s'arrête en pause : flammes, fumée et eau figées
+        if (EditorMode)
+        {
+            EditorDraw(time);
+            base.Draw(gameTime);
+            if (CapturePath != null && _frame >= CaptureAfter)
+            {
+                Capture(CapturePath);
+                Exit();
+            }
+            return;
+        }
         if (_intro != null || _splash != null)
         {
             DrawIntro();
@@ -1061,7 +1087,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         StopMenuVideo();
         _mission = mission;
         _difficulty = difficulty;
-        if (CapturePath == null && (!mission.Equals(_settings.LastMission, StringComparison.OrdinalIgnoreCase) || difficulty != _settings.LastDifficulty))
+        if (CapturePath == null && !EditorMode && (!mission.Equals(_settings.LastMission, StringComparison.OrdinalIgnoreCase) || difficulty != _settings.LastDifficulty))
         {
             _settings.LastMission = mission;   // la campagne s'ouvrira sur cette mission au prochain lancement
             _settings.LastDifficulty = difficulty;   // avec cette difficulté
@@ -1073,6 +1099,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         foreach ((MeshGpu mesh, List<(Matrix world, BoundingSphere bounds)> at) tr in _treeDraw)
             tr.mesh.Dispose();
         _treeDraw.Clear();
+        _treeVariants.Clear();
         foreach ((VertexBuffer vb, IndexBuffer ib, int count, Texture2D? tex, Texture2D? dirt, Texture2D? lm, bool alpha, bool roof, int mode, bool caster, int bld) d in _sceneDraw)
         {
             d.vb.Dispose();
@@ -1112,7 +1139,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         UnitManager.Nationality = _loadNat ?? _settings.Nationality;
         _gameNationality = UnitManager.Nationality;
         _journal = new();
-        _session = new Session(_files, mission, difficulty);
+        _session = new Session(_files, mission, difficulty, !EditorMode);   // éditeur : sans les scripts
         LoadSun();
         // les missions commencent tout de suite (cinématique d'introduction des scripts) ; sans script : en pause
         _paused = false;
@@ -1186,6 +1213,19 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             catch (Exception e) { Console.WriteLine($"{n.Mesh} : {e.Message}"); }
         }
         _curBuilding = -1;
+        // mission sans décor (créée par l'éditeur) : le sol est tiré de la grille (l'éditeur le dessine lui-même, il change)
+        _noScenery = scenery.Count == 0;
+        if (_noScenery && _session.Grid is { } tg && !EditorMode)
+            AddStatic(TerrainAsset(tg), SN.Matrix4x4.Identity, false, 1);
+        if (EditorMode)
+        {
+            // éditeur de missions : les objets posés sont dessinés un par un (on peut les choisir, les déplacer)
+            EditorLoadObjects();
+            Status("Envoi à la carte graphique...", 0.97f);
+            FlushStatic();
+            FinishLoad(mission);
+            return;
+        }
         // objets posés (sans les portes et fenêtres, dessinées à part suivant leur état)
         HashSet<string> openingNames = _session.Units.Openings.Select(o => o.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         openingNames.UnionWith(_session.Units.HiddenOpenings);   // cachées pour tout le jeu : pas dessinées non plus
@@ -1193,6 +1233,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         HashSet<string> explosiveNames = ExplosiveNames();
         List<SceneAssets.Placed> allPlaced = _assets.Placeables(_session.Level).Where(p => !p.Civilian && !openingNames.Contains(p.Name)).Select(p => p with { World = Lift(p.World) }).ToList();
         LoadExplosives(allPlaced.Where(p => explosiveNames.Contains(p.Name)));
+        LoadPlacedLids(mission, allPlaced);
         // repères d'objectif (drapeaux « rally_symbol ») : cachés jusqu'à ce que le script les montre (ENT_SetVisibility)
         _scriptShown.Clear();
         Dictionary<string, LevelObject> byName = _session.Level.Objects.GroupBy(o => o.Name, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
@@ -1328,6 +1369,12 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         LoadTrees();
         Status("Envoi à la carte graphique...", 0.97f);
         FlushStatic();
+        FinishLoad(mission);
+    }
+
+    /// <summary>Fin du chargement : cadrage de la caméra, carte vue de dessus, mini-carte.</summary>
+    private void FinishLoad(string mission)
+    {
         // cadrage
         _sceneMin = new SN.Vector3(float.MaxValue);
         _sceneMax = new SN.Vector3(float.MinValue);
@@ -1360,53 +1407,61 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     private string DiffName => _difficulty switch { "EASY" => "facile", "HARD" => "difficile", _ => "normal" };
 
     // arbres EZ-Tree : quelques variantes par espèce, mises à l'échelle de la hauteur prévue par la carte
+    // variantes d'arbres déjà faites (clé : forme # graine) : leurs deux modèles dans _treeDraw (écorce, feuillage),
+    // leur hauteur et le bas de leur tronc
+    private readonly Dictionary<string, (int bark, int leaves, float h, float y0)> _treeVariants = new();
+
+    private static string TreePreset(string m) => System.Text.RegularExpressions.Regex.IsMatch(m, "conif|pin", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ? "pine_medium"
+        : m.Contains("pleur", StringComparison.OrdinalIgnoreCase) ? "aspen_medium"
+        : System.Text.RegularExpressions.Regex.IsMatch(m, "feuillu0[24]", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ? "oak_medium" : "ash_medium";
+
+    /// <summary>Variante d'arbre (faite avec EZ-Tree la première fois) pour ce modèle SpeedTree et cette graine.</summary>
+    private (int bark, int leaves, float h, float y0) TreeVariant(string model, int seed)
+    {
+        string key = TreePreset(model) + "#" + (seed % 3);
+        if (_treeVariants.TryGetValue(key, out (int bark, int leaves, float h, float y0) v))
+            return v;
+        string dir = Path.Combine(AppContext.BaseDirectory, "Assets", "trees");
+        EzTree.TreeGenerator.Options o = OpenFD.EzTree.TreeGenerator.Options.FromJson(File.ReadAllText(Path.Combine(dir, TreePreset(model) + ".json")));
+        o.Seed = 1000 + seed % 3;
+        EzTree.TreeGenerator tr = new OpenFD.EzTree.TreeGenerator(o);
+        tr.Generate();
+        float ymin = float.MaxValue, ymax = float.MinValue;
+        for (int i = 1; i < tr.BranchPos.Count; i += 3)
+        {
+            ymin = MathF.Min(ymin, tr.BranchPos[i]);
+            ymax = MathF.Max(ymax, tr.BranchPos[i]);
+        }
+        for (int i = 1; i < tr.LeafPos.Count; i += 3)
+        {
+            ymin = MathF.Min(ymin, tr.LeafPos[i]);
+            ymax = MathF.Max(ymax, tr.LeafPos[i]);
+        }
+        float[] barkUv = tr.BranchUv.Select((x, i) => i % 2 == 0 ? x * o.BarkScale.X : x * o.BarkScale.Y).ToArray();
+        SceneAssets.MeshAsset Asset(List<float> pos, List<float> nrm, float[] uv, List<uint> idx, string texKey, bool alpha) => new()
+        {
+            Mesh = new Mesh { Positions = pos.ToArray(), Normals = nrm.ToArray(), Indices = idx.ToArray(), VertexCount = pos.Count / 3 },
+            Groups = new() { new SceneAssets.Group(0, idx.Count, "", texKey, alpha) }, Uv0 = uv, Uv1 = null,
+        };
+        SceneAssets.MeshAsset bark = Asset(tr.BranchPos, tr.BranchNrm, barkUv, tr.BranchIdx, "ez:bark_" + o.BarkType, false);
+        SceneAssets.MeshAsset leaves = Asset(tr.LeafPos, tr.LeafNrm, tr.LeafUv.ToArray(), tr.LeafIdx, "ez:leaves_" + o.LeafType, true);
+        TreeTex("bark_" + o.BarkType);
+        TreeTex("leaves_" + o.LeafType);
+        _treeDraw.Add((Upload(bark), new()));
+        _treeDraw.Add((Upload(leaves), new()));
+        return _treeVariants[key] = (_treeDraw.Count - 2, _treeDraw.Count - 1, ymax - ymin, ymin);
+    }
+
+    /// <summary>Matrice d'un arbre : EZ-Tree pousse vers +Y (le jeu a Z vers le haut), mis à la hauteur de sa classe.</summary>
+    private static SN.Matrix4x4 TreeWorld((int bark, int leaves, float h, float y0) v, float height, SN.Matrix4x4 place) =>
+        SN.Matrix4x4.CreateTranslation(0, -v.y0, 0) * SN.Matrix4x4.CreateScale(height / v.h) * SN.Matrix4x4.CreateRotationX(MathF.PI / 2) * place;
+
     private void LoadTrees()
     {
-        List<SceneAssets.TreeInfo> trees = _assets.Trees(_session.Level);
-        // variante d'arbre : ses deux modèles dans _treeDraw (écorce, feuillage), sa hauteur et le bas de son tronc
-        Dictionary<string, (int bark, int leaves, float h, float y0)> variants = new Dictionary<string, (int bark, int leaves, float h, float y0)>();
-        string Preset(string m) => System.Text.RegularExpressions.Regex.IsMatch(m, "conif|pin", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ? "pine_medium"
-            : m.Contains("pleur", StringComparison.OrdinalIgnoreCase) ? "aspen_medium"
-            : System.Text.RegularExpressions.Regex.IsMatch(m, "feuillu0[24]", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ? "oak_medium" : "ash_medium";
-        string dir = Path.Combine(AppContext.BaseDirectory, "Assets", "trees");
-        foreach (SceneAssets.TreeInfo t in trees)
+        foreach (SceneAssets.TreeInfo t in _assets.Trees(_session.Level))
         {
-            string key = Preset(t.Model) + "#" + (t.Seed % 3);
-            if (!variants.ContainsKey(key))
-            {
-                EzTree.TreeGenerator.Options o = OpenFD.EzTree.TreeGenerator.Options.FromJson(File.ReadAllText(Path.Combine(dir, Preset(t.Model) + ".json")));
-                o.Seed = 1000 + t.Seed % 3;
-                EzTree.TreeGenerator tr = new OpenFD.EzTree.TreeGenerator(o);
-                tr.Generate();
-                float ymin = float.MaxValue, ymax = float.MinValue;
-                for (int i = 1; i < tr.BranchPos.Count; i += 3)
-                {
-                    ymin = MathF.Min(ymin, tr.BranchPos[i]);
-                    ymax = MathF.Max(ymax, tr.BranchPos[i]);
-                }
-                for (int i = 1; i < tr.LeafPos.Count; i += 3)
-                {
-                    ymin = MathF.Min(ymin, tr.LeafPos[i]);
-                    ymax = MathF.Max(ymax, tr.LeafPos[i]);
-                }
-                float[] barkUv = tr.BranchUv.Select((v, i) => i % 2 == 0 ? v * o.BarkScale.X : v * o.BarkScale.Y).ToArray();
-                SceneAssets.MeshAsset Asset(List<float> pos, List<float> nrm, float[] uv, List<uint> idx, string texKey, bool alpha) => new()
-                {
-                    Mesh = new Mesh { Positions = pos.ToArray(), Normals = nrm.ToArray(), Indices = idx.ToArray(), VertexCount = pos.Count / 3 },
-                    Groups = new() { new SceneAssets.Group(0, idx.Count, "", texKey, alpha) }, Uv0 = uv, Uv1 = null,
-                };
-                SceneAssets.MeshAsset bark = Asset(tr.BranchPos, tr.BranchNrm, barkUv, tr.BranchIdx, "ez:bark_" + o.BarkType, false);
-                SceneAssets.MeshAsset leaves = Asset(tr.LeafPos, tr.LeafNrm, tr.LeafUv.ToArray(), tr.LeafIdx, "ez:leaves_" + o.LeafType, true);
-                TreeTex("bark_" + o.BarkType);
-                TreeTex("leaves_" + o.LeafType);
-                _treeDraw.Add((Upload(bark), new()));
-                _treeDraw.Add((Upload(leaves), new()));
-                variants[key] = (_treeDraw.Count - 2, _treeDraw.Count - 1, ymax - ymin, ymin);
-            }
-            (int bark, int leaves, float h, float y0) v = variants[key];
-            float s = t.Height / v.h;
-            // EZ-Tree pousse vers +Y ; le jeu a Z vers le haut
-            SN.Matrix4x4 w = SN.Matrix4x4.CreateTranslation(0, -v.y0, 0) * SN.Matrix4x4.CreateScale(s) * SN.Matrix4x4.CreateRotationX(MathF.PI / 2) * Lift(t.World);
+            (int bark, int leaves, float h, float y0) v = TreeVariant(t.Model, t.Seed);
+            SN.Matrix4x4 w = TreeWorld(v, t.Height, Lift(t.World));
             // sphère autour de l'arbre (du pied à la cime, et la largeur du houppier) : pour ne pas dessiner ceux hors de la vue
             SN.Vector3 foot = SN.Vector3.Transform(SN.Vector3.Zero, Lift(t.World));
             BoundingSphere bounds = new BoundingSphere(new Vector3(foot.X, foot.Y, foot.Z + t.Height / 2), t.Height * 0.75f);
@@ -1644,6 +1699,11 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                     DrawMesh(mesh, Matrix.Identity);
             if (_objects)
                 DrawTrees(new BoundingFrustum(_lightVp));
+            if (EditorMode)
+            {
+                EditorShadows();
+                return;
+            }
             RenderExplosives();   // voitures garées, tonneaux… (objets qui peuvent exploser)
             RenderUnits();
         }
@@ -1729,7 +1789,10 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         }
         gd.RasterizerState = RasterizerState.CullNone;
         RenderWater(_viewProj.X());  // rivière, mer : texture qui défile (OpenFDGame.Water.cs)
-        RenderLids(_viewProj.X());   // couvercles noirs des pièces pas encore atteintes
+        bool lids = true;
+        EditorLids(ref lids);
+        if (lids)
+            RenderLids(_viewProj.X());   // couvercles noirs des pièces pas encore atteintes
         gd.SamplerStates[1] = SamplerState.AnisotropicWrap;
         gd.SamplerStates[2] = SamplerState.LinearWrap;
         foreach ((MeshGpu? mesh, bool roof, int layer) in _draw)
@@ -1742,6 +1805,11 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         }
         if (_objects)
             DrawTrees(new BoundingFrustum(_viewProj));
+        if (EditorMode)
+        {
+            EditorRender3D(time);
+            return;
+        }
         RenderUnits();
         RenderOpenings();
         RenderExplosives();

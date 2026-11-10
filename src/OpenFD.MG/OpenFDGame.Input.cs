@@ -248,6 +248,11 @@ public sealed partial class OpenFDGame
     // lettres : reçues comme caractères tapés, donc justes quel que soit le clavier (AZERTY, QWERTY…)
     private void OnChar(char ch)
     {
+        if (EditorMode)
+        {
+            EditorChar(ch);
+            return;
+        }
         if (NetText(ch))
             return;
         if (!IsActive || _session == null || _cineOn)

@@ -66,6 +66,7 @@ public sealed partial class OpenFDGame
                     if (mis != null)
                     {
                         ClassFile c = ClassFile.Load(_files, mis);
+                        gfx |= c.GetBool("OPENFD", "Terrain");   // mission de l'éditeur sans décor : sol tiré de la grille
                         string? key = c.Get("BRIEFING", "StoryTitleKey")?.Trim('"', ' ');
                         string? t = !string.IsNullOrEmpty(key) ? _loc.Get(key) : null;
                         // « JOURNAL DE MICHAEL » puis le lieu : on garde le lieu

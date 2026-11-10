@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Éditeur de missions (exe à part, OpenFD.Editor.exe). Il compile les fichiers du jeu (src\OpenFD.MG) avec les siens :
+    même moteur, même vue 3D, mêmes mouvements de caméra. Les fichiers de l'éditeur ajoutent l'interface (OpenFDGame en
+    mode éditeur) ; le jeu, lui, ne contient rien de l'éditeur.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\OpenFD.Game\OpenFD.Game.csproj" />
+    <ProjectReference Include="..\OpenFD.FD2\OpenFD.FD2.csproj" />
+    <ProjectReference Include="..\OpenFD.FD3\OpenFD.FD3.csproj" />
+    <ProjectReference Include="..\OpenFD.EzTree\OpenFD.EzTree.csproj" />
+    <ProjectReference Include="..\OpenFD.Video\OpenFD.Video.csproj" />
+    <ProjectReference Include="..\OpenFD.Multiplayer\OpenFD.Multiplayer.csproj" />
+    <ProjectReference Include="..\OpenFD.Mp3\OpenFD.Mp3.csproj" />
+    <!-- le jeu (bouton « Tester ») : compilé en même temps que l'éditeur, dans son propre dossier, sans être lié -->
+    <ProjectReference Include="..\OpenFD.MG\OpenFD.MG.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <RollForward>Major</RollForward>
+    <AssemblyName>OpenFD.Editor</AssemblyName>
+    <ApplicationManifest>..\OpenFD.MG\app.manifest</ApplicationManifest>
+    <TieredPGO>true</TieredPGO>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\OpenFD.MG\*.cs" Exclude="..\OpenFD.MG\Program.cs" Link="Jeu\%(Filename)%(Extension)" />
+  </ItemGroup>
+  <!-- normal : paquet NuGet ; MonoGameLocal=chemin\MonoGame.Framework.dll : version compilée à la main (essais hors ligne) -->
+  <ItemGroup Condition="'$(MonoGameLocal)' == ''">
+    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.2.1105" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(MonoGameLocal)' != ''">
+    <Reference Include="MonoGame.Framework"><HintPath>$(MonoGameLocal)</HintPath></Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\OpenFD.MG\Assets\**" Link="Assets\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\languages\*.ini" Link="languages\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

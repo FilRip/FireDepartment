@@ -182,7 +182,7 @@ public sealed partial class UnitManager
                 c.Heading = u.Heading;
                 if (u.Moving)
                     break;
-                (Vector3 pos, float reach, Unit? vehicle)? amb = Shelters().OrderBy(s => Vector3.Distance(s.pos, u.Position)).Cast<(Vector3 pos, float reach, Unit? vehicle)?>().FirstOrDefault();
+                (Vector3 pos, float reach, Unit? vehicle)? amb = Shelters().OrderBy(s => Vector3.Distance(s.pos, u.Position)).Select(s => ((Vector3 pos, float reach, Unit? vehicle)?)s).FirstOrDefault();
                 if (amb is { } sh && Vector3.Distance(sh.pos, u.Position) < sh.reach * 1.5f)
                 {
                     u.Carry = CarryPhase.Dropping;

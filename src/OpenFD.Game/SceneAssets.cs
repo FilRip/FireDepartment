@@ -21,6 +21,17 @@ public sealed class SceneAssets
     public SceneAssets(GameFiles files) => _files = files;
     public GameFiles Files => _files;
 
+    /// <summary>Oublie ce qui a été lu (l'éditeur de missions vient d'écrire des fichiers).</summary>
+    public void ClearCaches()
+    {
+        lock (_classCache)
+            _classCache.Clear();
+        _texIndex.Clear();
+        _meshes.Clear();
+        _missions = null;
+        _cubes = null;
+    }
+
     public sealed record Node(string Mesh, Matrix4x4 World);
     public sealed record Placed(string Model, string Name, bool Civilian, Matrix4x4 World);
     public sealed record TreeInfo(string Model, string Name, float Height, int Seed, string? Bark, string? Leaves, Matrix4x4 World);
@@ -37,8 +48,12 @@ public sealed class SceneAssets
         public string? Lightmap { get; init; }
     }
 
+    /// <summary>Dossier des graphismes de la mission (son nom tel qu'il est écrit) ; la mission elle-même s'il n'y en a pas
+    /// (mission créée par l'éditeur : pas de décor, le sol est tiré de la grille).</summary>
     public string GfxDir(string mission) =>
-        _files.List("Gfx\\Mission\\").Select(p => p.Split('\\')[2]).First(m => m.Equals(mission, StringComparison.OrdinalIgnoreCase));
+        _files.List("Gfx\\Mission\\").Select(p => p.Split('\\')[2]).FirstOrDefault(m => m.Equals(mission, StringComparison.OrdinalIgnoreCase)) ?? mission;
+
+    public bool HasGfx(string mission) => _files.List("Gfx\\Mission\\" + mission + "\\").Any();
 
     private ClassFile? Class(LevelObject o)
     {
@@ -145,6 +160,22 @@ public sealed class SceneAssets
         Regex.IsMatch(name, "^[A-Za-z0-9_]+$") ? _files.TryRead("Gfx\\Speedtree\\General\\" + name + ".tga") : null;
 
     private static readonly Regex StateRx = new(@"_e\d$", RegexOptions.IgnoreCase);
+    /// <summary>
+    /// Couvercles noirs d'un modèle d'objet (« …_ROOM1_MASK », comme Gfx\Placeable\ROOF\Roof.sg du hangar de Mriya) :
+    /// les pièces que <see cref="ModelParts(string)"/> laisse de côté.
+    /// </summary>
+    public List<Node> ModelMasks(string model)
+    {
+        string dir = model.Contains('\\') ? model[..model.LastIndexOf('\\')] : "Placeable";
+        if (!model.Contains('\\'))
+            model = "Placeable\\" + model;
+        if (_files.TryRead("Gfx\\" + model + ".sg") is not { } sg)
+            return new List<Node>();
+        Dictionary<string, (string parent, Matrix4x4 m)> nodes = Rooms.SceneNodes(sg);
+        return nodes.Keys.Where(k => k.ToUpperInvariant().Contains("_MASK") && _files.TryRead("Gfx\\" + dir + "\\" + k + ".mesh") != null)
+            .Select(k => new Node(dir + "\\" + k, PartWorld(nodes, k))).ToList();
+    }
+
     /// <summary>
     /// Matrice d'une pièce de modèle. Quand les états d'endommagement sont rangés côte à côte dans le fichier
     /// (scierie « les_demage » : _e1 à x −4871, _e2 à 79, _e3 à 4691), le jeu les montre tous à l'emplacement de l'objet :

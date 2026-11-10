@@ -63,6 +63,8 @@ public static class Program
         // le jeu démarre toujours sur le menu. Seuls les essais automatiques (--capture : image enregistrée puis arrêt)
         // peuvent ouvrir directement une mission (--mission, --difficulte) pour la photographier
         string? capture = Opt("--capture");
+        // bouton « Tester » de l'éditeur de missions : -test=Mission (la mission se lance comme depuis l'écran « Campagne »)
+        string? test = args.FirstOrDefault(a => a.StartsWith("-test=", StringComparison.OrdinalIgnoreCase) || a.StartsWith("--test=", StringComparison.OrdinalIgnoreCase)) is { } ta ? ta[(ta.IndexOf('=') + 1)..].Trim('"') : null;
         string? testMission = capture != null ? Opt("--mission") : null;
         OpenFDGame Make() => new(new GameFiles(dataDir), testMission ?? "London", (capture != null ? Opt("--difficulte") ?? "EASY" : "EASY").ToUpperInvariant())
         {
@@ -78,7 +80,8 @@ public static class Program
             StartMenu = testMission == null || argList.Contains("--menu"),
             Games = games,
             StartScreen = startScreen,
-            ForceWindowed = argList.Any(a => a.Equals("-windowed", StringComparison.OrdinalIgnoreCase) || a.Equals("--windowed", StringComparison.OrdinalIgnoreCase)),
+            ForceWindowed = test != null || argList.Any(a => a.Equals("-windowed", StringComparison.OrdinalIgnoreCase) || a.Equals("--windowed", StringComparison.OrdinalIgnoreCase)),
+            TestMission = string.IsNullOrEmpty(test) ? null : test,
         };
         (string DataDir, int Screen)? next;
         try

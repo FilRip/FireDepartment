@@ -34,14 +34,22 @@ public sealed partial class UnitManager
             if (!o.StartVisible && !renamed)
                 continue;
             ClassFile? c = Class("Design\\Unit\\" + classRel + ".class");
+            // pompier à pied posé par l'éditeur de missions (classe « fireman\… ») : une unité à pied
+            bool vehicle = !classRel.StartsWith("fireman\\", StringComparison.OrdinalIgnoreCase);
             // le script le désigne par son numéro du niveau (ENT_FindByName("helico"))
-            Unit? u = Create(classRel, true, new Vector2(o.Position.X, o.Position.Y), (int)o.Id);
+            Unit? u = Create(classRel, vehicle, new Vector2(o.Position.X, o.Position.Y), (int)o.Id);
             if (c == null || u == null)
                 continue;
             u.Position = o.Position;
             u.Heading = o.Rotation.Z - VehicleModelYaw;
             u.Hidden = !o.StartVisible;
             u.FromLevel = true;
+            if (!vehicle)
+            {
+                u.Status = "attend les ordres";
+                Log.Add($"Pompier du niveau : {o.Name} ({classRel})");
+                continue;
+            }
             // hélicoptère : il ne roule pas ; posé, il sert d'ambulance (soins, civils mis à l'abri)
             if (string.Equals(c.Get("UNIT", "Type")?.Trim('"', ' '), "HELICO", StringComparison.OrdinalIgnoreCase))
             {
