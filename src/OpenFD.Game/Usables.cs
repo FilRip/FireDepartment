@@ -246,7 +246,15 @@ public sealed partial class UnitManager
         (string action, string script)? act = candidates.Count > 0 ? candidates[o.Uses % candidates.Count] : ((string action, string script)?)null;
         o.Uses++;
         if (repair)
+        {
             o.Repaired = true;
+            // réparé : l'objet retrouve toute sa vie (Lab : le script attend ENT_GetDamage(générateur) == 100)
+            if (_s.Explosions.ById.TryGetValue(o.Id, out ExplosiveItem? it) && !it.Exploded)
+            {
+                it.Life = it.MaxLife;
+                it.Repaired = true;
+            }
+        }
         Sounds.Add((repair ? "SC_REPAIR" : "SC_USE_GENERIC", o.Position));
         Log.Add($"{_s.Time,6:0} s : {(repair ? "réparation" : "action")} sur {o.Name}" + (act is { } a0 ? $" ({a0.script})" : ""));
         u.Status = "attend les ordres";

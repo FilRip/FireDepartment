@@ -147,6 +147,8 @@ public sealed partial class UnitManager
                         Vector3 wq = Vector3.Transform(new Vector3(q, 0), o.Matrix);
                         d.BoxMin = Vector2.Min(d.BoxMin, new(wq.X, wq.Y));
                         d.BoxMax = Vector2.Max(d.BoxMax, new(wq.X, wq.Y));
+                        if (_s.Grid is { } fg && fg.CellOf(wq) is (int fx, int fy) && fg.Inside(fx, fy))
+                            d.FootCells.Add(fg.Index(fx, fy));
                     }
                     if (_s.Grid is { } g)
                     {

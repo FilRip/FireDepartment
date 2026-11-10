@@ -242,7 +242,19 @@ public sealed class ExplosionSystem
             it.FireDamageCoef = coef;
     }
 
-    public float? LifeOf(uint id) => ById.TryGetValue(id, out ExplosiveItem? it) ? it.Life : null;
+    /// <summary>
+    /// Vie de l'objet pour les scripts. Réparé et à peine léché par un reste de feu (moins d'un point) : sa vie pleine (Lab :
+    /// le script attend ENT_GetDamage(générateur) == 100 pour valider l'objectif).
+    /// </summary>
+    public float? LifeOf(uint id)
+    {
+        if (!ById.TryGetValue(id, out ExplosiveItem? it))
+            return null;
+        if (it.Repaired && it.Life > it.MaxLife - 1)
+            return it.MaxLife;
+        it.Repaired = false;
+        return it.Life;
+    }
 
     /// <summary>Scripts : ENT_SetDamage(id, points de vie) ; 0 fait exploser.</summary>
     public bool SetLife(uint id, float life, FireWorld fire, float time)
