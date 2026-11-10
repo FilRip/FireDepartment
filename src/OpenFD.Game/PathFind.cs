@@ -536,6 +536,37 @@ public sealed class PathFind
     private const int CoverMin = 8;   // sur 16 carrés de 25 cm par case
 
     /// <summary>
+    /// Ferme les cases d'une nouvelle forme d'objet (repère du modèle, points de Footprint), avec la même règle que
+    /// BuildObstacles (l'objet couvre plus de la moitié de la case). Renvoie le nombre de cases fermées.
+    /// </summary>
+    public int BlockShape(LevelObject o, List<Vector2> local, string label)
+    {
+        if (_s.Grid is not { } g || Blocked.Length != g.Width * g.Height)
+            return 0;
+        Dictionary<int, int> cover = new Dictionary<int, int>();
+        HashSet<(int, int)> seen = new HashSet<(int, int)>();
+        foreach (Vector2 p in local)
+        {
+            Vector3 w = Vector3.Transform(new Vector3(p, 0), o.Matrix);
+            if (!seen.Add(((int)MathF.Floor(w.X / 25), (int)MathF.Floor(w.Y / 25))))
+                continue;
+            (int cx, int cy) = g.CellOf(w);
+            if (g.Inside(cx, cy))
+                cover[g.Index(cx, cy)] = cover.GetValueOrDefault(g.Index(cx, cy)) + 1;
+        }
+        int count = 0;
+        foreach ((int i, int n) in cover)
+            if (n > CoverMin && !Blocked[i])
+            {
+                Blocked[i] = true;
+                BlockedBy[i] = o.Name + " " + label;
+                count++;
+            }
+        ForgetFailure();
+        return count;
+    }
+
+    /// <summary>
     /// Passages à pied à travers un objet très long fait de plusieurs corps (Port : la rame de wagons, un seul modèle) :
     /// entre deux wagons, l'empreinte n'a plus que l'attelage, au milieu (moins d'un mètre de long). Avec des cases d'un
     /// mètre, chaque case de cet espace touche aussi un bout de wagon et resterait fermée ; dans le jeu, on y passe. On
@@ -706,6 +737,9 @@ public sealed class PathFind
     }
 
     public List<Vector2> FindPath(Vector2 from, Vector2 to) => FindPath(from, to, out _);
+
+    /// <summary>Oublie la dernière recherche échouée (les cases fermées viennent de changer dans le même pas).</summary>
+    public void ForgetFailure() => _failGen = -1;
 
     private float[] _cost = Array.Empty<float>();
     // dernière recherche échouée (voir FindPath) : sa génération, son pas de simulation, sa case de départ, ses règles, sa zone

@@ -73,6 +73,8 @@ public sealed class MissionHost : IScriptHost
         CameraOrders.Clear();
     }
     public Dictionary<uint, bool> SwitchedStates { get; } = new();
+    /// <summary>État logique des objets du décor changé par ENT_SwitchState (0 : S01).</summary>
+    public Dictionary<uint, int> ObjectStates { get; } = new();
     /// <summary>Objets du décor déplacés par le script (ENT_SetPosition : le train de l'Eurotunnel…).</summary>
     public Dictionary<uint, System.Numerics.Vector2> MovedObjects { get; } = new();
     /// <summary>
@@ -285,8 +287,23 @@ public sealed class MissionHost : IScriptHost
                 return Value.Zero;
             case "ENT_SWITCHSTATE":
                 // porte ou portail (interrupteurs de Jail : SW1_open → ENT_SwitchState(porte)) : ouverte ↔ fermée
-                if (Units?.Openings.FirstOrDefault(d => d.Id == (uint)V(0).AsInt) is { } sd && sd.State != OpeningState.Broken)
-                    Units.SetOpeningState(sd, sd.State == OpeningState.Open ? OpeningState.Closed : OpeningState.Open);
+                if (Units?.Openings.FirstOrDefault(d => d.Id == (uint)V(0).AsInt) is { } sd)
+                {
+                    if (sd.State != OpeningState.Broken)
+                        Units.SetOpeningState(sd, sd.State == OpeningState.Open ? OpeningState.Closed : OpeningState.Open);
+                }
+                else if (_byId.TryGetValue((uint)V(0).AsInt, out LevelObject? so) && Units?.StateAnims(so) is { Count: > 1 } states)
+                {
+                    // objet du décor à états (London : les gravats qui s'éboulent derrière le pompier, cinématique cat_3) :
+                    // état suivant, et son animation jouée une fois (elle reste sur sa dernière image)
+                    int next = ((ObjectStates.TryGetValue(so.Id, out int cur) ? cur : UnitManager.InitialState(so)) + 1) % states.Count;
+                    ObjectStates[so.Id] = next;
+                    if (states[next] is { } sa)
+                    {
+                        PlayedAnims[so.Id] = (sa, (float)GameTime, false);
+                        Units?.SettleStateObject(so, sa);
+                    }
+                }
                 SwitchedStates[(uint)V(0).AsInt] = !SwitchedStates.TryGetValue((uint)V(0).AsInt, out bool was) || !was;
                 FireLog.Add($"{GameTime,6:0.0} ENT_SwitchState {NameOf(V(0).AsInt)}");
                 return Value.Zero;
@@ -582,11 +599,7 @@ public sealed class MissionHost : IScriptHost
             case "IA_CMDSTOP":
                 foreach (long id in Members(V(0).AsInt))
                     if (Units?.ById(id) is { } su2)
-                    {
-                        su2.Path.Clear();
-                        su2.Target = null;
-                        su2.Opening = null;
-                    }
+                        Units.ScriptStop(su2);
                 return Value.Zero;
             case "IA_CMDATTACKFIRE":
             {

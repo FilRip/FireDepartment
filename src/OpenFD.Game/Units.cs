@@ -175,6 +175,8 @@ public sealed partial class UnitManager
         UpdateLadders(dt);
         UpdateAirStrike();
         foreach (Unit u in Units)
+            OpenScriptDoors(u);
+        foreach (Unit u in Units)
             Move(u, dt);
         UpdateVehicleObstacles();
         foreach (Unit v in Units.Where(u => u.IsVehicle && u.Crew.Count > 0 && !u.Moving).ToList())
@@ -632,6 +634,9 @@ public sealed partial class UnitManager
             return false;
         }
         u.Target = target;
+        u.ScriptDoors.Clear();
+        if (PlayerOrder)
+            u.ScriptHold = -1;   // le joueur reprend la main
         if (PlayerOrder && target == null)
             u.FireFocus = null;   // simple déplacement demandé par le joueur : l'IA reprend « le plus près de lui »
         u.Path.Clear();
