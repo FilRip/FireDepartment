@@ -54,6 +54,16 @@ public sealed class Unit
     public Vector3 LadderPivot = new Vector3(0, 426, 245), LadderHinge = new Vector3(6.6f, 602, 300);
     public float LadderRest = 894;
     public Ladder? Ladder;                                // camion : son échelle (en route, dressée ou en train de se replier)
+    /// <summary>Camion d'attaque ([UNIT] Type=WATERTOWER) : la lance est dans la nacelle, au bout de l'échelle (WaterTower.cs).</summary>
+    public bool IsWaterTower;
+    /// <summary>Échelle du camion d'attaque, repère du modèle : rotation de la tourelle, inclinaison (radians), allongement.</summary>
+    public float BoomYaw, BoomPitch, BoomExtend;
+    /// <summary>Temps passé sans feu à arroser (s) : l'échelle se replie au bout de quelques secondes.</summary>
+    public float BoomIdle;
+    /// <summary>[UNIT] Turret_Z_Rot_Speed, Turret_X_Rot_Speed (radians par seconde), DistFromNacelToFire, HeightFromNacelToFire.</summary>
+    public float TurretYawSpeed = 0.7f, TurretPitchSpeed = 0.7f, NacelToFire = 1500, NacelAboveFire = 1200;
+    /// <summary>Échelle du camion d'attaque couchée et repliée (il peut rouler).</summary>
+    public bool BoomStowed => BoomExtend <= 0 && MathF.Abs(BoomPitch) < 0.002f && MathF.Abs(BoomYaw) < 0.002f;
     public Opening? LadderNext;                           // camion : fenêtre suivante, une fois l'échelle repliée
     public Vector2? DriveNext;                            // camion : trajet demandé, une fois l'échelle repliée
     public Ladder? OnLadder;                              // pompier sur une échelle

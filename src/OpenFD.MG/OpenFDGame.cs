@@ -1947,10 +1947,12 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         List<string> names = new List<string>();
         try
         {
+            Dictionary<string, (string parent, SN.Matrix4x4 m)>? nodes = null;
+            try { nodes = _files.TryRead("Gfx\\" + model + ".sg") is { } sg ? Rooms.SceneNodes(sg) : null; } catch { nodes = null; }
             foreach (SceneAssets.Node part in _assets.ModelParts(model))
             {
                 l.Add((Upload(_assets.LoadMesh(_mission, part.Mesh, "gfx")), part.World));
-                names.Add(part.Mesh.ToUpperInvariant());
+                names.Add(JointName(part.Mesh, nodes).ToUpperInvariant());
             }
         }
         catch (Exception e) { Console.WriteLine($"{model} : {e.Message}"); }
@@ -1963,11 +1965,44 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     private readonly Dictionary<string, List<string>> _unitPartNames = new();
 
     /// <summary>
+    /// Nom qui décide du mouvement d'une pièce : celui de la tourelle ou de l'élément d'échelle qui la porte (la nacelle et
+    /// son pompier, accrochés à LADDER3 ; le conducteur et les gyrophares de la tourelle, accrochés à ROTZ1), sinon le sien.
+    /// </summary>
+    private static string JointName(string mesh, Dictionary<string, (string parent, SN.Matrix4x4 m)>? nodes)
+    {
+        int cut = mesh.LastIndexOf('\\');
+        string dir = mesh[..(cut + 1)];
+        string node = mesh[(cut + 1)..];
+        if (nodes == null)
+            return mesh;
+        for (int depth = 0; depth < 32 && nodes.TryGetValue(node, out (string parent, SN.Matrix4x4 m) n); depth++)
+        {
+            string up = node.ToUpperInvariant();
+            if (up.EndsWith("LADDER1") || up.EndsWith("LADDER2") || up.EndsWith("LADDER3") || up.Contains("ROTZ"))
+                return dir + node;
+            if (string.IsNullOrEmpty(n.parent) || n.parent == node)
+                break;
+            node = n.parent;
+        }
+        return mesh;
+    }
+
+    /// <summary>
     /// Pièce mobile d'un véhicule, dans le repère du modèle : tourelle (ROTZ) et échelle (LADDER1 à 3, qui coulissent)
     /// du camion échelle ; bras et pelle du bulldozer, levés pendant un coup de pelle.
     /// </summary>
     private static SN.Matrix4x4 VehiclePartPose(Unit u, string name)
     {
+        // camion d'attaque : son échelle suit la lance (WaterTower.cs), sauf quand elle est dressée devant une fenêtre
+        if (u.IsWaterTower && !u.BoomStowed && u.Ladder is not { Placed: true } && (name.Contains("LADDER") || name.Contains("ROTZ") || name.Contains("CYNO")))
+        {
+            SN.Matrix4x4 bturn = SN.Matrix4x4.CreateTranslation(-u.LadderPivot) * SN.Matrix4x4.CreateRotationZ(u.BoomYaw) * SN.Matrix4x4.CreateTranslation(u.LadderPivot);
+            if (!name.Contains("LADDER"))
+                return bturn;
+            float bslide = name.EndsWith("LADDER3") ? u.BoomExtend : name.EndsWith("LADDER2") ? u.BoomExtend / 2 : 0;
+            return SN.Matrix4x4.CreateTranslation(0, -bslide, 0) * SN.Matrix4x4.CreateTranslation(-u.LadderHinge) * SN.Matrix4x4.CreateRotationX(-u.BoomPitch)
+                * SN.Matrix4x4.CreateTranslation(u.LadderHinge) * bturn;
+        }
         if (u.Ladder is { } l && (name.Contains("LADDER") || name.Contains("ROTZ") || name.Contains("CYNO")))
         {
             float raise = l.Raise * l.Raise * (3 - 2 * l.Raise);   // départ et arrivée en douceur
@@ -2186,7 +2221,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         foreach (Unit u in _session.Units.Active.Where(u => u.Target != null && !u.Moving))
         {
             // lance : à la main pour un pompier, à l'avant (sur le toit) pour un véhicule
-            SN.Vector3 ja = u.IsVehicle ? u.Position + new SN.Vector3(MathF.Cos(u.Heading) * 330, MathF.Sin(u.Heading) * 330, 300) : u.Position + new SN.Vector3(0, 0, 120);
+            SN.Vector3 ja = u.IsWaterTower ? UnitManager.BoomTip(u) + new SN.Vector3(0, 0, 80) : u.IsVehicle ? u.Position + new SN.Vector3(MathF.Cos(u.Heading) * 330, MathF.Sin(u.Heading) * 330, 300) : u.Position + new SN.Vector3(0, 0, 120);
             SN.Vector3 jb = u.Target!.Position + new SN.Vector3(0, 0, 40);
             // jet bien visible : un filet continu (gouttes serrées), qui s'élargit en gerbe, et des éclaboussures au point visé
             float span = SN.Vector3.Distance(ja, jb), arc = MathF.Min(260, 60 + span * 0.12f);

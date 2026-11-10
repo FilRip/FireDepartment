@@ -173,6 +173,7 @@ public sealed partial class UnitManager
         }
         UpdateHealth(dt);
         UpdateLadders(dt);
+        UpdateWaterTowers(dt);
         UpdateAirStrike();
         foreach (Unit u in Units)
             OpenScriptDoors(u);
@@ -435,6 +436,9 @@ public sealed partial class UnitManager
         u.IsAerial = vehicle && Enumerable.Range(1, 9).Any(i => string.Equals(c.Get("CAPACITIES_ACTIONS", $"Action{i}")?.Trim('"', ' '), "LADDER", StringComparison.OrdinalIgnoreCase));
         if (u.IsAerial)
             SetupLadder(u, c, gfx);
+        u.IsWaterTower = u.IsAerial && (string.Equals(c.Get("UNIT", "Type")?.Trim('"', ' '), "WATERTOWER", StringComparison.OrdinalIgnoreCase) || c.GetBool("CAPACITIES_ACTIONS", "CanAttackFire"));
+        if (u.IsWaterTower)
+            SetupWaterTower(u, c);
         u.ClimbSpeed = c.GetFloat("MOVING", "ClimbGrapplinSpeed", c.GetFloat("CAPACITIES_PROPS", "ClimbGrapplinSpeed", 133));
         u.BreakPower = c.GetFloat("CAPACITIES_PROPS", "BreakPower", 1);
         u.IsAmbulance = vehicle && classRel.Contains("ambulance", StringComparison.OrdinalIgnoreCase);
