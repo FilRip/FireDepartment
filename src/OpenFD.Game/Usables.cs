@@ -20,6 +20,10 @@ public sealed partial class UnitManager
             bool use = c.GetBool("CAPACITIES_ACTIONS", "CouldBeUse") || c.GetBool("CAPACITIES_TARGET", "CouldBeUse"), repair = c.GetBool("CAPACITIES_ACTIONS", "CouldBeRepair") || c.GetBool("CAPACITIES_TARGET", "CouldBeRepair");
             if (Openings.Any(d => d.Id == o.Id))
                 continue;   // portes et fenêtres : voir Openings
+            // réparable par la carte elle-même (composant A026, octet « CouldBeRepair » du bloc des capacités) : Forest,
+            // l'épave du bulldozer (« buldozer_areparer ») dont la classe n'est pas réparable
+            if (CapacityByte(o, CapRepair))
+                repair = true;
             // objet que le script rend utilisable (ou réparable) plus tard : il ne l'est pas encore au départ
             // (Mriya : le calendrier bonus collé au transformateur, rendu utilisable pendant la cinématique de G2_CanUse)
             if (enabledLater.Contains((o.Id, "COULDBEUSE")))

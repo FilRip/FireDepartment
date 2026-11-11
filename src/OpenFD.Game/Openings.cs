@@ -239,6 +239,7 @@ public sealed partial class UnitManager
             Openings.Add(d);
         }
         LoadObstacles(level, assets);
+        LoadDemolishable(level, assets);
         LoadExtricable(level, assets);
         RefreshDoorCells();
     }
@@ -366,6 +367,96 @@ public sealed partial class UnitManager
         }
         Openings.Add(d);
         return d;
+    }
+
+    /// <summary>Octets du bloc des capacités propres à l'objet (composant A026) : CouldBeUse, CouldBeDemolish,
+    /// CouldBeExtricate, CouldBeRepair, CouldBeBreak, CouldBeClimb.</summary>
+    public const int CapUse = 0, CapDemolish = 1, CapExtricate = 2, CapRepair = 3;
+
+    /// <summary>La carte donne-t-elle à cet objet la capacité <paramref name="k"/> (composant A026, bloc des capacités) ?</summary>
+    private static bool CapacityByte(LevelObject o, int k)
+    {
+        if (o.GetComponent(0xA026) is not { } cc)
+            return false;
+        ReadOnlySpan<byte> b = o.ComponentBytes(cc);
+        return b.Length > 36 + k && b[22] == 0xAA && b[26] == 0x09 && b[36 + k] == 1;
+    }
+
+    // débris pour bulldozer cachés au départ : ils ferment le passage quand le script les montre (UpdateDemolishVisibility)
+    private readonly HashSet<uint> _demolishHidden = new();
+
+    /// <summary>Débris pour bulldozer encore caché (le script ne l'a pas montré) : ni dessiné, ni visé.</summary>
+    public bool WaitsForScript(Opening d) => _demolishHidden.Contains(d.Id);
+
+    /// <summary>Chaque pas : un débris pour bulldozer que le script vient de montrer ferme ses cases.</summary>
+    private void UpdateDemolishVisibility()
+    {
+        if (_demolishHidden.Count == 0 || _s.Host?.Visibility is not { } vis)
+            return;
+        bool changed = false;
+        foreach (Opening d in Openings.Where(d => _demolishHidden.Contains(d.Id)).ToList())
+        {
+            if (!vis.TryGetValue(d.Id, out bool shown) || !shown)
+                continue;
+            _demolishHidden.Remove(d.Id);
+            if (d.State != OpeningState.Open)
+                continue;
+            d.State = OpeningState.Closed;
+            changed = true;
+            Log.Add($"{_s.Time,6:0} s : {d.Name} montré : le passage est fermé jusqu'au bulldozer");
+        }
+        if (changed)
+            RefreshDoorCells();
+    }
+
+    /// <summary>
+    /// Débris pour bulldozer que la carte marque elle-même (composant A026, octet « CouldBeDemolish ») alors que leur classe
+    /// ne l'est pas : Forest, la souche (« stump_245 ») qui barre la route du sud-ouest. Ils ferment leurs cases jusqu'à ce
+    /// que le bulldozer les dégage ; la fonction du script nommée dans A024 (« arbre_detruits ») est alors appelée.
+    /// </summary>
+    private void LoadDemolishable(Level level, SceneAssets assets)
+    {
+        foreach (LevelObject o in level.Objects.Where(o => o.Kind == EntityKind.Placeable && o.HasTransform))
+        {
+            if (!CapacityByte(o, CapDemolish))
+                continue;
+            ClassFile? c = Class("Design\\" + o.ClassPath["design\\".Length..] + ".class");
+            if (c == null)
+                continue;
+            float life = c.GetFloat("DAMAGE", "LifePoints", 100), max = c.GetFloat("DAMAGE", "MaxLifePoints", 100);
+            string? onDestroy = null;
+            if (o.GetComponent(0xA024) is { } dc && dc.Size > 13)
+            {
+                byte[] b = o.ComponentBytes(dc).ToArray();
+                if (b[4] == 0x0C)
+                {
+                    life = BitConverter.ToSingle(b, 5);
+                    max = BitConverter.ToSingle(b, 9);
+                }
+                onDestroy = ScriptNameIn(b);
+            }
+            if (Openings.FirstOrDefault(x => x.Id == o.Id) is { } existing)
+            {
+                existing.Demolish = true;
+                existing.OnDestroy ??= onDestroy;
+                continue;
+            }
+            if (life <= 0)
+                continue;
+            Opening d = AddObstacle(o, c, life, assets);
+            d.Breakable = false;
+            d.Demolish = true;
+            d.MaxLife = MathF.Max(max, life);
+            d.OnDestroy = onDestroy;
+            // caché au départ (Petrochemical : les débris des tuyaux tombés, montrés par le script quand le tuyau tombe) :
+            // il ne ferme pas le passage tant que le script ne l'a pas montré
+            if (!o.StartVisible)
+            {
+                d.State = OpeningState.Open;
+                _demolishHidden.Add(d.Id);
+            }
+            Log.Add($"Débris pour bulldozer : {o.Name} ({d.Cells.Count} case(s), {life:0} points de vie{(onDestroy != null ? ", script " + onDestroy : "")})");
+        }
     }
 
     /// <summary>
@@ -779,6 +870,8 @@ public sealed partial class UnitManager
         u.Status = "attend les ordres";
         Log.Add($"{_s.Time,6:0} s : {d.Name} déblayé par {u.Name}");
         RefreshDoorCells();
+        if (!string.IsNullOrEmpty(d.OnDestroy))
+            _s.Scripts?.TryRun(d.OnDestroy!, Script.Value.I(d.Id));
     }
 
     /// <summary>

@@ -2058,9 +2058,9 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                     DrawMesh(mesh, (part * world).X());
         foreach (Opening o in _session.Units.Openings.Where(o => o.Extricate && o.Model != null && Vis(o.Id, true)))
             DrawExtricable(o);
-        foreach (Opening o in _session.Units.Openings.Where(o => !o.Extricate && o.Model != null && o.State != OpeningState.Broken && Vis(o.Id, true) && (o.OpenAnim != null || o.CloseAnim != null)))
+        foreach (Opening o in _session.Units.Openings.Where(o => !o.Extricate && o.Model != null && o.State != OpeningState.Broken && Vis(o.Id, true) && !_session.Units.WaitsForScript(o) && (o.OpenAnim != null || o.CloseAnim != null)))
             DrawAnimatedOpening(o);
-        foreach (Opening o in _session.Units.Openings.Where(o => !o.Extricate && o.Model != null && o.State != OpeningState.Broken && Vis(o.Id, true) && o.OpenAnim == null && o.CloseAnim == null))
+        foreach (Opening o in _session.Units.Openings.Where(o => !o.Extricate && o.Model != null && o.State != OpeningState.Broken && Vis(o.Id, true) && !_session.Units.WaitsForScript(o) && o.OpenAnim == null && o.CloseAnim == null))
             foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(o.Model!))
                 DrawMesh(mesh, (part * (o.State == OpeningState.Open && !o.IsWindow ? SN.Matrix4x4.CreateRotationZ(-MathF.PI / 2) : SN.Matrix4x4.Identity) * o.World).X());
     }
