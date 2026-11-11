@@ -285,6 +285,8 @@ public sealed partial class OpenFDGame
             _ended = true;
             _paused = true;
             _sel.Clear();
+            _endShownAt = System.Diagnostics.Stopwatch.GetTimestamp();
+            _medalsShown = 0;
             if (!_endSoundPlayed)
             {
                 _audio?.Play(h.Outcome == true ? "VOCAL_MISSION_SUCCESS" : "VOCAL_MISSION_FAILURE");
@@ -393,6 +395,9 @@ public sealed partial class OpenFDGame
     private static readonly (float x, float y, float w, float h) EndTextBox = (140, 196, 518, 314);
     private const float EndBigBoxBottom = 521;
     private const int MedalW = 13, MedalH = 24;   // WID_MEDAL.png : 4 médailles côte à côte ; la 1re gagnée, la 2e (sombre) pas gagnée
+    private const double MedalDelay = 0.5;        // victoire : une médaille gagnée de plus chaque demi-seconde, avec le son UI_MEDAL
+    private long _endShownAt;                     // moment où l'écran de fin s'est ouvert (horloge réelle : le jeu est en pause)
+    private int _medalsShown;                     // médailles gagnées déjà montrées (et leur son joué)
 
     private void RenderEndScreen()
     {
@@ -423,6 +428,20 @@ public sealed partial class OpenFDGame
         if (h.Scoring.Count > 0)
             y += lh / 2;
         Texture2D? medal = OverlayTexture("WID_MEDAL.png");
+        // victoire : les médailles gagnées s'allument une par une, une seconde d'écart, chacune avec son son
+        int reveal = int.MaxValue;
+        if (win)
+        {
+            double elapsed = (System.Diagnostics.Stopwatch.GetTimestamp() - _endShownAt) / (double)System.Diagnostics.Stopwatch.Frequency;
+            int total = h.Scoring.Sum(sc => Math.Clamp(sc.medals, 0, 5));
+            reveal = Math.Min(total, (int)(elapsed / MedalDelay));
+            while (_medalsShown < reveal)
+            {
+                _audio?.Play("UI_MEDAL");
+                _medalsShown++;
+            }
+        }
+        int lit = 0;
         float mh = _ui.LineHeight * 1.7f, mw = mh * MedalW / MedalH, gap = 4 * _scale;
         foreach ((string? label, double value, int medals) in h.Scoring)
         {
@@ -433,7 +452,10 @@ public sealed partial class OpenFDGame
                 for (int m = 0; m < 5; m++)
                 {
                     float mx = x + w - (5 - m) * (mw + gap);
-                    Rectangle src = new Rectangle((m < won ? 0 : 1) * MedalW, 0, MedalW, MedalH);
+                    bool on = m < won && lit < reveal;
+                    if (m < won)
+                        lit++;
+                    Rectangle src = new Rectangle((on ? 0 : 1) * MedalW, 0, MedalW, MedalH);
                     _ui.Image(medal, mx, y + (row - mh) / 2, mw, mh, src, SN.Vector4.One);
                 }
             y += row;
