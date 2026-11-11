@@ -402,6 +402,8 @@ public sealed partial class OpenFDGame
     {
         if (_unitTypeNames.TryGetValue(u.ClassPath, out string? known))
             return known;
+        if (_loc == null)
+            return "";   // textes pas encore chargés : on réessaiera
         string? key = UnitPublicName(u.ClassPath);
         string name = key == null ? "" : _loc.Get(key).Trim().TrimEnd(':').Trim();
         if (key != null && name == key.TrimStart('&'))
