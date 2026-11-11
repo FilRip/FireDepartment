@@ -1330,6 +1330,11 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         foreach (SceneAssets.Placed p in allPlaced)
             if (byName.TryGetValue(p.Name, out LevelObject? lo) && System.Text.RegularExpressions.Regex.IsMatch(lo.ClassPath, @"(mechanism|mechanism_symbol_blue|elec|elec_symbol_off|repair|buldo|arrow|koshka|saw|cross)_symbol$|mechanism_symbol_blue$|elec_symbol_off$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
                 _animMarks.Add((lo.Id, p.Model, p.World, System.Text.RegularExpressions.Regex.IsMatch(lo.ClassPath, @"(arrow|koshka)_symbol$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)));
+        // repère qui tourne sur lui-même et que le script montre ou cache (l'icône de réparation de l'épave de Forest…) :
+        // dessiné une seule fois, par les repères animés, qui suivent aussi le script ; pas en plus comme objet fixe
+        int twice = _scriptMoved.RemoveAll(x => _animMarks.Any(a => a.id == x.id));
+        if (twice > 0)
+            Console.WriteLine($"Repères animés que le script montre ou cache : {twice} (dessinés une seule fois, en tournant)");
         HashSet<string> shownNames = _scriptShown.Select(x => byName.Values.First(o => o.Id == x.id).Name)
             .Concat(_animMarks.Select(x => byName.Values.First(o => o.Id == x.id).Name))
             .Concat(_axeMarks.Concat(_brokenParts).Select(x => byName.Values.First(o => o.Id == x.id).Name))
