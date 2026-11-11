@@ -1,0 +1,674 @@
+using System.Numerics;
+using System.Text;
+using OpenFD.Formats;
+using OpenFD.MG;
+
+namespace OpenFD.ConvFD1;
+
+/// <summary>
+/// Conversion d'une mission FD1 vers le dossier Data du moteur (FD3) :
+///  • Gfx\Mission\&lt;nom&gt;\ : décor (&lt;nom&gt;.sg, un nœud par maillage) + .mesh/.meshdata, matériaux dans Shaders\ ;
+///  • Gfx\Textures\&lt;nom&gt;\ : textures (DDS 32 bits) ;
+///  • Design\Mission\&lt;nom&gt;\ : niveau (soleil, caméra, arrivée des équipes repris d'une mission du jeu), grille, .mis ;
+///  • Script\Mission\&lt;nom&gt;\ : script de départ.
+/// </summary>
+public sealed class MissionConverter
+{
+    /// <summary>Monde FD1 (1 = 10 m) → cm.</summary>
+    public const float WorldToCm = 1000f;
+
+    public required Fd1Data Fd1 { get; init; }
+    public required GameFiles Fd3 { get; init; }
+    /// <summary>Dossier de la mission FD1 (Logic\Missions\&lt;Mission&gt;).</summary>
+    public required string Mission { get; init; }
+    /// <summary>Nom de la mission convertie (dossiers et fichiers du moteur).</summary>
+    public required string Name { get; init; }
+    public List<string> Report { get; } = new();
+
+    /// <summary>
+    /// Classes FD1 qui ne sont pas du décor : personnages (remplacés par des unités et des civils du moteur), véhicules des
+    /// pompiers (« Tanker », « MMaster » : remplacés par les véhicules de l'équipe de départ), fanions des points de passage.
+    /// </summary>
+    private static readonly HashSet<string> NotScenery = new(StringComparer.OrdinalIgnoreCase) { "ActeurUnit", "Tanker", "MMaster", "WayPoint" };
+
+    /// <summary>Véhicules des pompiers FD1 (classe) → véhicule du moteur.</summary>
+    private static readonly Dictionary<string, string> Vehicles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Tanker", "Firevehicle\\Veh_P_pumper_us" },
+        { "MMaster", "Firevehicle\\Veh_P_ambulance_us" },
+    };
+
+    /// <summary>Pompiers FD1 (nom de l'objet) → pompier du moteur, et s'il vient en renfort (sinon dans l'équipe de départ).</summary>
+    private static readonly Dictionary<string, (string unit, bool reinforcement)> Firemen = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "pompier_pompier", ("Fireman\\fireman_sp_us", false) },
+        { "pompier_Engenieur", ("Fireman\\fireman_ing", false) },
+        { "pompier_commandos", ("Fireman\\fireman_scout", true) },
+        { "pompier_FireProof", ("Fireman\\fireman_igni", true) },
+    };
+
+    /// <summary>
+    /// Entrée des véhicules sur la carte, par mission (cm) : la rue devant le portail du parking (Entrepot). Ailleurs : à 3 000 cm
+    /// du point d'arrivée, vers le bas de la carte.
+    /// </summary>
+    private static readonly Dictionary<string, Vector2> Entries = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Entrepot", new Vector2(21300, 10250) },
+    };
+
+    private string Data => Fd3.DataDir;
+
+    /// <summary>Hauteur maximale des murs d'une pièce (cm) : au-dessus, ce n'est plus la pièce (façade, toit du hall).</summary>
+    private const float RoomMaxHeight = 450;
+
+    /// <summary>
+    /// Objets du décor qui gênent le passage (étagères, caisses, véhicules) : carrés de 25 cm couverts à hauteur d'homme.
+    /// Le moteur ne relève que les murs (faces du sol à plus de 2,3 m) ; les étagères FD1 sont faites de cartons empilés,
+    /// aucune face ne va du sol au plafond : on ferme leurs cases dans la grille (zone 0), comme la grille d'une mission du jeu.
+    /// </summary>
+    private readonly HashSet<(int x, int y)> _blockedQuarters = new HashSet<(int, int)>();
+
+    /// <summary>
+    /// Plus grand objet (m², rectangle englobant au sol) pris comme obstacle : au-delà, c'est un bâtiment (ses murs : le
+    /// moteur). Les objets qui brûlent (« ConteneurComposant » : étagères, caisses, meubles) ne sont jamais des bâtiments :
+    /// limite plus large (une étagère tombée en biais, 9 m de long, occupe un rectangle de 70 m²).
+    /// </summary>
+    private const float ObstacleMaxArea = 60;
+    private const float BurnableObstacleMaxArea = 150;
+
+    /// <summary>Classes FD1 qui ne ferment pas le passage : mécanismes (portes, boutons, bombes : on doit pouvoir y aller).</summary>
+    private static readonly HashSet<string> NotObstacle = new(StringComparer.OrdinalIgnoreCase) { "Mechanisme" };
+
+    /// <summary>Relève les carrés de 25 cm couverts par un objet entre 30 cm et 1,7 m au-dessus de son pied.</summary>
+    private void AddObstacle(List<Fd3Mesh> meshes, Matrix4x4 w, Vector3 lo, Vector3 hi, string fd1Class)
+    {
+        float max = fd1Class.Equals("ConteneurComposant", StringComparison.OrdinalIgnoreCase) ? BurnableObstacleMaxArea : ObstacleMaxArea;
+        if ((hi.X - lo.X) * (hi.Y - lo.Y) / 10000f > max || hi.Z - lo.Z < 60 || lo.Z > 50)
+            return;
+        const float Q = 25;
+        float low = lo.Z + 30;
+        float high = lo.Z + 170;
+        HashSet<(int x, int y)> mine = new HashSet<(int, int)>();
+        foreach (Fd3Mesh m in meshes)
+            for (int t = 0; t + 2 < m.Indices.Count; t += 3)
+            {
+                Vector3 a = Vector3.Transform(Vertex(m, m.Indices[t]), w);
+                Vector3 b = Vector3.Transform(Vertex(m, m.Indices[t + 1]), w);
+                Vector3 c = Vector3.Transform(Vertex(m, m.Indices[t + 2]), w);
+                if (MathF.Max(a.Z, MathF.Max(b.Z, c.Z)) < low || MathF.Min(a.Z, MathF.Min(b.Z, c.Z)) > high)
+                    continue;
+                float len = MathF.Max(Vector3.Distance(a, b), MathF.Max(Vector3.Distance(b, c), Vector3.Distance(a, c)));
+                int n = Math.Clamp((int)(len / (Q / 2)) + 1, 1, 400);
+                for (int i = 0; i <= n; i++)
+                    for (int j = 0; i + j <= n; j++)
+                    {
+                        Vector3 p = a + (b - a) * ((float)i / n) + (c - a) * ((float)j / n);
+                        if (p.Z >= low && p.Z <= high)
+                            mine.Add(((int)MathF.Floor(p.X / Q), (int)MathF.Floor(p.Y / Q)));
+                    }
+            }
+        _blockedQuarters.UnionWith(mine);
+        if (fd1Class.Equals("ConteneurComposant", StringComparison.OrdinalIgnoreCase))
+            CloseGaps(mine);
+    }
+
+    /// <summary>Carrés de 25 cm traversés par un mur de bâtiment à hauteur d'homme (AddWalls).</summary>
+    private readonly HashSet<(int x, int y)> _wallQuarters = new HashSet<(int, int)>();
+
+    /// <summary>
+    /// Murs des bâtiments, même en plusieurs morceaux : sous une fenêtre FD1 (non cassable), le mur est un muret, une vitre et
+    /// un linteau ; aucune face ne va du sol à 2,3 m, le moteur n'y voit pas de mur et on passe à travers. Ici : toute face
+    /// verticale large (70 cm au moins : pas les montants d'une porte) qui part de moins de 1,2 m (pas les murs de l'étage) et
+    /// passe entre 60 cm et 1,7 m. Une porte n'a rien à cette hauteur : elle reste ouverte.
+    /// </summary>
+    private void AddWalls(List<Fd3Mesh> meshes, Matrix4x4 w)
+    {
+        const float Q = 25;
+        foreach (Fd3Mesh m in meshes)
+            for (int t = 0; t + 2 < m.Indices.Count; t += 3)
+            {
+                Vector3 a = Vector3.Transform(Vertex(m, m.Indices[t]), w);
+                Vector3 b = Vector3.Transform(Vertex(m, m.Indices[t + 1]), w);
+                Vector3 c = Vector3.Transform(Vertex(m, m.Indices[t + 2]), w);
+                Vector3 nrm = Vector3.Cross(b - a, c - a);
+                float len = nrm.Length();
+                if (len < 1e-3f || MathF.Abs(nrm.Z) / len >= 0.25f)
+                    continue;
+                float zLow = MathF.Min(a.Z, MathF.Min(b.Z, c.Z));
+                float zTop = MathF.Max(a.Z, MathF.Max(b.Z, c.Z));
+                if (zLow > 120 || zTop < 60)
+                    continue;
+                float span = MathF.Max(Vector2.Distance(new Vector2(a.X, a.Y), new Vector2(b.X, b.Y)),
+                    MathF.Max(Vector2.Distance(new Vector2(b.X, b.Y), new Vector2(c.X, c.Y)), Vector2.Distance(new Vector2(a.X, a.Y), new Vector2(c.X, c.Y))));
+                if (span < 70)
+                    continue;
+                float edge = MathF.Max(Vector3.Distance(a, b), MathF.Max(Vector3.Distance(b, c), Vector3.Distance(a, c)));
+                int n = Math.Clamp((int)(edge / (Q / 2)) + 1, 1, 800);
+                for (int i = 0; i <= n; i++)
+                    for (int j = 0; i + j <= n; j++)
+                    {
+                        Vector3 p = a + (b - a) * ((float)i / n) + (c - a) * ((float)j / n);
+                        if (p.Z >= 60 && p.Z <= 170)
+                            _wallQuarters.Add(((int)MathF.Floor(p.X / Q), (int)MathF.Floor(p.Y / Q)));
+                    }
+            }
+    }
+
+    /// <summary>Cases ajoutées entre deux parties d'un même objet (CloseGaps).</summary>
+    private readonly HashSet<(int x, int y)> _gapCells = new HashSet<(int, int)>();
+
+    /// <summary>
+    /// Étagère tombée (rangées de cartons couchées) : une case libre entre deux cases de l'objet, sur une même ligne, est
+    /// fermée aussi ; sinon on marcherait entre les rangées.
+    /// </summary>
+    private void CloseGaps(HashSet<(int x, int y)> quarters)
+    {
+        int per = (int)(Grid.CellSize / 25);
+        HashSet<(int x, int y)> cells = quarters.GroupBy(q => (Math.DivRem(q.x, per, out _), Math.DivRem(q.y, per, out _)))
+            .Where(g => g.Count() > per * per / 2).Select(g => g.Key).ToHashSet();
+        foreach ((int x, int y) in cells.ToList())
+            foreach ((int dx, int dy) in new[] { (1, 0), (0, 1) })
+                if (!cells.Contains((x + dx, y + dy)) && cells.Contains((x + 2 * dx, y + 2 * dy)))
+                    _gapCells.Add((x + dx, y + dy));
+    }
+
+    private static Vector3 Vertex(Fd3Mesh m, int i) => new Vector3(m.Positions[3 * i], m.Positions[3 * i + 1], m.Positions[3 * i + 2]);
+
+    /// <summary>Cases de la grille fermées par les obstacles : l'objet en couvre plus de la moitié (8 carrés sur 16).</summary>
+    private int BlockObstacles(Grid g)
+    {
+        Dictionary<int, int> cover = new Dictionary<int, int>();
+        int per = (int)(Grid.CellSize / 25);
+        foreach ((int x, int y) in _blockedQuarters)
+        {
+            int cx = Math.DivRem(x, per, out _);
+            int cy = Math.DivRem(y, per, out _);
+            if (x < 0 || y < 0 || !g.Inside(cx, cy))
+                continue;
+            int k = g.Index(cx, cy);
+            cover[k] = cover.GetValueOrDefault(k) + 1;
+        }
+        int n = 0;
+        foreach ((int k, int c) in cover)
+            if (c > per * per / 2)
+            {
+                g.ZoneA[k] = 0;
+                n++;
+            }
+        // murs : une case traversée en deux carrés au moins (un mur est mince : une rangée de carrés)
+        Dictionary<int, int> wall = new Dictionary<int, int>();
+        foreach ((int x, int y) in _wallQuarters)
+        {
+            int cx = Math.DivRem(x, per, out _);
+            int cy = Math.DivRem(y, per, out _);
+            if (x >= 0 && y >= 0 && g.Inside(cx, cy))
+                wall[g.Index(cx, cy)] = wall.GetValueOrDefault(g.Index(cx, cy)) + 1;
+        }
+        foreach ((int k, int c) in wall)
+            if (c >= 2 && g.ZoneA[k] != 0)
+            {
+                g.ZoneA[k] = 0;
+                n++;
+            }
+        foreach ((int x, int y) in _gapCells)
+            if (g.Inside(x, y) && g.ZoneA[g.Index(x, y)] != 0)
+            {
+                g.ZoneA[g.Index(x, y)] = 0;
+                n++;
+            }
+        return n;
+    }
+
+    public void Run()
+    {
+        string misDir = Directory.EnumerateDirectories(Path.Combine(Fd1.Root, "Logic", "Missions"))
+            .FirstOrDefault(d => Path.GetFileName(d).Equals(Mission, StringComparison.OrdinalIgnoreCase))
+            ?? throw new DirectoryNotFoundException($"mission FD1 introuvable : Logic\\Missions\\{Mission}");
+        string xfl = Directory.EnumerateFiles(misDir, "*.xfl").FirstOrDefault()
+            ?? throw new FileNotFoundException($"niveau .xfl introuvable dans {misDir}");
+        Fd1Level level = Fd1Level.Load(File.ReadAllBytes(xfl));
+        Report.Add($"{level.Objects.Count} objets dans {Path.GetFileName(xfl)}");
+
+        ModelConverter models = new ModelConverter(Fd1, Path.GetFileName(misDir));
+        Dictionary<string, List<Fd3Mesh>> cache = new Dictionary<string, List<Fd3Mesh>>(StringComparer.OrdinalIgnoreCase);
+        string gfx = Path.Combine(Data, "Gfx", "Mission", Name);
+        Directory.CreateDirectory(Path.Combine(gfx, "Shaders"));
+        List<(string node, Matrix4x4 world)> nodes = new List<(string, Matrix4x4)>();
+        HashSet<string> materials = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        Vector3 lo = new Vector3(float.MaxValue);
+        Vector3 hi = new Vector3(float.MinValue);
+        int count = 0;
+        // pièces du niveau : modèles nommés dans les zones de son « SMAP_&lt;zone&gt;_&lt;modèle&gt;_&lt;n&gt; » (une par pièce)
+        List<string> smaps = level.Strings.Select(x => x.text).Where(t => t.StartsWith("SMAP_", StringComparison.Ordinal)).ToList();
+        bool IsRoomModel(string model) => !model.StartsWith("SOL", StringComparison.OrdinalIgnoreCase)
+            && smaps.Any(t => t.Contains("_" + model + "_", StringComparison.OrdinalIgnoreCase));
+        List<(string name, Vector3 min, Vector3 max)> rooms = new List<(string, Vector3, Vector3)>();
+        foreach (Fd1Object o in level.Objects.Where(o => !NotScenery.Contains(o.Class)))
+        {
+            // couvercles des petites pièces (« PIECES_TOP ») : un toit par pièce
+            bool lids = o.Model.EndsWith("_TOP", StringComparison.OrdinalIgnoreCase);
+            if (!cache.TryGetValue(o.Model, out List<Fd3Mesh>? meshes))
+            {
+                meshes = models.Convert(o.Model, "fd1_" + ModelConverter.Safe(o.Model).ToLowerInvariant());
+                if (lids)
+                    meshes = meshes.SelectMany(ModelConverter.Islands).ToList();
+                cache[o.Model] = meshes;
+            }
+            if (meshes.Count == 0)
+                continue;
+            Matrix4x4 w = o.World;
+            w.M41 *= WorldToCm;
+            w.M42 *= WorldToCm;
+            w.M43 *= WorldToCm;
+            count++;
+            // toit FD1 (« TOIT_ENTREPOT_01 », « ENT_TOIT_MANUFACTURE ») : nœud « …_ROOF », tout entier un toit pour le moteur
+            // (il part quand un pompier passe dessous) ; le reste des bâtiments est coupé à hauteur d'étage par le moteur
+            bool roof = lids || o.Model.Contains("TOIT", StringComparison.OrdinalIgnoreCase);
+            // cache noir FD1 d'une pièce pas encore découverte (« PIECE_01_CACHE ») : couvercle « …_MASK » du moteur
+            bool mask = o.Model.Contains("CACHE", StringComparison.OrdinalIgnoreCase);
+            bool room = IsRoomModel(o.Model);
+            Vector3 rlo = new Vector3(float.MaxValue);
+            Vector3 rhi = new Vector3(float.MinValue);
+            List<float> heights = new List<float>();
+            foreach (Fd3Mesh m in meshes)
+            {
+                string node = $"{m.Name}_{count}" + (mask ? "_ROOM_MASK" : roof ? "_ROOF" : "");
+                Fd3Mesh copy = new Fd3Mesh { Name = node, Positions = m.Positions, Normals = m.Normals, Uv = m.Uv, Indices = m.Indices, Groups = m.Groups };
+                File.WriteAllBytes(Path.Combine(gfx, node + ".mesh"), Fd3Writer.MeshFile(copy));
+                File.WriteAllBytes(Path.Combine(gfx, node + ".meshdata"), Fd3Writer.MeshData(copy));
+                nodes.Add((node, w));
+                foreach ((string mat, int _, int _) in m.Groups)
+                    materials.Add(mat);
+                for (int i = 0; i < m.VertexCount; i++)
+                {
+                    Vector3 p = Vector3.Transform(new Vector3(m.Positions[3 * i], m.Positions[3 * i + 1], m.Positions[3 * i + 2]), w);
+                    lo = Vector3.Min(lo, p);
+                    hi = Vector3.Max(hi, p);
+                    rlo = Vector3.Min(rlo, p);
+                    rhi = Vector3.Max(rhi, p);
+                    if (room)
+                        heights.Add(p.Z);
+                }
+            }
+            if (!room && !roof && !mask && !NotObstacle.Contains(o.Class))
+                AddObstacle(meshes, w, rlo, rhi, o.Class);
+            // bâtiments (pièces, halls, façades) : leurs murs, fenêtres comprises
+            bool building = room || ((rhi.X - rlo.X) * (rhi.Y - rlo.Y) / 10000f > ObstacleMaxArea && o.Class.Equals("ObjetDecor", StringComparison.OrdinalIgnoreCase));
+            if (building && !roof && !mask)
+                AddWalls(meshes, w);
+            if (room)
+            {
+                // haut des murs de la pièce : le plus haut sommet à 4,5 m au plus du sol (certains modèles de pièce
+                // contiennent aussi un bout de façade de 10 m : le couvercle n'irait pas si haut)
+                float top = heights.Where(z => z <= rlo.Z + RoomMaxHeight).DefaultIfEmpty(rhi.Z).Max();
+                rooms.Add((o.Name.Length > 0 ? o.Name : o.Model, rlo, new Vector3(rhi.X, rhi.Y, top)));
+            }
+        }
+        AddRoomLids(rooms, gfx, nodes, materials, models);
+        if (level.GroundTiles.Count > 0)
+        {
+            Fd3Mesh ground = models.Ground(level.GroundTiles, "FGD_" + Name);
+            File.WriteAllBytes(Path.Combine(gfx, ground.Name + ".mesh"), Fd3Writer.MeshFile(ground));
+            File.WriteAllBytes(Path.Combine(gfx, ground.Name + ".meshdata"), Fd3Writer.MeshData(ground));
+            nodes.Add((ground.Name, Matrix4x4.Identity));
+            foreach ((string mat, int _, int _) in ground.Groups)
+                materials.Add(mat);
+            Report.Add($"sol : {level.GroundTiles.Count} dalles de 10 m");
+        }
+        File.WriteAllBytes(Path.Combine(gfx, Name + ".sg"), Fd3Writer.Scene(nodes));
+        Report.Add($"décor : {count} objets, {nodes.Count} maillages ({cache.Count} modèles)");
+        Report.AddRange(models.Report.Distinct());
+
+        WriteMaterials(gfx, materials);
+        WriteTextures(models);
+        WriteDesign(lo, hi, level);
+    }
+
+    /// <summary>
+    /// Équipes de pompiers FD1 → casernes du moteur (Design\FireStation\&lt;nom&gt;_1.cfg, _2.cfg) : les véhicules et les
+    /// pompiers posés dans le niveau FD1 (cachés au départ, montrés par le script) forment l'équipe de départ ; le commando
+    /// (grappin) et le pompier ignifugé arrivent en premier renfort. Rend les points d'arrivée : (nom du point, position cm).
+    /// </summary>
+    private List<(string name, Vector2 at)> WriteStations(Fd1Level level, ref string mis)
+    {
+        List<(string name, Vector2 at)> points = new List<(string, Vector2)>();
+        List<Fd1Object> trucks = level.Objects.Where(o => Vehicles.ContainsKey(o.Class)).OrderBy(o => o.Class.Equals("MMaster", StringComparison.OrdinalIgnoreCase) ? 1 : 0).ToList();
+        List<Fd1Object> men = level.Objects.Where(o => o.Class.Equals("ActeurUnit", StringComparison.OrdinalIgnoreCase) && Firemen.ContainsKey(o.Name)).ToList();
+        List<string> first = trucks.Select(t => Vehicles[t.Class]).ToList();
+        // pompiers d'abord, spécialistes ensuite (comme la barre des unités de FD1)
+        first.AddRange(men.Where(m => !Firemen[m.Name].reinforcement).Select(m => Firemen[m.Name].unit).OrderBy(u => u.EndsWith("_sp_us", StringComparison.OrdinalIgnoreCase) ? 0 : 1));
+        List<Fd1Object> later = men.Where(m => Firemen[m.Name].reinforcement).ToList();
+        string dir = Path.Combine(Data, "Design", "FireStation");
+        Directory.CreateDirectory(dir);
+        if (first.Count > 0)
+        {
+            File.WriteAllBytes(Path.Combine(dir, Name + "_1.cfg"), Encoding.Latin1.GetBytes(Station("&E9", first)));
+            mis = IniText.Set(mis, "FIRESTATION", "INITIALDISPATCH", Name + "_1");
+            Vector2 entry = Entries.TryGetValue(Mission, out Vector2 e) ? e : Vector2.Zero;
+            for (int k = 0; k < trucks.Count; k++)
+            {
+                Vector2 end = new Vector2(trucks[k].World.M41, trucks[k].World.M42) * WorldToCm;
+                Vector2 start = entry != Vector2.Zero ? entry + new Vector2(0, 600 * k) : end - new Vector2(3000, 0);
+                points.Add(($"locstart1_{k + 1}", start));
+                points.Add(($"locend1_{k + 1}", end));
+            }
+            Report.Add($"équipe de départ : {first.Count} unités ({trucks.Count} véhicules)");
+        }
+        if (later.Count > 0)
+        {
+            File.WriteAllBytes(Path.Combine(dir, Name + "_2.cfg"), Encoding.Latin1.GetBytes(Station("&E10", later.Select(m => Firemen[m.Name].unit).ToList())));
+            mis = IniText.Set(mis, "FIRESTATION", "REINFORCEMENT1", Name + "_2");
+            mis = IniText.Set(mis, "FIRESTATION", "REINFORCEMENT1SPAWNPOINT", "2");
+            // [REP_TIME] du .MIS FD1 : délai avant le renfort (s)
+            string misFile = Directory.EnumerateFiles(Path.Combine(Fd1.Root, "Logic", "Missions", Mission), "*.MIS").FirstOrDefault() ?? "";
+            string rep = misFile.Length > 0 ? File.ReadLines(misFile, Encoding.Latin1).Select(l => l.Trim()).FirstOrDefault(l => l.StartsWith("[REP_TIME]", StringComparison.OrdinalIgnoreCase)) ?? "" : "";
+            string eta = rep.Length > 0 ? rep["[REP_TIME]".Length..].Trim().Split(' ', '\t', '/')[0] : "60";
+            mis = IniText.Set(mis, "FIRESTATION", "REINFORCEMENT1ETA", eta);
+            Vector2 at = new Vector2(later[0].World.M41, later[0].World.M42) * WorldToCm;
+            points.Add(("locstart2_1", at));
+            points.Add(("locend2_1", at));
+            Report.Add($"renfort : {later.Count} pompier(s) après {eta} s");
+        }
+        return points;
+    }
+
+    /// <summary>Fichier de caserne : nom de code de l'équipe et ses unités (véhicules d'abord).</summary>
+    private static string Station(string code, List<string> units)
+    {
+        StringBuilder sb = new StringBuilder();
+        // base_classic.cfg (et non classic_pumper.cfg, dont les UNIT03 à UNIT05 s'ajouteraient à une petite équipe)
+        sb.Append("[#INCLUDE]\r\nFILE0 = \"base_classic.cfg\"\r\n\r\n[FIRESTATION]\r\nNAME = &Station_Pumper\r\nICON = ICON_FIRESTATION_URBAN_PUMPER\r\n");
+        sb.Append($"CODENAME = {code}\r\n");
+        for (int i = 0; i < units.Count; i++)
+            sb.Append($"UNIT{i + 1:00} = {units[i]}\r\n");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Couvercles noirs des pièces, comme dans FD1 : une pièce qu'aucun pompier n'a encore visitée est fermée par un dessus
+    /// noir, à la hauteur de ses murs (Entrepot : le bureau du contremaître, « ent_entrepot_part04 »). Couvercle = plaque
+    /// noire sur l'emprise de la pièce, nœud « …_ROOF » : le moteur l'enlève quand un pompier passe dessous.
+    /// Pièces retenues : hautes d'au moins 2,5 m, de 4 à 400 m² (pas les halls, ni une caisse nommée dans une zone).
+    /// </summary>
+    private void AddRoomLids(List<(string name, Vector3 min, Vector3 max)> rooms, string gfx, List<(string node, Matrix4x4 world)> nodes, HashSet<string> materials, ModelConverter models)
+    {
+        const string black = "fd1c_000000";
+        int n = 0;
+        foreach ((string name, Vector3 mn, Vector3 mx) in rooms)
+        {
+            float area = (mx.X - mn.X) * (mx.Y - mn.Y) / 10000f;
+            if (mx.Z - mn.Z < 250 || area < 4 || area > 400)
+                continue;
+            Fd3Mesh lid = new Fd3Mesh { Name = $"fd1_lid_{ModelConverter.Safe(name).ToLowerInvariant()}_{n}_ROOF" };
+            float z = mx.Z + 2;
+            foreach ((float x, float y) in new[] { (mn.X, mn.Y), (mx.X, mn.Y), (mx.X, mx.Y), (mn.X, mx.Y) })
+            {
+                lid.Positions.AddRange(new[] { x, y, z });
+                lid.Normals.AddRange(new[] { 0f, 0f, 1f });
+                lid.Uv.AddRange(new[] { 0f, 0f });
+            }
+            foreach (int i in new[] { 0, 1, 2, 2, 3, 0 })
+                lid.Indices.Add((ushort)i);
+            lid.Groups.Add((black, 0, 6));
+            File.WriteAllBytes(Path.Combine(gfx, lid.Name + ".mesh"), Fd3Writer.MeshFile(lid));
+            File.WriteAllBytes(Path.Combine(gfx, lid.Name + ".meshdata"), Fd3Writer.MeshData(lid));
+            nodes.Add((lid.Name, Matrix4x4.Identity));
+            n++;
+        }
+        if (n == 0)
+            return;
+        models.Colors[black] = 0xFF000000;
+        materials.Add(black);
+        Report.Add($"pièces : {n} couvercle(s) noir(s)");
+    }
+
+    // ---- matériaux : copie d'un matériau du jeu à une seule texture ----
+    private void WriteMaterials(string gfx, HashSet<string> materials)
+    {
+        byte[] template = Fd3.TryRead("Gfx\\Placeable\\Shaders\\lv_Autom_022.stdmat")
+            ?? throw new FileNotFoundException("matériau modèle introuvable dans les données du jeu : Gfx\\Placeable\\Shaders\\lv_Autom_022.stdmat");
+        foreach (string mat in materials)
+            File.WriteAllBytes(Path.Combine(gfx, "Shaders", mat + ".stdmat"), Fd3Writer.Stdmat(template, mat, mat + ".tga"));
+        Report.Add($"{materials.Count} matériaux");
+    }
+
+    // ---- textures : images FD1 → DDS ; couleurs unies → petites images ----
+    private void WriteTextures(ModelConverter models)
+    {
+        string dir = Path.Combine(Data, "Gfx", "Textures", Name);
+        Directory.CreateDirectory(dir);
+        int ok = 0;
+        foreach ((string tex, string img) in models.Textures)
+        {
+            if (img.EndsWith(".dds", StringComparison.OrdinalIgnoreCase))
+            {
+                File.Copy(img, Path.Combine(dir, tex + ".dds"), true);
+                ok++;
+                continue;
+            }
+            (int w, int h, byte[] rgba)? im = ImageCodec.Decode(File.ReadAllBytes(img));
+            if (im is not { } v)
+            {
+                Report.Add($"image non lue : {img}");
+                continue;
+            }
+            if (models.Opaque.Contains(tex))
+                for (int i = 3; i < v.rgba.Length; i += 4)
+                    v.rgba[i] = 255;
+            File.WriteAllBytes(Path.Combine(dir, tex + ".dds"), ImageCodec.EncodeDds(v.w, v.h, v.rgba));
+            ok++;
+        }
+        foreach ((string name, uint argb) in models.Colors)
+        {
+            byte[] rgba = new byte[4 * 4 * 4];
+            for (int i = 0; i < 16; i++)
+            {
+                rgba[4 * i] = (byte)(argb >> 16);
+                rgba[4 * i + 1] = (byte)(argb >> 8);
+                rgba[4 * i + 2] = (byte)argb;
+                rgba[4 * i + 3] = 255;
+            }
+            File.WriteAllBytes(Path.Combine(dir, name + ".dds"), ImageCodec.EncodeDds(4, 4, rgba));
+        }
+        Report.Add($"textures : {ok} images, {models.Colors.Count} couleurs unies");
+    }
+
+    // ---- niveau, grille, .mis, script (comme une mission neuve de l'éditeur) ----
+    /// <summary>
+    /// Foyers allumés au départ, par mission. Le niveau FD1 ne dit pas (de façon lisible) quels feux brûlent au début : on
+    /// l'a relevé sur une capture du jeu, sous forme de zones (cm : x min, x max, y min, y max). Entrepot (premier hall) :
+    /// le mur de gauche, le bas de la deuxième rangée d'étagères, le côté droit contre le mur entre les deux halls.
+    /// Mission sans zones : les torches (grands feux à colonne de flammes).
+    /// </summary>
+    private static readonly Dictionary<string, (float x0, float x1, float y0, float y1)[]> StartFires = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Entrepot", new[] { (7800f, 13000f, 0f, 6400f), (11000f, 13000f, 6600f, 7400f), (9000f, 12500f, 12700f, 13700f) } },
+    };
+
+    private static bool LitAtStart(string mission, Vector3 at, string type)
+    {
+        if (StartFires.TryGetValue(mission, out (float x0, float x1, float y0, float y1)[]? zones))
+            return zones.Any(z => at.X >= z.x0 && at.X <= z.x1 && at.Y >= z.y0 && at.Y <= z.y1);
+        return type.StartsWith("torche", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Points de feu FD1 → foyers du moteur (copies d'un foyer d'une mission du jeu) : tous éteints, sauf ceux du départ
+    /// (LitAtStart). Les autres sont le combustible où le feu se propage.
+    /// </summary>
+    private int AddFires(Level level, Fd1Level fd1)
+    {
+        Dictionary<string, LevelObject> templates = FireTemplates();
+        if (!templates.ContainsKey(FireClass("")))
+        {
+            Report.Add("feux : aucun foyer modèle dans les missions du jeu");
+            return 0;
+        }
+        int n = 0;
+        int lit = 0;
+        foreach ((Vector3 at, string type) in fd1.Fires)
+        {
+            Vector3 cm = at * WorldToCm;
+            bool on = LitAtStart(Mission, cm, type);
+            LevelObject template = templates.TryGetValue(FireClass(type), out LevelObject? t) ? t : templates[FireClass("")];
+            float intensity = LevelEdit.FireState(template) is { intensity: > 0 } st ? st.intensity : 50;
+            n++;
+            LevelObject o = LevelEdit.Clone(template, LevelEdit.NewId(level), $"foyer_{n}", template.ClassPath);
+            o = LevelEdit.WithTransform(o, cm, Vector3.Zero);
+            o = LevelEdit.WithStartVisible(o, true);
+            o = LevelEdit.WithFire(o, on, intensity);
+            level.Objects.Add(o);
+            if (on)
+                lit++;
+        }
+        Report.Add($"feux : {n} foyers, dont {lit} allumés au départ");
+        return n;
+    }
+
+    /// <summary>Type de feu FD1 → classe de foyer du moteur : torche → grand foyer, « light » → petit, autres → moyen.</summary>
+    private static string FireClass(string type)
+    {
+        if (type.StartsWith("torche", StringComparison.OrdinalIgnoreCase))
+            return "design\\hotpoint\\ground_l";
+        if (type.EndsWith("_light", StringComparison.OrdinalIgnoreCase))
+            return "design\\hotpoint\\ground_s";
+        return "design\\hotpoint\\ground_m";
+    }
+
+    /// <summary>Un foyer de chaque classe utile (FireClass), pris dans les missions du jeu (bloc d'état complet).</summary>
+    private Dictionary<string, LevelObject> FireTemplates()
+    {
+        Dictionary<string, LevelObject> res = new Dictionary<string, LevelObject>(StringComparer.OrdinalIgnoreCase);
+        string[] wanted = { FireClass("torche"), FireClass("x_light"), FireClass("") };
+        foreach (string lv in Fd3.List("Design\\Mission\\").Where(p => p.EndsWith(".level", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (wanted.All(res.ContainsKey))
+                break;
+            try
+            {
+                Level l = Level.Parse(Fd3.Read(lv));
+                foreach (LevelObject o in l.Objects.Where(o => o.Kind == EntityKind.HotPoint && o.HasTransform && LevelEdit.FireState(o) is { full: true }))
+                    if (wanted.Contains(o.ClassPath, StringComparer.OrdinalIgnoreCase) && !res.ContainsKey(o.ClassPath))
+                        res[o.ClassPath] = o;
+            }
+            catch (Exception)
+            {
+            }
+        }
+        return res;
+    }
+
+    private void WriteDesign(Vector3 lo, Vector3 hi, Fd1Level fd1)
+    {
+        float width = MathF.Max(hi.X, 2000) + 1000;
+        float height = MathF.Max(hi.Y, 2000) + 1000;
+        int w = (int)MathF.Ceiling(width / Grid.CellSize);
+        int h = (int)MathF.Ceiling(height / Grid.CellSize);
+        (Level level, string mis) = ModelMission();
+        List<LevelObject> all = level.Objects.ToList();
+        LevelObject sun = all.First(IsSun);
+        LevelObject? waypoint = all.FirstOrDefault(o => o.Kind == EntityKind.Waypoint && o.HasTransform && o.ClassName.Equals("cam_startpos", StringComparison.OrdinalIgnoreCase))
+            ?? all.FirstOrDefault(o => o.Kind == EntityKind.Waypoint && o.HasTransform);
+        level.Objects.Clear();
+        level.ClearHotPointLinks();
+        float cx = (lo.X + hi.X) / 2;
+        float cy = (lo.Y + hi.Y) / 2;
+        if (!float.IsFinite(cx) || !float.IsFinite(cy))
+        {
+            cx = w * Grid.CellSize / 2;
+            cy = h * Grid.CellSize / 2;
+        }
+        level.Objects.Add(LevelEdit.WithTransform(sun, new Vector3(cx, cy, 5000), sun.Rotation));
+        for (int i = 1; i <= 9; i++)
+            if (IniText.Get(mis, "FIRESTATION", $"REINFORCEMENT{i}") != null)
+                mis = IniText.Set(mis, "FIRESTATION", $"REINFORCEMENT{i}", "");
+        List<(string name, Vector2 at)> points = WriteStations(fd1, ref mis);
+        AddFires(level, fd1);
+        if (waypoint != null)
+        {
+            // caméra de départ : sur le point d'arrivée de l'équipe, sinon au centre du niveau
+            Vector2 look = points.Where(p => p.name == "locend1_1").Select(p => p.at).DefaultIfEmpty(new Vector2(cx, cy)).First();
+            Vector3 eye = new Vector3(look.X, look.Y - 2500, 2500);
+            Vector3 f = Vector3.Normalize(new Vector3(look.X, look.Y, 0) - eye);
+            float rz = MathF.Asin(Math.Clamp(f.X, -1, 1));
+            float rx = MathF.Atan2(-f.Z, -f.Y);
+            LevelObject cam = LevelEdit.Clone(waypoint, LevelEdit.NewId(level), "cam_startpos", "design\\waypoint\\cam_startpos");
+            level.Objects.Add(LevelEdit.WithTransform(cam, eye, new Vector3(rx, 0, rz)));
+            if (points.Count == 0)
+            {
+                points.Add(("locstart1_1", new Vector2(cx, 300)));
+                points.Add(("locend1_1", new Vector2(cx, cy)));
+            }
+            foreach ((string name, Vector2 at) in points)
+            {
+                LevelObject p = LevelEdit.Clone(waypoint, LevelEdit.NewId(level), name, waypoint.ClassPath);
+                level.Objects.Add(LevelEdit.WithTransform(p, new Vector3(at, 0), Vector3.Zero));
+            }
+        }
+        foreach ((string sec, string key, string value) in new[]
+        {
+            ("MISSION", "Name", Name), ("MISSION", "Minimap", ""), ("DISPLAY", "Background", ""),
+            ("BRIEFING", "VIDEOFEEDFILE", ""), ("BRIEFING", "VideoSubtitleFile", ""), ("BRIEFING", "StoryTitleKey", Name),
+            ("SIMU", "GridSizeX", w.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            ("SIMU", "GridSizeY", h.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            ("SCRIPT", "AUTOEXECSCRIPT", Name + "_Start"), ("SCRIPT", "MISSIONSCRIPT1", Name + "_Main"), ("SCRIPT", "MISSIONSCRIPT2", ""),
+            ("FIRESTATION", "InitialDispatchSpawnPoint", "1"),
+        })
+            mis = IniText.Set(mis, sec, key, value);
+        string design = Path.Combine(Data, "Design", "Mission", Name);
+        Directory.CreateDirectory(design);
+        LevelEdit.SetMissionPath(level, $".\\Data\\Design\\Mission\\{Name}\\mission_{Name}.mis");
+        File.WriteAllBytes(Path.Combine(design, Name + ".level"), level.Serialize());
+        Grid grid = Grid.Flat(w, h);
+        // une seule zone B pour tout le niveau : en zone B 0, le moteur ferme toute bande libre de 3 cases au plus comme un
+        // « mur de pièce » (grilles du jeu) ; ici, les allées étroites entre deux étagères ou un bureau et un mur resteraient
+        // fermées. Les murs viennent des maillages (le moteur), les obstacles des objets (BlockObstacles).
+        Array.Fill(grid.ZoneB, (ushort)1);
+        int blocked = BlockObstacles(grid);
+        File.WriteAllBytes(Path.Combine(design, Name + ".grid"), grid.Serialize());
+        Report.Add($"grille : {blocked} cases fermées par les objets du décor (étagères, caisses, véhicules)");
+        File.WriteAllBytes(Path.Combine(design, "mission_" + Name + ".mis"), Encoding.Latin1.GetBytes(mis));
+        string scripts = Path.Combine(Data, "Script", "Mission", Name);
+        Directory.CreateDirectory(scripts);
+        string script = $"// {Name} : mission convertie de Fire Department 1 ({Mission})\r\n\r\nvoid {Name}_Start()\r\n{{\r\n}}\r\n\r\nvoid {Name}_Main()\r\n{{\r\n}}\r\n";
+        File.WriteAllBytes(Path.Combine(scripts, Name + ".scp"), Encoding.Latin1.GetBytes(script));
+        Report.Add($"niveau : grille {w} x {h} cases, .mis et script dans Design\\Mission\\{Name} et Script\\Mission\\{Name}");
+    }
+
+    private bool IsSun(LevelObject o)
+    {
+        if (o.Kind != EntityKind.Light)
+            return false;
+        try
+        {
+            ClassFile c = ClassFile.Load(Fd3, "Design\\" + o.ClassPath["design\\".Length..] + ".class");
+            return c.Get("LIGHT", "LightType")?.Trim('"', ' ').Equals("SUN", StringComparison.OrdinalIgnoreCase) == true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Mission du jeu qui sert de modèle : la première dont le niveau a un soleil.</summary>
+    private (Level level, string mis) ModelMission()
+    {
+        foreach (string lv in Fd3.List("Design\\Mission\\").Where(p => p.EndsWith(".level", StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                Level l = Level.Parse(Fd3.Read(lv));
+                if (!l.Objects.Any(IsSun))
+                    continue;
+                int at = l.MissionPath.IndexOf("Design\\", StringComparison.OrdinalIgnoreCase);
+                if (at < 0 || Fd3.TryRead(l.MissionPath[at..]) is not { } misBytes)
+                    continue;
+                return (l, Encoding.Latin1.GetString(misBytes));
+            }
+            catch (Exception)
+            {
+            }
+        }
+        throw new InvalidDataException("aucune mission du jeu ne peut servir de modèle (niveau avec un soleil)");
+    }
+}
