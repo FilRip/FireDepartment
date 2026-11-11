@@ -163,6 +163,33 @@ public sealed class MissionHost : IScriptHost
 
     private IEnumerable<long> Members(long id) => _groups.TryGetValue(id, out List<long>? l) ? l.ToList() : new List<long> { id };
 
+    /// <summary>
+    /// ENT_SetVisibility : le groupe lui-même (comme avant), et, pour un groupe du niveau, chacun de ses objets du décor
+    /// (sous-groupes compris) ; un groupe créé par le script : ses membres ; l'entité seule sinon.
+    /// </summary>
+    private IEnumerable<long> VisibilityMembers(long id)
+    {
+        if (_groups.ContainsKey(id))
+            return Members(id);
+        List<long> all = new List<long> { id };
+        if (Units?.ById(id) != null || !_byId.TryGetValue((uint)id, out LevelObject? g) || g.Kind != EntityKind.Group)
+            return all;
+        Stack<LevelObject> todo = new Stack<LevelObject>();
+        todo.Push(g);
+        HashSet<uint> seen = new HashSet<uint> { g.Id };
+        while (todo.Count > 0)
+            foreach (uint m in todo.Pop().Members)
+            {
+                if (!seen.Add(m) || !_byId.TryGetValue(m, out LevelObject? mo))
+                    continue;
+                if (mo.Kind == EntityKind.Group)
+                    todo.Push(mo);
+                else if (mo.Kind == EntityKind.Placeable)
+                    all.Add(m);   // seulement les objets du décor : les unités et les civils d'un groupe restent comme avant
+            }
+        return all;
+    }
+
     /// <summary>Membres d'un groupe créé par le script ou d'un groupe du niveau (« group_soldat_8_1 ») ; l'entité seule sinon.</summary>
     private IEnumerable<long> UnitMembers(long id)
     {
@@ -508,7 +535,8 @@ public sealed class MissionHost : IScriptHost
                 Units?.ActivateTeleport(V(0).AsInt, V(1).AsInt != 0);
                 return Value.Zero;
             case "ENT_SETVISIBILITY":
-                foreach (long id in Members(V(0).AsInt))
+                // un groupe du niveau (Street : « CCTrash », les débris du tramway renversé) : chacun de ses membres
+                foreach (long id in VisibilityMembers(V(0).AsInt))
                     if (Units?.ById(id) is { } vu)
                         vu.Hidden = V(1).AsInt == 0;
                     else if (Units?.CivilianById(id) is { } vc)

@@ -1082,6 +1082,27 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _sceneBatches.Clear();
     }
 
+    /// <summary>Objets du décor d'un groupe du niveau, sous-groupes compris.</summary>
+    private List<uint> GroupPlaceables(LevelObject group)
+    {
+        Dictionary<uint, LevelObject> byId = _session.Level.Objects.GroupBy(o => o.Id).ToDictionary(g => g.Key, g => g.First());
+        List<uint> found = new List<uint>();
+        HashSet<uint> seen = new HashSet<uint> { group.Id };
+        Stack<LevelObject> todo = new Stack<LevelObject>();
+        todo.Push(group);
+        while (todo.Count > 0)
+            foreach (uint m in todo.Pop().Members)
+            {
+                if (!seen.Add(m) || !byId.TryGetValue(m, out LevelObject? mo))
+                    continue;
+                if (mo.Kind == EntityKind.Group)
+                    todo.Push(mo);
+                else if (mo.Kind == EntityKind.Placeable)
+                    found.Add(m);
+            }
+        return found;
+    }
+
     private void LoadMission(string mission, string difficulty)
     {
         StopMenuVideo();
@@ -1268,6 +1289,9 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                         into.Add(uint.Parse(mm.Groups[2].Value));
                     else if (name != null && byName.TryGetValue(name, out LevelObject? no) && no.Kind == EntityKind.Placeable)
                         into.Add(no.Id);
+                    else if (name != null && byName.TryGetValue(name, out LevelObject? ng) && ng.Kind == EntityKind.Group && into == hiddenIds)
+                        foreach (uint m in GroupPlaceables(ng))
+                            into.Add(m);   // groupe du niveau que le script montre ou cache (Street : « CCTrash », les débris du tramway)
                 }
             // objet déplacé ou tourné sous un nom assemblé par morceaux (Factory : ENT_SetPosition(SCR_GetVarS32("Grid_" + NumGrid + "_" + NumPiece), …), les
             // battants des grilles automatiques qui glissent sur le côté) : chaque morceau de texte doit s'y retrouver, dans
