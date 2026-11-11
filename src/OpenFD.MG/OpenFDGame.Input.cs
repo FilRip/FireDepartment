@@ -570,6 +570,16 @@ public sealed partial class OpenFDGame
                     Log("Ce véhicule n'a pas de place");
                     return;
                 }
+                // un pompier qui porte un civil sur son dos refuse de monter à bord
+                List<Unit> carriers = walkers.Where(u => u.Carrying != null).ToList();
+                if (carriers.Count > 0)
+                    RefuseCarrying(carriers);
+                walkers.RemoveAll(u => u.Carrying != null);
+                if (walkers.Count == 0)
+                {
+                    _ignoredOrder = true;   // ni repère, ni « bien reçu » : seule la voix du refus
+                    return;
+                }
                 foreach (Unit u in walkers)
                     DoBoard(u, veh);
                 Log($"{walkers.Count} pompier(s) vont monter à bord ({veh.Seats - veh.Passengers.Count} place(s) libre(s))");
@@ -639,8 +649,16 @@ public sealed partial class OpenFDGame
                     return;
             }
             bool wantBreak = door.Breakable && (door.IsWindow || door.State == OpeningState.Closed);
-            Unit? who = _sel.Where(u => !u.IsVehicle && (wantBreak && u.CanBreak || door.Usable && u.CanUse))
-                .OrderBy(u => wantBreak && u.CanBreak ? 0 : 1).FirstOrDefault() ?? _sel.FirstOrDefault(u => !u.IsVehicle);
+            // casser une porte ou une fenêtre : pas un pompier qui porte un civil sur son dos
+            List<Unit> able = _sel.Where(u => !u.IsVehicle && !(wantBreak && u.Carrying != null)).ToList();
+            Unit? who = able.Where(u => wantBreak && u.CanBreak || door.Usable && u.CanUse)
+                .OrderBy(u => wantBreak && u.CanBreak ? 0 : 1).FirstOrDefault() ?? able.FirstOrDefault();
+            if (who == null && wantBreak && _sel.Any(u => !u.IsVehicle && u.Carrying != null))
+            {
+                RefuseCarrying(_sel.Where(u => !u.IsVehicle && u.Carrying != null).ToList());
+                _ignoredOrder = true;   // ni repère, ni « bien reçu » : seule la voix du refus
+                return;
+            }
             if (who != null)
             {
                 DoOpening(who, door);
@@ -677,6 +695,13 @@ public sealed partial class OpenFDGame
         if (Ground(x, y) is not { } g)
             return;
         MoveSelection(g);
+    }
+
+    /// <summary>Ordre refusé : ces pompiers portent un civil sur leur dos (voix « VOCAL_CARRYING_VICTIM »).</summary>
+    private void RefuseCarrying(List<Unit> carriers)
+    {
+        Log(carriers.Count == 1 ? $"{UnitLabel(carriers[0])} porte un civil : ordre refusé" : $"{carriers.Count} pompiers portent un civil : ordre refusé");
+        _audio?.Play("VOCAL_CARRYING_VICTIM");
     }
 
     // les unités choisies vont au point g (pompiers en cercle autour, véhicules côte à côte)
