@@ -117,6 +117,24 @@ public sealed partial class UnitManager
         }
         Vector2 down = wall - gp.Perp * (side * (face + 40));
         u.ClimbTo = new Vector3(down, Ground(down));
+        // en haut, de l'autre côté du mur (sur 4 m) : la première case où l'on peut marcher. À la hauteur du haut du mur
+        // (Paris : l'étage, derrière la façade) : il y avance et y reste. Il n'y a en haut que des cases interdites (croix
+        // rouges : Jail, le haut d'un mur d'enceinte) et la première case libre est tout en bas : il redescend de lui-même.
+        u.ClimbStay = false;
+        for (float d = 20; d <= 400; d += 10)
+        {
+            Vector2 q = wall - gp.Perp * (side * d);
+            (int sx, int sy) = g.CellOf(new Vector3(q, 0));
+            if (!g.Inside(sx, sy) || IsGrappleCell(g.Index(sx, sy)) || !WalkableCell(sx, sy))
+                continue;
+            if (Ground(q) > gp.Top.Z - 250)
+            {
+                Vector2 stay = wall - gp.Perp * (side * (d + 40));
+                u.ClimbStay = true;
+                u.ClimbTo = new Vector3(stay, Ground(stay));
+            }
+            break;
+        }
         u.ClimbAnchor = new Vector3(wall, wallTop + 20);
         u.Heading = MathF.Atan2(-gp.Perp.Y * side, -gp.Perp.X * side);   // face au mur
         u.Status = "lance le grappin";
@@ -149,8 +167,9 @@ public sealed partial class UnitManager
     private const float OverBack = 150, OverDrop = 156 + 43;            // sc_grappling_hook_get_on_top : à reculons par-dessus le bord, puis pendu
 
     /// <summary>
-    /// Montée, puis en haut : il se hisse et se relève (get_out_top), fait un pas vers l'autre bord, se retourne, passe
-    /// à reculons par-dessus le bord (get_on_top) et redescend face au mur de l'autre côté (sans ordre : ça fait partie de l'action).
+    /// Montée, puis en haut : il se hisse et se relève (get_out_top). Si une case où marcher l'attend en haut, il y avance et
+    /// y reste ; sinon il fait un pas vers l'autre bord, se retourne, passe à reculons par-dessus le bord (get_on_top) et
+    /// redescend face au mur de l'autre côté (sans ordre : ça fait partie de l'action).
     /// </summary>
     private void UpdateClimb(Unit u, float dt)
     {
@@ -196,9 +215,23 @@ public sealed partial class UnitManager
                 if (u.ClimbTimer >= GrappleStandSeconds)
                 {
                     u.Position = standAt;
-                    Next(ClimbPhase.Step, "s'approche du bord");
+                    Next(ClimbPhase.Step, u.ClimbStay ? "avance" : "s'approche du bord");
                 }
                 break;
+            case ClimbPhase.Step when u.ClimbStay:
+            {
+                // il reste en haut : quelques pas jusqu'à la case où marcher, et c'est fini
+                float walk = MathF.Max(GrappleStepSeconds, Vector3.Distance(standAt, u.ClimbTo) / 150f);
+                u.Position = Vector3.Lerp(standAt, u.ClimbTo, Math.Clamp(u.ClimbTimer / walk, 0, 1));
+                if (u.ClimbTimer < walk)
+                    break;
+                u.Position = u.ClimbTo;
+                u.Climb = ClimbPhase.None;
+                u.ClimbGrapple = null;
+                u.ClimbStay = false;
+                u.Status = u.Path.Count > 0 ? "en route" : "attend les ordres";
+                break;
+            }
             case ClimbPhase.Step:
                 u.Position = Vector3.Lerp(standAt, turnAt, Math.Clamp(u.ClimbTimer / stepTime, 0, 1));
                 if (u.ClimbTimer >= stepTime)
