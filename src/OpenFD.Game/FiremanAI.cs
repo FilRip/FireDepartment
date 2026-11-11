@@ -85,12 +85,13 @@ public sealed partial class UnitManager
             float d = Vector2.Distance(me, f);
             if (d > range || d < (minRange ?? u.Nozzle!.RangeMin))
                 continue;
-            // hauteur : un pompier à pied, son étage ; la lance d'un véhicule porte aussi en hauteur (toits, étages)
+            // hauteur : un pompier à pied, son étage ; la lance d'un véhicule et le canon portent aussi en hauteur (toits, étages)
+            bool high = u.IsVehicle || u.IsCanon;
             float dz = h.Position.Z - u.Position.Z;
             // lance d'un véhicule ou canon : un feu posé sur une pente (plus bas ou plus haut, sans marche d'étage entre les
             // deux) se voit comme un feu au même niveau (WineMansion : la pente d'herbe en feu sous le camion)
             bool slope = (u.IsVehicle || u.IsCanon) && MathF.Abs(dz) > 350 && OnSlope(me, f, h.Position.Z);
-            if (!slope && (u.IsVehicle ? dz < -350 || dz > VehicleFireHeight : MathF.Abs(dz) > 350))
+            if (!slope && (high ? dz < -350 || dz > VehicleFireHeight : MathF.Abs(dz) > 350))
                 continue;
             if (angle < MathF.PI && MathF.Abs(MathF.IEEERemainder(MathF.Atan2(f.Y - me.Y, f.X - me.X) - u.Heading, 2 * MathF.PI)) > angle)
                 continue;
@@ -107,7 +108,7 @@ public sealed partial class UnitManager
             Vector2 end = f - Vector2.Normalize(f - me + new Vector2(0.01f, 0)) * 120;
             // feu en hauteur (sur un toit) : le jet passe au-dessus du bâtiment qui le porte (le bout de la ligne peut y être)
             // en contrebas sur une pente : le jet part d'en haut et passe au-dessus des objets, jamais à travers un mur
-            bool seen = u.IsVehicle || slope ? Paths.WaterLineFree(me, end, elevated: !slope && dz > FloorStep, overObjects: slope && dz < 0) : LineFree(me, end, ignoreFire: true);
+            bool seen = high || slope ? Paths.WaterLineFree(me, end, elevated: !slope && dz > FloorStep, overObjects: slope && dz < 0) : LineFree(me, end, ignoreFire: true);
             Paths.PathingVehicle = saved;
             Paths.Clearance = savedClear;
             if (!seen)
@@ -118,7 +119,7 @@ public sealed partial class UnitManager
         return best;
     }
 
-    /// <summary>Hauteur maximale (au-dessus du véhicule) d'un feu que la lance d'un véhicule arrose d'elle-même (toits, étages).</summary>
+    /// <summary>Hauteur maximale (au-dessus de l'unité) d'un feu que la lance d'un véhicule ou un canon arrose d'elle-même (toits, étages).</summary>
     public const float VehicleFireHeight = 1500f;
 
     /// <summary>Essais : le feu que l'unité choisirait de lui-même à portée de sa lance, parmi ceux qui ne sont pas écartés.</summary>
