@@ -81,10 +81,21 @@ public sealed partial class OpenFDGame
         if (_map || _session == null)
             return;
         float px = MathF.Max(1, _scale);
-        foreach (Unit u in _session.Units.Active.Where(u => u.Climb != ClimbPhase.None && u.Climb != ClimbPhase.Land && !(u.Climb == ClimbPhase.Launch && u.ClimbTimer < 1.2f)))
+        // corde : pendant la montée (accrochée en haut du mur, côté montée), puis pendant la descente (accrochée en haut du
+        // mur, côté descente : au-dessus de la case où il descend) ; pas pendant qu'il est debout en haut
+        foreach (Unit u in _session.Units.Active.Where(u => (u.Climb is ClimbPhase.Climb or ClimbPhase.Descend || u.Climb == ClimbPhase.Launch && u.ClimbTimer >= 1.2f)))
         {
-            SN.Vector3 hand = PoseOf(u, u.Position, u.Heading).p + new SN.Vector3(0, 0, u.Climb is ClimbPhase.Stand or ClimbPhase.Step or ClimbPhase.Turn or ClimbPhase.Top ? 60 : 140);
-            if (Project(u.ClimbAnchor) is not { } a || Project(hand) is not { } b)
+            SN.Vector3 anchor = u.ClimbAnchor;
+            if (u.Climb == ClimbPhase.Descend)
+            {
+                SN.Vector2 wall = new SN.Vector2(u.ClimbAnchor.X, u.ClimbAnchor.Y);
+                SN.Vector2 back = new SN.Vector2(u.ClimbWall.X, u.ClimbWall.Y) - wall;   // vers le côté de la montée
+                back = back.LengthSquared() > 1 ? SN.Vector2.Normalize(back) : SN.Vector2.UnitX;
+                SN.Vector2 edge = new SN.Vector2(u.ClimbTo.X, u.ClimbTo.Y) + back * 40;   // le bord du mur, au-dessus de l'arrivée
+                anchor = new SN.Vector3(edge, u.ClimbAnchor.Z);
+            }
+            SN.Vector3 hand = PoseOf(u, u.Position, u.Heading).p + new SN.Vector3(0, 0, 140);
+            if (Project(anchor) is not { } a || Project(hand) is not { } b)
                 continue;
             _ui.Line(a.X, a.Y, b.X, b.Y, new SN.Vector4(0.1f, 0.08f, 0.05f, 0.85f), 3 * px);
             _ui.Line(a.X, a.Y, b.X, b.Y, new SN.Vector4(0.82f, 0.72f, 0.5f, 1f), 1.6f * px);

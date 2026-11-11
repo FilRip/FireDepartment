@@ -95,6 +95,7 @@ public sealed class Unit
     public float ClimbTimer;
     public Vector3 ClimbFrom, ClimbWall, ClimbTo, ClimbAnchor;   // ancre : là où le grappin est accroché (corde)
     public GrapplePoint? ClimbGrapple;
+    public bool ClimbStay;                                // en haut, une case où marcher : il y reste (Paris : les étages)
     public bool CanRepair;                                // technicien : répare les objets CouldBeRepair
     public UsableObject? UseTarget;                       // objet sur lequel agir (armoire électrique…)
     public float BreakPower = 1;
