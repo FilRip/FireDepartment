@@ -859,7 +859,7 @@ public sealed partial class OpenFDGame
     }
 
     /// <summary>Ouverture visible (le script peut cacher des éboulis jusqu'à l'effondrement).</summary>
-    private bool ShownOpening(Opening o) => Host?.Visibility.TryGetValue(o.Id, out bool v) != true || v;
+    private bool ShownOpening(Opening o) => (Host?.Visibility.TryGetValue(o.Id, out bool v) != true || v) && !_session.Units.WaitsForScript(o);
 
     /// <summary>Objet à découper sous la souris : son icône de scie (à l'écran), ou une case de la grille qu'il couvre.</summary>
     private Opening? ExtricableAt(SN.Vector2 m, double x, double y)

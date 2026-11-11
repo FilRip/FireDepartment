@@ -137,6 +137,7 @@ public sealed partial class UnitManager
     {
         PlayerOrder = false;   // l'ordre du joueur est appliqué : ce qui suit est l'IA (même chose en direct et rejoué)
         UpdateOccupations();
+        UpdateDemolishVisibility();
         for (int i = _pending.Count - 1; i >= 0; i--)
             if (time >= _pending[i].eta)
             {
