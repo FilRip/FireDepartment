@@ -286,6 +286,7 @@ public sealed partial class OpenFDGame
         bool blink = _uiClock % 1f < 0.5f;   // une demi-seconde affiché, une demi-seconde caché
         float pad = 6 * _scale, gap = 6 * _scale;
         List<(string team, List<Unit> units)> rows = PanelRows();
+        Unit? hovered = null;
         for (int ri = 0; ri < rows.Count; ri++)
         {
             (string team, List<Unit> units) = rows[ri];
@@ -321,6 +322,8 @@ public sealed partial class OpenFDGame
             foreach (Unit u in units)
             {
                 float iw = pr.cell - pad;
+                if (MouseOver(x, y, iw, pr.iconH))
+                    hovered = u;
                 if (_sel.Contains(u))   // unité choisie : cadre vert
                     _ui.Rect(x - 2 * _scale, y - 2 * _scale, iw + 4 * _scale, pr.iconH + 4 * _scale, new SN.Vector4(0.2f, 0.95f, 0.25f, 1));
                 _ui.Rect(x, y, iw, pr.iconH, new SN.Vector4(0.16f, 0.17f, 0.2f, 1));
@@ -360,6 +363,51 @@ public sealed partial class OpenFDGame
                 x += pr.cell;
             }
         }
+        DrawUnitTypeTip(hovered);
+    }
+
+    // souris sur l'image d'une unité de la barre du bas : son type (« Sapeur », « Canon »…), écrit là où la souris est
+    // entrée sur l'image ; il ne suit pas la souris et s'efface quand elle quitte l'image
+    private Unit? _tipUnit;
+    private SN.Vector2 _tipAt;
+    private readonly Dictionary<string, string> _unitTypeNames = new(StringComparer.OrdinalIgnoreCase);
+
+    private void DrawUnitTypeTip(Unit? hovered)
+    {
+        if (hovered == null)
+        {
+            _tipUnit = null;
+            return;
+        }
+        if (hovered != _tipUnit)
+        {
+            _tipUnit = hovered;
+            MouseState ms = Mouse.GetState();
+            (float mx, float my) = Fb(ms.X, ms.Y);
+            _tipAt = new SN.Vector2(mx, my);
+        }
+        string text = UnitTypeName(hovered);
+        if (text.Length == 0)
+            return;
+        float pad = 5 * _scale, w = _ui.Measure(text) + 2 * pad, h = _ui.LineHeight + 2 * pad;
+        float x = _tipAt.X + 18 * _scale, y = _tipAt.Y - h - 6 * _scale;   // à droite et au-dessus de la pointe de la souris
+        x = Math.Clamp(x, 0, MathF.Max(0, _fbW - w));
+        y = Math.Clamp(y, 0, MathF.Max(0, _fbH - h));
+        _ui.Rect(x, y, w, h, new SN.Vector4(0.05f, 0.05f, 0.06f, 0.92f));
+        _ui.Text(x + pad, y + pad, text, new SN.Vector4(1f, 0.88f, 0.2f, 1));
+    }
+
+    /// <summary>Type de l'unité dans la langue du jeu ([UNIT] PublicName de sa classe : « &amp;UNIT_FireFighter » → « Sapeur »).</summary>
+    private string UnitTypeName(Unit u)
+    {
+        if (_unitTypeNames.TryGetValue(u.ClassPath, out string? known))
+            return known;
+        string? key = UnitPublicName(u.ClassPath);
+        string name = key == null ? "" : _loc.Get(key).Trim().TrimEnd(':').Trim();
+        if (key != null && name == key.TrimStart('&'))
+            name = "";   // pas de texte pour cette clé
+        _unitTypeNames[u.ClassPath] = name;
+        return name;
     }
 
     private bool MouseOver(float x, float y, float w, float h)
