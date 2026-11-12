@@ -78,7 +78,9 @@ public static class Lexer
                 i++;
                 while (i < src.Length && src[i] != '"' && src[i] != '\n')
                 {
-                    if (src[i] == '\\' && i + 1 < src.Length)
+                    // « \n », « \t », « \\ », « \" » ; ailleurs la barre reste (chemins des scripts du jeu :
+                    // « SingleItem\si_Factory_store », « data\design\hotpoint\… »)
+                    if (src[i] == '\\' && i + 1 < src.Length && src[i + 1] is 'n' or 't' or '\\' or '"')
                     {
                         sb.Append(src[i + 1] switch { 'n' => '\n', 't' => '\t', _ => src[i + 1] });
                         i += 2;

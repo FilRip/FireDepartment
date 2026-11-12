@@ -350,10 +350,21 @@ public sealed class PathFind
         float H(int x, int y) => g.Inside(x, y) && g.ZoneA[g.Index(x, y)] != 0 ? g.GroundHeight[g.Index(x, y)] : float.NaN;
         // case haute qui est un plancher (étendu dans les deux sens) et non le haut d'une cloison (une ligne d'une case
         // d'épaisseur) : l'entre-deux des cloisons de la banque (passage d'une porte, petit bureau) n'est pas un mur
-        bool Floor(int x, int y)
+        // Une case haute à moins de 3 m au-dessus de la case basse est peut-être le haut d'un mur d'un étage (Petrochemical :
+        // murs à 2,5 m) : ce n'est un plancher que si elle fait partie d'un carré de 2 × 2 cases à sa hauteur (le haut d'un
+        // mur est une ligne d'une case, même à l'angle de deux murs, en T ou en L : l'entrée du couloir entre deux pièces
+        // n'est pas une cloison). Plus haut (planchers d'étage : Paris, Lab), la règle d'origine.
+        bool Floor(int x, int y, float low)
         {
             float hh = H(x, y);
             bool Near(int ax, int ay) => MathF.Abs(H(ax, ay) - hh) < 60;
+            if (hh - low < WallTopRise)
+            {
+                foreach ((int sx, int sy) in new[] { (1, 1), (1, -1), (-1, 1), (-1, -1) })
+                    if (Near(x + sx, y) && Near(x, y + sy) && Near(x + sx, y + sy))
+                        return true;
+                return false;
+            }
             return (Near(x - 1, y) || Near(x + 1, y)) && (Near(x, y - 1) || Near(x, y + 1));
         }
         for (int y = 0; y < g.Height; y++)
@@ -374,7 +385,7 @@ public sealed class PathFind
                             if ((a == 2 && float.IsNaN(H(x - dx, y - dy))) || (b == 2 && float.IsNaN(H(x + dx, y + dy))))
                                 continue;
                             float h1 = H(x - dx * a, y - dy * a), h2 = H(x + dx * b, y + dy * b);
-                            if (h1 >= h + 150 && h2 >= h + 150 && MathF.Abs(h1 - h2) < 60 && Floor(x - dx * a, y - dy * a) && Floor(x + dx * b, y + dy * b))
+                            if (h1 >= h + 150 && h2 >= h + 150 && MathF.Abs(h1 - h2) < 60 && Floor(x - dx * a, y - dy * a, h) && Floor(x + dx * b, y + dy * b, h))
                                 wall = true;
                         }
                     if (wall)
@@ -1159,6 +1170,8 @@ public sealed class PathFind
     /// deux étages) ; les rampes et escaliers dessinés dans la grille montent de moins d'un mètre par case.
     /// </summary>
     public const float MaxStep = 200f;
+    /// <summary>Au-dessous de cet écart (cm), une case haute contre une case basse peut être le haut d'un mur (voir Floor).</summary>
+    private const float WallTopRise = 300f;
 
     /// <summary>Poche (cases atteignables depuis le départ) assez petite pour être un piège, pas une pièce fermée.</summary>
     public const int PocketMax = 40;
