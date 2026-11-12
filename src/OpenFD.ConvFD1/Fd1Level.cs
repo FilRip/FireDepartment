@@ -23,8 +23,14 @@ public sealed class Fd1Level
 
     /// <summary>Type de point FD1 qui n'est pas un feu (lumières, jets d'eau).</summary>
     private static bool NotFire(string ini) =>
-        ini.StartsWith("lampad", StringComparison.OrdinalIgnoreCase) || ini.StartsWith("fx_fontaine", StringComparison.OrdinalIgnoreCase)
-        || ini.StartsWith("phare", StringComparison.OrdinalIgnoreCase);
+        NotFireTypes.Any(t => ini.StartsWith(t, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Types de points FD1 qui ne sont pas des feux (Villa : lampadaires, jets d'eau ; Quartier : phares, feu orange, lueurs,
+    /// jets de la fuite de gaz, fumée de porte). Les gyrophares (« giro_r », « giro_b ») restent des foyers : Entrepot et Banque
+    /// en ont, leurs numéros de foyers en dépendent.
+    /// </summary>
+    private static readonly string[] NotFireTypes = { "lampad", "fx_fontaine", "phare", "feu_orange", "nico_glow", "jet_flamme", "jet_gaz", "fumee_porte" };
 
     public static Fd1Level Load(byte[] d)
     {

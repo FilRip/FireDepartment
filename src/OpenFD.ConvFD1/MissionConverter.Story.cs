@@ -53,6 +53,13 @@ public sealed partial class MissionConverter
                 ("PopStar", "civilian\\civilian_star"), ("Jardinier", "civilian\\civilian_worker1"),
             }
         },
+        {
+            // Quartier : les quatre blessés de la rue, les victimes de l'étage sud, l'ambassadeur (Civil9) et ses invités
+            "quartier", new[]
+            {
+                ("Civil0", "civilian\\civilian_man4"), ("Civil1", "civilian\\civilian_man5"), ("Civil2", "civilian\\civilian_woman3"), ("Civil3", "civilian\\civilian_woman4"), ("Civil4", "civilian\\civilian_woman1"), ("Civil5", "civilian\\civilian_man6"), ("Civil6", "civilian\\civilian_man7"), ("Civil7", "civilian\\civilian_man8"), ("Civil8", "civilian\\civilian_woman2"), ("Civil9", "civilian\\civilian_man1"), ("Civil10", "civilian\\civilian_man2"), ("Civil11", "civilian\\civilian_man3"),
+            }
+        },
     };
 
     /// <summary>
@@ -98,6 +105,27 @@ public sealed partial class MissionConverter
                 ("T2", "T2", new Vector3(12777, 18065, 0), new Vector3(13477, 18765, 300)),
                 ("T9", "T9", new Vector3(14333, 5052, 0), new Vector3(14888, 13021, 300)),
                 ("T10", "T10", new Vector3(0, 2852, 0), new Vector3(24111, 5073, 300)),
+            }
+        },
+        {
+            // Quartier : zones FD1 du troisième étage (quartier.xfl ; cercles → carrés de même rayon) : l'arrivée à l'étage
+            // (T2, T10, T11, T12, T13, T18, T24), les victimes découvertes (T5 à T7), le couloir effondré, l'escalier en feu,
+            // la pièce de la fuite de gaz
+            "quartier", new[]
+            {
+                ("T2", "T2", new Vector3(6957, 8326, 1300), new Vector3(7657, 9026, 1800)),
+                ("T10", "T10", new Vector3(5521, 12857, 1300), new Vector3(7208, 13991, 1800)),
+                ("T11", "T11", new Vector3(7449, 7850, 1300), new Vector3(8149, 8550, 1800)),
+                ("T12", "T12", new Vector3(8455, 7852, 1300), new Vector3(9155, 8552, 1800)),
+                ("T13", "T13", new Vector3(9440, 7876, 1300), new Vector3(10140, 8576, 1800)),
+                ("T18", "T18", new Vector3(5564, 7800, 1300), new Vector3(7164, 9400, 1800)),
+                ("T24", "T24", new Vector3(12547, 7924, 1300), new Vector3(13010, 8433, 1800)),
+                ("T5", "T5", new Vector3(10458, 10583, 1300), new Vector3(11158, 11283, 1800)),
+                ("T6", "T6", new Vector3(8467, 10300, 1300), new Vector3(9167, 11000, 1800)),
+                ("T7", "T7", new Vector3(6006, 10346, 1300), new Vector3(6706, 11046, 1800)),
+                ("TriggerTrou", "TriggerTrou", new Vector3(7761, 9224, 1300), new Vector3(9229, 9644, 1800)),
+                ("T23", "T23", new Vector3(7306, 11690, 1300), new Vector3(8271, 12100, 1800)),
+                ("T21", "T21", new Vector3(5351, 11738, 1300), new Vector3(7277, 14147, 1800)),
             }
         },
     };
@@ -236,6 +264,8 @@ public sealed partial class MissionConverter
             return BanqueScript(fd1);
         if (Mission.Equals("Villa", StringComparison.OrdinalIgnoreCase))
             return VillaScript(fd1);
+        if (Mission.Equals("quartier", StringComparison.OrdinalIgnoreCase))
+            return QuartierScript(fd1);
         if (!Mission.Equals("Entrepot", StringComparison.OrdinalIgnoreCase))
             return ("", "", "");
         string T(string key) => _hasTexts ? TextKey(key) : key;

@@ -26,8 +26,18 @@ public sealed partial class MissionConverter
             || o.Model.StartsWith("ECO_PORTELOCALGRILLE", StringComparison.OrdinalIgnoreCase)
             // Villa : la grille du garage (entre les portes 4 et 5), les petites grilles du fond de la villa
             || o.Model.StartsWith("VIL_GRILLES02_GARAGE", StringComparison.OrdinalIgnoreCase)
-            || o.Model.StartsWith("ECO_PTTGRILLE01_BUT", StringComparison.OrdinalIgnoreCase))
+            || o.Model.StartsWith("ECO_PTTGRILLE01_BUT", StringComparison.OrdinalIgnoreCase)
+            || QuartierBreakable.Any(m => o.Model.StartsWith(m, StringComparison.OrdinalIgnoreCase)))
         && (o.World.M43 * WorldToCm < 50 || floors.Any(z => MathF.Abs(o.World.M43 * WorldToCm - z) < 50));
+
+    /// <summary>
+    /// Quartier : les portes et cloisons cassables du troisième étage (« QUA_PORTE_CASSER », les deux portes du backdraft, la
+    /// fenêtre et la cloison à casser, le mur du sapeur) et la grille du local du gaz dans la cour.
+    /// </summary>
+    private static readonly string[] QuartierBreakable =
+    {
+        "QUA_PORTE_CASSER", "PORTE_BACKDRAFT", "QUA_FENETRE_BUT", "QUA_CLOISONA_BUT", "QUART_MUR_SAP", "QUA_PORTELOCALGRILLE",
+    };
 
     /// <summary>Portes cassables trouvées dans le niveau FD1.</summary>
     private readonly List<(Fd1Object o, List<Fd3Mesh> meshes)> _breakableDoors = new List<(Fd1Object, List<Fd3Mesh>)>();
@@ -163,7 +173,7 @@ public sealed partial class MissionConverter
             k++;
             // nom FD1 de la porte (« Porte4 » : les scripts FD1 s'en servent), sinon un numéro
             string? fd1Name = InstanceName(o);
-            string name = fd1Name != null && System.Text.RegularExpressions.Regex.IsMatch(fd1Name, @"^Porte\d+$") ? fd1Name : $"porte_cassable_{k}";
+            string name = fd1Name != null && System.Text.RegularExpressions.Regex.IsMatch(fd1Name, @"^Porte\d+$", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ? fd1Name : $"porte_cassable_{k}";
             LevelObject d = LevelEdit.Clone(door, LevelEdit.NewId(level), name, cls);
             d = LevelEdit.WithTransform(d, at, new Vector3(0, 0, yaw));
             d = LevelEdit.WithStartVisible(d, true);
