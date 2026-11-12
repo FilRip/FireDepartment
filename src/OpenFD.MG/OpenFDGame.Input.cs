@@ -614,6 +614,9 @@ public sealed partial class OpenFDGame
             if (who == null)
             {
                 Log(obj.CanBeRepaired && !obj.CanBeUsed ? "Il faut un technicien pour réparer cela" : "Aucun pompier choisi ne peut utiliser cet objet");
+                // refus dit à voix haute, sans repère ni « bien reçu » (comme le jeu : bombe ou armoire à réparer sans technicien)
+                _audio?.Play("VOCAL_NO_SKILLS_FOR_THIS_ACTION");
+                _ignoredOrder = true;
                 return;
             }
             DoUse(who, obj);
