@@ -290,10 +290,6 @@ public sealed partial class OpenFDGame
                 foreach (Unit u in _session.Units.Active.Where(u => !u.IsVehicle && !u.Unconscious))
                     _sel.Add(u);
                 break;
-            case 'u':
-                _unitClass = _unitClass.EndsWith("medic") ? "Unit\\Fireman\\fireman_sp" : "Unit\\Fireman\\fireman_medic";
-                Log("Unité qui arrose : " + (_unitClass.EndsWith("medic") ? "médecin" : "pompier"));
-                break;
         }
     }
 
@@ -589,8 +585,6 @@ public sealed partial class OpenFDGame
             if (!best.IsVehicle && _sel.Contains(best))
                 _audio?.PlayAny(Enumerable.Range(1, 6).Select(i => $"VOCAL_SELECTION{i}"));
         }
-        else if (!add)
-            Pick(x, y);
     }
 
     // clic droit : les unités choisies vont au point visé, ou agissent sur ce qui est visé
@@ -1075,58 +1069,6 @@ public sealed partial class OpenFDGame
                 }
         }
         return best;
-    }
-
-    // clic sans unité choisie : l'unité d'appoint (U) arrose le feu le plus proche du point visé
-    private void Pick(double x, double y)
-    {
-        (float sx, float sy) = Fb(x, y);
-        HotPoint? best = null;
-        float bd = float.MaxValue;
-        if (_map)
-        {
-            SN.Vector2 m = ScreenToMap(sx, sy);
-            foreach (HotPoint h in _session.Fire.HotPoints.Where(h => h.IsBurning))
-            {
-                float d = SN.Vector2.Distance(new(h.Position.X, h.Position.Y), m);
-                if (d < bd)
-                {
-                    bd = d;
-                    best = h;
-                }
-            }
-            if (bd > Tol(20) / _mapScale)
-                best = null;
-        }
-        else
-        {
-            if (!SN.Matrix4x4.Invert(_viewProj, out SN.Matrix4x4 inv))
-                return;
-            float nx = sx / _fbW * 2 - 1, ny = 1 - sy / _fbH * 2;
-            SN.Vector4 a = SN.Vector4.Transform(new SN.Vector4(nx, ny, 0, 1), inv);
-            SN.Vector4 b = SN.Vector4.Transform(new SN.Vector4(nx, ny, 1, 1), inv);
-            SN.Vector3 o = new SN.Vector3(a.X, a.Y, a.Z) / a.W;
-            SN.Vector3 dir = SN.Vector3.Normalize(new SN.Vector3(b.X, b.Y, b.Z) / b.W - o);
-            foreach (HotPoint h in _session.Fire.HotPoints.Where(h => h.IsBurning))
-            {
-                SN.Vector3 v = h.Position + new SN.Vector3(0, 0, 100) - o;
-                float t = SN.Vector3.Dot(v, dir);
-                if (t < 0)
-                    continue;
-                float d = (v - dir * t).Length();
-                if (d < bd)
-                {
-                    bd = d;
-                    best = h;
-                }
-            }
-            if (bd > 500)
-                best = null;
-        }
-        if (best == null)
-            return;
-        DoSpray(best, _unitClass);
-        Log($"Arrosage de {best.Name} ({(_unitClass.EndsWith("medic") ? "médecin" : "pompier")})");
     }
 
     // ---- curseurs du jeu (Gfx\Textures\_cache\MouseCursors.dds, cases de 32 × 32, 8 par ligne) ----

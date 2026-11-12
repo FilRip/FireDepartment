@@ -74,7 +74,6 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     private readonly List<(string text, bool error)> _log = new();   // journal de débogage (touche D) ; les erreurs s'affichent en rouge
     private int _frame;
 
-    private string _unitClass = "Unit\\Fireman\\fireman_medic";
     private readonly Dictionary<string, List<(MeshGpu mesh, SN.Matrix4x4 part)>> _unitModels = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<Unit> _sel = new();
     private int _unitLogSeen;
