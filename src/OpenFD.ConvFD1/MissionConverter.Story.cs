@@ -43,6 +43,16 @@ public sealed partial class MissionConverter
                 ("Bandit3", "civilian\\civilian_gangster_3"),
             }
         },
+        {
+            // Villa : les joueurs de tennis (Steve Roger, le milliardaire, et son ami), les invités de la villa, Debby Love et
+            // le jardinier de la serre
+            "Villa", new[]
+            {
+                ("Milliardaire", "civilian\\civilian_man1"), ("Tennisman", "civilian\\civilian_man2"),
+                ("Productrice", "civilian\\civilian_woman1"), ("Journaliste", "civilian\\civilian_woman2"), ("Cameraman", "civilian\\civilian_man3"),
+                ("PopStar", "civilian\\civilian_star"), ("Jardinier", "civilian\\civilian_worker1"),
+            }
+        },
     };
 
     /// <summary>
@@ -79,6 +89,15 @@ public sealed partial class MissionConverter
                 ("T19", "T19", new Vector3(6092, 8856, 1400), new Vector3(10064, 9381, 1700)),
                 ("T20", "T20", new Vector3(16237, 12697, 0), new Vector3(16837, 13297, 300)),
                 ("T21", "T21", new Vector3(15122, 9591, 0), new Vector3(16222, 10691, 300)),
+            }
+        },
+        {
+            // Villa : zones FD1 (Villa.xfl) : le fond de la villa (cercle → carré), l'allée du tennis, la route
+            "Villa", new[]
+            {
+                ("T2", "T2", new Vector3(12777, 18065, 0), new Vector3(13477, 18765, 300)),
+                ("T9", "T9", new Vector3(14333, 5052, 0), new Vector3(14888, 13021, 300)),
+                ("T10", "T10", new Vector3(0, 2852, 0), new Vector3(24111, 5073, 300)),
             }
         },
     };
@@ -215,6 +234,8 @@ public sealed partial class MissionConverter
     {
         if (Mission.Equals("banque", StringComparison.OrdinalIgnoreCase))
             return BanqueScript(fd1);
+        if (Mission.Equals("Villa", StringComparison.OrdinalIgnoreCase))
+            return VillaScript(fd1);
         if (!Mission.Equals("Entrepot", StringComparison.OrdinalIgnoreCase))
             return ("", "", "");
         string T(string key) => _hasTexts ? TextKey(key) : key;

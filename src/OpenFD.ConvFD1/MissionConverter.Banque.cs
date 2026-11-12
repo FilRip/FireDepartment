@@ -45,6 +45,16 @@ public sealed partial class MissionConverter
                 ("Pompier2_Helico", "fireman\\fireman_sp_us"),
             }
         },
+        {
+            // Villa (MissionConverter.Villa.cs) : le renfort à pied de l'acte 2, la pompe de la piscine, l'Excalibur
+            "Villa", new[]
+            {
+                ("Renfort_Pompier", "fireman\\fireman_sp_us"),
+                ("Renfort_Ingenieur", "fireman\\fireman_ing"),
+                ("Pompe_Arrosage", "@pompe"),
+                ("VoitureDeLuxe1", "@excalibur"),
+            }
+        },
     };
 
     /// <summary>Unité posée à part pour cet objet FD1 (null : il fait partie des équipes, ou du décor).</summary>
@@ -94,12 +104,17 @@ public sealed partial class MissionConverter
             Fd1Object? o = fd1.Objects.FirstOrDefault(x => instance.Equals(InstanceName(x), StringComparison.OrdinalIgnoreCase));
             if (o == null)
                 continue;
-            string path = cls == "@helico" ? WriteHelicoClass() : "design\\unit\\" + cls;
-            string name = cls == "@helico" ? "Helicoptere" : instance;
+            // unité faite d'un objet FD1 (la pompe, l'Excalibur : MissionConverter.Villa.cs)
+            bool fd1Model = cls.StartsWith('@') && cls != "@helico";
+            string? path = cls == "@helico" ? WriteHelicoClass() : fd1Model ? WriteObjectUnitClass(instance, cls) : "design\\unit\\" + cls;
+            if (path == null)
+                continue;
+            string name = cls == "@helico" ? "Helicoptere" : cls == "@excalibur" ? "Excalibur" : instance;
             Vector3 at = new Vector3(o.World.M41, o.World.M42, o.World.M43) * WorldToCm;
             float yaw = MathF.Atan2(o.World.M12, o.World.M11);
             LevelObject u = LevelEdit.Clone(template, LevelEdit.NewId(level), name, path);
-            u = LevelEdit.WithTransform(u, at, new Vector3(0, 0, yaw + MathF.PI / 2));
+            // modèle FD1 : posé comme l'objet du décor (le moteur le fait rouler vers son −Y) ; véhicule du jeu : tourné d'un quart
+            u = LevelEdit.WithTransform(u, at, new Vector3(0, 0, fd1Model ? yaw : yaw + MathF.PI / 2));
             u = LevelEdit.WithStartVisible(u, false);
             level.Objects.Add(u);
             n++;

@@ -74,6 +74,8 @@ public sealed partial class MissionConverter
         { "pompier_commandos", ("Fireman\\fireman_scout", true) },
         { "pompier_FireProof", ("Fireman\\fireman_igni", true) },
         { "pompier_Medic", ("Fireman\\fireman_medic", false) },
+        // Villa : le sapeur (un pompier comme les autres pour le moteur)
+        { "pompier_sapeur", ("Fireman\\fireman_sp_us", false) },
     };
 
     /// <summary>
@@ -85,6 +87,8 @@ public sealed partial class MissionConverter
         { "Entrepot", new Vector2(21300, 10250) },
         // Banque : la grande avenue devant la banque, depuis l'est
         { "banque", new Vector2(23500, 17450) },
+        // Villa : la route devant la propriété, depuis l'est
+        { "Villa", new Vector2(23500, 4000) },
     };
 
     private string Data => Fd3.DataDir;
@@ -123,6 +127,16 @@ public sealed partial class MissionConverter
     private static readonly Dictionary<string, string[]> FakeDoorModels = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Entrepot", new[] { "ENT_PT_PORTE_ETAT01" } },
+    };
+
+    /// <summary>
+    /// Toits FD1 sans « TOIT » dans le nom de leur modèle, par mission. Villa : le dôme noir posé sur la serre tropicale
+    /// (« Cache_Toit_Serre_Tropicale », enlevé à l'acte 4), ses vitres (« dom_01 »… : transparentes dans FD1, opaques ici :
+    /// enlevées à l'acte 4 aussi) et son armature (« Toit_SerreTropicale »).
+    /// </summary>
+    private static readonly Dictionary<string, string[]> RoofModels = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Villa", new[] { "VILLA_SERRE_DOM_NOIR", "DOM_01", "VILLA_SERRE_STRUCT" } },
     };
 
     /// <summary>Emprises au sol des zones hors jeu (cm : min, max).</summary>
@@ -337,6 +351,8 @@ public sealed partial class MissionConverter
         Report.Add($"{level.Objects.Count} objets dans {Path.GetFileName(xfl)}");
 
         ModelConverter models = new ModelConverter(Fd1, Path.GetFileName(misDir));
+        // unités faites d'objets FD1 (Villa : la pompe de la piscine, l'Excalibur) : leurs textures avec celles du décor
+        PrepareUnitModels(level, models);
         Dictionary<string, List<Fd3Mesh>> cache = new Dictionary<string, List<Fd3Mesh>>(StringComparer.OrdinalIgnoreCase);
         string gfx = Path.Combine(Data, "Gfx", "Mission", Name);
         Directory.CreateDirectory(Path.Combine(gfx, "Shaders"));
@@ -357,6 +373,7 @@ public sealed partial class MissionConverter
             if (!cache.TryGetValue(o.Model, out List<Fd3Mesh>? meshes))
             {
                 meshes = models.Convert(o.Model, "fd1_" + ModelConverter.Safe(o.Model).ToLowerInvariant());
+                LiftSurfaces(o.Model, meshes);
                 if (lids)
                     meshes = meshes.SelectMany(ModelConverter.Islands).ToList();
                 cache[o.Model] = meshes;
@@ -370,13 +387,17 @@ public sealed partial class MissionConverter
                 continue;
             if (ScriptObjectRole(instance) is { } objectRole)
             {
+                // un objet FD1 en double (Villa : deux voitures l'une dans l'autre) n'en fait qu'un
+                if (_scriptObjects.Any(x => x.name.Equals(instance, StringComparison.OrdinalIgnoreCase)))
+                    continue;
                 _scriptObjects.Add((o, meshes, instance!, objectRole.role, objectRole.script));
                 foreach (Fd3Mesh m in meshes)
                     foreach ((string mat, int _, int _) in m.Groups)
                         materials.Add(mat);
                 // machines et camion : toujours là, leurs cases restent fermées dans la grille (les étagères, cachées ou
                 // montrées par le script, ferment leurs cases par le moteur)
-                if (objectRole.role is not (ObjectRole.Standing or ObjectRole.Fallen))
+                // (la voiture à conduire non plus : le véhicule qui la remplace part de là)
+                if (objectRole.role is not (ObjectRole.Standing or ObjectRole.Fallen or ObjectRole.Drivable))
                 {
                     Matrix4x4 ow = o.World;
                     ow.M41 *= WorldToCm;
@@ -388,7 +409,7 @@ public sealed partial class MissionConverter
                 continue;
             }
             // portes ouvertes par le script et boutons qui les ouvrent (MissionConverter.Upper.cs), pas du décor
-            string? scriptDoor = ScriptDoorName(o.Model);
+            string? scriptDoor = ScriptDoorName(o.Model, instance);
             // bouton : par le nom de l'instance (Banque : « Bobine3 », « CoffreMec1 ») ou par celui de l'objet (Entrepot)
             (string door, string message)? scriptButton = instance != null ? ScriptButtonOf(instance) : null;
             Fd1Object buttonObject = o;
@@ -453,7 +474,8 @@ public sealed partial class MissionConverter
                 _upperFloors.Add((meshes, w, upper, SaggingFloors.TryGetValue(Mission, out string[]? sag) && sag.Contains(o.Model, StringComparer.OrdinalIgnoreCase)));
             // toit FD1 (« TOIT_ENTREPOT_01 », « ENT_TOIT_MANUFACTURE ») : nœud « …_ROOF », tout entier un toit pour le moteur
             // (il part quand un pompier passe dessous) ; le reste des bâtiments est coupé à hauteur d'étage par le moteur
-            bool roof = lids || o.Model.Contains("TOIT", StringComparison.OrdinalIgnoreCase);
+            bool roof = lids || o.Model.Contains("TOIT", StringComparison.OrdinalIgnoreCase)
+                || (RoofModels.TryGetValue(Mission, out string[]? roofModels) && roofModels.Contains(o.Model, StringComparer.OrdinalIgnoreCase));
             // cache noir FD1 d'une pièce pas encore découverte (« PIECE_01_CACHE ») : couvercle « …_MASK » du moteur
             bool mask = o.Model.Contains("CACHE", StringComparison.OrdinalIgnoreCase);
             bool room = IsRoomModel(o.Model);
@@ -470,6 +492,13 @@ public sealed partial class MissionConverter
                 // toit FD1 : une cinématique qui regarde dessous l'enlève (MissionConverter.Cinematics.cs)
                 if (roof && !lids)
                     _covers.Add((node, MeshBox(m, w)));
+                // toit que le script enlève (Villa : « Toit_Garage »…)
+                if (roof && !lids && instance != null)
+                {
+                    if (!_roofNodes.TryGetValue(instance, out List<string>? roofNodes))
+                        _roofNodes[instance] = roofNodes = new List<string>();
+                    roofNodes.Add(node);
+                }
                 foreach ((string mat, int _, int _) in m.Groups)
                     materials.Add(mat);
                 for (int i = 0; i < m.VertexCount; i++)
@@ -722,6 +751,9 @@ public sealed partial class MissionConverter
         // Banque : les torches, sauf dans les pièces dont le feu attend le script (groupes de foyers FD1, éteints au départ)
         if (mission.Equals("banque", StringComparison.OrdinalIgnoreCase))
             return type.StartsWith("torche", StringComparison.OrdinalIgnoreCase) && BanqueGroupOf(at, type) == 0;
+        // Villa : la remise, les bidons, les haies du tennis (MissionConverter.Villa.cs)
+        if (mission.Equals("Villa", StringComparison.OrdinalIgnoreCase))
+            return VillaLitAtStart(at, type);
         if (StartFires.TryGetValue(mission, out (float x0, float x1, float y0, float y1)[]? zones))
             return zones.Any(z => at.X >= z.x0 && at.X <= z.x1 && at.Y >= z.y0 && at.Y <= z.y1);
         return type.StartsWith("torche", StringComparison.OrdinalIgnoreCase);
