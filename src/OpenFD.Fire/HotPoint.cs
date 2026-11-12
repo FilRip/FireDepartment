@@ -28,6 +28,8 @@ public sealed class HotPoint
     public float SleepingThreshold = 80f;
     public bool Sleeping;
     public float PendingAttack;    // eau/mousse reçue depuis la dernière mise à jour (§ 6)
+    /// <summary>Sprinkler au plafond (FIR_HPSetSprinkler) : eau reçue en continu, puissance par seconde (0 : aucun).</summary>
+    public float Sprinkler;
     public readonly List<HotPoint> HeatSources = new();
 
     public bool IsBurning => Lit && Intensity > 0;
