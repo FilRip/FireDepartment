@@ -1,0 +1,398 @@
+using System.Numerics;
+using System.Text;
+using OpenFD.Formats;
+using OpenFD.MG;
+
+namespace OpenFD.ConvFD1;
+
+/// <summary>
+/// Étages FD1 et passages vers eux. La grille du moteur n'a qu'un sol par case : un plancher en hauteur ne remplace que des
+/// cases fermées au rez-de-chaussée (Entrepot : le dessus du bloc noir entre les deux halls, à 15 m). On y monte au
+/// grappin (repère « koshka_symbol » en haut du mur : seul le scout passe). Un bouton (objet utilisable) y appelle une
+/// fonction du script qui ouvre une porte fermée (porte qui monte, mais que personne ne peut ouvrir à la main).
+/// Entrepot : dans FD1, le technicien ouvre la porte blindée entre les deux halls (« PorteFen ») avec le Fenwick ; ici, le
+/// scout monte sur le bloc noir et appuie sur le bouton de l'échelle 1 (« Ent_Bouton_Echelle1 »), qui ouvre cette porte.
+/// </summary>
+public sealed partial class MissionConverter
+{
+    /// <summary>Planchers en hauteur, par mission : modèle FD1 et hauteur du plancher (cm).</summary>
+    private static readonly Dictionary<string, (string model, float z)[]> UpperFloors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Entrepot", new[] { ("CORNICHE", 1500f), ("ENT_PASSERELLE", 1500f), ("PIECE02_01", 1500f), ("PIECE02_02", 1500f) } },
+    };
+
+    /// <summary>
+    /// Passages au grappin, par mission : haut du mur (repère) et direction du mur (radians, 0 : le long de x). Entrepot : le
+    /// bord de la passerelle (15 m, devant le bloc noir côté premier hall, où est le bouton de l'échelle 1) : le scout monte
+    /// et redescend au bord, dans l'allée du hall, pas contre le mur sous la passerelle ; et le mur du bureau de la
+    /// secrétaire côté deuxième hall, à côté de l'échelle 2.
+    /// </summary>
+    private static readonly Dictionary<string, (Vector3 top, float yaw)[]> GrappleWalls = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Entrepot", new[] { (new Vector3(9400, 13240, 1430), 0f), (new Vector3(8750, 19200, 1430), MathF.PI / 2) } },
+    };
+
+    /// <summary>
+    /// Échelles FD1 rendues utilisables par un bouton, par mission : nom, bout en haut, bout en bas. Pour le moteur : un
+    /// escalier (« teleport_stair » et ses deux icônes), caché et inactif au départ. Entrepot : l'échelle 2, du bureau de la
+    /// secrétaire au deuxième hall.
+    /// </summary>
+    private static readonly Dictionary<string, (string name, Vector3 top, Vector3 bottom)[]> ScriptStairs = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Entrepot", new[] { ("Echelle2", new Vector3(8600, 19400, 1500), new Vector3(8950, 19420, 0)) } },
+    };
+
+    /// <summary>Portes FD1 que seul le script ouvre, par mission : modèle et nom de la porte (elle monte, fermée au départ).</summary>
+    private static readonly Dictionary<string, (string model, string name)[]> ScriptDoors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Entrepot", new[] { ("ENT_PORTEBLINDEE01", "PorteFen") } },
+    };
+
+    /// <summary>
+    /// Objets FD1 utilisables du script, par mission : nom de l'objet, porte qu'il ouvre, échelle qu'il rend utilisable
+    /// (ScriptStairs) ou « @fonction » du script de la mission à appeler (MissionConverter.Story.cs), message.
+    /// </summary>
+    private static readonly Dictionary<string, (string button, string door, string message)[]> ScriptButtons = new(StringComparer.OrdinalIgnoreCase)
+    {
+        {
+            "Entrepot", new[]
+            {
+                ("Ent_Bouton_Echelle1", "PorteFen", "La porte blindée entre les deux halls s'ouvre"),
+                ("Ent_Bouton_Echelle2", "Echelle2", "L'échelle du bureau de la secrétaire est descendue"),
+                // indices à ramasser (MissionConverter.Story.cs) : la vidéo du local de sécurité, les documents du bureau
+                ("ent_localsecurite01_etat01_meca", "@VideoPick", ""),
+                ("ent_documents", "@DocPick", ""),
+            }
+        },
+    };
+
+    /// <summary>Maillages des planchers en hauteur (dans le repère du monde) et hauteur de chacun.</summary>
+    private readonly List<(List<Fd3Mesh> meshes, Matrix4x4 w, float z)> _upperFloors = new List<(List<Fd3Mesh>, Matrix4x4, float)>();
+
+    /// <summary>Portes du script trouvées dans le niveau FD1 (objet, maillages, nom).</summary>
+    private readonly List<(Fd1Object o, List<Fd3Mesh> meshes, string name)> _scriptDoors = new List<(Fd1Object, List<Fd3Mesh>, string)>();
+
+    /// <summary>Boutons du script trouvés dans le niveau FD1 (objet, maillages, porte, message).</summary>
+    private readonly List<(Fd1Object o, List<Fd3Mesh> meshes, string door, string message)> _scriptButtons = new List<(Fd1Object, List<Fd3Mesh>, string, string)>();
+
+    /// <summary>Murs (AddWalls) et meubles (AddObstacle) des étages, par hauteur de plancher : carrés de 25 cm.</summary>
+    private readonly Dictionary<float, HashSet<(int x, int y)>> _upperWallQuarters = new Dictionary<float, HashSet<(int, int)>>();
+    private readonly Dictionary<float, HashSet<(int x, int y)>> _upperBlockedQuarters = new Dictionary<float, HashSet<(int, int)>>();
+
+    private static HashSet<(int x, int y)> UpperQuarters(Dictionary<float, HashSet<(int x, int y)>> sets, float floor)
+    {
+        if (!sets.TryGetValue(floor, out HashSet<(int x, int y)>? set))
+            sets[floor] = set = new HashSet<(int, int)>();
+        return set;
+    }
+
+    /// <summary>Hauteurs des planchers d'étage de cette mission.</summary>
+    private IEnumerable<float> UpperFloorHeights() =>
+        UpperFloors.TryGetValue(Mission, out (string model, float z)[]? floors) ? floors.Select(f => f.z).Distinct() : Enumerable.Empty<float>();
+
+    /// <summary>Plancher en hauteur de ce modèle FD1 dans cette mission (null : aucun).</summary>
+    private float? UpperFloorOf(string model)
+    {
+        if (!UpperFloors.TryGetValue(Mission, out (string model, float z)[]? floors))
+            return null;
+        foreach ((string m, float z) in floors)
+            if (m.Equals(model, StringComparison.OrdinalIgnoreCase))
+                return z;
+        return null;
+    }
+
+    /// <summary>Nom de la porte du script faite de ce modèle FD1 (null : ce n'en est pas une).</summary>
+    private string? ScriptDoorName(string model)
+    {
+        if (!ScriptDoors.TryGetValue(Mission, out (string model, string name)[]? doors))
+            return null;
+        foreach ((string m, string name) in doors)
+            if (m.Equals(model, StringComparison.OrdinalIgnoreCase))
+                return name;
+        return null;
+    }
+
+    /// <summary>Porte et message du bouton du script de ce nom FD1 (null : ce n'en est pas un).</summary>
+    private (string door, string message)? ScriptButtonOf(string name)
+    {
+        if (!ScriptButtons.TryGetValue(Mission, out (string button, string door, string message)[]? buttons))
+            return null;
+        foreach ((string b, string door, string message) in buttons)
+            if (b.Equals(name, StringComparison.OrdinalIgnoreCase))
+                return (door, message);
+        return null;
+    }
+
+    /// <summary>
+    /// Planchers en hauteur dans la grille : les cases dont le centre est sous un triangle horizontal du plancher (à 60 cm
+    /// près de sa hauteur) s'ouvrent, à cette hauteur. Les cases du mur des passages au grappin aussi (à la hauteur du
+    /// plancher : seul le scout les franchit). Rend le nombre de cases.
+    /// </summary>
+    private int ApplyUpperFloors(Grid g)
+    {
+        int n = 0;
+        foreach ((List<Fd3Mesh> meshes, Matrix4x4 w, float z) in _upperFloors)
+            foreach (Fd3Mesh m in meshes)
+                for (int t = 0; t + 2 < m.Indices.Count; t += 3)
+                {
+                    Vector3 a = Vector3.Transform(Vertex(m, m.Indices[t]), w);
+                    Vector3 b = Vector3.Transform(Vertex(m, m.Indices[t + 1]), w);
+                    Vector3 c = Vector3.Transform(Vertex(m, m.Indices[t + 2]), w);
+                    Vector3 normal = Vector3.Cross(b - a, c - a);
+                    if (normal.Length() < 1 || MathF.Abs(Vector3.Normalize(normal).Z) < 0.95f || MathF.Abs((a.Z + b.Z + c.Z) / 3 - z) > 60)
+                        continue;
+                    int x0 = (int)MathF.Floor(MathF.Min(a.X, MathF.Min(b.X, c.X)) / Grid.CellSize);
+                    int x1 = (int)MathF.Floor(MathF.Max(a.X, MathF.Max(b.X, c.X)) / Grid.CellSize);
+                    int y0 = (int)MathF.Floor(MathF.Min(a.Y, MathF.Min(b.Y, c.Y)) / Grid.CellSize);
+                    int y1 = (int)MathF.Floor(MathF.Max(a.Y, MathF.Max(b.Y, c.Y)) / Grid.CellSize);
+                    for (int cy = y0; cy <= y1; cy++)
+                        for (int cx = x0; cx <= x1; cx++)
+                        {
+                            Vector2 p = new Vector2((cx + 0.5f) * Grid.CellSize, (cy + 0.5f) * Grid.CellSize);
+                            if (!g.Inside(cx, cy) || !InTriangle(p, a, b, c))
+                                continue;
+                            int k = g.Index(cx, cy);
+                            if (g.ZoneA[k] == 0 || g.GroundHeight[k] != z)
+                                n++;
+                            g.ZoneA[k] = 1;
+                            g.GroundHeight[k] = z;
+                        }
+                }
+        // une case fermée entre deux cases de plancher à la même hauteur (en face l'une de l'autre) : le plancher continue
+        // (Entrepot : la jointure entre la passerelle et le dessus du bloc noir)
+        List<int> joints = new List<int>();
+        for (int cy = 1; cy + 1 < g.Height; cy++)
+            for (int cx = 1; cx + 1 < g.Width; cx++)
+            {
+                int k = g.Index(cx, cy);
+                if (g.ZoneA[k] != 0)
+                    continue;
+                foreach ((int dx, int dy) in new[] { (1, 0), (0, 1) })
+                {
+                    int a = g.Index(cx - dx, cy - dy), b = g.Index(cx + dx, cy + dy);
+                    bool floorA = g.ZoneA[a] != 0 && _upperFloors.Any(f => f.z == g.GroundHeight[a]);
+                    if (floorA && g.ZoneA[b] != 0 && g.GroundHeight[b] == g.GroundHeight[a])
+                    {
+                        joints.Add(k);
+                        g.GroundHeight[k] = g.GroundHeight[a];
+                        break;
+                    }
+                }
+            }
+        foreach (int k in joints)
+            g.ZoneA[k] = 1;
+        n += joints.Count;
+        // murs et meubles des étages, sur les cases de leur plancher seulement (comme au sol : un mur traverse une case en
+        // deux carrés au moins, un meuble en couvre plus de la moitié)
+        int per = (int)(Grid.CellSize / 25);
+        foreach ((Dictionary<float, HashSet<(int x, int y)>> sets, int need) in new[] { (_upperWallQuarters, 2), (_upperBlockedQuarters, per * per / 2 + 1) })
+            foreach ((float z, HashSet<(int x, int y)> quarters) in sets)
+                foreach (IGrouping<int, (int x, int y)> cell in quarters.Where(q => q.x >= 0 && q.y >= 0).GroupBy(q => g.Inside(q.x / per, q.y / per) ? g.Index(q.x / per, q.y / per) : -1))
+                    if (cell.Key >= 0 && cell.Count() >= need && g.ZoneA[cell.Key] != 0 && g.GroundHeight[cell.Key] == z)
+                        g.ZoneA[cell.Key] = 0;
+        if (GrappleWalls.TryGetValue(Mission, out (Vector3 top, float yaw)[]? walls))
+            foreach ((Vector3 top, float yaw) in walls)
+            {
+                // les cases que le moteur prend pour le mur du passage (dans la ligne du mur à 70 cm près, sur 2,2 m de part
+                // et d'autre du repère) : ouvertes, à la hauteur du plancher le plus proche
+                Vector2 axis = new Vector2(MathF.Cos(yaw), MathF.Sin(yaw));
+                Vector2 perp = new Vector2(-axis.Y, axis.X);
+                float floor = _upperFloors.Select(f => f.z).OrderBy(z => MathF.Abs(z - top.Z)).DefaultIfEmpty(top.Z).First();
+                for (int cy = 0; cy < g.Height; cy++)
+                    for (int cx = 0; cx < g.Width; cx++)
+                    {
+                        Vector2 c = new Vector2((cx + 0.5f) * Grid.CellSize, (cy + 0.5f) * Grid.CellSize) - new Vector2(top.X, top.Y);
+                        if (MathF.Abs(Vector2.Dot(c, perp)) > 70 || MathF.Abs(Vector2.Dot(c, axis)) > 220)
+                            continue;
+                        int k = g.Index(cx, cy);
+                        g.ZoneA[k] = 1;
+                        g.GroundHeight[k] = floor;
+                        n++;
+                    }
+            }
+        return n;
+    }
+
+    /// <summary>Le point p est-il dans le triangle abc (vu de dessus) ?</summary>
+    private static bool InTriangle(Vector2 p, Vector3 a, Vector3 b, Vector3 c)
+    {
+        float d1 = (p.X - b.X) * (a.Y - b.Y) - (a.X - b.X) * (p.Y - b.Y);
+        float d2 = (p.X - c.X) * (b.Y - c.Y) - (b.X - c.X) * (p.Y - c.Y);
+        float d3 = (p.X - a.X) * (c.Y - a.Y) - (c.X - a.X) * (p.Y - a.Y);
+        bool negative = d1 < 0 || d2 < 0 || d3 < 0;
+        bool positive = d1 > 0 || d2 > 0 || d3 > 0;
+        return !(negative && positive);
+    }
+
+    /// <summary>Repères des passages au grappin dans le niveau du moteur.</summary>
+    private void AddGrapples(Level level)
+    {
+        if (!GrappleWalls.TryGetValue(Mission, out (Vector3 top, float yaw)[]? walls))
+            return;
+        LevelObject? symbol = TemplateObject("functional\\koshka_symbol");
+        if (symbol == null)
+        {
+            Report.Add("grappin : repère modèle introuvable dans les missions du jeu");
+            return;
+        }
+        int k = 0;
+        foreach ((Vector3 top, float yaw) in walls)
+        {
+            k++;
+            LevelObject s = LevelEdit.Clone(symbol, LevelEdit.NewId(level), $"grappin_{k}", symbol.ClassPath);
+            s = LevelEdit.WithTransform(s, top, new Vector3(0, 0, yaw));
+            s = LevelEdit.WithStartVisible(s, true);
+            level.Objects.Add(s);
+        }
+        Report.Add($"grappin : {walls.Length} passage(s)");
+    }
+
+    /// <summary>Portes du script dans le niveau du moteur (fermées, elles montent quand le script les ouvre).</summary>
+    private void AddScriptDoors(Level level)
+    {
+        if (_scriptDoors.Count == 0)
+            return;
+        LevelObject? door = TemplateObject("opening\\factory_store");
+        if (door == null)
+        {
+            Report.Add("portes du script : porte modèle introuvable dans les missions du jeu");
+            return;
+        }
+        foreach ((Fd1Object o, List<Fd3Mesh> meshes, string name) in _scriptDoors)
+        {
+            string cls = WriteDoorModel(o.Model, meshes, true, false);
+            Vector3 at = new Vector3(o.World.M41, o.World.M42, o.World.M43) * WorldToCm;
+            float yaw = MathF.Atan2(o.World.M12, o.World.M11);
+            LevelObject d = LevelEdit.Clone(door, LevelEdit.NewId(level), name, cls);
+            d = LevelEdit.WithTransform(d, at, new Vector3(0, 0, yaw));
+            d = LevelEdit.WithStartVisible(d, true);
+            d = WithInitialState(d, 0);
+            level.Objects.Add(d);
+        }
+        Report.Add($"portes du script : {string.Join(", ", _scriptDoors.Select(d => d.name))}");
+    }
+
+    /// <summary>
+    /// Classe des boutons : Design\placeable\functional\useable\&lt;nom&gt;_&lt;modèle&gt;.class (utilisable par tout pompier qui
+    /// sait utiliser un objet). Rend son chemin.
+    /// </summary>
+    private string WriteButtonClass(string model, List<Fd3Mesh> meshes)
+    {
+        (string safe, List<(string node, Matrix4x4 world)> _, float _) = WritePlaceableModel(model, meshes);
+        string classDir = Path.Combine(Data, "Design", "placeable", "functional", "useable");
+        Directory.CreateDirectory(classDir);
+        string cls = $"""
+            [#INCLUDE]
+            FILE0 = "base_useable.class"
+
+            [DISPLAY]
+            MODEL = {Name}\{safe}
+
+            [DAMAGE]
+            USEDAMAGE = 0
+            CARBONISABLE = 0
+
+            [CAPACITIES_ACTIONS]
+            COULDBEUSE = 1
+
+            [EXPLOSION]
+            CANEXPLODE = 0
+
+            [LOGICAL_STATE]
+            S01_USER_ANIM = ItemChar\ic_pick_up_down
+            S01__NAME = use
+
+            """;
+        File.WriteAllBytes(Path.Combine(classDir, safe + ".class"), Encoding.Latin1.GetBytes(cls.Replace("\n", "\r\n")));
+        return "design\\placeable\\functional\\useable\\" + safe;
+    }
+
+    /// <summary>Boutons du script dans le niveau du moteur : leur action appelle « Use_&lt;bouton&gt; ».</summary>
+    private void AddScriptButtons(Level level)
+    {
+        if (_scriptButtons.Count == 0)
+            return;
+        LevelObject? template = ActionTemplate();
+        if (template == null)
+        {
+            Report.Add("boutons du script : objet utilisable modèle introuvable dans les missions du jeu");
+            return;
+        }
+        foreach ((Fd1Object o, List<Fd3Mesh> meshes, string door, string _) in _scriptButtons)
+        {
+            string cls = WriteButtonClass(o.Model, meshes);
+            Vector3 at = new Vector3(o.World.M41, o.World.M42, o.World.M43) * WorldToCm;
+            float yaw = MathF.Atan2(o.World.M12, o.World.M11);
+            LevelObject b = LevelEdit.Clone(template, LevelEdit.NewId(level), o.Name, cls);
+            b = LevelEdit.WithTransform(b, at, new Vector3(0, 0, yaw));
+            b = LevelEdit.WithStartVisible(b, true);
+            b = WithActionScript(b, "Use_" + o.Name);
+            level.Objects.Add(b);
+        }
+        Report.Add($"boutons du script : {string.Join(", ", _scriptButtons.Select(b => b.o.Name + " → " + b.door))}");
+    }
+
+    /// <summary>
+    /// Escaliers des échelles du script dans le niveau du moteur : l'escalier « &lt;nom&gt; » et ses icônes
+    /// « &lt;nom&gt;_haut » et « &lt;nom&gt;_bas » (numéros qui se suivent : le moteur les trouve ainsi), tous cachés au départ.
+    /// </summary>
+    private void AddScriptStairs(Level level)
+    {
+        if (!ScriptStairs.TryGetValue(Mission, out (string name, Vector3 top, Vector3 bottom)[]? stairs))
+            return;
+        LevelObject? stair = TemplateObject("teleport_stair");
+        LevelObject? symbol = TemplateObject("stair_symbol");
+        if (stair == null || symbol == null)
+        {
+            Report.Add("échelles du script : escalier modèle introuvable dans les missions du jeu");
+            return;
+        }
+        foreach ((string name, Vector3 top, Vector3 bottom) in stairs)
+        {
+            LevelObject t = LevelEdit.Clone(stair, LevelEdit.NewId(level), name, stair.ClassPath);
+            t = LevelEdit.WithTransform(t, (top + bottom) / 2, Vector3.Zero);
+            t = LevelEdit.WithStartVisible(t, false);
+            level.Objects.Add(t);
+            foreach ((string end, Vector3 at) in new[] { ("haut", top), ("bas", bottom) })
+            {
+                LevelObject e = LevelEdit.Clone(symbol, LevelEdit.NewId(level), $"{name}_{end}", symbol.ClassPath);
+                e = LevelEdit.WithTransform(e, at, Vector3.Zero);
+                e = LevelEdit.WithStartVisible(e, false);
+                level.Objects.Add(e);
+            }
+        }
+        Report.Add($"échelles du script : {string.Join(", ", stairs.Select(x => x.name))} (cachées au départ)");
+    }
+
+    /// <summary>Le bouton rend utilisable cette échelle du script (sinon : il ouvre une porte).</summary>
+    private bool IsScriptStair(string name) =>
+        ScriptStairs.TryGetValue(Mission, out (string name, Vector3 top, Vector3 bottom)[]? stairs) && stairs.Any(x => x.name.Equals(name, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Script des boutons : chacun ouvre sa porte (ou montre son échelle) une fois, puis ne sert plus.</summary>
+    private string ButtonScript()
+    {
+        StringBuilder s = new StringBuilder();
+        foreach ((Fd1Object o, List<Fd3Mesh> _, string door, string message) in _scriptButtons)
+        {
+            s.Append($"// {o.Name} : {(door.StartsWith('@') ? "appelle" : IsScriptStair(door) ? "rend utilisable l'échelle" : "ouvre")} {door.TrimStart('@')}\r\n");
+            s.Append($"void Use_{o.Name}(EntityID User, EntityID Bouton, mcString State)\r\n{{\r\n");
+            s.Append($"\tif(SCR_GetVarS32(\"{o.Name}\") == 0)\r\n\t{{\r\n");
+            s.Append($"\t\tSCR_SetVarS32(\"{o.Name}\", 1);\r\n");
+            if (door.StartsWith('@'))
+                s.Append($"\t\t{door[1..]}();\r\n");
+            else if (IsScriptStair(door))
+            {
+                foreach (string part in new[] { door, door + "_haut", door + "_bas" })
+                    s.Append($"\t\tENT_SetVisibility(ENT_FindByName(\"{part}\"), 1);\r\n");
+                s.Append($"\t\tENT_ActivateTeleport(ENT_FindByName(\"{door}\"), 1);\r\n");
+            }
+            else
+                s.Append($"\t\tENT_SwitchState(ENT_FindByName(\"{door}\"));\r\n");
+            s.Append($"\t\tENT_SetCapacityTarget(Bouton, \"CouldBeUse\", 0);\r\n");
+            if (message.Length > 0)
+                s.Append($"\t\tPNL_AddMessage(\"\", \"{message}\", 0.0, 0.0);\r\n");
+            s.Append("\t}\r\n}\r\n\r\n");
+        }
+        return s.ToString();
+    }
+}
