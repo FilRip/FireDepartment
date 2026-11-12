@@ -23,6 +23,58 @@ public sealed partial class UnitManager
     public static bool IsOccupationName(string name) =>
         name.Contains("occupation", StringComparison.OrdinalIgnoreCase) || name.StartsWith("occup_", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Objets du décor dont les cases sont en ce moment fermées par leur propre forme (ObjectShown).</summary>
+    private readonly HashSet<uint> _objectsBlocking = new();
+
+    /// <summary>
+    /// Objet du décor que le script cache ou montre : ses cases (PathFind.ObjectCells) s'ouvrent, sauf celles qu'un autre
+    /// objet visible ferme aussi, ou se ferment (sauf les cases déjà murées ou fermées par la grille).
+    /// </summary>
+    private void ObjectShown(uint id, string name, List<int> cells, bool shown, Dictionary<uint, bool> vis)
+    {
+        bool blocking = _objectsBlocking.Contains(id) || (!_objectsTouched.Contains(id) && Paths.ObjectStartVisible.GetValueOrDefault(id, true));
+        _objectsTouched.Add(id);
+        if (shown == blocking)
+        {
+            if (shown)
+                _objectsBlocking.Add(id);
+            return;
+        }
+        if (shown)
+        {
+            int n = 0;
+            foreach (int i in cells)
+                if (!Paths.Blocked[i])
+                {
+                    Paths.Blocked[i] = true;
+                    Paths.BlockedBy[i] = name + " (montré)";
+                    n++;
+                }
+            _objectsBlocking.Add(id);
+            Paths.ForgetFailure();
+            Log.Add($"{_s.Time,6:0} s : {name} montré : {n} case(s) fermée(s)");
+            return;
+        }
+        _objectsBlocking.Remove(id);
+        // une case reste fermée si un autre objet visible la ferme aussi
+        HashSet<int> others = new HashSet<int>();
+        foreach ((uint other, List<int> oc) in Paths.ObjectCells)
+            if (other != id && (vis.TryGetValue(other, out bool ov) ? ov : Paths.ObjectStartVisible.GetValueOrDefault(other, true)))
+                others.UnionWith(oc);
+        int freed = 0;
+        foreach (int i in cells)
+            if (Paths.Blocked[i] && !others.Contains(i) && !(Paths.BlockedBy.TryGetValue(i, out string? by) && by is "mur" or "cloison" or "mur de pièce"))
+            {
+                Paths.Blocked[i] = false;
+                freed++;
+            }
+        Paths.ForgetFailure();
+        Log.Add($"{_s.Time,6:0} s : {name} caché : {freed} case(s) libérée(s)");
+    }
+
+    /// <summary>Objets dont le script a déjà changé la visibilité.</summary>
+    private readonly HashSet<uint> _objectsTouched = new();
+
     private void LoadOccupations(Level level)
     {
         foreach (LevelObject o in level.Objects.Where(o => o.Kind == EntityKind.Placeable))
@@ -78,6 +130,11 @@ public sealed partial class UnitManager
             return;
         foreach ((uint id, bool shown) in vis)
         {
+            if (Paths.ObjectCells.TryGetValue(id, out List<int>? own) && _placeableNames.TryGetValue(id, out string? ownName) && !IsOccupationName(ownName) && !Openings.Any(d => d.Id == id))
+            {
+                ObjectShown(id, ownName, own, shown, vis);
+                continue;
+            }
             if (!shown && !_hiddenFootprints.ContainsKey(id) && _placeableNames.TryGetValue(id, out string? name) && !IsOccupationName(name) && !Openings.Any(d => d.Id == id))
             {
                 // caché : ses cases (celles que BuildObstacles lui a données) se rouvrent
