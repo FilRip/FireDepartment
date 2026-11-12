@@ -32,6 +32,11 @@ public sealed partial class OpenFDGame
             string name = Path.GetFileName(file.Replace('\\', '/'));
             string dir = Path.Combine(_files.DataDir, "Overlay", "Textures");
             string? path = Directory.Exists(dir) ? Directory.EnumerateFiles(dir).FirstOrDefault(f => Path.GetFileName(f).Equals(name, StringComparison.OrdinalIgnoreCase)) : null;
+            // image de l'interface rangée avec les textures du jeu (« ActionIcons.png » de GameGraphicDB2.Ini :
+            // Gfx\Textures\_cache\ActionIcons.dds), quand elle n'est pas dans Overlay\Textures
+            if (path == null && !whiteMask && !cropFrame && !grayToWhite
+                && _files.TryRead("Gfx\\Textures\\_cache\\" + Path.GetFileNameWithoutExtension(name) + ".dds") is { } dds)
+                t = Tex.Dds(GraphicsDevice, dds);
             if (path != null)
             {
                 Color[]? px = null;
