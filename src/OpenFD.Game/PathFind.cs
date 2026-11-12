@@ -234,6 +234,69 @@ public sealed class PathFind
 
     /// <param name="openings">Portes et fenêtres : leurs cases restent ouvertes.</param>
     /// <param name="keep">Points à ne jamais fermer (civils, points de passage des scripts).</param>
+    /// <summary>
+    /// Passerelles et leurs escaliers (Factory : la passerelle à 2,36 m au-dessus des machines, où gît un employé) : la grille
+    /// les met en zone B 0 en bandes minces, comme les murs des pièces, mais un mur est au niveau du sol. Groupe de cases en
+    /// zone B 0 à 50 cm au moins, reliées par des marches de 1,1 m au plus, qui monte à 2 m ou plus et qu'un escalier relie
+    /// au sol (une case du groupe à 1,1 m au plus au-dessus d'une case voisine au sol) : ce n'est pas un mur. Seulement un
+    /// petit groupe (60 cases au plus) à quelques hauteurs nettes (4 au plus) : pas les pentes ni les rampes (Presidio, Urban).
+    /// </summary>
+    private static HashSet<int> Walkways(Grid g)
+    {
+        HashSet<int> res = new HashSet<int>();
+        int n = g.Width * g.Height;
+        bool Cand(int i) => g.ZoneA[i] != 0 && g.ZoneB[i] == 0 && g.GroundHeight[i] >= 50;
+        bool[] seen = new bool[n];
+        (int dx, int dy)[] dirs = { (1, 0), (-1, 0), (0, 1), (0, -1) };
+        for (int start = 0; start < n; start++)
+        {
+            if (seen[start] || !Cand(start))
+                continue;
+            List<int> group = new List<int>();
+            Queue<int> q = new Queue<int>();
+            q.Enqueue(start);
+            seen[start] = true;
+            bool high = false;
+            bool linked = false;
+            while (q.Count > 0)
+            {
+                int i = q.Dequeue();
+                group.Add(i);
+                float h = g.GroundHeight[i];
+                if (h >= 200)
+                    high = true;
+                int x = i % g.Width;
+                int y = i / g.Width;
+                foreach ((int dx, int dy) in dirs)
+                {
+                    if (!g.Inside(x + dx, y + dy))
+                        continue;
+                    int j = g.Index(x + dx, y + dy);
+                    float hj = g.GroundHeight[j];
+                    if (g.ZoneA[j] != 0 && hj < 50 && h - hj <= 110)
+                        linked = true;
+                    if (!seen[j] && Cand(j) && MathF.Abs(hj - h) <= 110)
+                    {
+                        seen[j] = true;
+                        q.Enqueue(j);
+                    }
+                }
+            }
+            // escalier et plateau : quelques hauteurs nettes (0,9 m, 1,9 m, 2,3 m), pas une pente du terrain ni une rampe
+            int levels = group.Select(k => (int)(g.GroundHeight[k] / 10)).Distinct().Count();
+            // et un plateau en haut : 2 cases au moins au même niveau (une passerelle, pas le haut d'un muret en pente)
+            float top = group.Max(k => g.GroundHeight[k]);
+            bool deck = group.Count(k => g.GroundHeight[k] >= 200 && top - g.GroundHeight[k] < 10) >= 2;
+            if (high && linked && deck && levels <= 4 && group.Count <= 60)
+            {
+                res.UnionWith(group);
+                if (Environment.GetEnvironmentVariable("FD3_PASSERELLES") != null)
+                    Console.WriteLine($"PASSERELLE {group.Count} cases autour de {group[0] % g.Width * 100},{group[0] / g.Width * 100} : hauteurs {string.Join(" ", group.Select(k => (int)g.GroundHeight[k]).GroupBy(v => v / 10 * 10).OrderBy(v => v.Key).Select(v => $"{v.Key}x{v.Count()}"))}");
+            }
+        }
+        return res;
+    }
+
     public void BlockThinWalls(IReadOnlyList<Opening> openings, IEnumerable<Vector2> keep)
     {
         if (_s.Grid is not { } g)
@@ -385,6 +448,7 @@ public sealed class PathFind
             }
             return Slope(1, 0) || Slope(0, 1);
         }
+        HashSet<int> walkways = Walkways(g);
         int m = 0;
         HashSet<int> rule = new HashSet<int>();
         if (Environment.GetEnvironmentVariable("FD3_SANS_MURSPIECES") == null)
@@ -392,7 +456,7 @@ public sealed class PathFind
             for (int x = 0; x < g.Width; x++)
             {
                 int i = g.Index(x, y);
-                if (g.ZoneA[i] == 0 || g.ZoneB[i] != 0 || Blocked[i] || nearDoor.Contains(i) || Stair(x, y))
+                if (g.ZoneA[i] == 0 || g.ZoneB[i] != 0 || Blocked[i] || nearDoor.Contains(i) || Stair(x, y) || walkways.Contains(i))
                     continue;
                 // une bande mince (3 cases au plus en travers) : un mur ; une grande étendue en zone B 0 reste praticable
                 if (Math.Min(Run(x, y, 1, 0), Run(x, y, 0, 1)) > 3)

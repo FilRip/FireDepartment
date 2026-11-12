@@ -30,6 +30,24 @@ public sealed partial class UnitManager
         }
     }
 
+    /// <summary>Animation qui déplace une pièce du modèle d'un mètre au moins (rideau, portail coulissant), pas une rotation.</summary>
+    private bool AnimSlides(string anim, string? model)
+    {
+        if (model == null || _files.TryRead("Gfx\\Anim\\" + anim + ".anim") is not { } b)
+            return false;
+        try
+        {
+            OpenFD.Formats.AnimClip clip = OpenFD.Formats.AnimClip.Parse(b);
+            SceneAssets assets = _assets ??= new SceneAssets(_files);
+            return assets.ModelParts(model).Any(n => clip.Tracks.TryGetValue(n.Mesh[(n.Mesh.LastIndexOf('\\') + 1)..], out OpenFD.Formats.AnimClip.Track? t)
+                && t.Pos.Length > 1 && Vector3.Distance(t.Pos[0].v, t.Pos[^1].v) >= 100);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     private static string? StateOpenAnim(ClassFile c)
     {
         for (int k = 1; k <= 6; k++)
@@ -132,6 +150,15 @@ public sealed partial class UnitManager
             }
             if (stateOpen != null && d.ScriptGate)
                 d.OpenAnim ??= stateOpen;
+            // porte ordinaire dont l'état « Open » joue une animation qui fait glisser une pièce (rideau métallique
+            // « factory_store » de Factory et Petrochemical : il remonte) : jouée à l'ouverture, à l'envers à la fermeture
+            // (S01 « Close » : la même animation, HOLD_REVERSE) ; sans elle, la porte pivoterait de 90°
+            bool shutter = false;
+            if (!d.ScriptGate && stateOpen != null && !d.IsWindow && d.OpenAnim == null && d.CloseAnim == null && AnimSlides(stateOpen, model))
+            {
+                d.OpenAnim = stateOpen;
+                shutter = true;
+            }
             d.Center = d.Position;
             if (model != null)
             {
@@ -200,7 +227,9 @@ public sealed partial class UnitManager
                                 w.Translation = pos;
                                 return w;
                             }
-                            if (slides && PathFind.Footprint(assets, model, 0, 260, Opened) is { Count: > 0 } open)
+                            // rideau ou porte de garage ouverts : le panneau rangé en haut (2,2 m, Urban) ne gêne pas ; on regarde
+                            // jusqu'à hauteur d'homme
+                            if (slides && PathFind.Footprint(assets, model, 0, shutter ? 200 : 260, Opened) is { Count: > 0 } open)
                                 foreach (Vector2 p in open)
                                 {
                                     (int cx, int cy) = g.CellOf(Vector3.Transform(new Vector3(p, 0), o.Matrix));
@@ -208,7 +237,8 @@ public sealed partial class UnitManager
                                         d.OpenBlocked.Add(g.Index(cx, cy));
                                 }
                             // bâti : boîte du modèle (repère de l'objet : les battants coulissent le long de X), hors du passage
-                            List<Vector2> all = slides ? PathFind.Footprint(assets, model, 0, 1000) : new();
+                            // (pas pour un rideau : il est posé dans le mur du bâtiment, qui ferme déjà les côtés)
+                            List<Vector2> all = slides && !shutter ? PathFind.Footprint(assets, model, 0, 1000) : new();
                             if (slides && all.Count > 0 && Matrix4x4.Invert(o.Matrix, out Matrix4x4 inv) && d.Cells.Count > 0)
                             {
                                 float bx0 = all.Min(q => q.X), bx1 = all.Max(q => q.X), by0 = all.Min(q => q.Y), by1 = all.Max(q => q.Y);

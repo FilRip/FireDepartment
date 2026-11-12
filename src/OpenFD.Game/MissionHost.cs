@@ -573,7 +573,15 @@ public sealed class MissionHost : IScriptHost
                 return Value.Zero;
             case "ANM_PLAY":
                 foreach (long id in Members(V(0).AsInt))
-                    PlayedAnims[(uint)id] = (V(1).AsText.Replace('/', '\\'), (float)GameTime, a.Count > 3 && V(3).AsInt != 0);
+                {
+                    string anim = V(1).AsText.Replace('/', '\\');
+                    PlayedAnims[(uint)id] = (anim, (float)GameTime, a.Count > 3 && V(3).AsInt != 0);
+                    // portail que le script ouvre en jouant son animation d'ouverture (Petrochemical, Renfort_2 : les rideaux
+                    // factices bdoor2 et bdoor3 du garage, « si_Factory_store ») : ouvert, les véhicules sortent
+                    if (Units?.Openings.FirstOrDefault(d => d.Id == (uint)id) is { } od && od.State == OpeningState.Closed
+                        && od.OpenAnim != null && od.OpenAnim.Equals(anim, StringComparison.OrdinalIgnoreCase))
+                        Units.SetOpeningState(od, OpeningState.Open);
+                }
                 return Value.Zero;
             case "ANM_STOP":
                 foreach (long id in Members(V(0).AsInt))
