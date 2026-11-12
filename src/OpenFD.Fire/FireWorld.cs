@@ -254,6 +254,11 @@ public sealed class FireWorld
                     dst.DelayedHeat += src.Intensity;
             }
 
+        // sprinklers : de l'eau en continu, sans fin, comme une lance
+        foreach (HotPoint hp in HotPoints)
+            if (hp.Sprinkler > 0 && hp.Lit)
+                Attack(hp, hp.Sprinkler, dt, AgentEfficiency("WATER", hp.Class.FireType));
+
         LastDt = dt;
         // 2. chaleur reçue, calculée avant toute mise à jour d'intensité
         foreach (HotPoint hp in HotPoints)

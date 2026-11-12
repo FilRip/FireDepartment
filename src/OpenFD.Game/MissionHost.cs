@@ -375,6 +375,16 @@ public sealed class MissionHost : IScriptHost
                 FireLog.Add($"{GameTime,6:0.0} FIR_HPAddIntensity {NameOf(V(0).AsInt)} {V(1).AsNum} ({hs.Count} foyers)");
                 return Value.Zero;
             }
+            case "FIR_HPSETSPRINKLER":
+            {
+                // ajout d'OpenFD (FD1 Banque : DeclencheSprinkler) : les sprinklers du plafond arrosent ces foyers sans fin,
+                // avec cette puissance (celle d'un pompier : 10) ; 0 les arrête
+                List<HotPoint> hs = HotPointsOf(V(0).AsInt);
+                foreach (HotPoint h in hs)
+                    h.Sprinkler = (float)V(1).AsNum;
+                FireLog.Add($"{GameTime,6:0.0} FIR_HPSetSprinkler {NameOf(V(0).AsInt)} {V(1).AsNum} ({hs.Count} foyers)");
+                return Value.Zero;
+            }
             case "FIR_HPSETINTENSITY":
                 foreach (HotPoint h in HotPointsOf(V(0).AsInt))
                 {

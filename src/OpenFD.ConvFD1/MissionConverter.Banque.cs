@@ -153,6 +153,20 @@ public sealed partial class MissionConverter
     /// </summary>
     private static readonly (int strong, int bobine, int smallSafe, int bigSafe) BanqueBurnLimits = (30, 120, 150, 180);
 
+    /// <summary>
+    /// Pièces arrosées par les sprinklers de la Banque (cm, rez-de-chaussée) : sous les tuyaux du plafond (modèle FD1
+    /// « BAN_SPRINCKLERS ») : la salle des coffres, son couloir, la salle du garde.
+    /// </summary>
+    private static readonly (float x0, float x1, float y0, float y1)[] BanqueSprinklerRooms =
+    {
+        (15100, 16400, 9450, 11350),
+        (15100, 16050, 11300, 12900),
+        (16000, 17050, 11700, 12900),
+    };
+
+    /// <summary>Puissance des sprinklers sur chaque foyer : le quart de celle d'un pompier (FIREATTACKPOWER = 10).</summary>
+    private const float BanqueSprinklerPower = 2.5f;
+
     /// <summary>Intensité donnée aux foyers d'un groupe FD1 quand le script l'allume (il grandit ensuite de lui-même).</summary>
     private const int BanqueGroupStart = 20;
 
@@ -466,17 +480,26 @@ public sealed partial class MissionConverter
             Msg("\t", "EVENT_BAN_COFFRE");
             L("}");
         }
-        L("// l'armoire des sprinklers : le couloir des coffres brûle moins fort (FD1 : DeclencheSprinkler)");
+        // foyers sous les tuyaux des sprinklers (modèle FD1 « BAN_SPRINCKLERS » : salle des coffres, son couloir, salle du garde)
+        List<string> sprinkled = new List<string>();
+        for (int i = 0; i < fd1.Fires.Count; i++)
+        {
+            Vector3 at = fd1.Fires[i].at * WorldToCm;
+            if (at.Z < 1000 && BanqueSprinklerRooms.Any(r => at.X >= r.x0 && at.X <= r.x1 && at.Y >= r.y0 && at.Y <= r.y1))
+                sprinkled.Add($"foyer_{i + 1}");
+        }
+        Report.Add($"script : {sprinkled.Count} foyers sous les sprinklers");
+        L("// l'armoire des sprinklers : les trois pièces sous les tuyaux sont arrosées sans fin (FD1 : DeclencheSprinkler) ;");
+        L($"// puissance : le quart de celle d'un pompier");
         L("void Sprinklers()");
         L("{");
+        L("\ts32 g;");
         Msg("\t", "EVENT_BAN_SPRINKLER");
         Cin("\t", "CUT_SPRINKLERS");
-        foreach (int g in new[] { 18, 25 })
-            foreach (string h in groups.TryGetValue(g, out List<string>? l) ? l : new List<string>())
-                L($"\tFIR_HPAddIntensity(ENT_FindByName(\"{h}\"), -40.0);");
-        foreach (int g in new[] { 18, 25 })
-            if (Count(g) > 0)
-                L($"\tFIR_HPMultGrowthRate(SCR_GetVarS32(\"G_{g}\"), 0.5);");
+        L("\tg = ENT_GroupCreate(\"groupe_sprinklers\");");
+        foreach (string h in sprinkled)
+            L($"\tENT_GroupAddEntity(g, ENT_FindByName(\"{h}\"));");
+        L($"\tFIR_HPSetSprinkler(g, {BanqueSprinklerPower.ToString("0.0#", System.Globalization.CultureInfo.InvariantCulture)});");
         L("}");
         // une bande ou un coffre est perdu quand son foyer a brûlé fort assez longtemps (en tout, en secondes : BanqueBurnLimits) ;
         // les grands coffres préviennent dès que leur foyer prend

@@ -2273,6 +2273,18 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 P(sp, 90 + 160 * t, new SN.Vector4(0.85f, 0.94f, 1f, 0.7f * (1 - t)), right, up);
             }
         }
+        // sprinklers du plafond (FIR_HPSetSprinkler) : une pluie fine qui tombe à 3 m au-dessus de chaque foyer arrosé
+        foreach (HotPoint h in _session.Fire.HotPoints.Where(h => h.Sprinkler > 0))
+        {
+            int seed = h.GetHashCode() & 0xFFFF;
+            for (int q = 0; q < 12; q++)
+            {
+                float ph = Frac(q * 0.618f + seed * 0.0137f), t = Frac(time * 1.3f + ph);
+                float a = ph * 40f, r = 40 + 110 * Frac(ph * 7.3f);
+                SN.Vector3 dp = h.Position + new SN.Vector3(MathF.Cos(a) * r * (0.4f + 0.6f * t), MathF.Sin(a) * r * (0.4f + 0.6f * t), 300 - 290 * t);
+                P(dp, 35 + 45 * t, new SN.Vector4(0.82f, 0.93f, 1f, 0.7f * (1 - 0.5f * t)), right, up);
+            }
+        }
         ExplosionSmoke(right, up);
         if (_smokeOn)
             SmokeColumns(time, right, up);
