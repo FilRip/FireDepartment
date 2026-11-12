@@ -51,6 +51,15 @@ public sealed partial class MissionConverter
         { "banque", new[] { "CLONETTE_ETA01" } },
     };
 
+    /// <summary>
+    /// Délai du renfort (s) quand le .MIS FD1 n'en donne pas de juste, par mission. Banque : [REP_TIME] y est en
+    /// commentaire ; le script FD1 fait rouler les véhicules du renfort dès son appel (acte 3), sous la cinématique.
+    /// </summary>
+    private static readonly Dictionary<string, int> ReinforcementDelays = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "banque", 1 },
+    };
+
     /// <summary>Véhicules FD1 (classe) qui arrivent avec le premier renfort, par mission (Banque : acte 3).</summary>
     private static readonly Dictionary<string, string[]> ReinforcementVehicles = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -567,6 +576,9 @@ public sealed partial class MissionConverter
             string misFile = Directory.EnumerateFiles(Path.Combine(Fd1.Root, "Logic", "Missions", Mission), "*.MIS").FirstOrDefault() ?? "";
             string rep = misFile.Length > 0 ? File.ReadLines(misFile, Encoding.Latin1).Select(l => l.Trim()).FirstOrDefault(l => l.StartsWith("[REP_TIME]", StringComparison.OrdinalIgnoreCase)) ?? "" : "";
             string eta = rep.Length > 0 ? rep["[REP_TIME]".Length..].Trim().Split(' ', '\t', '/')[0] : "60";
+            // délai imposé par la mission (Banque : FD1 fait entrer le renfort aussitôt, pendant sa cinématique)
+            if (ReinforcementDelays.TryGetValue(Mission, out int delay))
+                eta = delay.ToString(System.Globalization.CultureInfo.InvariantCulture);
             mis = IniText.Set(mis, "FIRESTATION", "REINFORCEMENT1ETA", eta);
             _reinforcementEta = float.TryParse(eta, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float r) ? r : 60;
             if (laterTrucks.Count > 0)
