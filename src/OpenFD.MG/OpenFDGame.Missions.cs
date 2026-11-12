@@ -495,7 +495,11 @@ public sealed partial class OpenFDGame
     {
         if (ExitIcon() is not { } ic)
             return;
-        if (_iconExit == null)
+        // icône du jeu : [ICON_ACTION_UNLOAD] (Overlay\GameGraphicDB2.Ini) : ActionIcons, case 64,32 (un carré ouvert à gauche,
+        // une flèche qui en sort) ; à défaut, l'ancienne (curseur « entrer »)
+        Texture2D? icons = OverlayTexture("ActionIcons.png");
+        Rectangle? src = icons != null ? new Rectangle(64, 32, 32, 32) : null;
+        if (icons == null && _iconExit == null)
         {
             // icône « entrer » du jeu (curseurs : case 14, un carré ouvert à droite traversé par une flèche), sans la petite flèche du pointeur
             (int w, int h, byte[] rgba)? img = _files.TryRead("Gfx\\Textures\\_cache\\MouseCursors.dds") is { } d ? Tex.DecodeDds32(d) : null;
@@ -515,8 +519,33 @@ public sealed partial class OpenFDGame
         (float sx, float sy) = Fb(Mouse.GetState().X, Mouse.GetState().Y);
         bool over = sx >= ic.x && sx <= ic.x + ic.s && sy >= ic.y && sy <= ic.y + ic.s;
         _ui.Rect(ic.x - 4 * _scale, ic.y - 4 * _scale, ic.s + 8 * _scale, ic.s + 8 * _scale, over ? new SN.Vector4(0.85f, 0.35f, 0.1f, 0.9f) : new SN.Vector4(0.08f, 0.08f, 0.1f, 0.8f));
-        _ui.Image(_iconExit, ic.x, ic.y, ic.s, ic.s, SN.Vector4.One);
+        if (icons != null)
+            _ui.Image(icons, ic.x, ic.y, ic.s, ic.s, src!.Value, SN.Vector4.One);
+        else if (_iconExit != null)
+            _ui.Image(_iconExit, ic.x, ic.y, ic.s, ic.s, SN.Vector4.One);
         string t = $"{ic.v.Passengers.Count}";
         _ui.Text(ic.x + ic.s + 6 * _scale, ic.y + (ic.s - _ui.LineHeight) / 2, t, new SN.Vector4(1, 1, 1, 1));
+        if (over)
+            DrawExitTip(ic.x, ic.y);
+    }
+
+    /// <summary>
+    /// Bulle de l'icône « faire descendre » : le texte du jeu (Interface : « &amp;DebarkPassenger », deux lignes : le nom de
+    /// l'action, puis ce qu'elle fait), au-dessus de l'icône.
+    /// </summary>
+    private void DrawExitTip(float x, float y)
+    {
+        string[] lines = L("&DebarkPassenger", "Débarquer passager\nFait sortir du véhicule le passager sélectionné")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (lines.Length == 0)
+            return;
+        float pad = 5 * _scale;
+        float w = lines.Max(l => _ui.Measure(l)) + 2 * pad;
+        float h = lines.Length * _ui.LineHeight + 2 * pad;
+        float tx = Math.Clamp(x, 0, MathF.Max(0, _fbW - w));
+        float ty = Math.Clamp(y - h - 8 * _scale, 0, MathF.Max(0, _fbH - h));
+        _ui.Rect(tx, ty, w, h, new SN.Vector4(0.05f, 0.05f, 0.06f, 0.92f));
+        for (int i = 0; i < lines.Length; i++)
+            _ui.Text(tx + pad, ty + pad + i * _ui.LineHeight, lines[i], i == 0 ? new SN.Vector4(1f, 0.88f, 0.2f, 1) : SN.Vector4.One);
     }
 }
