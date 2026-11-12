@@ -37,7 +37,9 @@ public static class Program
         int errors = 0;
         foreach (string mission in missions)
         {
-            string name = args.Length > 3 && missions.Count == 1 ? args[3] : "FD1_" + ModelConverter.Safe(mission);
+            // nom par défaut : « FD1_ » et le nom du dossier FD1 avec une majuscule (« banque » → FD1_Banque)
+            string safe = ModelConverter.Safe(mission);
+            string name = args.Length > 3 && missions.Count == 1 ? args[3] : "FD1_" + char.ToUpperInvariant(safe[0]) + safe.Substring(1);
             Console.WriteLine($"== {mission} → {name}");
             MissionConverter c = new MissionConverter { Fd1 = fd1, Fd3 = fd3, Mission = mission, Name = name };
             try

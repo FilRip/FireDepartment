@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 namespace OpenFD.ConvFD1;
 
 /// <summary>
-/// Textes de la mission FD1 pour le moteur : Data\Localize\Lang_&lt;XXX&gt;\FD1_&lt;mission&gt;.loc (UTF-16, comme ceux du jeu),
+/// Textes de la mission FD1 pour le moteur : Data\Localize\Lang_&lt;XXX&gt;\&lt;nom de la mission convertie&gt;.loc (UTF-16, comme ceux du jeu),
 /// pour chaque langue du jeu installé (FD1 a le français, l'anglais et l'allemand : LOCALISATION\Fra, Eng, ger ; les
 /// autres langues du jeu, italien, espagnol…, prennent les textes anglais). Chaque clé FD1 devient
 /// « FD1_&lt;mission&gt;_&lt;clé&gt; » : objectifs (scenario), messages (Warnings&lt;mission&gt;), textes des cinématiques
@@ -32,7 +32,7 @@ public sealed partial class MissionConverter
     };
 
     /// <summary>Clé de texte du moteur pour une clé FD1 de la mission (avec « &amp; » : à traduire).</summary>
-    private string TextKey(string fd1Key) => $"&FD1_{Mission}_{fd1Key}";
+    private string TextKey(string fd1Key) => $"&{Name}_{fd1Key}";
 
     /// <summary>La mission a des textes FD1 (au moins une langue écrite).</summary>
     private bool _hasTexts;
@@ -66,7 +66,8 @@ public sealed partial class MissionConverter
                 continue;
             // objectif des indices : le texte FD1 finit par « (indices trouvés : » que le jeu FD1 complétait ; ici le
             // compteur est celui de l'objectif, et l'objectif est facultatif
-            foreach (string key in texts.Keys.Where(k => k.EndsWith("_DES_S1O1", StringComparison.OrdinalIgnoreCase) || k.EndsWith("_DES_S2O2", StringComparison.OrdinalIgnoreCase)).ToList())
+            foreach (string key in texts.Keys.Where(k => k.EndsWith("_DES_S1O1", StringComparison.OrdinalIgnoreCase) || k.EndsWith("_DES_S2O2", StringComparison.OrdinalIgnoreCase)
+                || k.EndsWith("_DES_S3O2", StringComparison.OrdinalIgnoreCase) || k.EndsWith("_DES_S4O1", StringComparison.OrdinalIgnoreCase)).ToList())
             {
                 string t = texts[key];
                 int cut = t.IndexOf('\n');
@@ -79,13 +80,13 @@ public sealed partial class MissionConverter
             sb.Append("#FILE_VERSION 3\r\n");
             sb.Append($"#= Fire Department 1 : {Mission} (textes convertis de LOCALISATION\\{fd1.dir})\r\n");
             foreach ((string key, string text) in texts.OrderBy(k => k.Key, StringComparer.Ordinal))
-                sb.Append($"#FIELD_ID &FD1_{Mission}_{key}\r\n{text.Replace("\n", "\r\n")}\r\n");
-            File.WriteAllBytes(Path.Combine(langDir, $"FD1_{Mission}.loc"), Encoding.Unicode.GetPreamble().Concat(Encoding.Unicode.GetBytes(sb.ToString())).ToArray());
+                sb.Append($"#FIELD_ID &{Name}_{key}\r\n{text.Replace("\n", "\r\n")}\r\n");
+            File.WriteAllBytes(Path.Combine(langDir, $"{Name}.loc"), Encoding.Unicode.GetPreamble().Concat(Encoding.Unicode.GetBytes(sb.ToString())).ToArray());
             written++;
             codes.Add(Fd1Languages.ContainsKey(code) ? code : code + " (textes anglais)");
             _hasTexts = true;
         }
-        Report.Add($"textes : {written} langue(s) : {string.Join(", ", codes)} (Data\\Localize\\Lang_…\\FD1_{Mission}.loc)");
+        Report.Add($"textes : {written} langue(s) : {string.Join(", ", codes)} (Data\\Localize\\Lang_…\\{Name}.loc)");
         return written;
     }
 

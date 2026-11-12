@@ -30,6 +30,19 @@ public sealed partial class MissionConverter
     private static readonly Dictionary<string, (string name, string cls)[]> StoryCivilians = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Entrepot", new[] { ("Garde1", "civilian\\civilian_cop_1"), ("Garde2", "civilian\\civilian_cop_1"), ("Secretaire", "civilian\\civilian_woman1") } },
+        {
+            // Banque : la cliente et les gardes du hall, les employés des bureaux, les victimes de l'étage, le garde et les
+            // trois faux pompiers de la salle des coffres
+            "banque", new[]
+            {
+                ("Client1", "civilian\\civilian_woman2"), ("Garde1", "civilian\\civilian_cop_1"), ("Garde2", "civilian\\civilian_cop_2"),
+                ("Employe1", "civilian\\civilian_man2"), ("Employe2", "civilian\\civilian_man3"),
+                ("Banquier", "civilian\\civilian_man1"), ("GrosClient", "civilian\\civilian_man4"), ("Comptable", "civilian\\civilian_man5"),
+                ("Informaticien", "civilian\\civilian_man6"),
+                ("Garde3", "civilian\\civilian_cop_3"), ("Bandit1", "civilian\\civilian_gangster_1"), ("Bandit2", "civilian\\civilian_gangster_2"),
+                ("Bandit3", "civilian\\civilian_gangster_3"),
+            }
+        },
     };
 
     /// <summary>
@@ -55,6 +68,19 @@ public sealed partial class MissionConverter
                 ("FlaqueCut", "FlaqueCut", new Vector3(9383, 18722, 0), new Vector3(10006, 19448, 300)),
             }
         },
+        {
+            // Banque : zones FD1 (Banque.xfl ; cercles → carrés de même rayon)
+            "banque", new[]
+            {
+                ("T1", "T1", new Vector3(11277, 13440, 0), new Vector3(12877, 15040, 300)),
+                ("T4", "T4", new Vector3(11710, 14570, 0), new Vector3(12521, 15934, 300)),
+                ("T12", "T12", new Vector3(10800, 12800, 0), new Vector3(13300, 13000, 300)),
+                ("T15", "T15", new Vector3(15113, 7307, 1400), new Vector3(17032, 7802, 1700)),
+                ("T19", "T19", new Vector3(6092, 8856, 1400), new Vector3(10064, 9381, 1700)),
+                ("T20", "T20", new Vector3(16237, 12697, 0), new Vector3(16837, 13297, 300)),
+                ("T21", "T21", new Vector3(15122, 9591, 0), new Vector3(16222, 10691, 300)),
+            }
+        },
     };
 
     /// <summary>Cinématique FD1 jouée quand on utilise ce bouton du script (Entrepot : la porte blindée, l'échelle 2).</summary>
@@ -75,12 +101,20 @@ public sealed partial class MissionConverter
     {
         if (_fd1 == null)
             return null;
-        List<string> texts = _fd1.Strings.Where(s => s.offset > o.Offset + 40 && s.offset < o.Offset + 140).Select(s => s.text)
+        // après le nom de la classe (« Mechanisme », « ObjetDecor »…) : le nom de l'objet, puis celui de l'instance (celui des
+        // scripts : « CoffreMec1 », « bob3 », « PorteCoupe0 ») ; ce dernier peut manquer
+        List<string> texts = _fd1.Strings.Where(s => s.offset > o.Offset && s.offset < o.Offset + 400).Select(s => s.text).ToList();
+        int cls = texts.FindIndex(t => t.Equals(o.Class, StringComparison.OrdinalIgnoreCase));
+        string? Name(int i) => i < texts.Count && texts[i] != "NULL" && !texts[i].EndsWith(".SCP", StringComparison.OrdinalIgnoreCase)
+            && !texts[i].EndsWith(".FLX", StringComparison.OrdinalIgnoreCase) ? texts[i] : null;
+        if (cls >= 0)
+            return Name(cls + 2) ?? Name(cls + 1);
+        List<string> near = _fd1.Strings.Where(s => s.offset > o.Offset + 40 && s.offset < o.Offset + 140).Select(s => s.text)
             .Where(t => t != "NULL").ToList();
-        int script = texts.FindIndex(t => t.EndsWith(".SCP", StringComparison.OrdinalIgnoreCase));
+        int script = near.FindIndex(t => t.EndsWith(".SCP", StringComparison.OrdinalIgnoreCase));
         if (script >= 0)
-            texts = texts.Take(script).ToList();
-        return texts.Count > 0 ? texts[^1] : null;
+            near = near.Take(script).ToList();
+        return near.Count > 0 ? near[^1] : null;
     }
 
     /// <summary>Un objet du jeu de la sorte voulue, pris dans les missions du jeu.</summary>
@@ -113,6 +147,14 @@ public sealed partial class MissionConverter
                 Fd1Object? actor = fd1.Objects.FirstOrDefault(o => o.Class.Equals("ActeurUnit", StringComparison.OrdinalIgnoreCase) && InstanceName(o) == name);
                 LevelObject? template = TemplateWhere(o => o.Kind == EntityKind.Civilian && o.ClassPath.EndsWith(cls, StringComparison.OrdinalIgnoreCase)
                     && o.GetComponent(0xA02A) is { } c && c.Size > 39 && o.ComponentBytes(c)[39] == 3);
+                // pas de civil évanoui de ce modèle dans les missions du jeu : un autre civil évanoui, avec la classe voulue
+                string classPath = template?.ClassPath ?? "";
+                if (template == null)
+                {
+                    template = TemplateWhere(o => o.Kind == EntityKind.Civilian && o.GetComponent(0xA02A) is { } c && c.Size > 39 && o.ComponentBytes(c)[39] == 3);
+                    if (template != null)
+                        classPath = template.ClassPath[..(template.ClassPath.IndexOf("civilian\\", StringComparison.OrdinalIgnoreCase) is int k and >= 0 ? k : 0)] + cls;
+                }
                 if (actor == null || template == null)
                 {
                     Report.Add($"civils : {name} {(actor == null ? "introuvable dans le niveau FD1" : "sans civil modèle dans les missions du jeu")}");
@@ -120,7 +162,7 @@ public sealed partial class MissionConverter
                 }
                 Vector3 at = new Vector3(actor.World.M41, actor.World.M42, actor.World.M43) * WorldToCm;
                 float yaw = MathF.Atan2(actor.World.M12, actor.World.M11);
-                LevelObject c = LevelEdit.Clone(template, LevelEdit.NewId(level), name, template.ClassPath);
+                LevelObject c = LevelEdit.Clone(template, LevelEdit.NewId(level), name, classPath);
                 c = LevelEdit.WithTransform(c, at, new Vector3(0, 0, yaw));
                 c = LevelEdit.WithStartVisible(c, false);
                 level.Objects.Add(c);
@@ -171,6 +213,8 @@ public sealed partial class MissionConverter
     /// <summary>Script du déroulement (fonctions, départ, boucle) ; vide pour une mission sans déroulement.</summary>
     private (string functions, string start, string main) StoryScript(Fd1Level fd1)
     {
+        if (Mission.Equals("banque", StringComparison.OrdinalIgnoreCase))
+            return BanqueScript(fd1);
         if (!Mission.Equals("Entrepot", StringComparison.OrdinalIgnoreCase))
             return ("", "", "");
         string T(string key) => _hasTexts ? TextKey(key) : key;

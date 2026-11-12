@@ -22,7 +22,8 @@ public sealed partial class MissionConverter
     /// qui brûlent ; détruites, elles découvrent la pièce derrière) : un pompier avec une hache les casse pour passer.
     /// Au sol, ou sur un plancher d'étage (Entrepot : la porte du bureau de la secrétaire, à 15 m).
     /// </summary>
-    private static bool IsBreakableDoor(Fd1Object o, IEnumerable<float> floors) => o.Model.StartsWith("sta_porte_", StringComparison.OrdinalIgnoreCase)
+    private static bool IsBreakableDoor(Fd1Object o, IEnumerable<float> floors) => (o.Model.StartsWith("sta_porte_", StringComparison.OrdinalIgnoreCase)
+            || o.Model.StartsWith("ECO_PORTELOCALGRILLE", StringComparison.OrdinalIgnoreCase))
         && (o.World.M43 * WorldToCm < 50 || floors.Any(z => MathF.Abs(o.World.M43 * WorldToCm - z) < 50));
 
     /// <summary>Portes cassables trouvées dans le niveau FD1.</summary>
