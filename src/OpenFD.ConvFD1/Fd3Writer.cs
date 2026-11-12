@@ -142,6 +142,50 @@ public static class Fd3Writer
     /// .stdmat : copie d'un matériau du jeu à une seule texture (modèle), où l'on remplace le nom du matériau et le nom de la
     /// texture (chaînes « u32 longueur + texte + 0 »).
     /// </summary>
+    /// <summary>
+    /// Animation du moteur (Gfx\Anim\…\.anim) : pour chaque pièce du modèle, ses positions dans le temps (secondes, cm),
+    /// sans rotation ni échelle. En-tête : version, nombre de pistes ; par piste : 0, nom (longueur, texte, 0), 11 entiers
+    /// (5 : début et nombre des positions, puis des rotations, puis des échelles) ; puis les positions (temps en
+    /// 1/4800 s, x, y, z), le nombre de rotations (0) et d'échelles (0).
+    /// </summary>
+    public static byte[] Anim(IReadOnlyList<(string node, (float t, Vector3 p)[] keys)> tracks)
+    {
+        using MemoryStream ms = new MemoryStream();
+        using BinaryWriter w = new BinaryWriter(ms);
+        w.Write(1);
+        w.Write(tracks.Count);
+        int start = 0;
+        foreach ((string node, (float t, Vector3 p)[] keys) in tracks)
+        {
+            byte[] name = Encoding.ASCII.GetBytes(node);
+            w.Write(0);
+            w.Write(name.Length + 1);
+            w.Write(name);
+            w.Write((byte)0);
+            for (int i = 0; i < 5; i++)
+                w.Write(0);
+            w.Write(start);
+            w.Write(keys.Length);
+            w.Write(0);
+            w.Write(0);
+            w.Write(0);
+            w.Write(0);
+            start += keys.Length;
+        }
+        w.Write(start);
+        foreach ((string _, (float t, Vector3 p)[] keys) in tracks)
+            foreach ((float t, Vector3 p) k in keys)
+            {
+                w.Write(k.t * 4800f);
+                w.Write(k.p.X);
+                w.Write(k.p.Y);
+                w.Write(k.p.Z);
+            }
+        w.Write(0);
+        w.Write(0);
+        return ms.ToArray();
+    }
+
     public static byte[] Stdmat(byte[] template, string name, string texture)
     {
         List<(int at, int len, string text)> strings = new List<(int, int, string)>();
