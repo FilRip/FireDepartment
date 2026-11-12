@@ -58,6 +58,8 @@ public sealed partial class MissionConverter
     private static readonly Dictionary<string, int> ReinforcementDelays = new(StringComparer.OrdinalIgnoreCase)
     {
         { "banque", 1 },
+        // Quartier : le script FD1 appelle le renfort (acte 3) quand il entre dans la carte
+        { "quartier", 1 },
     };
 
     /// <summary>Véhicules FD1 (classe) qui arrivent avec le premier renfort, par mission (Banque : acte 3).</summary>
@@ -65,6 +67,26 @@ public sealed partial class MissionConverter
     {
         { "banque", new[] { "Aerial", "WaterTower" } },
     };
+
+    /// <summary>
+    /// Unités FD1 du premier renfort désignées par le début du nom de leur instance, par mission. Quartier : « Renfort_Tanker »,
+    /// « Renfort_WaterTower », « Renfort_Aerial », « Renfort_Pompier1 »… (acte 3, par le parking au nord).
+    /// </summary>
+    private static readonly Dictionary<string, string> ReinforcementPrefixes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "quartier", "Renfort_" },
+    };
+
+    /// <summary>Entrée des véhicules du renfort, par mission, quand ce n'est pas celle du départ (cm).</summary>
+    private static readonly Dictionary<string, Vector2> ReinforcementEntries = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Quartier : la rue au nord, derrière le parking
+        { "quartier", new Vector2(24500, 21100) },
+    };
+
+    /// <summary>Cette unité FD1 vient-elle avec le premier renfort (par le nom de son instance) ?</summary>
+    private bool IsReinforcementInstance(Fd1Object o) =>
+        ReinforcementPrefixes.TryGetValue(Mission, out string? prefix) && InstanceName(o) is { } n && n.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Pompiers FD1 (nom de l'objet) → pompier du moteur, et s'il vient en renfort (sinon dans l'équipe de départ).</summary>
     private static readonly Dictionary<string, (string unit, bool reinforcement)> Firemen = new(StringComparer.OrdinalIgnoreCase)
@@ -89,6 +111,8 @@ public sealed partial class MissionConverter
         { "banque", new Vector2(23500, 17450) },
         // Villa : la route devant la propriété, depuis l'est
         { "Villa", new Vector2(23500, 4000) },
+        // Quartier : la rue devant l'ambassade, depuis l'ouest
+        { "quartier", new Vector2(300, 4600) },
     };
 
     private string Data => Fd3.DataDir;
@@ -424,8 +448,8 @@ public sealed partial class MissionConverter
                     continue;
                 if (scriptDoor != null)
                     _scriptDoors.Add((o, meshes, scriptDoor));
-                else
-                    _scriptButtons.Add((buttonObject, meshes, scriptButton!.Value.door, scriptButton.Value.message));
+                else if (PlaceButton(buttonObject, meshes) is { } placed)
+                    _scriptButtons.Add((placed.o, placed.meshes, scriptButton!.Value.door, scriptButton.Value.message));
                 foreach (Fd3Mesh m in meshes)
                     foreach ((string mat, int _, int _) in m.Groups)
                         materials.Add(mat);
@@ -571,14 +595,16 @@ public sealed partial class MissionConverter
         // véhicules et pompiers FD1 des équipes (sans ceux posés à part : l'hélicoptère de la Banque et son équipe)
         bool Apart(Fd1Object o) => LevelUnitOf(o) != null;
         List<Fd1Object> allTrucks = level.Objects.Where(o => Vehicles.ContainsKey(o.Class) && !Apart(o)).ToList();
-        List<Fd1Object> trucks = allTrucks.Where(o => !laterClasses.Contains(o.Class, StringComparer.OrdinalIgnoreCase))
+        bool Later(Fd1Object o) => laterClasses.Contains(o.Class, StringComparer.OrdinalIgnoreCase) || IsReinforcementInstance(o);
+        List<Fd1Object> trucks = allTrucks.Where(o => !Later(o))
             .OrderBy(o => o.Class.Equals("MMaster", StringComparison.OrdinalIgnoreCase) ? 1 : 0).ToList();
-        List<Fd1Object> laterTrucks = allTrucks.Where(o => laterClasses.Contains(o.Class, StringComparer.OrdinalIgnoreCase)).ToList();
+        List<Fd1Object> laterTrucks = allTrucks.Where(Later).ToList();
         List<Fd1Object> men = level.Objects.Where(o => o.Class.Equals("ActeurUnit", StringComparison.OrdinalIgnoreCase) && Firemen.ContainsKey(o.Name) && !Apart(o)).ToList();
         List<string> first = trucks.Select(t => Vehicles[t.Class]).ToList();
         // pompiers d'abord, spécialistes ensuite (comme la barre des unités de FD1)
-        first.AddRange(men.Where(m => !Firemen[m.Name].reinforcement).Select(m => Firemen[m.Name].unit).OrderBy(u => u.EndsWith("_sp_us", StringComparison.OrdinalIgnoreCase) ? 0 : 1));
-        List<Fd1Object> later = men.Where(m => Firemen[m.Name].reinforcement).ToList();
+        bool LaterMan(Fd1Object m) => Firemen[m.Name].reinforcement || IsReinforcementInstance(m);
+        first.AddRange(men.Where(m => !LaterMan(m)).Select(m => Firemen[m.Name].unit).OrderBy(u => u.EndsWith("_sp_us", StringComparison.OrdinalIgnoreCase) ? 0 : 1));
+        List<Fd1Object> later = men.Where(LaterMan).ToList();
         string dir = Path.Combine(Data, "Design", "FireStation");
         Directory.CreateDirectory(dir);
         Vector2 entry = Entries.TryGetValue(Mission, out Vector2 e) ? e : Vector2.Zero;
@@ -612,11 +638,15 @@ public sealed partial class MissionConverter
             _reinforcementEta = float.TryParse(eta, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float r) ? r : 60;
             if (laterTrucks.Count > 0)
             {
-                // véhicules du renfort : ils entrent comme ceux du départ et vont à leur place FD1 (l'équipage descend)
+                // véhicules du renfort : ils entrent comme ceux du départ (ou par leur propre entrée) et vont à leur place FD1
+                // (l'équipage descend)
+                Vector2 entry2 = ReinforcementEntries.TryGetValue(Mission, out Vector2 e2) ? e2 : entry;
                 for (int k = 0; k < laterTrucks.Count; k++)
                 {
                     Vector2 end = new Vector2(laterTrucks[k].World.M41, laterTrucks[k].World.M42) * WorldToCm;
-                    Vector2 start = entry != Vector2.Zero ? entry + new Vector2(0, 600 * k) : end - new Vector2(3000, 0);
+                    // (entrée propre au renfort : les camions à la file le long de la rue, en x)
+                    Vector2 step = ReinforcementEntries.ContainsKey(Mission) ? new Vector2(600 * k, 0) : new Vector2(0, 600 * k);
+                    Vector2 start = entry2 != Vector2.Zero ? entry2 + step : end - new Vector2(3000, 0);
                     points.Add(($"locstart2_{k + 1}", start));
                     points.Add(($"locend2_{k + 1}", end));
                 }
@@ -754,6 +784,9 @@ public sealed partial class MissionConverter
         // Villa : la remise, les bidons, les haies du tennis (MissionConverter.Villa.cs)
         if (mission.Equals("Villa", StringComparison.OrdinalIgnoreCase))
             return VillaLitAtStart(at, type);
+        // Quartier : les voitures accidentées de la rue, l'aile ouest de l'étage (MissionConverter.Quartier.cs)
+        if (mission.Equals("quartier", StringComparison.OrdinalIgnoreCase))
+            return QuartierLitAtStart(at, type);
         if (StartFires.TryGetValue(mission, out (float x0, float x1, float y0, float y1)[]? zones))
             return zones.Any(z => at.X >= z.x0 && at.X <= z.x1 && at.Y >= z.y0 && at.Y <= z.y1);
         return type.StartsWith("torche", StringComparison.OrdinalIgnoreCase);

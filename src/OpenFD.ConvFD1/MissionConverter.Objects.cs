@@ -42,6 +42,16 @@ public sealed partial class MissionConverter
         { "Entrepot", new[] { ("Truckabc", "FD1_Rien") } },
         // Villa : les vieux bidons (FD1 : BarilsExplo), les jerricanes de la remise (le script les fait sauter : FD1 Explode)
         { "Villa", new[] { ("Barils", "BarilsExplo"), ("JerricanExplose", "FD1_Rien") } },
+        // Quartier : la charge du backdraft (le script la fait sauter), la voiture accidentée de la rue, les huit fenêtres du
+        // deuxième étage
+        {
+            "quartier", new[]
+            {
+                ("explosif1", "FD1_Rien"), ("ExploVoiture", "VoitureExplosee"),
+                ("Fenetre1", "FenetreExplosee"), ("Fenetre2", "FenetreExplosee"), ("Fenetre3", "FenetreExplosee"), ("Fenetre4", "FenetreExplosee"),
+                ("Fenetre5", "FenetreExplosee"), ("Fenetre6", "FenetreExplosee"), ("Fenetre7", "FenetreExplosee"), ("Fenetre8", "FenetreExplosee"),
+            }
+        },
     };
 
     /// <summary>

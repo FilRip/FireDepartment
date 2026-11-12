@@ -25,6 +25,8 @@ public sealed partial class MissionConverter
             ("BAN_COULOIR_DIR", 1500f), ("BAN_COULOIR_VIP", 1500f), ("BAN_INFOR", 1500f), ("BAN_VIP", 1500f), ("BAN_WC", 1500f),
             ("BAN_G_HALL", 1500f), ("BAN_EFFONDRE", 1500f), ("BAN_EBOUL_01", 1500f), ("BAN_EBOUL_02", 1500f), ("BAN_EBOUL_03", 1500f),
             ("BAN_EBOUL_04", 1500f) } },
+        // Quartier : le troisième étage de l'ambassade (appartements, salons, salle de réception) ; on y monte à l'échelle
+        { "quartier", new[] { ("QUA_APPART01", 1500f), ("QUA_APPART02", 1500f), ("QUA_APPART03", 1500f), ("QUA_APPART04", 1500f), ("QUA_APPART05", 1500f), ("QUA_APPART06", 1500f), ("QUA_APPART07", 1500f), ("QUA_APPART08", 1500f), ("QUA_APPART09", 1500f), ("QUA_APPART10", 1500f), ("QUA_APPART11", 1500f), ("QUA_APPART12", 1500f), ("QUA_APPART13", 1500f), ("QUA_APPART14", 1500f), ("QUA_APPART15", 1500f), ("QUA_APPART16", 1500f), ("QUA_APPART17", 1500f), ("QUA_APPART18", 1500f), ("QUA_APPART19", 1500f), ("QUA_APPART20", 1500f), ("QUA_APPART21", 1500f), ("QUA_APPART22", 1500f), ("QUA_APPART23", 1500f), ("QUA_EBOULEMENT_RD", 1500f), ("QUA_NO_PICKING", 1500f) } },
     };
 
     /// <summary>
@@ -109,6 +111,15 @@ public sealed partial class MissionConverter
                 ("BoutonSortieSerreTropicale", "SortieSerreTropicale", ""),
                 ("Pompe_Arrosage_Mecanisme", "@Pompe", ""),
                 ("BandeSon1", "@Pick_BandeSon", ""),
+            }
+        },
+        {
+            // Quartier (MissionConverter.Quartier.cs) : les six oeuvres d'art à ramasser, le robinet de gaz du local de la cour
+            "quartier", new[]
+            {
+                ("Oeuvre1", "@Pick_Oeuvre1", ""), ("Oeuvre2", "@Pick_Oeuvre2", ""), ("Oeuvre3", "@Pick_Oeuvre3", ""),
+                ("Oeuvre4", "@Pick_Oeuvre4", ""), ("Oeuvre5", "@Pick_Oeuvre5", ""), ("Oeuvre6", "@Pick_Oeuvre6", ""),
+                ("qua_arret_gaz", "@CoupeGaz", ""),
             }
         },
     };
@@ -372,6 +383,52 @@ public sealed partial class MissionConverter
             """;
         File.WriteAllBytes(Path.Combine(classDir, file + ".class"), Encoding.Latin1.GetBytes(cls.Replace("\n", "\r\n")));
         return "design\\placeable\\functional\\useable\\" + file;
+    }
+
+    /// <summary>
+    /// Bouton FD1 tel qu'il sera posé : null s'il est hors de la carte ou si un bouton du même nom est déjà pris (Quartier :
+    /// trois robinets de gaz « qua_arret_gaz », dont deux hors de la carte). Un modèle dessiné loin de son origine (le robinet
+    /// est à 66 m de la sienne) est recentré : le moteur fait venir le pompier à l'origine de l'objet.
+    /// </summary>
+    private (Fd1Object o, List<Fd3Mesh> meshes)? PlaceButton(Fd1Object o, List<Fd3Mesh> meshes)
+    {
+        if (_scriptButtons.Any(b => b.o.Name.Equals(o.Name, StringComparison.OrdinalIgnoreCase)))
+            return null;
+        Matrix4x4 w = o.World;
+        w.M41 *= WorldToCm;
+        w.M42 *= WorldToCm;
+        w.M43 *= WorldToCm;
+        List<Vector3> local = meshes.SelectMany(m => Enumerable.Range(0, m.VertexCount).Select(i => Vertex(m, i))).ToList();
+        if (local.Count == 0)
+            return (o, meshes);
+        Vector3 center = new Vector3((local.Min(p => p.X) + local.Max(p => p.X)) / 2, (local.Min(p => p.Y) + local.Max(p => p.Y)) / 2, 0);
+        Vector3 world = Vector3.Transform(center, w);
+        if (world.X < 0 || world.Y < 0 || world.X > MaxMapCm || world.Y > MaxMapCm)
+            return null;
+        if (center.Length() < 300)
+            return (o, meshes);
+        List<Fd3Mesh> moved = meshes.Select(m => Shifted(m, -center)).ToList();
+        Matrix4x4 nw = o.World;
+        nw.M41 = world.X / WorldToCm;
+        nw.M42 = world.Y / WorldToCm;
+        Fd1Object c = new Fd1Object { Model = o.Model + "_C", Class = o.Class, Name = o.Name, Race = o.Race, World = nw, Offset = o.Offset };
+        return (c, moved);
+    }
+
+    /// <summary>Plus grande coordonnée d'un objet sur la carte (cm) : au-delà, un reste de l'éditeur FD1.</summary>
+    private const float MaxMapCm = 30000;
+
+    /// <summary>Copie d'un maillage déplacé.</summary>
+    private static Fd3Mesh Shifted(Fd3Mesh m, Vector3 by)
+    {
+        Fd3Mesh r = new Fd3Mesh { Name = m.Name, Uv = m.Uv, Indices = m.Indices, Groups = m.Groups, Normals = m.Normals };
+        for (int i = 0; i + 2 < m.Positions.Count; i += 3)
+        {
+            r.Positions.Add(m.Positions[i] + by.X);
+            r.Positions.Add(m.Positions[i + 1] + by.Y);
+            r.Positions.Add(m.Positions[i + 2] + by.Z);
+        }
+        return r;
     }
 
     /// <summary>Boutons du script dans le niveau du moteur : leur action appelle « Use_&lt;bouton&gt; ».</summary>

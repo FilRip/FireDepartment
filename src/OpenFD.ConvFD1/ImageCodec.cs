@@ -1,6 +1,6 @@
 namespace OpenFD.ConvFD1;
 
-/// <summary>Images des textures de FD1 (BMP 8, 24 ou 32 bits ; TGA 24 ou 32 bits, brut ou RLE) → DDS 32 bits (BGRA) lu par le moteur.</summary>
+/// <summary>Images des textures de FD1 (BMP 8, 24 ou 32 bits ; TGA 24 ou 32 bits, brut ou RLE ; JPEG baseline) → DDS 32 bits (BGRA) lu par le moteur.</summary>
 public static class ImageCodec
 {
     /// <summary>Image décodée en RGBA (ligne du haut en premier) ; null si le format n'est pas reconnu.</summary>
@@ -8,6 +8,9 @@ public static class ImageCodec
     {
         if (d.Length > 54 && d[0] == 'B' && d[1] == 'M')
             return DecodeBmp(d);
+        // JPEG (Quartier : les dalles de sol)
+        if (d.Length > 4 && d[0] == 0xFF && d[1] == 0xD8)
+            return JpegDecoder.Decode(d);
         return DecodeTga(d);
     }
 

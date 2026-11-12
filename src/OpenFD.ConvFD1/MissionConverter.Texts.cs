@@ -68,7 +68,7 @@ public sealed partial class MissionConverter
             // compteur est celui de l'objectif, et l'objectif est facultatif
             // (Villa : « voitures détruites : », S2O0)
             foreach (string key in texts.Keys.Where(k => k.EndsWith("_DES_S1O1", StringComparison.OrdinalIgnoreCase) || k.EndsWith("_DES_S2O2", StringComparison.OrdinalIgnoreCase)
-                || k.EndsWith("_DES_S2O0", StringComparison.OrdinalIgnoreCase)
+                || k.EndsWith("_DES_S2O0", StringComparison.OrdinalIgnoreCase) || k.EndsWith("_DES_S2O1", StringComparison.OrdinalIgnoreCase)
                 || k.EndsWith("_DES_S3O2", StringComparison.OrdinalIgnoreCase) || k.EndsWith("_DES_S4O1", StringComparison.OrdinalIgnoreCase)).ToList())
             {
                 string t = texts[key];
