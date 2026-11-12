@@ -140,9 +140,12 @@ public sealed partial class MissionConverter
     }
 
     /// <summary>Les actions de l'objet appellent cette fonction du script (composant A027).</summary>
-    private static LevelObject WithActionScript(LevelObject o, string function)
+    private static LevelObject WithActionScript(LevelObject o, string function) => WithComponentScript(o, 0xA027, function);
+
+    /// <summary>Les noms de fonction du script dans ce composant deviennent celui-ci (A024 : fonction appelée à la destruction).</summary>
+    private static LevelObject WithComponentScript(LevelObject o, ushort component, string function)
     {
-        if (o.GetComponent(0xA027) is not { } comp)
+        if (o.GetComponent(component) is not { } comp)
             return o;
         byte[] b = o.ComponentBytes(comp).ToArray();
         byte[] name = Encoding.Latin1.GetBytes(function + "\0");

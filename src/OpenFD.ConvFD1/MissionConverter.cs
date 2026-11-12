@@ -269,6 +269,7 @@ public sealed partial class MissionConverter
             ?? throw new FileNotFoundException($"niveau .xfl introuvable dans {misDir}");
         Fd1Level level = Fd1Level.Load(File.ReadAllBytes(xfl));
         _fd1 = level;
+        ReadCinematics(misDir);
         Report.Add($"{level.Objects.Count} objets dans {Path.GetFileName(xfl)}");
 
         ModelConverter models = new ModelConverter(Fd1, Path.GetFileName(misDir));
@@ -298,6 +299,27 @@ public sealed partial class MissionConverter
             }
             if (meshes.Count == 0)
                 continue;
+            // objets que le script suit (étagères qui tombent, machines, camion : MissionConverter.Objects.cs), pas du décor
+            string? instance = InstanceName(o);
+            if (ScriptObjectRole(instance) is { } objectRole)
+            {
+                _scriptObjects.Add((o, meshes, instance!, objectRole.role, objectRole.script));
+                foreach (Fd3Mesh m in meshes)
+                    foreach ((string mat, int _, int _) in m.Groups)
+                        materials.Add(mat);
+                // machines et camion : toujours là, leurs cases restent fermées dans la grille (les étagères, cachées ou
+                // montrées par le script, ferment leurs cases par le moteur)
+                if (objectRole.role is not (ObjectRole.Standing or ObjectRole.Fallen))
+                {
+                    Matrix4x4 ow = o.World;
+                    ow.M41 *= WorldToCm;
+                    ow.M42 *= WorldToCm;
+                    ow.M43 *= WorldToCm;
+                    List<Vector3> op = meshes.SelectMany(m => Enumerable.Range(0, m.VertexCount).Select(i => Vector3.Transform(Vertex(m, i), ow))).ToList();
+                    AddObstacle(meshes, ow, new Vector3(op.Min(p => p.X), op.Min(p => p.Y), op.Min(p => p.Z)), new Vector3(op.Max(p => p.X), op.Max(p => p.Y), op.Max(p => p.Z)), o.Class);
+                }
+                continue;
+            }
             // portes ouvertes par le script et boutons qui les ouvrent (MissionConverter.Upper.cs), pas du décor
             string? scriptDoor = ScriptDoorName(o.Model);
             (string door, string message)? scriptButton = ScriptButtonOf(o.Name);
@@ -369,6 +391,9 @@ public sealed partial class MissionConverter
                 File.WriteAllBytes(Path.Combine(gfx, node + ".mesh"), Fd3Writer.MeshFile(copy));
                 File.WriteAllBytes(Path.Combine(gfx, node + ".meshdata"), Fd3Writer.MeshData(copy));
                 nodes.Add((node, w));
+                // toit FD1 : une cinématique qui regarde dessous l'enlève (MissionConverter.Cinematics.cs)
+                if (roof && !lids)
+                    _covers.Add((node, MeshBox(m, w)));
                 foreach ((string mat, int _, int _) in m.Groups)
                     materials.Add(mat);
                 for (int i = 0; i < m.VertexCount; i++)
@@ -518,6 +543,7 @@ public sealed partial class MissionConverter
             File.WriteAllBytes(Path.Combine(gfx, lid.Name + ".mesh"), Fd3Writer.MeshFile(lid));
             File.WriteAllBytes(Path.Combine(gfx, lid.Name + ".meshdata"), Fd3Writer.MeshData(lid));
             nodes.Add((lid.Name, Matrix4x4.Identity));
+            _covers.Add((lid.Name, MeshBox(lid, Matrix4x4.Identity)));
             n++;
         }
         if (n == 0)
@@ -697,6 +723,9 @@ public sealed partial class MissionConverter
         AddGrapples(level);
         AddScriptStairs(level);
         AddStory(level, fd1);
+        AddScriptObjects(level);
+        if (waypoint != null)
+            AddCinematics(level, waypoint);
         if (waypoint != null)
         {
             // caméra de départ : sur le point d'arrivée de l'équipe, sinon au centre du niveau
@@ -749,7 +778,7 @@ public sealed partial class MissionConverter
         WriteTexts();
         (string bombStart, string bombMain, string bombFunctions) = BombScript();
         (string storyFunctions, string storyStart, string storyMain) = StoryScript(fd1);
-        string script = $"// {Name} : mission convertie de Fire Department 1 ({Mission})\r\n\r\n{bombFunctions}{ButtonScript()}{storyFunctions}void {Name}_Start()\r\n{{\r\n{bombStart}{storyStart}}}\r\n\r\nvoid {Name}_Main()\r\n{{\r\n{bombMain}{storyMain}}}\r\n";
+        string script = $"// {Name} : mission convertie de Fire Department 1 ({Mission})\r\n\r\n{bombFunctions}{CinematicScript()}{ButtonScript()}{storyFunctions}void {Name}_Start()\r\n{{\r\n{bombStart}{storyStart}}}\r\n\r\nvoid {Name}_Main()\r\n{{\r\n{bombMain}{storyMain}}}\r\n";
         File.WriteAllBytes(Path.Combine(scripts, Name + ".scp"), Encoding.Latin1.GetBytes(script));
         Report.Add($"niveau : grille {w} x {h} cases, .mis et script dans Design\\Mission\\{Name} et Script\\Mission\\{Name}");
     }
