@@ -167,6 +167,9 @@ public sealed partial class MissionConverter
     /// <summary>Puissance des sprinklers sur chaque foyer : le quart de celle d'un pompier (FIREATTACKPOWER = 10).</summary>
     private const float BanqueSprinklerPower = 2.5f;
 
+    /// <summary>Secondes entre l'appel du renfort (acte 3) et sa cinématique : les véhicules sont alors dans l'avenue.</summary>
+    private const int BanqueReinforcementCineDelay = 5;
+
     /// <summary>Intensité donnée aux foyers d'un groupe FD1 quand le script l'allume (il grandit ensuite de lui-même).</summary>
     private const int BanqueGroupStart = 20;
 
@@ -375,7 +378,9 @@ public sealed partial class MissionConverter
         L("\tLEV_ValidateObjective(SCR_GetVarS32(\"Obj_Acte2\"), 1);");
         L("\tFeuxEnHaut();");
         L("\tLEV_CallReinforcement(1);");
-        Cin("\t", "ARRIVEE_RENFORT");
+        // la cinématique quand les véhicules entrent dans l'avenue (le renfort part 1 s après l'appel)
+        if (Cine("ARRIVEE_RENFORT").Length > 0)
+            L($"\tSCR_RunDelayed(\"Cine_ARRIVEE_RENFORT\", {BanqueReinforcementCineDelay}.0);");
         L("\tSCR_RunDelayed(\"Helicoptere\", 40.0);");
         L("\tSCR_RunDelayed(\"AllumVIP\", 180.0);");
         // le comptable (FD1 : montré par la sortie de secours ou derrière Porte7) : dès l'acte 3
