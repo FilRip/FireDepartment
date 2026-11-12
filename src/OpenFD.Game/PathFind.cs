@@ -116,6 +116,14 @@ public sealed class PathFind
     public Dictionary<int, string> BlockedBy { get; } = new();
 
     /// <summary>
+    /// Cases que chaque objet du décor ferme à lui seul (BuildObstacles), et s'il est visible au départ : quand le script le
+    /// cache ou le montre (Occupations.cs), ce sont ces cases qui s'ouvrent ou se ferment, même si un autre objet les
+    /// partage (FD1 Entrepot : l'étagère debout et l'étagère couchée qui la remplace).
+    /// </summary>
+    public Dictionary<uint, List<int>> ObjectCells { get; } = new();
+    public Dictionary<uint, bool> ObjectStartVisible { get; } = new();
+
+    /// <summary>
     /// Obstacles des objets posés (voitures, meubles…) : la grille du jeu ne contient que les murs.
     /// Comme le jeu (section [OCCUPATION]) :
     ///  • mode « Rectangle » : Rect_SizeX × Rect_SizeY cases centrées sur l'objet (0 × 0 = ne bloque pas : herbes…) ;
@@ -567,6 +575,7 @@ public sealed class PathFind
             }
             if (string.IsNullOrEmpty(model) || model.Equals("noitem", StringComparison.OrdinalIgnoreCase))
                 continue;
+            ObjectStartVisible[o.Id] = o.StartVisible;
             string path = SceneAssets.GfxPath("Placeable", model);
             if (!shapes.TryGetValue(path, out pts!))
             {
@@ -596,6 +605,7 @@ public sealed class PathFind
         void Mark(LevelObject o, List<Vector2> local, string model)
         {
             HashSet<(int, int)> seen = new HashSet<(int, int)>();
+            Dictionary<int, int> mine = new Dictionary<int, int>();
             foreach (Vector2 p in local)
             {
                 Vector3 w = Vector3.Transform(new Vector3(p, 0), o.Matrix);
@@ -605,9 +615,14 @@ public sealed class PathFind
                 if (!g.Inside(cx, cy))
                     continue;
                 int i = g.Index(cx, cy);
+                mine[i] = mine.GetValueOrDefault(i) + 1;
+                // caché au départ (le script le montrera) : il ne ferme rien encore
+                if (!o.StartVisible)
+                    continue;
                 cover[i] = cover.GetValueOrDefault(i) + 1;
                 names.TryAdd(i, o.Name + " " + model);
             }
+            ObjectCells[o.Id] = mine.Where(kv => kv.Value > CoverMin).Select(kv => kv.Key).ToList();
         }
     }
     private const int CoverMin = 8;   // sur 16 carrés de 25 cm par case
