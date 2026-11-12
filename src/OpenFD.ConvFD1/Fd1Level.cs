@@ -80,7 +80,7 @@ public sealed class Fd1Level
         return lv;
     }
 
-    private static readonly System.Text.RegularExpressions.Regex TileRx = new(@"^[A-Za-z0-9]+_X(\d+)_Y(\d+)\.BMP$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    private static readonly System.Text.RegularExpressions.Regex TileRx = new(@"^[A-Za-z0-9_]*?_X(\d+)_Y(\d+)\.BMP$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     /// <summary>Matrice affine 4×4 plausible à cet endroit (dernière colonne 0, 0, 0, 1 ; axes de longueur raisonnable).</summary>
     private static Matrix4x4? MatrixAt(byte[] d, long at)

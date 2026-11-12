@@ -19,6 +19,12 @@ public sealed partial class MissionConverter
     private static readonly Dictionary<string, (string model, float z)[]> UpperFloors = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Entrepot", new[] { ("CORNICHE", 1500f), ("ENT_PASSERELLE", 1500f), ("PIECE02_01", 1500f), ("PIECE02_02", 1500f) } },
+        // Banque : l'étage (comptabilité, bureau du directeur, salle informatique, salle VIP, couloirs, toilettes) et le toit
+        // de l'immeuble voisin, où se pose l'hélicoptère (« BAN_BAT_EVAC », 14,8 m : même niveau, par la sortie de secours)
+        { "banque", new[] { ("BAN_BAT_EVAC", 1500f), ("BAN_BUR_DIR", 1500f), ("BAN_COMPTA_03", 1500f), ("BAN_COULOIR_ANGL_VIP", 1500f),
+            ("BAN_COULOIR_DIR", 1500f), ("BAN_COULOIR_VIP", 1500f), ("BAN_INFOR", 1500f), ("BAN_VIP", 1500f), ("BAN_WC", 1500f),
+            ("BAN_G_HALL", 1500f), ("BAN_EFFONDRE", 1500f), ("BAN_EBOUL_01", 1500f), ("BAN_EBOUL_02", 1500f), ("BAN_EBOUL_03", 1500f),
+            ("BAN_EBOUL_04", 1500f) } },
     };
 
     /// <summary>
@@ -30,6 +36,8 @@ public sealed partial class MissionConverter
     private static readonly Dictionary<string, (Vector3 top, float yaw)[]> GrappleWalls = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Entrepot", new[] { (new Vector3(9400, 13240, 1430), 0f), (new Vector3(8750, 19200, 1430), MathF.PI / 2) } },
+        // Banque : le spécialiste au grappin monte du hall au couloir est de l'étage, à côté de l'escalier effondré
+        { "banque", new[] { (new Vector3(13600, 9550, 1430), 0f) } },
     };
 
     /// <summary>
@@ -46,6 +54,9 @@ public sealed partial class MissionConverter
     private static readonly Dictionary<string, (string model, string name)[]> ScriptDoors = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Entrepot", new[] { ("ENT_PORTEBLINDEE01", "PorteFen") } },
+        // Banque : la sortie de secours (toit voisin ↔ étage, ouverte à l'arrivée de l'hélicoptère), la porte de la salle de
+        // surveillance (acte 4) et la porte blindée de la salle des coffres
+        { "banque", new[] { ("ECO_PORTECOUPFEU01", "SortieSecours"), ("ECO_PORTECOUPEFEU_01", "PorteSurveillance"), ("BAN_PORTE_BLINDEE_SALLE", "PorteBlindeeCoffre") } },
     };
 
     /// <summary>
@@ -66,10 +77,32 @@ public sealed partial class MissionConverter
                 ("eco_arm_cont_coupfeu01", "@BoutFlaque", ""),
             }
         },
+        {
+            // Banque (MissionConverter.Banque.cs) : les bandes et les petits coffres à ramasser, les grands coffres à ouvrir,
+            // l'armoire des sprinklers
+            "banque", new[]
+            {
+                ("Bobine1", "@Pick_Bobine1", ""), ("Bobine2", "@Pick_Bobine2", ""), ("Bobine3", "@Pick_Bobine3", ""),
+                ("Bobine4", "@Pick_Bobine4", ""), ("Bobine5", "@Pick_Bobine5", ""), ("Bobine6", "@Pick_Bobine6", ""),
+                ("Coffre1", "@Pick_Coffre1", ""), ("Coffre2", "@Pick_Coffre2", ""), ("Coffre3", "@Pick_Coffre3", ""),
+                ("CoffreMec1", "@Ouvre_CoffreMec1", ""), ("CoffreMec2", "@Ouvre_CoffreMec2", ""), ("CoffreMec3", "@Ouvre_CoffreMec3", ""),
+                ("DeclencheSprinkler", "@Sprinklers", ""),
+            }
+        },
     };
 
     /// <summary>Maillages des planchers en hauteur (dans le repère du monde) et hauteur de chacun.</summary>
-    private readonly List<(List<Fd3Mesh> meshes, Matrix4x4 w, float z)> _upperFloors = new List<(List<Fd3Mesh>, Matrix4x4, float)>();
+    private readonly List<(List<Fd3Mesh> meshes, Matrix4x4 w, float z, bool sagging)> _upperFloors = new List<(List<Fd3Mesh>, Matrix4x4, float, bool)>();
+
+    /// <summary>
+    /// Planchers affaissés, par mission (modèle FD1) : leurs bords penchent vers un trou ; on y marche quand même (pente
+    /// jusqu'à 35°, jusqu'à 2 m sous le plancher). Banque : la pièce effondrée de l'étage, entre les deux ailes, et les
+    /// dalles écroulées qui en couvrent le milieu : on la traverse.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> SaggingFloors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "banque", new[] { "BAN_EFFONDRE", "BAN_EBOUL_01", "BAN_EBOUL_02", "BAN_EBOUL_03", "BAN_EBOUL_04" } },
+    };
 
     /// <summary>Portes du script trouvées dans le niveau FD1 (objet, maillages, nom).</summary>
     private readonly List<(Fd1Object o, List<Fd3Mesh> meshes, string name)> _scriptDoors = new List<(Fd1Object, List<Fd3Mesh>, string)>();
@@ -133,7 +166,7 @@ public sealed partial class MissionConverter
     private int ApplyUpperFloors(Grid g)
     {
         int n = 0;
-        foreach ((List<Fd3Mesh> meshes, Matrix4x4 w, float z) in _upperFloors)
+        foreach ((List<Fd3Mesh> meshes, Matrix4x4 w, float z, bool sagging) in _upperFloors)
             foreach (Fd3Mesh m in meshes)
                 for (int t = 0; t + 2 < m.Indices.Count; t += 3)
                 {
@@ -141,7 +174,8 @@ public sealed partial class MissionConverter
                     Vector3 b = Vector3.Transform(Vertex(m, m.Indices[t + 1]), w);
                     Vector3 c = Vector3.Transform(Vertex(m, m.Indices[t + 2]), w);
                     Vector3 normal = Vector3.Cross(b - a, c - a);
-                    if (normal.Length() < 1 || MathF.Abs(Vector3.Normalize(normal).Z) < 0.95f || MathF.Abs((a.Z + b.Z + c.Z) / 3 - z) > 60)
+                    if (normal.Length() < 1 || MathF.Abs(Vector3.Normalize(normal).Z) < (sagging ? 0.8f : 0.95f)
+                        || (a.Z + b.Z + c.Z) / 3 - z > 60 || z - (a.Z + b.Z + c.Z) / 3 > (sagging ? 200 : 60))
                         continue;
                     int x0 = (int)MathF.Floor(MathF.Min(a.X, MathF.Min(b.X, c.X)) / Grid.CellSize);
                     int x1 = (int)MathF.Floor(MathF.Max(a.X, MathF.Max(b.X, c.X)) / Grid.CellSize);

@@ -91,6 +91,13 @@ public sealed partial class MissionConverter
         if (ccs == null)
             return;
         byte[] d = File.ReadAllBytes(ccs);
+        // noms des cinématiques : les fonctions du script FD1 des cinématiques (« Banque_Cutscene.SCP » : void ARRIVEE()…) ;
+        // les autres textes du .ccs sont des clés de textes (« CUT_VIP », « BAN_CUT_SEQUENCE2 »)
+        HashSet<string> names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string scp in Directory.EnumerateFiles(misDir, "*.scp", new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive })
+                     .Where(f => Path.GetFileName(f).Contains("cutscene", StringComparison.OrdinalIgnoreCase)))
+            foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(scp, Encoding.Latin1), @"^\s*void\s+(\w+)\s*\(", System.Text.RegularExpressions.RegexOptions.Multiline))
+                names.Add(m.Groups[1].Value);
         string? current = null;
         string? pendingText = null;
         List<CineShot> shots = new List<CineShot>();
@@ -125,7 +132,8 @@ public sealed partial class MissionConverter
                         continue;
                     }
                 }
-                else if (s.StartsWith("ENT_CUT_", StringComparison.OrdinalIgnoreCase) || s.Contains("_CUT_", StringComparison.OrdinalIgnoreCase))
+                else if (s.StartsWith("ENT_CUT_", StringComparison.OrdinalIgnoreCase) || s.Contains("_CUT_", StringComparison.OrdinalIgnoreCase)
+                    || (names.Count > 0 && !names.Contains(s) && s != "NULL" && s.All(c => char.IsUpper(c) || char.IsDigit(c) || c == '_')))
                 {
                     // texte : affiché au plan suivant (ou sur le dernier, s'il n'y en a plus)
                     if (current != null && CinematicCuts.TryGetValue(Mission, out (string cine, string beforeText)[]? cuts)

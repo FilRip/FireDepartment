@@ -29,13 +29,32 @@ public sealed partial class MissionConverter
     /// Classes FD1 qui ne sont pas du décor : personnages (remplacés par des unités et des civils du moteur), véhicules des
     /// pompiers (« Tanker », « MMaster » : remplacés par les véhicules de l'équipe de départ), fanions des points de passage.
     /// </summary>
-    private static readonly HashSet<string> NotScenery = new(StringComparer.OrdinalIgnoreCase) { "ActeurUnit", "Tanker", "MMaster", "WayPoint" };
+    private static readonly HashSet<string> NotScenery = new(StringComparer.OrdinalIgnoreCase) { "ActeurUnit", "Tanker", "MMaster", "WayPoint", "FireFighter", "Aerial", "WaterTower" };
 
     /// <summary>Véhicules des pompiers FD1 (classe) → véhicule du moteur.</summary>
     private static readonly Dictionary<string, string> Vehicles = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Tanker", "Firevehicle\\Veh_P_pumper_us" },
         { "MMaster", "Firevehicle\\Veh_P_ambulance_us" },
+        // Banque : le « Pumper » (lance à eau), la grande échelle et la tour d'eau
+        { "FireFighter", "Firevehicle\\Veh_P_pumper_us" },
+        { "Aerial", "Firevehicle\\Veh_P_aerial_us" },
+        { "WaterTower", "Firevehicle\\Veh_P_watertower_us" },
+    };
+
+    /// <summary>
+    /// Poteaux de barrière, par mission (modèle FD1) : un mur les relie l'un à l'autre (BarrierWalls). Banque : les
+    /// poteaux des guichets du comptoir en arc de cercle du hall.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> Barriers = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "banque", new[] { "CLONETTE_ETA01" } },
+    };
+
+    /// <summary>Véhicules FD1 (classe) qui arrivent avec le premier renfort, par mission (Banque : acte 3).</summary>
+    private static readonly Dictionary<string, string[]> ReinforcementVehicles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "banque", new[] { "Aerial", "WaterTower" } },
     };
 
     /// <summary>Pompiers FD1 (nom de l'objet) → pompier du moteur, et s'il vient en renfort (sinon dans l'équipe de départ).</summary>
@@ -45,6 +64,7 @@ public sealed partial class MissionConverter
         { "pompier_Engenieur", ("Fireman\\fireman_ing", false) },
         { "pompier_commandos", ("Fireman\\fireman_scout", true) },
         { "pompier_FireProof", ("Fireman\\fireman_igni", true) },
+        { "pompier_Medic", ("Fireman\\fireman_medic", false) },
     };
 
     /// <summary>
@@ -54,6 +74,8 @@ public sealed partial class MissionConverter
     private static readonly Dictionary<string, Vector2> Entries = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Entrepot", new Vector2(21300, 10250) },
+        // Banque : la grande avenue devant la banque, depuis l'est
+        { "banque", new Vector2(23500, 17450) },
     };
 
     private string Data => Fd3.DataDir;
@@ -101,7 +123,7 @@ public sealed partial class MissionConverter
     private static readonly HashSet<string> NotObstacle = new(StringComparer.OrdinalIgnoreCase) { "Mechanisme" };
 
     /// <summary>Relève les carrés de 25 cm couverts par un objet entre 30 cm et 1,7 m au-dessus de son pied.</summary>
-    private void AddObstacle(List<Fd3Mesh> meshes, Matrix4x4 w, Vector3 lo, Vector3 hi, string fd1Class, float floor = 0)
+    private void AddObstacle(List<Fd3Mesh> meshes, Matrix4x4 w, Vector3 lo, Vector3 hi, string fd1Class, float floor = 0, bool barrier = false)
     {
         float max = fd1Class.Equals("ConteneurComposant", StringComparison.OrdinalIgnoreCase) ? BurnableObstacleMaxArea : ObstacleMaxArea;
         if ((hi.X - lo.X) * (hi.Y - lo.Y) / 10000f > max || hi.Z - lo.Z < 60 || lo.Z > floor + 50)
@@ -135,8 +157,41 @@ public sealed partial class MissionConverter
             return;
         }
         _blockedQuarters.UnionWith(mine);
+        // poteau d'une barrière (Banque : le comptoir du hall) : relié aux suivants (BarrierWalls)
+        if (barrier)
+            _barrierPosts.Add(new Vector2((lo.X + hi.X) / 2, (lo.Y + hi.Y) / 2));
         if (fd1Class.Equals("ConteneurComposant", StringComparison.OrdinalIgnoreCase))
             CloseGaps(mine);
+    }
+
+    /// <summary>Poteaux des barrières (Barriers), au sol.</summary>
+    private readonly List<Vector2> _barrierPosts = new List<Vector2>();
+
+    /// <summary>
+    /// Barrières : de poteau en poteau voisin (moins de 7 m, dans l'ordre des x), un mur à travers lequel on ne passe pas.
+    /// Banque : le comptoir en arc de cercle entre les poteaux des guichets (le comptoir lui-même est dans le bâtiment du
+    /// hall, trop bas pour en être un mur).
+    /// </summary>
+    private void BarrierWalls()
+    {
+        const float Q = 25;
+        List<Vector2> posts = _barrierPosts.OrderBy(p => p.X).ToList();
+        for (int i = 0; i + 1 < posts.Count; i++)
+        {
+            Vector2 a = posts[i];
+            Vector2 b = posts[i + 1];
+            float len = Vector2.Distance(a, b);
+            if (len > 700)
+                continue;
+            for (float t = 0; t <= len; t += Q / 2)
+            {
+                Vector2 p = a + (b - a) * (t / len);
+                _wallQuarters.Add(((int)MathF.Floor(p.X / Q), (int)MathF.Floor(p.Y / Q)));
+                // deux carrés côte à côte : une case traversée en biais compte au moins deux carrés (règle des murs)
+                _wallQuarters.Add(((int)MathF.Floor((p.X + Q / 2) / Q), (int)MathF.Floor(p.Y / Q)));
+                _wallQuarters.Add(((int)MathF.Floor(p.X / Q), (int)MathF.Floor((p.Y + Q / 2) / Q)));
+            }
+        }
     }
 
     /// <summary>Carrés de 25 cm traversés par un mur de bâtiment à hauteur d'homme (AddWalls).</summary>
@@ -301,6 +356,9 @@ public sealed partial class MissionConverter
                 continue;
             // objets que le script suit (étagères qui tombent, machines, camion : MissionConverter.Objects.cs), pas du décor
             string? instance = InstanceName(o);
+            // objets FD1 remplacés ou laissés de côté (Banque : l'hélicoptère du décor, les portes coupe-feu ouvertes)
+            if (instance != null && HiddenDecor.TryGetValue(Mission, out string[]? hidden) && hidden.Contains(instance, StringComparer.OrdinalIgnoreCase))
+                continue;
             if (ScriptObjectRole(instance) is { } objectRole)
             {
                 _scriptObjects.Add((o, meshes, instance!, objectRole.role, objectRole.script));
@@ -322,13 +380,22 @@ public sealed partial class MissionConverter
             }
             // portes ouvertes par le script et boutons qui les ouvrent (MissionConverter.Upper.cs), pas du décor
             string? scriptDoor = ScriptDoorName(o.Model);
-            (string door, string message)? scriptButton = ScriptButtonOf(o.Name);
+            // bouton : par le nom de l'instance (Banque : « Bobine3 », « CoffreMec1 ») ou par celui de l'objet (Entrepot)
+            (string door, string message)? scriptButton = instance != null ? ScriptButtonOf(instance) : null;
+            Fd1Object buttonObject = o;
+            if (scriptButton != null)
+                buttonObject = new Fd1Object { Model = o.Model, Class = o.Class, Name = instance!, Race = o.Race, World = o.World, Offset = o.Offset };
+            else
+                scriptButton = ScriptButtonOf(o.Name);
             if (scriptDoor != null || scriptButton != null)
             {
+                // une porte FD1 en double (Banque : deux portes blindées l'une sur l'autre) n'en fait qu'une
+                if (scriptDoor != null && _scriptDoors.Any(d => d.name == scriptDoor))
+                    continue;
                 if (scriptDoor != null)
                     _scriptDoors.Add((o, meshes, scriptDoor));
                 else
-                    _scriptButtons.Add((o, meshes, scriptButton!.Value.door, scriptButton.Value.message));
+                    _scriptButtons.Add((buttonObject, meshes, scriptButton!.Value.door, scriptButton.Value.message));
                 foreach (Fd3Mesh m in meshes)
                     foreach ((string mat, int _, int _) in m.Groups)
                         materials.Add(mat);
@@ -374,7 +441,7 @@ public sealed partial class MissionConverter
             count++;
             // plancher en hauteur (dessus du bloc noir d'Entrepot) : des cases de la grille à sa hauteur
             if (UpperFloorOf(o.Model) is float upper)
-                _upperFloors.Add((meshes, w, upper));
+                _upperFloors.Add((meshes, w, upper, SaggingFloors.TryGetValue(Mission, out string[]? sag) && sag.Contains(o.Model, StringComparer.OrdinalIgnoreCase)));
             // toit FD1 (« TOIT_ENTREPOT_01 », « ENT_TOIT_MANUFACTURE ») : nœud « …_ROOF », tout entier un toit pour le moteur
             // (il part quand un pompier passe dessous) ; le reste des bâtiments est coupé à hauteur d'étage par le moteur
             bool roof = lids || o.Model.Contains("TOIT", StringComparison.OrdinalIgnoreCase);
@@ -416,7 +483,8 @@ public sealed partial class MissionConverter
             if (FakeDoorModels.TryGetValue(Mission, out string[]? fake) && fake.Contains(o.Model, StringComparer.OrdinalIgnoreCase))
                 AddWalls(meshes, w);
             if (!room && !roof && !mask && !NotObstacle.Contains(o.Class))
-                AddObstacle(meshes, w, rlo, rhi, o.Class, UpperFloorHeights().FirstOrDefault(z => MathF.Abs(rlo.Z - z) <= 50));
+                AddObstacle(meshes, w, rlo, rhi, o.Class, UpperFloorHeights().FirstOrDefault(z => MathF.Abs(rlo.Z - z) <= 50),
+                    Barriers.TryGetValue(Mission, out string[]? barriers) && barriers.Contains(o.Model, StringComparer.OrdinalIgnoreCase));
             // bâtiments (pièces, halls, façades) : leurs murs, fenêtres comprises
             bool building = room || ((rhi.X - rlo.X) * (rhi.Y - rlo.Y) / 10000f > ObstacleMaxArea && o.Class.Equals("ObjetDecor", StringComparison.OrdinalIgnoreCase));
             if (building && !roof && !mask)
@@ -461,19 +529,25 @@ public sealed partial class MissionConverter
     private List<(string name, Vector2 at)> WriteStations(Fd1Level level, ref string mis)
     {
         List<(string name, Vector2 at)> points = new List<(string, Vector2)>();
-        List<Fd1Object> trucks = level.Objects.Where(o => Vehicles.ContainsKey(o.Class)).OrderBy(o => o.Class.Equals("MMaster", StringComparison.OrdinalIgnoreCase) ? 1 : 0).ToList();
-        List<Fd1Object> men = level.Objects.Where(o => o.Class.Equals("ActeurUnit", StringComparison.OrdinalIgnoreCase) && Firemen.ContainsKey(o.Name)).ToList();
+        string[] laterClasses = ReinforcementVehicles.TryGetValue(Mission, out string[]? lc) ? lc : Array.Empty<string>();
+        // véhicules et pompiers FD1 des équipes (sans ceux posés à part : l'hélicoptère de la Banque et son équipe)
+        bool Apart(Fd1Object o) => LevelUnitOf(o) != null;
+        List<Fd1Object> allTrucks = level.Objects.Where(o => Vehicles.ContainsKey(o.Class) && !Apart(o)).ToList();
+        List<Fd1Object> trucks = allTrucks.Where(o => !laterClasses.Contains(o.Class, StringComparer.OrdinalIgnoreCase))
+            .OrderBy(o => o.Class.Equals("MMaster", StringComparison.OrdinalIgnoreCase) ? 1 : 0).ToList();
+        List<Fd1Object> laterTrucks = allTrucks.Where(o => laterClasses.Contains(o.Class, StringComparer.OrdinalIgnoreCase)).ToList();
+        List<Fd1Object> men = level.Objects.Where(o => o.Class.Equals("ActeurUnit", StringComparison.OrdinalIgnoreCase) && Firemen.ContainsKey(o.Name) && !Apart(o)).ToList();
         List<string> first = trucks.Select(t => Vehicles[t.Class]).ToList();
         // pompiers d'abord, spécialistes ensuite (comme la barre des unités de FD1)
         first.AddRange(men.Where(m => !Firemen[m.Name].reinforcement).Select(m => Firemen[m.Name].unit).OrderBy(u => u.EndsWith("_sp_us", StringComparison.OrdinalIgnoreCase) ? 0 : 1));
         List<Fd1Object> later = men.Where(m => Firemen[m.Name].reinforcement).ToList();
         string dir = Path.Combine(Data, "Design", "FireStation");
         Directory.CreateDirectory(dir);
+        Vector2 entry = Entries.TryGetValue(Mission, out Vector2 e) ? e : Vector2.Zero;
         if (first.Count > 0)
         {
             File.WriteAllBytes(Path.Combine(dir, Name + "_1.cfg"), Encoding.Latin1.GetBytes(Station("&E9", first)));
             mis = IniText.Set(mis, "FIRESTATION", "INITIALDISPATCH", Name + "_1");
-            Vector2 entry = Entries.TryGetValue(Mission, out Vector2 e) ? e : Vector2.Zero;
             for (int k = 0; k < trucks.Count; k++)
             {
                 Vector2 end = new Vector2(trucks[k].World.M41, trucks[k].World.M42) * WorldToCm;
@@ -483,9 +557,10 @@ public sealed partial class MissionConverter
             }
             Report.Add($"équipe de départ : {first.Count} unités ({trucks.Count} véhicules)");
         }
-        if (later.Count > 0)
+        if (later.Count > 0 || laterTrucks.Count > 0)
         {
-            File.WriteAllBytes(Path.Combine(dir, Name + "_2.cfg"), Encoding.Latin1.GetBytes(Station("&E10", later.Select(m => Firemen[m.Name].unit).ToList())));
+            List<string> units = laterTrucks.Select(t => Vehicles[t.Class]).Concat(later.Select(m => Firemen[m.Name].unit)).ToList();
+            File.WriteAllBytes(Path.Combine(dir, Name + "_2.cfg"), Encoding.Latin1.GetBytes(Station("&E10", units)));
             mis = IniText.Set(mis, "FIRESTATION", "REINFORCEMENT1", Name + "_2");
             mis = IniText.Set(mis, "FIRESTATION", "REINFORCEMENT1SPAWNPOINT", "2");
             // [REP_TIME] du .MIS FD1 : délai avant le renfort (s)
@@ -493,11 +568,25 @@ public sealed partial class MissionConverter
             string rep = misFile.Length > 0 ? File.ReadLines(misFile, Encoding.Latin1).Select(l => l.Trim()).FirstOrDefault(l => l.StartsWith("[REP_TIME]", StringComparison.OrdinalIgnoreCase)) ?? "" : "";
             string eta = rep.Length > 0 ? rep["[REP_TIME]".Length..].Trim().Split(' ', '\t', '/')[0] : "60";
             mis = IniText.Set(mis, "FIRESTATION", "REINFORCEMENT1ETA", eta);
-            _reinforcementEta = float.TryParse(eta, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float e) ? e : 60;
-            Vector2 at = new Vector2(later[0].World.M41, later[0].World.M42) * WorldToCm;
-            points.Add(("locstart2_1", at));
-            points.Add(("locend2_1", at));
-            Report.Add($"renfort : {later.Count} pompier(s) après {eta} s");
+            _reinforcementEta = float.TryParse(eta, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float r) ? r : 60;
+            if (laterTrucks.Count > 0)
+            {
+                // véhicules du renfort : ils entrent comme ceux du départ et vont à leur place FD1 (l'équipage descend)
+                for (int k = 0; k < laterTrucks.Count; k++)
+                {
+                    Vector2 end = new Vector2(laterTrucks[k].World.M41, laterTrucks[k].World.M42) * WorldToCm;
+                    Vector2 start = entry != Vector2.Zero ? entry + new Vector2(0, 600 * k) : end - new Vector2(3000, 0);
+                    points.Add(($"locstart2_{k + 1}", start));
+                    points.Add(($"locend2_{k + 1}", end));
+                }
+            }
+            else
+            {
+                Vector2 at = new Vector2(later[0].World.M41, later[0].World.M42) * WorldToCm;
+                points.Add(("locstart2_1", at));
+                points.Add(("locend2_1", at));
+            }
+            Report.Add($"renfort : {units.Count} unité(s) après {eta} s");
         }
         return points;
     }
@@ -616,8 +705,11 @@ public sealed partial class MissionConverter
         { "Entrepot", new[] { (7800f, 13000f, 0f, 6400f), (11000f, 13000f, 6600f, 7400f), (9000f, 12500f, 12700f, 13700f) } },
     };
 
-    private static bool LitAtStart(string mission, Vector3 at, string type)
+    private bool LitAtStart(string mission, Vector3 at, string type)
     {
+        // Banque : les torches, sauf dans les pièces dont le feu attend le script (groupes de foyers FD1, éteints au départ)
+        if (mission.Equals("banque", StringComparison.OrdinalIgnoreCase))
+            return type.StartsWith("torche", StringComparison.OrdinalIgnoreCase) && BanqueGroupOf(at, type) == 0;
         if (StartFires.TryGetValue(mission, out (float x0, float x1, float y0, float y1)[]? zones))
             return zones.Any(z => at.X >= z.x0 && at.X <= z.x1 && at.Y >= z.y0 && at.Y <= z.y1);
         return type.StartsWith("torche", StringComparison.OrdinalIgnoreCase);
@@ -723,6 +815,7 @@ public sealed partial class MissionConverter
         AddGrapples(level);
         AddScriptStairs(level);
         AddStory(level, fd1);
+        AddLevelUnits(level, fd1);
         AddScriptObjects(level);
         if (waypoint != null)
             AddCinematics(level, waypoint);
@@ -766,6 +859,7 @@ public sealed partial class MissionConverter
         // « mur de pièce » (grilles du jeu) ; ici, les allées étroites entre deux étagères ou un bureau et un mur resteraient
         // fermées. Les murs viennent des maillages (le moteur), les obstacles des objets (BlockObstacles).
         Array.Fill(grid.ZoneB, (ushort)1);
+        BarrierWalls();
         int blocked = BlockObstacles(grid);
         int upperCells = ApplyUpperFloors(grid);
         if (upperCells > 0)
