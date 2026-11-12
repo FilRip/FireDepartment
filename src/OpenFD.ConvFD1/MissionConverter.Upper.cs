@@ -62,6 +62,8 @@ public sealed partial class MissionConverter
                 // indices à ramasser (MissionConverter.Story.cs) : la vidéo du local de sécurité, les documents du bureau
                 ("ent_localsecurite01_etat01_meca", "@VideoPick", ""),
                 ("ent_documents", "@DocPick", ""),
+                // l'armoire qui coupe le courant de la flaque électrique
+                ("eco_arm_cont_coupfeu01", "@BoutFlaque", ""),
             }
         },
     };
@@ -378,6 +380,11 @@ public sealed partial class MissionConverter
             s.Append($"void Use_{o.Name}(EntityID User, EntityID Bouton, mcString State)\r\n{{\r\n");
             s.Append($"\tif(SCR_GetVarS32(\"{o.Name}\") == 0)\r\n\t{{\r\n");
             s.Append($"\t\tSCR_SetVarS32(\"{o.Name}\", 1);\r\n");
+            // qui a utilisé l'objet (Entrepot : le scout, au bouton de l'échelle 1)
+            s.Append($"\t\tSCR_SetVarS32(\"User_{o.Name}\", User);\r\n");
+            // sa cinématique FD1 (MissionConverter.Story.cs, Cinematics.cs)
+            if (ButtonCinematics.TryGetValue(o.Name, out string? cine) && Cine(cine).Length > 0)
+                s.Append($"\t\t{Cine(cine)}\r\n");
             if (door.StartsWith('@'))
                 s.Append($"\t\t{door[1..]}();\r\n");
             else if (IsScriptStair(door))

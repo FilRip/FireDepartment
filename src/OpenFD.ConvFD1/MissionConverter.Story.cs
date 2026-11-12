@@ -49,8 +49,25 @@ public sealed partial class MissionConverter
                 // hall) ou entre dans l'atelier, par la porte blindée ou par les portes du quai
                 ("AvantAtelier", "Zone_FeuAtelier", new Vector3(11100, 11700, 0), new Vector3(13100, 13690, 300)),
                 ("Atelier", "Zone_FeuAtelier", new Vector3(8800, 13700, 0), new Vector3(14000, 19600, 300)),
+                // flaque électrique (zones FD1 « Flaque » et « FlaqueCut ») : on s'y électrocute tant que le courant n'est
+                // pas coupé à l'armoire ; la première fois qu'on approche, l'avertissement
+                ("Flaque", "Flaque_Entree", new Vector3(9415, 18691, 0), new Vector3(9953, 19448, 300)),
+                ("FlaqueCut", "FlaqueCut", new Vector3(9383, 18722, 0), new Vector3(10006, 19448, 300)),
             }
         },
+    };
+
+    /// <summary>Cinématique FD1 jouée quand on utilise ce bouton du script (Entrepot : la porte blindée, l'échelle 2).</summary>
+    private static readonly Dictionary<string, string> ButtonCinematics = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Ent_Bouton_Echelle1", "FENOUVRE" },
+        { "Ent_Bouton_Echelle2", "CUTECHELLE2" },
+    };
+
+    /// <summary>Fonction appelée quand une unité sort d'une zone de déclenchement (par nom de zone).</summary>
+    private static readonly Dictionary<string, string> StoryTriggerLeave = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Flaque", "Flaque_Sortie" },
     };
 
     /// <summary>Nom FD1 de l'objet (dernier texte de son enregistrement avant le script) ; null : sans nom.</summary>
@@ -123,7 +140,7 @@ public sealed partial class MissionConverter
             {
                 LevelObject t = LevelEdit.Clone(template, LevelEdit.NewId(level), name, template.ClassPath);
                 t = LevelEdit.WithTransform(t, (min + max) / 2, Vector3.Zero);
-                t = LevelEdit.WithTrigger(t, script, "", true, max - min);
+                t = LevelEdit.WithTrigger(t, script, StoryTriggerLeave.TryGetValue(name, out string? leave) ? leave : "", true, max - min);
                 level.Objects.Add(t);
             }
             Report.Add($"déclencheurs : {triggers.Length}");
@@ -178,7 +195,10 @@ public sealed partial class MissionConverter
         L("{");
         L("\ts32 g;");
         L("\tSCR_SetVarS32(\"Acte\", 1);");
-        foreach (string v in new[] { "FeuAtelier", "GardesSauves", "SecretaireSauvee", "VideoDone", "DocDone", "BombeDone", "Fin", "Feu1Fini", "Feu2Fini", "Garde1Vu", "Garde2Vu", "SecretaireVue", "EtageFeu", "Surprise1", "Surprise3" })
+        // cinématique d'arrivée (FD1 : ARRIVEE)
+        if (Cine("ARRIVEE").Length > 0)
+            L("\t" + Cine("ARRIVEE"));
+        foreach (string v in new[] { "NbMach", "Hall1Vu", "Hall2Vu", "FlaqueVue", "FeuAtelier", "GardesSauves", "SecretaireSauvee", "VideoDone", "DocDone", "BombeDone", "Fin", "Feu1Fini", "Feu2Fini", "Garde1Vu", "Garde2Vu", "SecretaireVue", "EtageFeu", "Surprise1", "Surprise3" })
             L($"\tSCR_SetVarS32(\"{v}\", 0);");
         foreach ((string name, List<string> fires) in new[] { ("hall1", hall1), ("hall2", hall2) })
         {
@@ -187,6 +207,13 @@ public sealed partial class MissionConverter
                 L($"\tENT_GroupAddEntity(g, ENT_FindByName(\"{h}\"));");
             L($"\tSCR_SetVarS32(\"G_{name}\", g);");
         }
+        // flaque électrique : les unités dedans (groupe), le courant (1 : il passe)
+        L("\tSCR_SetVarS32(\"G_flaque\", ENT_GroupCreate(\"dans_flaque\"));");
+        L("\tSCR_SetVarS32(\"FlaqueActive\", 1);");
+        // étagères couchées : cachées (le moteur rouvre leurs cases)
+        if (FallingShelves.TryGetValue(Mission, out string[]? shelves))
+            foreach (string sh in shelves)
+                L($"\tENT_SetVisibility(ENT_FindByName(\"{sh}Bis\"), 0);");
         L($"\tSCR_SetVarS32(\"Obj_Gardes\", LEV_AddObjectiveIterate(\"{T("ENTREPOT_DES_S1O0")}\", 2));");
         L($"\tSCR_SetVarS32(\"Obj_Feu1\", LEV_AddObjectiveBoolean(\"{T("ENTREPOT_DES_S1O2")}\"));");
         L($"\tSCR_SetVarS32(\"Obj_Indices\", LEV_AddObjectiveIterate(\"{T("ENTREPOT_DES_S1O1_SEUL")}\", 3));");
@@ -195,6 +222,8 @@ public sealed partial class MissionConverter
         L("// le scout (renfort) est arrivé : il peut monter au grappin");
         L("void MsgScout()");
         L("{");
+        if (Cine("PASSAGES").Length > 0)
+            L("\t" + Cine("PASSAGES"));
         Msg("\t", "ENT_CUT_PASSAGES2");
         Msg("\t", "ENT_CUT_PASSAGES3");
         L("}");
@@ -235,6 +264,8 @@ public sealed partial class MissionConverter
         L("\tif(SCR_GetVarS32(\"bombe0Mec\") == 0)");
         L("\t{");
         L("\t\tMsgBombes();");
+        if (Cine("SURPRISE0").Length > 0)
+            L("\t\t" + Cine("SURPRISE0"));
         L("\t\tAmorce0();");
         L("\t}");
         L("}");
@@ -243,6 +274,8 @@ public sealed partial class MissionConverter
         L("\tif(FIR_HPGetIntensity(SCR_GetVarS32(\"G_hall2\")) >= 250.0 && SCR_GetVarS32(\"bombe4Mec\") == 0)");
         L("\t{");
         L("\t\tMsgBombes();");
+        if (Cine("SURPRISE4").Length > 0)
+            L("\t\t" + Cine("SURPRISE4"));
         L("\t\tAmorce4();");
         L("\t}");
         L("}");
@@ -251,6 +284,8 @@ public sealed partial class MissionConverter
         L("\tif(SCR_GetVarS32(\"bombe2Mec\") == 0)");
         L("\t{");
         L("\t\tMsgBombes();");
+        if (Cine("SURPRISE2").Length > 0)
+            L("\t\t" + Cine("SURPRISE2"));
         L("\t\tSCR_RunDelayed(\"Amorce2\", 10.0);");
         L("\t}");
         L("}");
@@ -263,6 +298,8 @@ public sealed partial class MissionConverter
         L("\t\tSCR_SetVarS32(\"Garde1Vu\", 1);");
         L("\t\tENT_SetVisibility(ENT_FindByName(\"Garde1\"), 1);");
         Msg("\t\t", "ENT_CUT_GARDIEN1");
+        if (Cine("GARDIEN1").Length > 0)
+            L("\t\t" + Cine("GARDIEN1"));
         L("\t\tSCR_RunDelayed(\"Bombe2Run\", 50.0);");
         L("\t}");
         L("}");
@@ -275,6 +312,73 @@ public sealed partial class MissionConverter
         L("\t\tSCR_SetVarS32(\"EtageFeu\", 1);");
         L($"\t\tFIR_HPSetIntensity(ENT_FindByName(\"foyer_{EntrepotUpstairsFire + 1}\"), 50.0);");
         L("\t}");
+        L("}");
+        L("");
+        L("// rien à faire (objet du script dont la destruction ne déclenche rien)");
+        L("void FD1_Rien(EntityID Objet)");
+        L("{");
+        L("}");
+        L("");
+        if (FallingShelves.TryGetValue(Mission, out string[]? falling))
+            foreach (string sh in falling)
+            {
+                L($"// l'étagère {sh} a brûlé : elle tombe (FD1 : etagereCheckStatus)");
+                L($"void Tombe_{sh}(EntityID Objet)");
+                L("{");
+                L($"\tif(SCR_GetVarS32(\"{sh}Tombee\") == 0)");
+                L("\t{");
+                L($"\t\tSCR_SetVarS32(\"{sh}Tombee\", 1);");
+                L($"\t\tENT_SetVisibility(ENT_FindByName(\"{sh}\"), 0);");
+                L($"\t\tENT_SetVisibility(ENT_FindByName(\"{sh}Bis\"), 1);");
+                L("\t}");
+                L("}");
+            }
+        L("");
+        L("// une machine a brûlé (FD1 : Machines) : toutes détruites, la mission est perdue");
+        L("void MachDetruite(EntityID Machine)");
+        L("{");
+        L("\tSCR_SetVarS32(\"NbMach\", SCR_GetVarS32(\"NbMach\") + 1);");
+        L("\tif(SCR_GetVarS32(\"NbMach\") >= 16 && SCR_GetVarS32(\"Fin\") == 0)");
+        L("\t{");
+        L("\t\tSCR_SetVarS32(\"Fin\", 2);");
+        L($"\t\tLEV_SetDebriefText(\"{T("DEFEAT_MACHINES")}\");");
+        L("\t\tSCR_RunDelayed(\"Entrepot_Defaite\", 5.0);");
+        L("\t}");
+        L("}");
+        L("");
+        L("// flaque électrique : qui y entre s'y électrocute (FD1 : Flaque) jusqu'à ce qu'on coupe le courant à l'armoire");
+        L("void Flaque_Entree(EntityID Unit, EntityID Zone)");
+        L("{");
+        L("\tENT_GroupAddEntity(SCR_GetVarS32(\"G_flaque\"), Unit);");
+        L("}");
+        L("void Flaque_Sortie(EntityID Unit, EntityID Zone)");
+        L("{");
+        L("\tENT_GroupRemoveEntity(SCR_GetVarS32(\"G_flaque\"), Unit);");
+        L("}");
+        L("void FlaqueCut(EntityID Unit, EntityID Zone)");
+        L("{");
+        L("\tif(SCR_GetVarS32(\"FlaqueVue\") == 0 && SCR_GetVarS32(\"FlaqueActive\") == 1)");
+        L("\t{");
+        L("\t\tSCR_SetVarS32(\"FlaqueVue\", 1);");
+        Msg("\t\t", "ENT_CUT_FLAQUE");
+        if (Cine("CUTFLAQUE").Length > 0)
+            L("\t\t" + Cine("CUTFLAQUE"));
+        L("\t}");
+        L("}");
+        L("void BoutFlaque()");
+        L("{");
+        L("\tSCR_SetVarS32(\"FlaqueActive\", 0);");
+        Msg("\t", "EVENT_ENT_FLAQUE");
+        L("}");
+        L("void Entrepot_Flaque()");
+        L("{");
+        L("\ts32 i;");
+        L("\ts32 g;");
+        L("\tif(SCR_GetVarS32(\"FlaqueActive\") == 0)");
+        L("\t\treturn;");
+        L("\tg = SCR_GetVarS32(\"G_flaque\");");
+        L("\tfor(i = 0; i < ENT_GroupGetNbEntities(g); i = i + 1)");
+        L("\t\tENT_AddDamage(ENT_GroupGetEntityAt(g, i), -1.0);");
         L("}");
         L("");
         L("// indices (facultatifs)");
@@ -326,13 +430,15 @@ public sealed partial class MissionConverter
         L("// civils découverts derrière les portes cassées (FD1 : CheckGlobalCache)");
         L("void Entrepot_Caches()");
         L("{");
-        foreach ((string door, string civil, string flag, string key) in new[] { ("Porte3", "Garde2", "Garde2Vu", "ENT_CUT_GARDIEN2"), ("Porte4", "Secretaire", "SecretaireVue", "ENT_CUT_SECRETAIRE") })
+        foreach ((string door, string civil, string flag, string key, string cine) in new[] { ("Porte3", "Garde2", "Garde2Vu", "ENT_CUT_GARDIEN2", "GARDIEN2"), ("Porte4", "Secretaire", "SecretaireVue", "ENT_CUT_SECRETAIRE", "SECRETAIRE") })
         {
             L($"\tif(SCR_GetVarS32(\"{flag}\") == 0 && ENT_GetState(ENT_FindByName(\"{door}\")) == \"Broken\")");
             L("\t{");
             L($"\t\tSCR_SetVarS32(\"{flag}\", 1);");
             L($"\t\tENT_SetVisibility(ENT_FindByName(\"{civil}\"), 1);");
             Msg("\t\t", key);
+            if (Cine(cine).Length > 0)
+                L("\t\t" + Cine(cine));
             L("\t}");
         }
         L("}");
@@ -358,7 +464,15 @@ public sealed partial class MissionConverter
             L("\t\treturn;");
             L("\t}");
         }
-        L("\t// FD1 : le commando mort avant d'avoir descendu l'échelle 2 (DEFEAT5) ; à faire quand le script saura retrouver le scout");
+        // le scout : celui qui a appuyé sur le bouton de l'échelle 1 ; mort avant d'avoir descendu l'échelle 2 (FD1 :
+        // « ComPlusUtile »), plus personne ne peut monter au bureau
+        L("\tif(SCR_GetVarS32(\"User_Ent_Bouton_Echelle1\") != 0 && SCR_GetVarS32(\"Ent_Bouton_Echelle2\") == 0 && ENT_GetUnitState(SCR_GetVarS32(\"User_Ent_Bouton_Echelle1\")) == 4)");
+        L("\t{");
+        L("\t\tSCR_SetVarS32(\"Fin\", 2);");
+        L($"\t\tLEV_SetDebriefText(\"{T("DEFEAT5")}\");");
+        L("\t\tSCR_RunDelayed(\"Entrepot_Defaite\", 5.0);");
+        L("\t\treturn;");
+        L("\t}");
         L("}");
         L("void Entrepot_Defaite()");
         L("{");
@@ -377,8 +491,14 @@ public sealed partial class MissionConverter
         (int v, int d, int b, int k)[] endings = { (1, 1, 1, 1), (1, 1, 0, 2), (1, 0, 0, 3), (0, 0, 0, 4), (0, 1, 1, 5), (0, 0, 1, 6), (0, 1, 0, 7), (1, 0, 1, 8) };
         foreach ((int v, int d, int b, int k) in endings)
         {
+            // plus de 8 machines détruites : le texte « BIS » (FD1)
             L($"\tif(v == {v} && d == {d} && b == {b})");
-            L($"\t\tLEV_SetDebriefText(\"{T("VICTORY" + k)}\");");
+            L("\t{");
+            L("\t\tif(SCR_GetVarS32(\"NbMach\") > 8)");
+            L($"\t\t\tLEV_SetDebriefText(\"{T("VICTORY" + k + "BIS")}\");");
+            L("\t\telse");
+            L($"\t\t\tLEV_SetDebriefText(\"{T("VICTORY" + k)}\");");
+            L("\t}");
         }
         L("\tLEV_TriggerVictory();");
         L("}");
@@ -428,6 +548,16 @@ public sealed partial class MissionConverter
         L("\t\treturn;");
         L("\tEntrepot_Caches();");
         L("\tEntrepot_Defaites();");
+        L("\tEntrepot_Flaque();");
+        if (Cine("TRUCKEXPLOSION").Length > 0)
+        {
+            // le camion du parking a explosé (FD1 : TruckExpl)
+            L("\tif(SCR_GetVarS32(\"TruckAExpl\") == 0 && ENT_GetDamage(ENT_FindByName(\"Truckabc\")) <= 0.0)");
+            L("\t{");
+            L("\t\tSCR_SetVarS32(\"TruckAExpl\", 1);");
+            L("\t\t" + Cine("TRUCKEXPLOSION"));
+            L("\t}");
+        }
         L("\t// indices : la vidéo, les documents, une bombe désamorcée");
         L("\tif(SCR_GetVarS32(\"BombeDone\") == 0 && (" + string.Join(" || ", Enumerable.Range(0, 5).Select(n => $"SCR_GetVarS32(\"bombe{n}Mec\") == 1")) + "))");
         L("\t{");
@@ -441,17 +571,22 @@ public sealed partial class MissionConverter
         L("\tif(SCR_GetVarS32(\"Acte\") == 1)");
         L("\t{");
         L("\t\tfeu = FIR_HPGetIntensity(SCR_GetVarS32(\"G_hall1\"));");
+        L("\t\t// le feu a bien pris (les tout premiers instants, les foyers ne comptent pas encore)");
+        L("\t\tif(feu >= 400.0)");
+        L("\t\t\tSCR_SetVarS32(\"Hall1Vu\", 1);");
         L("\t\t// le feu du premier hall est presque éteint : la bombe 3 s'amorce (FD1 : Go < 400)");
-        L("\t\tif(feu < 400.0 && SCR_GetVarS32(\"Surprise3\") == 0)");
+        L("\t\tif(feu < 400.0 && SCR_GetVarS32(\"Hall1Vu\") == 1 && SCR_GetVarS32(\"Surprise3\") == 0)");
         L("\t\t{");
         L("\t\t\tSCR_SetVarS32(\"Surprise3\", 1);");
         L("\t\t\tif(SCR_GetVarS32(\"bombe3Mec\") == 0)");
         L("\t\t\t{");
         L("\t\t\t\tMsgBombes();");
+        if (Cine("SURPRISE3").Length > 0)
+            L("\t\t\t\t" + Cine("SURPRISE3"));
         L("\t\t\t\tAmorce3();");
         L("\t\t\t}");
         L("\t\t}");
-        L("\t\tif(feu <= 0.0 && SCR_GetVarS32(\"Feu1Fini\") == 0)");
+        L("\t\tif(feu <= 0.0 && SCR_GetVarS32(\"Hall1Vu\") == 1 && SCR_GetVarS32(\"Feu1Fini\") == 0)");
         L("\t\t{");
         L("\t\t\tSCR_SetVarS32(\"Feu1Fini\", 1);");
         L("\t\t\tLEV_ValidateObjective(SCR_GetVarS32(\"Obj_Feu1\"), 1);");
@@ -462,17 +597,21 @@ public sealed partial class MissionConverter
         L("\telse if(SCR_GetVarS32(\"Acte\") == 2)");
         L("\t{");
         L("\t\tfeu = FIR_HPGetIntensity(SCR_GetVarS32(\"G_hall2\"));");
+        L("\t\tif(feu >= 250.0)");
+        L("\t\t\tSCR_SetVarS32(\"Hall2Vu\", 1);");
         L("\t\t// l'atelier est presque éteint : la bombe 1 s'amorce (FD1 : Go < 200)");
-        L("\t\tif(feu < 200.0 && SCR_GetVarS32(\"Surprise1\") == 0)");
+        L("\t\tif(feu < 200.0 && SCR_GetVarS32(\"Hall2Vu\") == 1 && SCR_GetVarS32(\"Surprise1\") == 0)");
         L("\t\t{");
         L("\t\t\tSCR_SetVarS32(\"Surprise1\", 1);");
         L("\t\t\tif(SCR_GetVarS32(\"bombe1Mec\") == 0)");
         L("\t\t\t{");
         L("\t\t\t\tMsgBombes();");
+        if (Cine("SURPRISE").Length > 0)
+            L("\t\t\t\t" + Cine("SURPRISE"));
         L("\t\t\t\tAmorce1();");
         L("\t\t\t}");
         L("\t\t}");
-        L("\t\tif(feu <= 0.0 && SCR_GetVarS32(\"Feu2Fini\") == 0)");
+        L("\t\tif(feu <= 0.0 && (SCR_GetVarS32(\"Hall2Vu\") == 1 || SCR_GetVarS32(\"FeuAtelier\") == 1) && SCR_GetVarS32(\"Feu2Fini\") == 0)");
         L("\t\t{");
         L("\t\t\tSCR_SetVarS32(\"Feu2Fini\", 1);");
         L("\t\t\tLEV_ValidateObjective(SCR_GetVarS32(\"Obj_Feu2\"), 1);");
