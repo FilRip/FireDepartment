@@ -103,6 +103,7 @@ public sealed partial class OpenFDGame
         if (_debugAi && !_netGame)
             DebugKeys(k);
         HandleArrows(k, dt);
+        HandleHeight(k, dt);
 
         // molette : zoom
         int wheel = m.ScrollWheelValue - _mPrev.ScrollWheelValue;
@@ -401,6 +402,26 @@ public sealed partial class OpenFDGame
         SN.Vector3 back = new SN.Vector3(MathF.Cos(_yaw), MathF.Sin(_yaw), 0);
         SN.Vector3 right = new SN.Vector3(-back.Y, back.X, 0);
         _target += (right * x - back * y) * (_dist * 0.8f) * dt;
+    }
+
+    /// <summary>
+    /// Page précédente : la caméra monte tout droit, sans changer d'angle (elle regarde dans la même direction : la vue
+    /// glisse vers le haut de l'écran) ; Page suivante : elle descend. Maj : plus vite (comme les flèches). Le point visé
+    /// (autour duquel elle tourne et zoome) monte et descend avec elle.
+    /// </summary>
+    private void HandleHeight(KeyboardState k, float dt)
+    {
+        float up = (k.IsKeyDown(Keys.PageUp) ? 1 : 0) - (k.IsKeyDown(Keys.PageDown) ? 1 : 0);
+        if (up == 0 || _map)
+            return;
+        if (k.IsKeyDown(Keys.LeftShift) || k.IsKeyDown(Keys.RightShift))
+            dt *= _arrowShift;
+        float eyeZ = _target.Z + _dist * MathF.Sin(_pitch);
+        float ground = MathF.Max(0, GroundAt(_target.X, _target.Y));
+        // vitesse : la moitié de la hauteur au-dessus du sol par seconde (au moins 2 m/s) ; l'œil reste à 1 m du sol au moins
+        float speed = MathF.Max(200, 0.5f * (eyeZ - ground));
+        float newEye = Math.Clamp(eyeZ + up * speed * dt, ground + 100, 60000);
+        _target.Z += newEye - eyeZ;
     }
 
     private void Drag(float dx, float dy)
