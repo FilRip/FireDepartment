@@ -11,11 +11,14 @@ namespace OpenFD.ConvFD1;
 ///    l'étagère debout disparaît et la couchée paraît (FD1 : etagereCheckStatus) ; le moteur ferme ou rouvre leurs cases
 ///    selon leur visibilité ;
 ///  • machines (« Mach01 »… « Mach16 ») : détruites, le script les compte (défaite si toutes brûlent) ;
-///  • objets qui explosent quand le feu les détruit (« Truckabc », le camion du parking).
+///  • objets qui explosent quand le feu les détruit (« Truckabc », le camion du parking ; Villa : les vieux bidons, les
+///    jerricanes de la remise) ;
+///  • voiture à conduire (Villa : l'Excalibur) : un ingénieur la prend (il la « répare »), le script la remplace par un
+///    véhicule ; détruite par le feu avant, elle appelle le script comme un objet suivi.
 /// </summary>
 public sealed partial class MissionConverter
 {
-    private enum ObjectRole { Standing, Fallen, Watched, Explosive }
+    private enum ObjectRole { Standing, Fallen, Watched, Explosive, Drivable }
 
     /// <summary>Sensibilité au feu des étagères debout (1 : elles tombent 25 s après que le feu les a prises).</summary>
     private const float ShelfFireCoef = 0.25f;
@@ -30,12 +33,30 @@ public sealed partial class MissionConverter
     private static readonly Dictionary<string, (string prefix, string script)[]> WatchedObjects = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Entrepot", new[] { ("Mach", "MachDetruite") } },
+        { "Villa", new[] { ("VoitureDeLuxe", "VoitureDetruite") } },
     };
 
-    /// <summary>Objets qui explosent, par mission : noms FD1.</summary>
-    private static readonly Dictionary<string, string[]> ExplosiveObjects = new(StringComparer.OrdinalIgnoreCase)
+    /// <summary>Objets qui explosent, par mission : nom FD1, fonction du script appelée à leur explosion.</summary>
+    private static readonly Dictionary<string, (string name, string script)[]> ExplosiveObjects = new(StringComparer.OrdinalIgnoreCase)
     {
-        { "Entrepot", new[] { "Truckabc" } },
+        { "Entrepot", new[] { ("Truckabc", "FD1_Rien") } },
+        // Villa : les vieux bidons (FD1 : BarilsExplo), les jerricanes de la remise (le script les fait sauter : FD1 Explode)
+        { "Villa", new[] { ("Barils", "BarilsExplo"), ("JerricanExplose", "FD1_Rien") } },
+    };
+
+    /// <summary>
+    /// Sensibilité au feu de certains objets du script (1 : détruits 25 s après que le feu les a pris), par mission. Villa :
+    /// les vieux bidons tiennent trois fois plus (FD1 : 300 points de vie, alerte à 200).
+    /// </summary>
+    private static readonly Dictionary<string, (string name, float coef)[]> ObjectFireCoefs = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Villa", new[] { ("Barils", 0.33f) } },
+    };
+
+    /// <summary>Voitures à conduire, par mission : nom FD1, fonction du script appelée quand un ingénieur la prend.</summary>
+    private static readonly Dictionary<string, (string name, string script)[]> DrivableObjects = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Villa", new[] { ("VoitureDeLuxe1", "Use_Excalibur") } },
     };
 
     /// <summary>Objets du script trouvés dans le niveau FD1 (objet, maillages, nom, rôle, fonction à la destruction).</summary>
@@ -54,13 +75,68 @@ public sealed partial class MissionConverter
                 if (name.Equals(s + "Bis", StringComparison.OrdinalIgnoreCase))
                     return (ObjectRole.Fallen, "FD1_Rien");
             }
+        if (DrivableObjects.TryGetValue(Mission, out (string name, string script)[]? drivable) && drivable.Any(d => d.name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+            return (ObjectRole.Drivable, WatchedScript(name) ?? "FD1_Rien");
         if (WatchedObjects.TryGetValue(Mission, out (string prefix, string script)[]? watched))
             foreach ((string prefix, string script) in watched)
                 if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && name.Length > prefix.Length && name[prefix.Length..].All(char.IsDigit))
                     return (ObjectRole.Watched, script);
-        if (ExplosiveObjects.TryGetValue(Mission, out string[]? explosive) && explosive.Contains(name, StringComparer.OrdinalIgnoreCase))
-            return (ObjectRole.Explosive, "FD1_Rien");
+        if (ExplosiveObjects.TryGetValue(Mission, out (string name, string script)[]? explosive))
+            foreach ((string n, string script) in explosive)
+                if (n.Equals(name, StringComparison.OrdinalIgnoreCase))
+                    return (ObjectRole.Explosive, script);
         return null;
+    }
+
+    /// <summary>Fonction du script appelée à la destruction de cet objet suivi (null : il n'est pas suivi).</summary>
+    private string? WatchedScript(string name)
+    {
+        if (!WatchedObjects.TryGetValue(Mission, out (string prefix, string script)[]? watched))
+            return null;
+        foreach ((string prefix, string script) in watched)
+            if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && name.Length > prefix.Length && name[prefix.Length..].All(char.IsDigit))
+                return script;
+        return null;
+    }
+
+    /// <summary>
+    /// Classe d'une voiture à conduire : Design\placeable\functional\useable\&lt;nom&gt;_&lt;modèle&gt;_conduite.class : elle
+    /// s'abîme au feu (100 points de vie), seul un ingénieur s'en sert (« réparer »).
+    /// </summary>
+    private string WriteDrivableClass(string model, List<Fd3Mesh> meshes)
+    {
+        (string safe, List<(string node, Matrix4x4 world)> _, float _) = WritePlaceableModel(model, meshes);
+        string classDir = Path.Combine(Data, "Design", "placeable", "functional", "useable");
+        Directory.CreateDirectory(classDir);
+        string name = safe + "_conduite";
+        string cls = $"""
+            [#INCLUDE]
+            FILE0 = "base_useable.class"
+
+            [DISPLAY]
+            MODEL = {Name}\{safe}
+
+            [DAMAGE]
+            USEDAMAGE = 1
+            CARBONISABLE = 0
+            FIREDAMAGECOEF = 1
+            LIFEPOINTS = 100
+            MAXLIFEPOINTS = 100
+
+            [CAPACITIES_ACTIONS]
+            COULDBEUSE = 0
+            COULDBEREPAIR = 1
+
+            [EXPLOSION]
+            CANEXPLODE = 0
+
+            [LOGICAL_STATE]
+            S01_USER_ANIM = ItemChar\ic_pick_up_down
+            S01__NAME = use
+
+            """;
+        File.WriteAllBytes(Path.Combine(classDir, name + ".class"), Encoding.Latin1.GetBytes(cls.Replace("\n", "\r\n")));
+        return "design\\placeable\\functional\\useable\\" + name;
     }
 
     /// <summary>
@@ -174,6 +250,11 @@ public sealed partial class MissionConverter
         Dictionary<(string model, bool explosive), string> classes = new Dictionary<(string, bool), string>();
         foreach ((Fd1Object o, List<Fd3Mesh> meshes, string name, ObjectRole role, string script) in _scriptObjects)
         {
+            if (role == ObjectRole.Drivable)
+            {
+                AddDrivable(level, o, meshes, name, script);
+                continue;
+            }
             bool explosive = role == ObjectRole.Explosive;
             Matrix4x4 w = o.World;
             w.M41 *= WorldToCm;
@@ -199,11 +280,43 @@ public sealed partial class MissionConverter
             x = LevelEdit.WithStartVisible(x, role != ObjectRole.Fallen);
             x = WithComponentScript(x, 0xA024, script);
             // étagère debout : elle tient un moment dans le feu avant de tomber (sinon elle tombe en 25 s)
-            x = WithExplosive(x, explosive, role == ObjectRole.Standing ? ShelfFireCoef : 1f);
+            float coef = role == ObjectRole.Standing ? ShelfFireCoef : 1f;
+            if (ObjectFireCoefs.TryGetValue(Mission, out (string name, float coef)[]? coefs) && coefs.FirstOrDefault(c => c.name.Equals(name, StringComparison.OrdinalIgnoreCase)) is { name: not null } fc)
+                coef = fc.coef;
+            x = WithExplosive(x, explosive, coef);
             level.Objects.Add(x);
         }
         Report.Add($"objets du script : {_scriptObjects.Count(s => s.role == ObjectRole.Standing)} étagères qui tombent, "
             + $"{_scriptObjects.Count(s => s.role == ObjectRole.Watched)} objets suivis, {_scriptObjects.Count(s => s.role == ObjectRole.Explosive)} explosif(s)");
+    }
+
+    /// <summary>
+    /// Voiture à conduire dans le niveau du moteur : un objet réparable (modèle : la bombe de Sawmill, qui a une action et
+    /// une fonction à sa destruction) ; son action appelle la fonction de DrivableObjects, sa destruction celle des objets
+    /// suivis.
+    /// </summary>
+    private void AddDrivable(Level level, Fd1Object o, List<Fd3Mesh> meshes, string name, string destroyed)
+    {
+        LevelObject? template = ActionTemplate();
+        string? use = DrivableObjects.TryGetValue(Mission, out (string name, string script)[]? drivable)
+            ? drivable.FirstOrDefault(d => d.name.Equals(name, StringComparison.OrdinalIgnoreCase)).script : null;
+        if (template == null || use == null)
+        {
+            Report.Add($"voiture à conduire {name} : objet utilisable modèle introuvable dans les missions du jeu");
+            return;
+        }
+        Matrix4x4 w = o.World;
+        w.M41 *= WorldToCm;
+        w.M42 *= WorldToCm;
+        w.M43 *= WorldToCm;
+        LevelObject x = LevelEdit.Clone(template, LevelEdit.NewId(level), name, WriteDrivableClass(o.Model, meshes));
+        x = LevelEdit.WithTransform(x, new Vector3(w.M41, w.M42, w.M43), EulerOf(w));
+        x = LevelEdit.WithStartVisible(x, true);
+        x = WithActionScript(x, use);
+        x = WithComponentScript(x, 0xA024, destroyed);
+        x = WithExplosive(x, false);
+        level.Objects.Add(x);
+        Report.Add($"voiture à conduire : {name} ({use})");
     }
 
     /// <summary>Copie d'un maillage tourné (sommets et normales).</summary>

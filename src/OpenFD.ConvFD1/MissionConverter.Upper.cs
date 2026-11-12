@@ -50,13 +50,24 @@ public sealed partial class MissionConverter
         { "Entrepot", new[] { ("Echelle2", new Vector3(8600, 19400, 1500), new Vector3(8950, 19420, 0)) } },
     };
 
-    /// <summary>Portes FD1 que seul le script ouvre, par mission : modèle et nom de la porte (elle monte, fermée au départ).</summary>
+    /// <summary>
+    /// Portes FD1 que seul le script ouvre, par mission : modèle (ou nom de l'instance FD1) et nom de la porte (elle monte,
+    /// fermée au départ).
+    /// </summary>
     private static readonly Dictionary<string, (string model, string name)[]> ScriptDoors = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Entrepot", new[] { ("ENT_PORTEBLINDEE01", "PorteFen") } },
         // Banque : la sortie de secours (toit voisin ↔ étage, ouverte à l'arrivée de l'hélicoptère), la porte de la salle de
         // surveillance (acte 4) et la porte blindée de la salle des coffres
         { "banque", new[] { ("ECO_PORTECOUPFEU01", "SortieSecours"), ("ECO_PORTECOUPEFEU_01", "PorteSurveillance"), ("BAN_PORTE_BLINDEE_SALLE", "PorteBlindeeCoffre") } },
+        // Villa : les cinq portes du garage (boutons rouges) et la sortie de secours de la serre tropicale
+        {
+            "Villa", new[]
+            {
+                ("PorteGarage1", "PorteGarage1"), ("PorteGarage2", "PorteGarage2"), ("PorteGarage3", "PorteGarage3"),
+                ("PorteGarage4", "PorteGarage4"), ("PorteGarage5", "PorteGarage5"), ("SortieSerreTropicale", "SortieSerreTropicale"),
+            }
+        },
     };
 
     /// <summary>
@@ -89,6 +100,23 @@ public sealed partial class MissionConverter
                 ("DeclencheSprinkler", "@Sprinklers", ""),
             }
         },
+        {
+            // Villa (MissionConverter.Villa.cs) : les boutons rouges du garage et de la serre, la pompe de la piscine (un
+            // ingénieur la met en marche), la bande master
+            "Villa", new[]
+            {
+                ("BoutonPG1", "@PortesGarage123", ""), ("BoutonPG3", "@PortesGarage123", ""), ("BoutonPG4", "@PortesGarage45", ""),
+                ("BoutonSortieSerreTropicale", "SortieSerreTropicale", ""),
+                ("Pompe_Arrosage_Mecanisme", "@Pompe", ""),
+                ("BandeSon1", "@Pick_BandeSon", ""),
+            }
+        },
+    };
+
+    /// <summary>Boutons du script dont seul un ingénieur se sert (il « répare »), par mission (nom FD1).</summary>
+    private static readonly Dictionary<string, string[]> EngineerButtons = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Villa", new[] { "Pompe_Arrosage_Mecanisme" } },
     };
 
     /// <summary>Maillages des planchers en hauteur (dans le repère du monde) et hauteur de chacun.</summary>
@@ -136,13 +164,13 @@ public sealed partial class MissionConverter
         return null;
     }
 
-    /// <summary>Nom de la porte du script faite de ce modèle FD1 (null : ce n'en est pas une).</summary>
-    private string? ScriptDoorName(string model)
+    /// <summary>Nom de la porte du script faite de ce modèle FD1, ou de cette instance (null : ce n'en est pas une).</summary>
+    private string? ScriptDoorName(string model, string? instance)
     {
         if (!ScriptDoors.TryGetValue(Mission, out (string model, string name)[]? doors))
             return null;
         foreach ((string m, string name) in doors)
-            if (m.Equals(model, StringComparison.OrdinalIgnoreCase))
+            if (m.Equals(model, StringComparison.OrdinalIgnoreCase) || (instance != null && m.Equals(instance, StringComparison.OrdinalIgnoreCase)))
                 return name;
         return null;
     }
@@ -310,11 +338,14 @@ public sealed partial class MissionConverter
 
     /// <summary>
     /// Classe des boutons : Design\placeable\functional\useable\&lt;nom&gt;_&lt;modèle&gt;.class (utilisable par tout pompier qui
-    /// sait utiliser un objet). Rend son chemin.
+    /// sait utiliser un objet ; « _ing » : seul un ingénieur, qui le répare). Rend son chemin.
     /// </summary>
-    private string WriteButtonClass(string model, List<Fd3Mesh> meshes)
+    private string WriteButtonClass(string model, List<Fd3Mesh> meshes, bool engineer)
     {
         (string safe, List<(string node, Matrix4x4 world)> _, float _) = WritePlaceableModel(model, meshes);
+        // seul un ingénieur s'en sert : il « répare » (Villa : la pompe de la piscine)
+        string actions = engineer ? "COULDBEUSE = 0\nCOULDBEREPAIR = 1" : "COULDBEUSE = 1";
+        string file = engineer ? safe + "_ing" : safe;
         string classDir = Path.Combine(Data, "Design", "placeable", "functional", "useable");
         Directory.CreateDirectory(classDir);
         string cls = $"""
@@ -329,7 +360,7 @@ public sealed partial class MissionConverter
             CARBONISABLE = 0
 
             [CAPACITIES_ACTIONS]
-            COULDBEUSE = 1
+            {actions}
 
             [EXPLOSION]
             CANEXPLODE = 0
@@ -339,8 +370,8 @@ public sealed partial class MissionConverter
             S01__NAME = use
 
             """;
-        File.WriteAllBytes(Path.Combine(classDir, safe + ".class"), Encoding.Latin1.GetBytes(cls.Replace("\n", "\r\n")));
-        return "design\\placeable\\functional\\useable\\" + safe;
+        File.WriteAllBytes(Path.Combine(classDir, file + ".class"), Encoding.Latin1.GetBytes(cls.Replace("\n", "\r\n")));
+        return "design\\placeable\\functional\\useable\\" + file;
     }
 
     /// <summary>Boutons du script dans le niveau du moteur : leur action appelle « Use_&lt;bouton&gt; ».</summary>
@@ -356,7 +387,8 @@ public sealed partial class MissionConverter
         }
         foreach ((Fd1Object o, List<Fd3Mesh> meshes, string door, string _) in _scriptButtons)
         {
-            string cls = WriteButtonClass(o.Model, meshes);
+            bool engineer = EngineerButtons.TryGetValue(Mission, out string[]? eb) && eb.Contains(o.Name, StringComparer.OrdinalIgnoreCase);
+            string cls = WriteButtonClass(o.Model, meshes, engineer);
             Vector3 at = new Vector3(o.World.M41, o.World.M42, o.World.M43) * WorldToCm;
             float yaw = MathF.Atan2(o.World.M12, o.World.M11);
             LevelObject b = LevelEdit.Clone(template, LevelEdit.NewId(level), o.Name, cls);

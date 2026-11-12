@@ -21,6 +21,11 @@ public sealed class Fd1Level
     /// </summary>
     public List<(Vector3 at, string type)> Fires = new();
 
+    /// <summary>Type de point FD1 qui n'est pas un feu (lumières, jets d'eau).</summary>
+    private static bool NotFire(string ini) =>
+        ini.StartsWith("lampad", StringComparison.OrdinalIgnoreCase) || ini.StartsWith("fx_fontaine", StringComparison.OrdinalIgnoreCase)
+        || ini.StartsWith("phare", StringComparison.OrdinalIgnoreCase);
+
     public static Fd1Level Load(byte[] d)
     {
         Fd1Level lv = new Fd1Level();
@@ -67,6 +72,10 @@ public sealed class Fd1Level
                 continue;
             Vector3 at = new Vector3(BitConverter.ToSingle(d, (int)off - 136), BitConverter.ToSingle(d, (int)off - 132), BitConverter.ToSingle(d, (int)off - 128));
             if (!float.IsFinite(at.X) || !float.IsFinite(at.Y) || !float.IsFinite(at.Z) || (at.X == 0 && at.Y == 0))
+                continue;
+            // effets du décor posés comme des points de feu (Villa : « lampad » les lampadaires, « fx_fontaine » les jets
+            // d'eau ; Quartier : « phare ») : ils ne brûlent pas
+            if (NotFire(s))
                 continue;
             lv.Fires.Add((at, s[..^4]));
         }
