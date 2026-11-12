@@ -487,6 +487,10 @@ public sealed partial class OpenFDGame
         SN.Vector3 d = new SN.Vector3(b.X, b.Y, b.Z) / b.W - o;
         if (MathF.Abs(d.Z) < 1e-6f)
             return null;
+        // plancher en hauteur (FD1 Entrepot : le bureau à 15 m) : le premier sol où l'on marche que le rayon rencontre,
+        // pas le sol plus bas que l'on verrait à travers (sinon un clic dans le bureau vise la cour, sous lui)
+        if (FirstFloorHit(o, d) is { } floorHit)
+            return floorHit;
         // le sol n'est pas toujours à la hauteur 0 (Eurotunnel : -4 m, en sous-sol) : on suit sa hauteur pas à pas
         float z = _session?.Units.GroundZ(new(_target.X, _target.Y)) ?? 0;
         SN.Vector2? hit = null;
@@ -502,6 +506,71 @@ public sealed partial class OpenFDGame
             z = nz;
         }
         return hit;
+    }
+
+    // hauteurs extrêmes des sols où l'on marche (grille de la partie en cours) : bornes de la recherche le long du rayon
+    private OpenFD.Formats.Grid? _pickGrid;
+    private float _pickTop, _pickBottom;
+
+    /// <summary>
+    /// Premier point du rayon (origine o, direction d) sous le sol d'une case (case fermée : la hauteur de la grille, pas
+    /// celle du dessus du décor), en descendant le rayon par pas de 25 cm à plat, puis précisé par dichotomie. null : pas de grille, ou rien
+    /// rencontré entre le plus haut et le plus bas des sols ; seulement utile s'il y a un étage (plus de 3 m d'écart).
+    /// </summary>
+    private SN.Vector2? FirstFloorHit(SN.Vector3 o, SN.Vector3 d)
+    {
+        if (_session?.Grid is not { } g || d.Z >= 0)
+            return null;
+        if (!ReferenceEquals(_pickGrid, g))
+        {
+            _pickGrid = g;
+            _pickTop = float.MinValue;
+            _pickBottom = float.MaxValue;
+            for (int k = 0; k < g.ZoneA.Length; k++)
+                if (g.ZoneA[k] != 0)
+                {
+                    _pickTop = MathF.Max(_pickTop, g.GroundHeight[k]);
+                    _pickBottom = MathF.Min(_pickBottom, g.GroundHeight[k]);
+                }
+        }
+        if (_pickTop - _pickBottom < 300)
+            return null;
+        float Floor(float t)
+        {
+            SN.Vector2 p = new SN.Vector2(o.X + d.X * t, o.Y + d.Y * t);
+            (int cx, int cy) = g.CellOf(new SN.Vector3(p, 0));
+            if (!g.Inside(cx, cy))
+                return float.MinValue;
+            // case fermée (mur, étagère) : la hauteur de la grille, sans le dessus du décor
+            return g.ZoneA[g.Index(cx, cy)] == 0 ? g.GroundHeight[g.Index(cx, cy)] : _session.Units.GroundZ(p);
+        }
+        float t0 = MathF.Max(0, (_pickTop + 50 - o.Z) / d.Z);
+        float t1 = (_pickBottom - 50 - o.Z) / d.Z;
+        if (t1 <= t0)
+            return null;
+        float flat = MathF.Sqrt(d.X * d.X + d.Y * d.Y);
+        float step = flat > 1e-6f ? 25f / flat : (t1 - t0) / 200;
+        step = MathF.Max(step, (t1 - t0) / 4000);
+        float prev = t0;
+        for (float t = t0; t <= t1; t += step)
+        {
+            if (o.Z + d.Z * t > Floor(t))
+            {
+                prev = t;
+                continue;
+            }
+            float lo = prev, hi = t;
+            for (int i = 0; i < 12; i++)
+            {
+                float mid = (lo + hi) / 2;
+                if (o.Z + d.Z * mid > Floor(mid))
+                    lo = mid;
+                else
+                    hi = mid;
+            }
+            return new SN.Vector2(o.X + d.X * hi, o.Y + d.Y * hi);
+        }
+        return null;
     }
 
     private void Select(double x, double y, bool add)
