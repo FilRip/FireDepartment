@@ -124,6 +124,10 @@ public sealed class MissionHost : IScriptHost
             if (depth < 6 && _byId.TryGetValue(i, out LevelObject? o))
                 foreach (uint m in o.Members)
                     Walk(m, depth + 1);
+            // groupe fait par le script (ENT_GroupCreate : FD1 Entrepot, les foyers de chaque hall)
+            else if (depth < 6 && _groups.TryGetValue(i, out List<long>? g))
+                foreach (long m in g)
+                    Walk((uint)m, depth + 1);
         }
         Walk((uint)id, 0);
         return res;
