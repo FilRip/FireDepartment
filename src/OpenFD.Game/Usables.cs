@@ -147,10 +147,13 @@ public sealed partial class UnitManager
         u.ActionTimer = 0;
         Vector2 me = new Vector2(u.Position.X, u.Position.Y);
         Vector2 at = NearestPoint(o, me);
-        if (Vector2.Distance(me, at) > ActionReach)
+        // objet à un autre étage, avec un plancher à sa hauteur tout près (FD1 Entrepot : le bouton sur le bloc noir, à
+        // 15 m) : on va sur ce plancher, pas dessous ; sans chemin jusque-là, le pompier n'y va pas
+        Vector2? level = OtherLevelSpot(u, o);
+        if (Vector2.Distance(me, at) > ActionReach || level != null)
         {
-            Vector2 spot = Walkable(at + Vector2.Normalize(me - at + new Vector2(0.01f, 0)) * 120);
-            if (!Order(u, spot, refuseUnreachable: false))
+            Vector2 spot = level ?? Walkable(at + Vector2.Normalize(me - at + new Vector2(0.01f, 0)) * 120);
+            if (!Order(u, spot, refuseUnreachable: level != null))
             {
                 u.UseTarget = null;
                 u.Status = "ne peut pas atteindre l'objet";
@@ -158,6 +161,41 @@ public sealed partial class UnitManager
             }
         }
         u.Status = o.CanBeRepaired && !o.CanBeUsed ? "va réparer" : "va utiliser l'objet";
+    }
+
+    /// <summary>Écart de hauteur entre le pompier et l'objet au-delà duquel ils ne sont pas au même étage (cm).</summary>
+    private const float OtherLevelGap = 500f;
+
+    /// <summary>
+    /// Pompier et objet à des étages différents (plus de 5 m d'écart), avec un plancher à la hauteur de l'objet à moins de
+    /// 4 m de lui : la case libre de ce plancher la plus proche de l'objet, où aller. null : même étage, ou pas de plancher
+    /// près de l'objet (objet en hauteur qu'on atteint d'en bas : rien ne change).
+    /// </summary>
+    private Vector2? OtherLevelSpot(Unit u, UsableObject o)
+    {
+        if (_s.Grid is not { } g || MathF.Abs(u.Position.Z - o.Position.Z) <= OtherLevelGap)
+            return null;
+        Vector2 c = (o.BoxMin + o.BoxMax) / 2;
+        (int cx, int cy) = g.CellOf(new Vector3(c, 0));
+        Vector2? best = null;
+        float bestD = float.MaxValue;
+        for (int dy = -4; dy <= 4; dy++)
+            for (int dx = -4; dx <= 4; dx++)
+            {
+                int x = cx + dx, y = cy + dy;
+                if (!g.Inside(x, y) || !WalkableCell(x, y))
+                    continue;
+                Vector2 p = new Vector2((x + 0.5f) * Grid.CellSize, (y + 0.5f) * Grid.CellSize);
+                if (MathF.Abs(Ground(p) - o.Position.Z) > 250)
+                    continue;
+                float d = Vector2.Distance(p, NearestPoint(o, p));
+                if (d < bestD && d <= ActionReach)
+                {
+                    bestD = d;
+                    best = p;
+                }
+            }
+        return best;
     }
 
     /// <summary>IA_CmdUse(unité, objet) : porte (ouvre ou ferme) ou objet utilisable.</summary>
@@ -228,7 +266,7 @@ public sealed partial class UnitManager
             return;
         Vector2 me = new Vector2(u.Position.X, u.Position.Y);
         Vector2 at = NearestPoint(o, me);
-        if (Vector2.Distance(me, at) > ActionReach + 150)
+        if (Vector2.Distance(me, at) > ActionReach + 150 || OtherLevelSpot(u, o) != null)
         {
             u.UseTarget = null;
             u.Status = "trop loin de l'objet";
