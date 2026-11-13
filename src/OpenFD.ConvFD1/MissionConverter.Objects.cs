@@ -52,6 +52,25 @@ public sealed partial class MissionConverter
                 ("Fenetre5", "FenetreExplosee"), ("Fenetre6", "FenetreExplosee"), ("Fenetre7", "FenetreExplosee"), ("Fenetre8", "FenetreExplosee"),
             }
         },
+        // Station-service : les charges des backdrafts du chantier et de l'immeuble, la voiture qui embrase l'immeuble (acte
+        // 4) : le script les fait sauter ; la citerne de butane de la supérette, qui explose quand le feu la détruit
+        {
+            "station_service", new[]
+            {
+                ("Back1", "FD1_Rien"), ("Back2", "FD1_Rien"), ("Back3", "FD1_Rien"), ("Back4", "FD1_Rien"), ("VoitActe4", "FD1_Rien"),
+                ("Bombonne", "BombonneExplosee"),
+            }
+        },
+        // Train : la locomotive de tête, le wagon de gaz (sa destruction perd la mission), les trois silos (la pollution
+        // augmente), les voitures et le camion du village, la voiture qui bloque l'entrée du tunnel (acte 3, par le script)
+        {
+            "train", new[]
+            {
+                ("Loco1", "LocoExplosee"), ("MiniConvoi", "MiniConvoiExplose"), ("Silo1", "SiloExplose"), ("Silo2", "SiloExplose"),
+                ("Silo3", "SiloExplose"), ("Voiture1", "FD1_Rien"), ("Voiture2", "FD1_Rien"), ("Voiture3", "FD1_Rien"), ("Camion1", "FD1_Rien"),
+                ("VoitureExplo", "FD1_Rien"),
+            }
+        },
     };
 
     /// <summary>
@@ -61,12 +80,30 @@ public sealed partial class MissionConverter
     private static readonly Dictionary<string, (string name, float coef)[]> ObjectFireCoefs = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Villa", new[] { ("Barils", 0.33f) } },
+        // Station-service : la citerne de butane tient trois fois plus ; le camion-citerne de GPL, en feu à l'arrivée des
+        // pompiers, dix fois plus ; les charges des backdrafts et la voiture de l'acte 4 ne sautent que par le script
+        {
+            "station_service", new[]
+            {
+                ("Bombonne", 0.33f), ("Citerne", 0.1f), ("Back1", 0f), ("Back2", 0f), ("Back3", 0f), ("Back4", 0f), ("VoitActe4", 0f),
+            }
+        },
+        // Train : la locomotive et les silos tiennent trois fois plus, le wagon de gaz quatre fois plus ; la voiture de
+        // l'entrée du tunnel ne saute que par le script
+        {
+            "train", new[]
+            {
+                ("Loco1", 0.33f), ("MiniConvoi", 0.25f), ("Silo1", 0.33f), ("Silo2", 0.33f), ("Silo3", 0.33f), ("VoitureExplo", 0f),
+            }
+        },
     };
 
     /// <summary>Voitures à conduire, par mission : nom FD1, fonction du script appelée quand un ingénieur la prend.</summary>
     private static readonly Dictionary<string, (string name, string script)[]> DrivableObjects = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Villa", new[] { ("VoitureDeLuxe1", "Use_Excalibur") } },
+        // Station-service : le camion-citerne de GPL, à conduire jusqu'à l'unité d'arrosage à mousse
+        { "station_service", new[] { ("Citerne", "Use_Citerne") } },
     };
 
     /// <summary>Objets du script trouvés dans le niveau FD1 (objet, maillages, nom, rôle, fonction à la destruction).</summary>
@@ -324,7 +361,10 @@ public sealed partial class MissionConverter
         x = LevelEdit.WithStartVisible(x, true);
         x = WithActionScript(x, use);
         x = WithComponentScript(x, 0xA024, destroyed);
-        x = WithExplosive(x, false);
+        float coef = 1f;
+        if (ObjectFireCoefs.TryGetValue(Mission, out (string name, float coef)[]? coefs) && coefs.FirstOrDefault(c => c.name.Equals(name, StringComparison.OrdinalIgnoreCase)) is { name: not null } fc)
+            coef = fc.coef;
+        x = WithExplosive(x, false, coef);
         level.Objects.Add(x);
         Report.Add($"voiture à conduire : {name} ({use})");
     }

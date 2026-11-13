@@ -60,12 +60,17 @@ public sealed partial class MissionConverter
         { "banque", 1 },
         // Quartier : le script FD1 appelle le renfort (acte 3) quand il entre dans la carte
         { "quartier", 1 },
+        // Station-service : le script FD1 fait entrer l'échelle et le bras élévateur à l'acte 4 (ArriveeMega)
+        { "station_service", 1 },
+        // Train : l'hélicoptère dépose les deux pompiers ignifugés à l'acte 3 (HelicoCutScene)
+        { "train", 1 },
     };
 
     /// <summary>Véhicules FD1 (classe) qui arrivent avec le premier renfort, par mission (Banque : acte 3).</summary>
     private static readonly Dictionary<string, string[]> ReinforcementVehicles = new(StringComparer.OrdinalIgnoreCase)
     {
         { "banque", new[] { "Aerial", "WaterTower" } },
+        { "station_service", new[] { "Aerial", "WaterTower" } },
     };
 
     /// <summary>
@@ -82,11 +87,41 @@ public sealed partial class MissionConverter
     {
         // Quartier : la rue au nord, derrière le parking
         { "quartier", new Vector2(24500, 21100) },
+        // Train : les deux pompiers de l'acte 3, sur la route près de l'équipe de départ (FD1 : déposés par l'hélicoptère sur
+        // la colline)
+        { "train", new Vector2(10700, 9300) },
+    };
+
+    /// <summary>
+    /// Unités FD1 du premier renfort désignées par le nom de leur instance, par mission. Station-service : les deux pompiers
+    /// qui arrivent avec l'échelle (ArriveeMega3).
+    /// </summary>
+    private static readonly Dictionary<string, string[]> ReinforcementNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "station_service", new[] { "Pompier5", "Pompier6" } },
+        // Train : les deux pompiers que l'hélicoptère dépose à l'acte 3 (l'un ignifugé, l'autre non dans FD1)
+        { "train", new[] { "FireProof1", "FireProof2" } },
+    };
+
+    /// <summary>
+    /// Unités FD1 laissées de côté, par mission (nom de l'instance) : Train, l'hélicoptère qui dépose le renfort (une
+    /// ambulance pour FD1 : il ne doit pas entrer dans l'équipe de départ).
+    /// </summary>
+    private static readonly Dictionary<string, string[]> ExcludedUnits = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "train", new[] { "Helico" } },
     };
 
     /// <summary>Cette unité FD1 vient-elle avec le premier renfort (par le nom de son instance) ?</summary>
-    private bool IsReinforcementInstance(Fd1Object o) =>
-        ReinforcementPrefixes.TryGetValue(Mission, out string? prefix) && InstanceName(o) is { } n && n.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+    private bool IsReinforcementInstance(Fd1Object o)
+    {
+        string? n = InstanceName(o);
+        if (n == null)
+            return false;
+        if (ReinforcementPrefixes.TryGetValue(Mission, out string? prefix) && n.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            return true;
+        return ReinforcementNames.TryGetValue(Mission, out string[]? names) && names.Contains(n, StringComparer.OrdinalIgnoreCase);
+    }
 
     /// <summary>Pompiers FD1 (nom de l'objet) → pompier du moteur, et s'il vient en renfort (sinon dans l'équipe de départ).</summary>
     private static readonly Dictionary<string, (string unit, bool reinforcement)> Firemen = new(StringComparer.OrdinalIgnoreCase)
@@ -113,6 +148,8 @@ public sealed partial class MissionConverter
         { "Villa", new Vector2(23500, 4000) },
         // Quartier : la rue devant l'ambassade, depuis l'ouest
         { "quartier", new Vector2(300, 4600) },
+        // Train : la route du passage à niveau, depuis le sud-ouest
+        { "train", new Vector2(11000, 500) },
     };
 
     private string Data => Fd3.DataDir;
@@ -161,6 +198,26 @@ public sealed partial class MissionConverter
     private static readonly Dictionary<string, string[]> RoofModels = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Villa", new[] { "VILLA_SERRE_DOM_NOIR", "DOM_01", "VILLA_SERRE_STRUCT" } },
+    };
+
+    /// <summary>
+    /// Modèles du décor descendus de quelques centimètres, par mission (modèle FD1, cm) : Station-service, la grande plaque
+    /// de trottoir et de rue « STA_REBORD_PATCH2 », au niveau du sol, dont la texture a une bande noire sur son bord : les
+    /// dalles du sol passent devant.
+    /// </summary>
+    private static readonly Dictionary<string, (string model, float dz)[]> LoweredModels = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "station_service", new[] { ("STA_REBORD_PATCH2", -3f) } },
+    };
+
+    /// <summary>
+    /// Dalles de sol absentes de FD1 à boucher, par mission : dalle (rang de 10 m), dalle voisine dont on prend la texture.
+    /// Station-service : entre la supérette et le chantier, devant le camion-citerne (la bande noire de STA_REBORD_PATCH2
+    /// s'y voyait).
+    /// </summary>
+    private static readonly Dictionary<string, (int x, int y, int fromX, int fromY)[]> GroundFills = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "station_service", new[] { (14, 13, 14, 14), (15, 13, 15, 14), (16, 13, 16, 14) } },
     };
 
     /// <summary>Emprises au sol des zones hors jeu (cm : min, max).</summary>
@@ -492,6 +549,10 @@ public sealed partial class MissionConverter
             w.M41 *= WorldToCm;
             w.M42 *= WorldToCm;
             w.M43 *= WorldToCm;
+            if (LoweredModels.TryGetValue(Mission, out (string model, float dz)[]? lowered))
+                foreach ((string lm, float dz) in lowered)
+                    if (lm.Equals(o.Model, StringComparison.OrdinalIgnoreCase))
+                        w.M43 += dz;
             count++;
             // plancher en hauteur (dessus du bloc noir d'Entrepot) : des cases de la grille à sa hauteur
             if (UpperFloorOf(o.Model) is float upper)
@@ -573,6 +634,21 @@ public sealed partial class MissionConverter
             foreach ((string mat, int _, int _) in ground.Groups)
                 materials.Add(mat);
             Report.Add($"sol : {level.GroundTiles.Count} dalles de 10 m");
+            if (GroundFills.TryGetValue(Mission, out (int x, int y, int fromX, int fromY)[]? fills))
+            {
+                // dalles absentes de FD1 : la texture d'une voisine, 1 cm sous le sol (les planchers des bâtiments, au niveau
+                // du sol, passent devant)
+                List<(int x, int y, string texture)> fillTiles = fills
+                    .Select(f => (f.x, f.y, level.GroundTiles.FirstOrDefault(t => t.x == f.fromX && t.y == f.fromY).texture))
+                    .Where(f => f.texture != null).ToList();
+                Fd3Mesh fill = models.Ground(fillTiles, "FGD_" + Name + "_fill", -1);
+                File.WriteAllBytes(Path.Combine(gfx, fill.Name + ".mesh"), Fd3Writer.MeshFile(fill));
+                File.WriteAllBytes(Path.Combine(gfx, fill.Name + ".meshdata"), Fd3Writer.MeshData(fill));
+                nodes.Add((fill.Name, Matrix4x4.Identity));
+                foreach ((string mat, int _, int _) in fill.Groups)
+                    materials.Add(mat);
+                Report.Add($"sol : {fillTiles.Count} dalle(s) bouchée(s)");
+            }
         }
         File.WriteAllBytes(Path.Combine(gfx, Name + ".sg"), Fd3Writer.Scene(nodes));
         Report.Add($"décor : {count} objets, {nodes.Count} maillages ({cache.Count} modèles)");
@@ -593,7 +669,7 @@ public sealed partial class MissionConverter
         List<(string name, Vector2 at)> points = new List<(string, Vector2)>();
         string[] laterClasses = ReinforcementVehicles.TryGetValue(Mission, out string[]? lc) ? lc : Array.Empty<string>();
         // véhicules et pompiers FD1 des équipes (sans ceux posés à part : l'hélicoptère de la Banque et son équipe)
-        bool Apart(Fd1Object o) => LevelUnitOf(o) != null;
+        bool Apart(Fd1Object o) => LevelUnitOf(o) != null || (ExcludedUnits.TryGetValue(Mission, out string[]? ex) && ex.Contains(InstanceName(o) ?? "", StringComparer.OrdinalIgnoreCase));
         List<Fd1Object> allTrucks = level.Objects.Where(o => Vehicles.ContainsKey(o.Class) && !Apart(o)).ToList();
         bool Later(Fd1Object o) => laterClasses.Contains(o.Class, StringComparer.OrdinalIgnoreCase) || IsReinforcementInstance(o);
         List<Fd1Object> trucks = allTrucks.Where(o => !Later(o))
@@ -653,7 +729,8 @@ public sealed partial class MissionConverter
             }
             else
             {
-                Vector2 at = new Vector2(later[0].World.M41, later[0].World.M42) * WorldToCm;
+                // (entrée propre au renfort à pied, sinon la place FD1 du premier)
+                Vector2 at = ReinforcementEntries.TryGetValue(Mission, out Vector2 e3) ? e3 : new Vector2(later[0].World.M41, later[0].World.M42) * WorldToCm;
                 points.Add(("locstart2_1", at));
                 points.Add(("locend2_1", at));
             }
@@ -787,6 +864,12 @@ public sealed partial class MissionConverter
         // Quartier : les voitures accidentées de la rue, l'aile ouest de l'étage (MissionConverter.Quartier.cs)
         if (mission.Equals("quartier", StringComparison.OrdinalIgnoreCase))
             return QuartierLitAtStart(at, type);
+        // Station-service : le camion-citerne, les pompes, les deux voitures accidentées (MissionConverter.StationService.cs)
+        if (mission.Equals("station_service", StringComparison.OrdinalIgnoreCase))
+            return StationLitAtStart(at, type);
+        // Train : les wagons chimiques du passage à niveau, la locomotive de tête (MissionConverter.Train.cs)
+        if (mission.Equals("train", StringComparison.OrdinalIgnoreCase))
+            return TrainLitAtStart(at, type);
         if (StartFires.TryGetValue(mission, out (float x0, float x1, float y0, float y1)[]? zones))
             return zones.Any(z => at.X >= z.x0 && at.X <= z.x1 && at.Y >= z.y0 && at.Y <= z.y1);
         return type.StartsWith("torche", StringComparison.OrdinalIgnoreCase);

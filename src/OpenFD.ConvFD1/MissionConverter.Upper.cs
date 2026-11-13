@@ -27,6 +27,8 @@ public sealed partial class MissionConverter
             ("BAN_EBOUL_04", 1500f) } },
         // Quartier : le troisième étage de l'ambassade (appartements, salons, salle de réception) ; on y monte à l'échelle
         { "quartier", new[] { ("QUA_APPART01", 1500f), ("QUA_APPART02", 1500f), ("QUA_APPART03", 1500f), ("QUA_APPART04", 1500f), ("QUA_APPART05", 1500f), ("QUA_APPART06", 1500f), ("QUA_APPART07", 1500f), ("QUA_APPART08", 1500f), ("QUA_APPART09", 1500f), ("QUA_APPART10", 1500f), ("QUA_APPART11", 1500f), ("QUA_APPART12", 1500f), ("QUA_APPART13", 1500f), ("QUA_APPART14", 1500f), ("QUA_APPART15", 1500f), ("QUA_APPART16", 1500f), ("QUA_APPART17", 1500f), ("QUA_APPART18", 1500f), ("QUA_APPART19", 1500f), ("QUA_APPART20", 1500f), ("QUA_APPART21", 1500f), ("QUA_APPART22", 1500f), ("QUA_APPART23", 1500f), ("QUA_EBOULEMENT_RD", 1500f), ("QUA_NO_PICKING", 1500f) } },
+        // Station-service : l'étage de l'immeuble ouest (appartements) ; on y monte à l'échelle (acte 4)
+        { "station_service", new[] { ("STA_HABITAT_PIECE01", 1500f), ("STA_HABITAT_PIECE02", 1500f), ("STA_HABITAT_PIECE03", 1500f), ("STA_HABITAT_PIECE04", 1500f), ("STA_HABITAT_PIECE05", 1500f), ("STA_HABITAT_PIECE06", 1500f), ("STA_HABITAT_PIECE07", 1500f), ("STA_HABITAT_PIECE08", 1500f), ("STA_HABITAT_PIECE09", 1500f), ("STA_HABITAT_PIECE10", 1500f), ("STA_HABITAT_PIECE11", 1500f), ("STA_HABITAT_PIECE12", 1500f), ("STA_HABITAT_PIECE13", 1500f), ("STA_HABITAT_PIECE14", 1500f), ("STA_HABITAT_PIECE15", 1500f), ("STA_HABITAT_PIECE16", 1500f) } },
     };
 
     /// <summary>
@@ -122,6 +124,15 @@ public sealed partial class MissionConverter
                 ("qua_arret_gaz", "@CoupeGaz", ""),
             }
         },
+        {
+            // Station-service (MissionConverter.StationService.cs) : la vanne de la fuite de propane, le sac des 3 millions
+            "station_service", new[]
+            {
+                ("valveessence", "@ValveEssence", ""), ("Sac", "@Pick_Sac", ""),
+            }
+        },
+        // Train (MissionConverter.Train.cs) : l'armoire de l'aération de secours du tunnel
+        { "train", new[] { ("eco_arm_cont_coupfeu01", "@Ventilation", "") } },
     };
 
     /// <summary>Boutons du script dont seul un ingénieur se sert (il « répare »), par mission (nom FD1).</summary>

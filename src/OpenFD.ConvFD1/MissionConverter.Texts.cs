@@ -45,6 +45,7 @@ public sealed partial class MissionConverter
             return 0;
         int written = 0;
         List<string> codes = new List<string>();
+        (List<string> misFiles, List<string> prefixes) = MisTextSources();
         // dossiers « Lang_XXX » (parfois « LANG_ITA ») : la casse varie
         foreach (string langDir in Directory.EnumerateDirectories(localize).Where(d => Path.GetFileName(d).StartsWith("Lang_", StringComparison.OrdinalIgnoreCase)))
         {
@@ -55,12 +56,11 @@ public sealed partial class MissionConverter
             if (source == null)
                 continue;
             Dictionary<string, string> texts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (string file in new[] { $"Warnings{Mission}", $"{Mission}_CutScenes", $"{Mission}_Intro" })
+            foreach (string file in new[] { $"Warnings{Mission}", $"{Mission}_CutScenes", $"{Mission}_Intro" }.Concat(misFiles).Distinct(StringComparer.OrdinalIgnoreCase))
                 foreach ((string key, string text) in ReadFd1Texts(source, file, fd1.ext))
                     texts[key] = text;
-            string prefix = Mission.ToUpperInvariant() + "_";
             foreach ((string key, string text) in ReadFd1Texts(source, "scenario", fd1.ext))
-                if (key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) || key.StartsWith("ALL_", StringComparison.OrdinalIgnoreCase))
+                if (prefixes.Any(p => key.StartsWith(p, StringComparison.OrdinalIgnoreCase)) || key.StartsWith("ALL_", StringComparison.OrdinalIgnoreCase))
                     texts[key] = text;
             if (texts.Count == 0)
                 continue;
@@ -96,6 +96,37 @@ public sealed partial class MissionConverter
     /// Textes d'un fichier FD1 (UTF-16 : lignes FIELD_ID="clé" puis TEXT="texte") ; « &lt;BR&gt; » → retour à la ligne.
     /// Fichier absent : rien.
     /// </summary>
+    /// <summary>
+    /// Fichiers de textes et préfixes des clés de la mission, d'après son .MIS FD1 ([WARNINGS], [TEXT], [CUTSCENE] : leur nom
+    /// ne suit pas toujours celui du dossier : « station_service » → WarningsStationService ; les objectifs
+    /// « STATION_DES_S1O0 » → préfixe « STATION_ »), avec le nom du dossier en majuscules.
+    /// </summary>
+    private (List<string> files, List<string> prefixes) MisTextSources()
+    {
+        List<string> files = new List<string>();
+        List<string> prefixes = new List<string> { Mission.ToUpperInvariant() + "_" };
+        string dir = Path.Combine(Fd1.Root, "Logic", "Missions", Mission);
+        // (« station_service.MIS », « quartier.mis », « ecole.MiS » : l'extension sans tenir compte de la casse)
+        string? mis = Directory.Exists(dir) ? Directory.EnumerateFiles(dir).FirstOrDefault(p => p.EndsWith(".mis", StringComparison.OrdinalIgnoreCase)) : null;
+        if (mis == null)
+            return (files, prefixes);
+        foreach (string raw in File.ReadLines(mis, Encoding.Latin1))
+        {
+            string line = raw.Split("//")[0].Trim();
+            string[] parts = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 2)
+                continue;
+            string tag = parts[0].ToUpperInvariant();
+            if (tag is "[WARNINGS]" or "[TEXT]")
+                files.Add(parts[1]);
+            else if (tag == "[CUTSCENE]" && parts.Length >= 4)
+                files.Add(parts[3]);
+            else if (Regex.IsMatch(tag, @"^\[SCENARIO\d+_OBJ\d+\]$") && parts.Length >= 3 && parts[2].IndexOf("_DES_", StringComparison.OrdinalIgnoreCase) is int k and > 0)
+                prefixes.Add(parts[2][..(k + 1)]);
+        }
+        return (files, prefixes.Distinct(StringComparer.OrdinalIgnoreCase).ToList());
+    }
+
     private static IEnumerable<(string key, string text)> ReadFd1Texts(string dir, string name, string ext)
     {
         string? path = Directory.EnumerateFiles(dir).FirstOrDefault(f => Path.GetFileName(f).Equals($"{name}.{ext}", StringComparison.OrdinalIgnoreCase));

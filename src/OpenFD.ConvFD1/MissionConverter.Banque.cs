@@ -28,6 +28,14 @@ public sealed partial class MissionConverter
         // au départ : le passage reste libre), les coffres brûlés et les bandes brûlées (le script FD1 les montre à la place
         // des intacts), la seconde porte blindée posée sur la première
         { "banque", new[] { "Helicoptere", "PorteCoupe0", "PorteCoupe1", "CoffreBrul1", "CoffreBrul2", "CoffreBrul3", "bob1", "bob2", "bob3", "bob4", "bob5", "bob6", "PorteSalleBlindee" } },
+        // Train : les débris de la locomotive de tête (FD1 les montre quand elle explose ; le moteur fait son explosion)
+        {
+            "train", new[]
+            {
+                "DebriLoco1_01", "DebriLoco1_02", "DebriLoco1_03", "DebriLoco1_04", "DebriLoco1_05", "DebriLoco1_06", "DebriLoco1_07", "DebriLoco1_08", "DebriLoco1_09",
+                "DebriLoco1_10", "DebriLoco1_11", "DebriLoco1_12", "DebriLoco1_13", "DebriLoco1_14", "DebriLoco1_15", "DebriLoco1_16", "DebriLoco1_17", "DebriLoco1_18",
+            }
+        },
     };
 
     /// <summary>
@@ -55,6 +63,8 @@ public sealed partial class MissionConverter
                 ("VoitureDeLuxe1", "@excalibur"),
             }
         },
+        // Station-service (MissionConverter.StationService.cs) : le camion-citerne de GPL, que l'ingénieur conduit
+        { "station_service", new[] { ("Citerne", "@citerne") } },
     };
 
     /// <summary>Unité posée à part pour cet objet FD1 (null : il fait partie des équipes, ou du décor).</summary>
@@ -109,7 +119,13 @@ public sealed partial class MissionConverter
             string? path = cls == "@helico" ? WriteHelicoClass() : fd1Model ? WriteObjectUnitClass(instance, cls) : "design\\unit\\" + cls;
             if (path == null)
                 continue;
-            string name = cls == "@helico" ? "Helicoptere" : cls == "@excalibur" ? "Excalibur" : instance;
+            string name = cls switch
+            {
+                "@helico" => "Helicoptere",
+                "@excalibur" => "Excalibur",
+                "@citerne" => StationTruckUnit,
+                _ => instance,
+            };
             Vector3 at = new Vector3(o.World.M41, o.World.M42, o.World.M43) * WorldToCm;
             float yaw = MathF.Atan2(o.World.M12, o.World.M11);
             LevelObject u = LevelEdit.Clone(template, LevelEdit.NewId(level), name, path);

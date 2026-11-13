@@ -171,7 +171,7 @@ public sealed class ModelConverter
     /// <summary>
     /// Sol du niveau : une dalle carrée de 10 m par texture « …_Xnn_Ynn » (x, y : numéro de la dalle), à la hauteur 0.
     /// </summary>
-    public Fd3Mesh Ground(List<(int x, int y, string texture)> tiles, string name)
+    public Fd3Mesh Ground(List<(int x, int y, string texture)> tiles, string name, float z = 0)
     {
         Fd3Mesh m = new Fd3Mesh { Name = name };
         const float size = MissionTile;
@@ -185,7 +185,7 @@ public sealed class ModelConverter
             (float px, float py, float u, float v)[] corners = { (x0, y0, 0, 1), (x0 + size, y0, 1, 1), (x0 + size, y0 + size, 1, 0), (x0, y0 + size, 0, 0) };
             foreach ((float px, float py, float u, float v) in corners)
             {
-                m.Positions.AddRange(new[] { px, py, 0f });
+                m.Positions.AddRange(new[] { px, py, z });
                 m.Normals.AddRange(new[] { 0f, 0f, 1f });
                 m.Uv.AddRange(new[] { u, v });
             }

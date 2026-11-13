@@ -37,9 +37,11 @@ public static class Program
         int errors = 0;
         foreach (string mission in missions)
         {
-            // nom par défaut : « FD1_ » et le nom du dossier FD1 avec une majuscule (« banque » → FD1_Banque)
+            // nom par défaut : « FD1_ » et le nom du dossier FD1, chaque mot avec une majuscule, sans « _ » (« banque » →
+            // FD1_Banque, « station_service » → FD1_StationService)
             string safe = ModelConverter.Safe(mission);
-            string name = args.Length > 3 && missions.Count == 1 ? args[3] : "FD1_" + char.ToUpperInvariant(safe[0]) + safe.Substring(1);
+            string camel = string.Concat(safe.Split('_', StringSplitOptions.RemoveEmptyEntries).Select(w => char.ToUpperInvariant(w[0]) + w.Substring(1)));
+            string name = args.Length > 3 && missions.Count == 1 ? args[3] : "FD1_" + camel;
             Console.WriteLine($"== {mission} → {name}");
             MissionConverter c = new MissionConverter { Fd1 = fd1, Fd3 = fd3, Mission = mission, Name = name };
             try
