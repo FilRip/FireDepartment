@@ -354,7 +354,7 @@ public sealed partial class UnitManager
     /// Obstacle du décor qui ferme ses cases jusqu'à ce qu'il soit dégagé : les cases que le décor lui attribue déjà
     /// (BuildObstacles) et son emprise au sol.
     /// </summary>
-    private Opening AddObstacle(LevelObject o, ClassFile c, float life, SceneAssets assets)
+    private Opening AddObstacle(LevelObject o, ClassFile c, float life, SceneAssets assets, bool ownLevel = false)
     {
         string? m = c.Get("DISPLAY", "Model")?.Trim('"', ' ');
         string? model = string.IsNullOrEmpty(m) ? null : SceneAssets.GfxPath("Placeable", m);
@@ -375,11 +375,19 @@ public sealed partial class UnitManager
             if (model != null)
             {
                 List<Vector2> pts = PathFind.Footprint(assets, model, -400, 400);
+                // gravats à découper posés à l'étage (Ecole : la flèche de grue tombée dans une salle de classe, qui dépasse
+                // dehors au-dessus de la rue) : seulement les cases de leur étage, pas celles du sol en dessous
+                bool upstairs = ownLevel && pts.Any(p => g.CellOf(Vector3.Transform(new Vector3(p, 0), o.Matrix)) is (int ux, int uy)
+                    && g.Inside(ux, uy) && g.ZoneA[g.Index(ux, uy)] != 0 && MathF.Abs(g.GroundHeight[g.Index(ux, uy)] - o.Position.Z) <= 100)
+                    && o.Position.Z > 400;
                 foreach (Vector2 p in pts)
                 {
                     (int cx, int cy) = g.CellOf(Vector3.Transform(new Vector3(p, 0), o.Matrix));
-                    if (g.Inside(cx, cy) && g.ZoneA[g.Index(cx, cy)] != 0 && !d.Cells.Contains(g.Index(cx, cy)))
-                        d.Cells.Add(g.Index(cx, cy));
+                    if (!g.Inside(cx, cy) || g.ZoneA[g.Index(cx, cy)] == 0 || d.Cells.Contains(g.Index(cx, cy)))
+                        continue;
+                    if (upstairs && g.GroundHeight[g.Index(cx, cy)] < o.Position.Z - 400)
+                        continue;
+                    d.Cells.Add(g.Index(cx, cy));
                 }
                 if (pts.Count > 0)
                 {
@@ -553,7 +561,7 @@ public sealed partial class UnitManager
             Opening? existing = Openings.FirstOrDefault(x => x.Id == o.Id);
             if (existing != null && !sawOf.ContainsKey(o.Id))
                 continue;   // tuyau du décor sans icône de scie à lui : il reste tel quel
-            Opening d = existing ?? AddObstacle(o, c, life, assets);
+            Opening d = existing ?? AddObstacle(o, c, life, assets, true);
             d.Breakable = false;
             d.Demolish = false;
             d.Extricate = true;

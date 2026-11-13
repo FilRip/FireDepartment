@@ -64,6 +64,8 @@ public sealed partial class MissionConverter
         { "station_service", 1 },
         // Train : l'hélicoptère dépose les deux pompiers ignifugés à l'acte 3 (HelicoCutScene)
         { "train", 1 },
+        // Ecole : le script FD1 fait venir la grande échelle et le bras élévateur à l'acte 2 (animRenforts0)
+        { "ecole", 1 },
     };
 
     /// <summary>Véhicules FD1 (classe) qui arrivent avec le premier renfort, par mission (Banque : acte 3).</summary>
@@ -71,6 +73,7 @@ public sealed partial class MissionConverter
     {
         { "banque", new[] { "Aerial", "WaterTower" } },
         { "station_service", new[] { "Aerial", "WaterTower" } },
+        { "ecole", new[] { "Aerial", "WaterTower" } },
     };
 
     /// <summary>
@@ -101,6 +104,8 @@ public sealed partial class MissionConverter
         { "station_service", new[] { "Pompier5", "Pompier6" } },
         // Train : les deux pompiers que l'hélicoptère dépose à l'acte 3 (l'un ignifugé, l'autre non dans FD1)
         { "train", new[] { "FireProof1", "FireProof2" } },
+        // Ecole : le médecin qui arrive avec l'échelle (acte 2)
+        { "ecole", new[] { "pompier3" } },
     };
 
     /// <summary>
@@ -150,6 +155,8 @@ public sealed partial class MissionConverter
         { "quartier", new Vector2(300, 4600) },
         // Train : la route du passage à niveau, depuis le sud-ouest
         { "train", new Vector2(11000, 500) },
+        // Ecole : la rue devant le chantier, depuis le nord
+        { "ecole", new Vector2(22400, 21000) },
     };
 
     private string Data => Fd3.DataDir;
@@ -183,11 +190,13 @@ public sealed partial class MissionConverter
 
     /// <summary>
     /// Fausses portes, par mission : modèles fermés comme un mur (Entrepot : « ENT_PT_PORTE_ETAT01 », la porte de la cour
-    /// contre le hall de droite, qui ne mène nulle part).
+    /// contre le hall de droite, qui ne mène nulle part). Train : l'écurie, dont on traversait les fenêtres (objet qui brûle,
+    /// pas un bâtiment pour le convertisseur : ses murs n'étaient pas relevés) ; on n'y entre que par sa porte.
     /// </summary>
     private static readonly Dictionary<string, string[]> FakeDoorModels = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Entrepot", new[] { "ENT_PT_PORTE_ETAT01" } },
+        { "train", new[] { "tra_ecuries_etat1" } },
     };
 
     /// <summary>
@@ -533,10 +542,12 @@ public sealed partial class MissionConverter
                 if (n >= 0)
                     continue;
             }
-            // grandes portes : des portes du moteur (MissionConverter.Doors.cs), pas du décor
-            if (IsBigDoor(o.Model) || IsBreakableDoor(o, UpperFloorHeights()))
+            // grandes portes : des portes du moteur (MissionConverter.Doors.cs), pas du décor ; gravats à découper aussi
+            if (IsBigDoor(o.Model) || IsBreakableDoor(o, UpperFloorHeights()) || IsExtricable(o.Model))
             {
-                if (IsBigDoor(o.Model))
+                if (IsExtricable(o.Model))
+                    _extricables.Add((o, meshes));
+                else if (IsBigDoor(o.Model))
                     _bigDoors.Add((o, meshes));
                 else
                     _breakableDoors.Add((o, meshes));
@@ -870,6 +881,9 @@ public sealed partial class MissionConverter
         // Train : les wagons chimiques du passage à niveau, la locomotive de tête (MissionConverter.Train.cs)
         if (mission.Equals("train", StringComparison.OrdinalIgnoreCase))
             return TrainLitAtStart(at, type);
+        // Ecole : le pied de la grue, le baraquement de l'ouvrier, la chaufferie (MissionConverter.Ecole.cs)
+        if (mission.Equals("ecole", StringComparison.OrdinalIgnoreCase))
+            return EcoleLitAtStart(at, type);
         if (StartFires.TryGetValue(mission, out (float x0, float x1, float y0, float y1)[]? zones))
             return zones.Any(z => at.X >= z.x0 && at.X <= z.x1 && at.Y >= z.y0 && at.Y <= z.y1);
         return type.StartsWith("torche", StringComparison.OrdinalIgnoreCase);
@@ -896,7 +910,9 @@ public sealed partial class MissionConverter
             LevelObject template = templates.TryGetValue(FireClass(type), out LevelObject? t) ? t : templates[FireClass("")];
             float intensity = LevelEdit.FireState(template) is { intensity: > 0 } st ? st.intensity : 50;
             n++;
-            LevelObject o = LevelEdit.Clone(template, LevelEdit.NewId(level), $"foyer_{n}", template.ClassPath);
+            // feu électrique (classe du jeu « …_elec », type C) : on ne l'arrose qu'une fois le courant coupé
+            string classPath = ElectricFire(cm, type) ? template.ClassPath + "_elec" : template.ClassPath;
+            LevelObject o = LevelEdit.Clone(template, LevelEdit.NewId(level), $"foyer_{n}", classPath);
             o = LevelEdit.WithTransform(o, cm, Vector3.Zero);
             o = LevelEdit.WithStartVisible(o, true);
             o = LevelEdit.WithFire(o, on, intensity);
@@ -907,6 +923,14 @@ public sealed partial class MissionConverter
         Report.Add($"feux : {n} foyers, dont {lit} allumés au départ");
         return n;
     }
+
+    /// <summary>
+    /// Ce foyer FD1 est-il un feu électrique ? Ecole : le baraquement de l'ouvrier (sous tension du groupe électrogène) et
+    /// les feux électriques de la flèche de la grue tombée sur l'école (sous tension du câble tombé devant l'école).
+    /// </summary>
+    private bool ElectricFire(Vector3 at, string type) =>
+        Mission.Equals("ecole", StringComparison.OrdinalIgnoreCase)
+        && EcoleGroupOf(at, type) is EcoleHut or EcoleCraneElec;
 
     /// <summary>Type de feu FD1 → classe de foyer du moteur : torche → grand foyer, « light » → petit, autres → moyen.</summary>
     private static string FireClass(string type)
@@ -969,6 +993,7 @@ public sealed partial class MissionConverter
         AddFires(level, fd1);
         AddBigDoors(level, fd1);
         AddBreakableDoors(level);
+        AddExtricables(level);
         AddBombs(level);
         AddScriptDoors(level);
         AddScriptButtons(level);

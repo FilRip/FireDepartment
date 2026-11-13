@@ -83,6 +83,15 @@ public sealed partial class MissionConverter
                 ("Conducteur3", "civilian\\civilian_man5"), ("Conducteur4", "civilian\\civilian_man6"),
             }
         },
+        {
+            // Ecole : l'ouvrier du chantier (acte 1), les deux employées du bâtiment administratif (acte 2), les trois
+            // professeurs de l'école (acte 3)
+            "ecole", new[]
+            {
+                ("ouvrier0", "civilian\\civilian_worker1"), ("civil0", "civilian\\civilian_woman1"), ("civil1", "civilian\\civilian_woman2"),
+                ("civil10", "civilian\\civilian_man1"), ("civil11", "civilian\\civilian_man2"), ("civil12", "civilian\\civilian_man3"),
+            }
+        },
     };
 
     /// <summary>
@@ -164,6 +173,27 @@ public sealed partial class MissionConverter
                 ("TCache11", "TCache11", new Vector3(6701, 14028, 1300), new Vector3(7201, 14528, 1800)),
                 ("TCache17", "TCache17", new Vector3(3552, 12785, 1300), new Vector3(4252, 13485, 1800)),
                 ("TCache19", "TCache19", new Vector3(3859, 14681, 1300), new Vector3(4459, 15281, 1800)),
+            }
+        },
+        {
+            // Ecole : zones FD1 (ecole.xfl ; cercles → carrés de même rayon) : l'armoire électrique du chantier, l'étage du
+            // bâtiment administratif, les entrées des salles de classe de l'école, le plancher qui s'effondre
+            "ecole", new[]
+            {
+                ("presElec", "presElec", new Vector3(19431, 12947, 0), new Vector3(21031, 14547, 300)),
+                ("decache0", "decache0", new Vector3(12292, 7506, 1300), new Vector3(13192, 8406, 1800)),
+                ("entrePiece12a", "entrePiece12", new Vector3(8313, 10753, 1300), new Vector3(8813, 11253, 1800)),
+                ("entrePiece12b", "entrePiece12", new Vector3(9329, 10743, 1300), new Vector3(9829, 11243, 1800)),
+                ("piece12Show", "entrePiece12", new Vector3(7949, 12616, 1300), new Vector3(8649, 13316, 1800)),
+                ("entrePiece11a", "entrePiece11", new Vector3(11384, 10720, 1300), new Vector3(11884, 11220, 1800)),
+                ("entrePiece11b", "entrePiece11", new Vector3(11729, 11635, 1300), new Vector3(12229, 12135, 1800)),
+                ("entrePiece11c", "entrePiece11", new Vector3(11729, 12248, 1300), new Vector3(12229, 12748, 1800)),
+                ("entrePiece13", "entrePiece13", new Vector3(11764, 14270, 1300), new Vector3(12264, 14770, 1800)),
+                ("entrePiece15a", "entrePiece15", new Vector3(11861, 15117, 1300), new Vector3(12361, 15617, 1800)),
+                ("entrePiece15b", "entrePiece15", new Vector3(11865, 16242, 1300), new Vector3(12365, 16742, 1800)),
+                ("entrePiece15c", "entrePiece15", new Vector3(11395, 16680, 1300), new Vector3(11895, 17180, 1800)),
+                ("entrePiece16", "entrePiece16", new Vector3(8281, 16594, 1300), new Vector3(8781, 17094, 1800)),
+                ("launchEffondr", "launchEffondr", new Vector3(11628, 16465, 1300), new Vector3(12128, 16965, 1800)),
             }
         },
     };
@@ -308,6 +338,8 @@ public sealed partial class MissionConverter
             return StationScript(fd1);
         if (Mission.Equals("train", StringComparison.OrdinalIgnoreCase))
             return TrainScript(fd1);
+        if (Mission.Equals("ecole", StringComparison.OrdinalIgnoreCase))
+            return EcoleScript(fd1);
         if (!Mission.Equals("Entrepot", StringComparison.OrdinalIgnoreCase))
             return ("", "", "");
         string T(string key) => _hasTexts ? TextKey(key) : key;

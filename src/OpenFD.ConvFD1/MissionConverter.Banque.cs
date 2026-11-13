@@ -36,6 +36,9 @@ public sealed partial class MissionConverter
                 "DebriLoco1_10", "DebriLoco1_11", "DebriLoco1_12", "DebriLoco1_13", "DebriLoco1_14", "DebriLoco1_15", "DebriLoco1_16", "DebriLoco1_17", "DebriLoco1_18",
             }
         },
+        // Ecole : les éclairs bleus autour de la grue et de l'armoire électrique (FD1 : un effet animé, mélangé ; le moteur le
+        // dessinerait plein, une grue toute bleue)
+        { "ecole", new[] { "effetElec0", "effetElec1" } },
     };
 
     /// <summary>
@@ -65,6 +68,8 @@ public sealed partial class MissionConverter
         },
         // Station-service (MissionConverter.StationService.cs) : le camion-citerne de GPL, que l'ingénieur conduit
         { "station_service", new[] { ("Citerne", "@citerne") } },
+        // Ecole (MissionConverter.Ecole.cs) : le bulldozer du chantier, que l'ouvrier prête (acte 2), le sapeur de l'acte 3
+        { "ecole", new[] { ("buldo", "firevehicle\\Veh_P_bulldozer"), ("pompier5", "fireman\\fireman_des") } },
     };
 
     /// <summary>Unité posée à part pour cet objet FD1 (null : il fait partie des équipes, ou du décor).</summary>

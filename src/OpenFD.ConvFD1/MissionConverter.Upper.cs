@@ -27,6 +27,16 @@ public sealed partial class MissionConverter
             ("BAN_EBOUL_04", 1500f) } },
         // Quartier : le troisième étage de l'ambassade (appartements, salons, salle de réception) ; on y monte à l'échelle
         { "quartier", new[] { ("QUA_APPART01", 1500f), ("QUA_APPART02", 1500f), ("QUA_APPART03", 1500f), ("QUA_APPART04", 1500f), ("QUA_APPART05", 1500f), ("QUA_APPART06", 1500f), ("QUA_APPART07", 1500f), ("QUA_APPART08", 1500f), ("QUA_APPART09", 1500f), ("QUA_APPART10", 1500f), ("QUA_APPART11", 1500f), ("QUA_APPART12", 1500f), ("QUA_APPART13", 1500f), ("QUA_APPART14", 1500f), ("QUA_APPART15", 1500f), ("QUA_APPART16", 1500f), ("QUA_APPART17", 1500f), ("QUA_APPART18", 1500f), ("QUA_APPART19", 1500f), ("QUA_APPART20", 1500f), ("QUA_APPART21", 1500f), ("QUA_APPART22", 1500f), ("QUA_APPART23", 1500f), ("QUA_EBOULEMENT_RD", 1500f), ("QUA_NO_PICKING", 1500f) } },
+        // Ecole : l'étage de l'école (salles de classe, couloir, la classe au plancher qui s'effondre) et celui du bâtiment
+        // administratif ; on y monte à l'échelle (acte 2)
+        {
+            "ecole", new[]
+            {
+                ("ECO_CLASSE01", 1500f), ("ECO_CLASSE02", 1500f), ("ECO_CLASSE03", 1500f), ("ECO_CLASSE04", 1500f),
+                ("ECO_CLASSE05", 1500f), ("ECO_COULOIR_CLASSE01", 1500f), ("ECO_PLANCHER_QUI_SEFFONDRE", 1500f), ("ECO_SALLE_PROF01", 1500f),
+                ("ECO_SALLE_PROF02", 1500f), ("ECO_SALLE_PROF04", 1500f), ("ECO_SALLE_PROF05", 1500f), ("ECO_SALLE_PROF06", 1500f),
+            }
+        },
         // Station-service : l'étage de l'immeuble ouest (appartements) ; on y monte à l'échelle (acte 4)
         { "station_service", new[] { ("STA_HABITAT_PIECE01", 1500f), ("STA_HABITAT_PIECE02", 1500f), ("STA_HABITAT_PIECE03", 1500f), ("STA_HABITAT_PIECE04", 1500f), ("STA_HABITAT_PIECE05", 1500f), ("STA_HABITAT_PIECE06", 1500f), ("STA_HABITAT_PIECE07", 1500f), ("STA_HABITAT_PIECE08", 1500f), ("STA_HABITAT_PIECE09", 1500f), ("STA_HABITAT_PIECE10", 1500f), ("STA_HABITAT_PIECE11", 1500f), ("STA_HABITAT_PIECE12", 1500f), ("STA_HABITAT_PIECE13", 1500f), ("STA_HABITAT_PIECE14", 1500f), ("STA_HABITAT_PIECE15", 1500f), ("STA_HABITAT_PIECE16", 1500f) } },
     };
@@ -64,6 +74,9 @@ public sealed partial class MissionConverter
         // Banque : la sortie de secours (toit voisin ↔ étage, ouverte à l'arrivée de l'hélicoptère), la porte de la salle de
         // surveillance (acte 4) et la porte blindée de la salle des coffres
         { "banque", new[] { ("ECO_PORTECOUPFEU01", "SortieSecours"), ("ECO_PORTECOUPEFEU_01", "PorteSurveillance"), ("BAN_PORTE_BLINDEE_SALLE", "PorteBlindeeCoffre") } },
+        // Ecole : les portes coupe-feu entre les pièces de l'étage administratif (FD1 : mécanismes « openDoor » ; le joueur
+        // les ouvre, UsableDoors)
+        { "ecole", new[] { ("pcf0", "pcf0"), ("pcf1", "pcf1"), ("pcf2", "pcf2"), ("pcf3", "pcf3") } },
         // Villa : les cinq portes du garage (boutons rouges) et la sortie de secours de la serre tropicale
         {
             "Villa", new[]
@@ -133,6 +146,8 @@ public sealed partial class MissionConverter
         },
         // Train (MissionConverter.Train.cs) : l'armoire de l'aération de secours du tunnel
         { "train", new[] { ("eco_arm_cont_coupfeu01", "@Ventilation", "") } },
+        // Ecole (MissionConverter.Ecole.cs) : le groupe électrogène du chantier (on coupe le courant)
+        { "ecole", new[] { ("grpeElec", "@GEOff", "") } },
     };
 
     /// <summary>Boutons du script dont seul un ingénieur se sert (il « répare »), par mission (nom FD1).</summary>
@@ -213,6 +228,9 @@ public sealed partial class MissionConverter
     /// près de sa hauteur) s'ouvrent, à cette hauteur. Les cases du mur des passages au grappin aussi (à la hauteur du
     /// plancher : seul le scout les franchit). Rend le nombre de cases.
     /// </summary>
+    /// <summary>Missions où une case au sol prise entre deux cases de plancher d'étage (face à face) devient du plancher.</summary>
+    private static readonly HashSet<string> LowFloorJoints = new(StringComparer.OrdinalIgnoreCase) { "ecole" };
+
     private int ApplyUpperFloors(Grid g)
     {
         int n = 0;
@@ -247,19 +265,25 @@ public sealed partial class MissionConverter
         // une case fermée entre deux cases de plancher à la même hauteur (en face l'une de l'autre) : le plancher continue
         // (Entrepot : la jointure entre la passerelle et le dessus du bloc noir)
         List<int> joints = new List<int>();
+        // cases au sol devenues du plancher (LowFloorJoints) : leur hauteur d'avant
+        Dictionary<int, float> lowJoints = new Dictionary<int, float>();
         for (int cy = 1; cy + 1 < g.Height; cy++)
             for (int cx = 1; cx + 1 < g.Width; cx++)
             {
                 int k = g.Index(cx, cy);
-                if (g.ZoneA[k] != 0)
+                // une case fermée, ou (missions de LowFloorJoints) ouverte mais au sol (Ecole : la ligne du mur sous la porte de
+                // la classe qui s'effondre, entre le plancher du couloir et celui de la classe)
+                if (g.ZoneA[k] != 0 && !(LowFloorJoints.Contains(Mission) && _upperFloors.Any(f => g.GroundHeight[k] < f.z - 200)))
                     continue;
                 foreach ((int dx, int dy) in new[] { (1, 0), (0, 1) })
                 {
                     int a = g.Index(cx - dx, cy - dy), b = g.Index(cx + dx, cy + dy);
-                    bool floorA = g.ZoneA[a] != 0 && _upperFloors.Any(f => f.z == g.GroundHeight[a]);
+                    bool floorA = g.ZoneA[a] != 0 && _upperFloors.Any(f => f.z == g.GroundHeight[a]) && (g.ZoneA[k] == 0 || g.GroundHeight[a] - g.GroundHeight[k] > 200);
                     if (floorA && g.ZoneA[b] != 0 && g.GroundHeight[b] == g.GroundHeight[a])
                     {
                         joints.Add(k);
+                        if (g.ZoneA[k] != 0)
+                            lowJoints[k] = g.GroundHeight[k];
                         g.GroundHeight[k] = g.GroundHeight[a];
                         break;
                     }
@@ -276,6 +300,15 @@ public sealed partial class MissionConverter
                 foreach (IGrouping<int, (int x, int y)> cell in quarters.Where(q => q.x >= 0 && q.y >= 0).GroupBy(q => g.Inside(q.x / per, q.y / per) ? g.Index(q.x / per, q.y / per) : -1))
                     if (cell.Key >= 0 && cell.Count() >= need && g.ZoneA[cell.Key] != 0 && g.GroundHeight[cell.Key] == z)
                         g.ZoneA[cell.Key] = 0;
+        // une case au sol devenue du plancher puis fermée par un mur de l'étage : elle redevient ce qu'elle était (seules
+        // restent les cases du passage, la porte)
+        foreach ((int k, float h) in lowJoints)
+            if (g.ZoneA[k] == 0)
+            {
+                g.ZoneA[k] = 1;
+                g.GroundHeight[k] = h;
+                n--;
+            }
         if (GrappleWalls.TryGetValue(Mission, out (Vector3 top, float yaw)[]? walls))
             foreach ((Vector3 top, float yaw) in walls)
             {
@@ -333,6 +366,12 @@ public sealed partial class MissionConverter
         Report.Add($"grappin : {walls.Length} passage(s)");
     }
 
+    /// <summary>Portes du script que le joueur ouvre lui-même, par mission (nom de la porte).</summary>
+    private static readonly Dictionary<string, string[]> UsableDoors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "ecole", new[] { "pcf0", "pcf1", "pcf2", "pcf3" } },
+    };
+
     /// <summary>Portes du script dans le niveau du moteur (fermées, elles montent quand le script les ouvre).</summary>
     private void AddScriptDoors(Level level)
     {
@@ -346,7 +385,8 @@ public sealed partial class MissionConverter
         }
         foreach ((Fd1Object o, List<Fd3Mesh> meshes, string name) in _scriptDoors)
         {
-            string cls = WriteDoorModel(o.Model, meshes, true, false);
+            bool usable = UsableDoors.TryGetValue(Mission, out string[]? usables) && usables.Contains(name, StringComparer.OrdinalIgnoreCase);
+            string cls = WriteDoorModel(o.Model, meshes, true, usable);
             Vector3 at = new Vector3(o.World.M41, o.World.M42, o.World.M43) * WorldToCm;
             float yaw = MathF.Atan2(o.World.M12, o.World.M11);
             LevelObject d = LevelEdit.Clone(door, LevelEdit.NewId(level), name, cls);
