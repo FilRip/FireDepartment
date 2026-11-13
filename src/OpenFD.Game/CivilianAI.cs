@@ -242,6 +242,12 @@ public sealed partial class UnitManager
             }
             return;
         }
+        // sur l'échelle d'un camion : il la monte ou la descend jusqu'au bout (même si son guide ne l'attend plus)
+        if (c.OnLadder != null)
+        {
+            UpdateCivilianLadder(c, dt);
+            return;
+        }
         if (c.Leader is not { } l || c.State != CivilianState.Conscious)
             return;
         // arrivé à une ambulance (ou un poste de soins) avec son guide : il est mis à l'abri
@@ -283,7 +289,17 @@ public sealed partial class UnitManager
             c.Replan = 0.6f;
             c.FollowGoal = to;
             c.FollowPath.Clear();
-            List<Vector2> path = FindPath(me, to, out _);
+            // par les échelles dressées aussi, comme son guide (il ne casse ni n'ouvre la fenêtre)
+            Paths.PathingLadder = true;
+            List<Vector2> path;
+            try
+            {
+                path = FindPath(me, to, out _);
+            }
+            finally
+            {
+                Paths.PathingLadder = false;
+            }
             foreach (Vector2 p in path)
                 c.FollowPath.Enqueue(p);
             if (c.FollowPath.Count == 0)
@@ -307,6 +323,15 @@ public sealed partial class UnitManager
                 c.StairsTo = new Vector3(t, down ? stairs.HeightB : stairs.HeightA);
                 c.Heading = MathF.Atan2(t.Y - me.Y, t.X - me.X);
                 c.Position = c.StairsFrom;
+                return;
+            }
+            // prochain pas : l'autre bout de l'échelle d'un camion → il y monte (ou descend), quand personne n'y monte
+            if (LadderBetween(me, t) is { } ladder)
+            {
+                if (!LadderFree(ladder))
+                    break;
+                c.FollowPath.Clear();
+                StartCivilianLadder(c, ladder, me, t);
                 return;
             }
             // inutile d'aller jusqu'au guide : il s'arrête à FollowDistance de lui

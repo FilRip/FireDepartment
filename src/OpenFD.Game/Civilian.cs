@@ -33,4 +33,13 @@ public sealed class Civilian
     public float StairsTimer;
     public Vector3 StairsFrom;
     public Vector3 StairsTo;
+    /// <summary>
+    /// Échelle d'un camion échelle qu'il monte ou descend derrière son guide (Ladders.cs, UpdateCivilianLadder) : étape,
+    /// temps passé dans l'étape, point de départ de l'étape, sens (vers l'étage).
+    /// </summary>
+    public Ladder? OnLadder;
+    public LadderPhase LadderStep;
+    public float LadderTimer;
+    public Vector3 ClimbFrom;
+    public bool LadderUp;
 }

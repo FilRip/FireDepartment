@@ -415,6 +415,136 @@ public sealed partial class UnitManager
         return false;
     }
 
+    /// <summary>Échelle dressée dont les deux bouts (pied, étage) sont les cases de ces deux points (un pas « lien » d'un chemin).</summary>
+    private Ladder? LadderBetween(Vector2 a, Vector2 b)
+    {
+        if (_s.Grid is not { } g)
+            return null;
+        int ca = CellIndex(g, a), cb = CellIndex(g, b);
+        foreach (Unit v in Units)
+            if (v.Ladder is { } l && l.Ready && l.FootCell >= 0 && l.InsideCell >= 0
+                && ((l.FootCell == ca && l.InsideCell == cb) || (l.FootCell == cb && l.InsideCell == ca)))
+                return l;
+        return null;
+    }
+
+    /// <summary>Personne ne s'engage sur l'échelle (on n'y monte pas l'un dans l'autre : on attend que le premier y soit).</summary>
+    private bool LadderFree(Ladder l) =>
+        !Units.Any(x => x.OnLadder == l && x.LadderStep is LadderPhase.Mount or LadderPhase.Leave or LadderPhase.Enter or LadderPhase.Dismount)
+        && !Civilians.Any(x => x.OnLadder == l && x.LadderStep is LadderPhase.Mount or LadderPhase.Leave or LadderPhase.Enter or LadderPhase.Dismount);
+
+    /// <summary>Un civil qui suit son guide s'engage sur l'échelle : depuis le sol (il monte) ou depuis l'étage (il descend).</summary>
+    private void StartCivilianLadder(Civilian c, Ladder l, Vector2 from, Vector2 to)
+    {
+        c.OnLadder = l;
+        c.LadderUp = _s.Grid is { } g && CellIndex(g, to) == l.InsideCell;
+        c.LadderStep = c.LadderUp ? LadderPhase.Mount : LadderPhase.Leave;
+        c.LadderTimer = 0;
+        c.ClimbFrom = new Vector3(from, Ground(from));
+        c.Position = c.ClimbFrom;
+    }
+
+    /// <summary>
+    /// Civil sur l'échelle (il suit son guide) : comme le pompier, sans s'arrêter en haut. Il monte (enjamber le camion,
+    /// grimper, passer la fenêtre) ou descend (passer la fenêtre, descendre, quitter le camion). Échelle repliée ou camion
+    /// parti, ou civil évanoui : il se retrouve au pied.
+    /// </summary>
+    private void UpdateCivilianLadder(Civilian c, float dt)
+    {
+        Ladder l = c.OnLadder!;
+        if (!l.Placed || l.Truck.Ladder != l || c.State != CivilianState.Conscious)
+        {
+            EndCivilianLadder(c, new Vector3(l.Foot, Ground(l.Foot)));
+            return;
+        }
+        float len = MathF.Max(1, Vector3.Distance(l.Base, l.Tip));
+        Vector2 toWindow = new Vector2(l.Window.Center.X - l.Tip.X, l.Window.Center.Y - l.Tip.Y);
+        float faceWindow = MathF.Atan2(toWindow.Y, toWindow.X);
+        float alongLadder = MathF.Atan2(l.Tip.Y - l.Base.Y, l.Tip.X - l.Base.X);
+        c.LadderTimer += dt;
+        switch (c.LadderStep)
+        {
+            case LadderPhase.Mount:
+            {
+                float k = Math.Clamp(c.LadderTimer / LadderMountSeconds, 0, 1);
+                c.Position = Vector3.Lerp(c.ClimbFrom, l.Base, k);
+                c.Heading = alongLadder;
+                if (k >= 1)
+                    Next(LadderPhase.Up);
+                break;
+            }
+            case LadderPhase.Up:
+            {
+                float k = Math.Clamp(c.LadderTimer * LadderClimbSpeed / len, 0, 1);
+                c.Position = Vector3.Lerp(l.Base, l.Tip, k);
+                c.Heading = alongLadder;
+                if (k >= 1)
+                {
+                    Next(LadderPhase.Enter);
+                    c.ClimbFrom = new Vector3(l.Inside, Ground(l.Inside));
+                }
+                break;
+            }
+            case LadderPhase.Enter:
+            {
+                float k = Math.Clamp(c.LadderTimer / LadderWindowSeconds, 0, 1);
+                c.Position = Vector3.Lerp(l.Tip, c.ClimbFrom, k);
+                c.Heading = faceWindow;
+                if (k >= 1)
+                    EndCivilianLadder(c, c.ClimbFrom);
+                break;
+            }
+            case LadderPhase.Leave:
+            {
+                float k = Math.Clamp(c.LadderTimer / LadderWindowSeconds, 0, 1);
+                c.Position = Vector3.Lerp(c.ClimbFrom, l.Tip, k);
+                c.Heading = faceWindow + MathF.PI;
+                if (k >= 1)
+                    Next(LadderPhase.Down);
+                break;
+            }
+            case LadderPhase.Down:
+            {
+                float k = Math.Clamp(c.LadderTimer * LadderClimbSpeed / len, 0, 1);
+                c.Position = Vector3.Lerp(l.Tip, l.Base, k);
+                c.Heading = alongLadder;
+                if (k >= 1)
+                {
+                    Next(LadderPhase.Dismount);
+                    c.ClimbFrom = new Vector3(l.Foot, Ground(l.Foot));
+                }
+                break;
+            }
+            case LadderPhase.Dismount:
+            {
+                float k = Math.Clamp(c.LadderTimer / LadderMountSeconds, 0, 1);
+                c.Position = Vector3.Lerp(l.Base, c.ClimbFrom, k);
+                if (k >= 1)
+                    EndCivilianLadder(c, c.ClimbFrom);
+                break;
+            }
+            default:
+                EndCivilianLadder(c, new Vector3(l.Foot, Ground(l.Foot)));
+                break;
+        }
+
+        void Next(LadderPhase p)
+        {
+            c.LadderStep = p;
+            c.LadderTimer = 0;
+        }
+    }
+
+    // le civil quitte l'échelle (au bout, ou au pied si elle disparaît) : nouveau chemin vers son guide
+    private static void EndCivilianLadder(Civilian c, Vector3 at)
+    {
+        c.OnLadder = null;
+        c.LadderStep = LadderPhase.None;
+        c.Position = at;
+        c.FollowPath.Clear();
+        c.FollowGoal = new Vector2(float.MaxValue, 0);
+    }
+
     /// <summary>Le pompier peut passer par la fenêtre de cette échelle : ouverte, ou il peut la casser ou l'ouvrir.</summary>
     private static bool CanPass(Unit u, Ladder l) =>
         l.InsideCell >= 0 && (l.Window.State != OpeningState.Closed || (u.CanBreak && l.Window.Breakable) || (u.CanUse && l.Window.Usable));
