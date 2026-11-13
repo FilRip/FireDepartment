@@ -3,7 +3,7 @@
 
 OpenFD — C# re-implementation of Fire Department 2 and 3 and a mission editor (and missions of Fire Department 1 with a converter included)
 
-A new engine that reads files from an original installation of Fire Department 2 and 3.
+A new engine that reads files from an original installation of Fire Department 2 and 3. For Windows and Linux (x64)
 
 A converter is now included to convert missions/files of Fire Department 1, to be played in Fire Department 3 and OpenFD.
 
@@ -37,3 +37,5 @@ OpenFD.ConvFD1 <Path root of Fire Department 1> <Path of "Data" of Fire Departme
 Thank you to support me please :
 
 [![Donate with PayPal](https://raw.githubusercontent.com/stefan-niedermann/paypal-donate-button/master/paypal-donate-button.png)](https://www.paypal.com/donate/?hosted_button_id=ZFAW8GC4FZMXW)
+
+![Preview](./docs/demo.png)
