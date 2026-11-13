@@ -92,6 +92,22 @@ public sealed partial class MissionConverter
                 ("civil10", "civilian\\civilian_man1"), ("civil11", "civilian\\civilian_man2"), ("civil12", "civilian\\civilian_man3"),
             }
         },
+        {
+            // Foret (MissionConverter.Foret.cs) : le bûcheron (acte 1), le couple de l'accident de voiture (acte 2), les six
+            // scouts du camp (acte 3, conscients : ils suivent les pompiers jusqu'au refuge)
+            "foret", new[]
+            {
+                ("Bucheron", "civilian\\civilian_worker2"), ("Homme_Accident", "civilian\\civilian_man4"), ("Femme_Accident", "civilian\\civilian_woman3"),
+                ("Scout0", "civilian\\civilian_man5"), ("Scout1", "civilian\\civilian_man6"), ("Scout2", "civilian\\civilian_woman4"),
+                ("Scout3", "civilian\\civilian_man7"), ("Scout4", "civilian\\civilian_woman5"), ("Scout5", "civilian\\civilian_man8"),
+            }
+        },
+    };
+
+    /// <summary>Civils du déroulement qui sont conscients (ils suivent un pompier), par mission ; les autres sont évanouis.</summary>
+    private static readonly Dictionary<string, string[]> ConsciousCivilians = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "foret", new[] { "Scout0", "Scout1", "Scout2", "Scout3", "Scout4", "Scout5" } },
     };
 
     /// <summary>
@@ -196,6 +212,16 @@ public sealed partial class MissionConverter
                 ("launchEffondr", "launchEffondr", new Vector3(11628, 16465, 1300), new Vector3(12128, 16965, 1800)),
             }
         },
+        {
+            // Foret : zones FD1 (foret.xfl) : le nord-ouest de la carte (T0 : la cinématique de l'héliport du bûcheron), les
+            // deux héliports (T1, T2 : unités qui gênent l'atterrissage)
+            "foret", new[]
+            {
+                ("ZoneHeliport1", "ForetZone0", new Vector3(257, 203, -200), new Vector3(9360, 12009, 800)),
+                ("Heliport1", "ForetEntre1", new Vector3(3480, 5150, -200), new Vector3(5030, 6500, 800)),
+                ("Heliport2", "ForetEntre2", new Vector3(4863, 17510, -200), new Vector3(6524, 19133, 800)),
+            }
+        },
     };
 
     /// <summary>Cinématique FD1 jouée quand on utilise ce bouton du script (Entrepot : la porte blindée, l'échelle 2).</summary>
@@ -209,6 +235,8 @@ public sealed partial class MissionConverter
     private static readonly Dictionary<string, string> StoryTriggerLeave = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Flaque", "Flaque_Sortie" },
+        { "Heliport1", "ForetSort1" },
+        { "Heliport2", "ForetSort2" },
     };
 
     /// <summary>Nom FD1 de l'objet (dernier texte de son enregistrement avant le script) ; null : sans nom.</summary>
@@ -260,13 +288,15 @@ public sealed partial class MissionConverter
             foreach ((string name, string cls) in civilians)
             {
                 Fd1Object? actor = fd1.Objects.FirstOrDefault(o => o.Class.Equals("ActeurUnit", StringComparison.OrdinalIgnoreCase) && InstanceName(o) == name);
+                // état de départ (octet 39 du composant A02A) : 3 évanoui, 1 conscient
+                byte wanted = ConsciousCivilians.TryGetValue(Mission, out string[]? awake) && awake.Contains(name, StringComparer.OrdinalIgnoreCase) ? (byte)1 : (byte)3;
                 LevelObject? template = TemplateWhere(o => o.Kind == EntityKind.Civilian && o.ClassPath.EndsWith(cls, StringComparison.OrdinalIgnoreCase)
-                    && o.GetComponent(0xA02A) is { } c && c.Size > 39 && o.ComponentBytes(c)[39] == 3);
+                    && o.GetComponent(0xA02A) is { } c && c.Size > 39 && o.ComponentBytes(c)[39] == wanted);
                 // pas de civil évanoui de ce modèle dans les missions du jeu : un autre civil évanoui, avec la classe voulue
                 string classPath = template?.ClassPath ?? "";
                 if (template == null)
                 {
-                    template = TemplateWhere(o => o.Kind == EntityKind.Civilian && o.GetComponent(0xA02A) is { } c && c.Size > 39 && o.ComponentBytes(c)[39] == 3);
+                    template = TemplateWhere(o => o.Kind == EntityKind.Civilian && o.GetComponent(0xA02A) is { } c && c.Size > 39 && o.ComponentBytes(c)[39] == wanted);
                     if (template != null)
                         classPath = template.ClassPath[..(template.ClassPath.IndexOf("civilian\\", StringComparison.OrdinalIgnoreCase) is int k and >= 0 ? k : 0)] + cls;
                 }
@@ -283,7 +313,7 @@ public sealed partial class MissionConverter
                 level.Objects.Add(c);
                 n++;
             }
-            Report.Add($"civils : {n} (évanouis, cachés au départ)");
+            Report.Add($"civils : {n} (cachés au départ)");
         }
         if (StoryTriggers.TryGetValue(Mission, out (string name, string script, Vector3 min, Vector3 max)[]? triggers))
         {
@@ -340,6 +370,8 @@ public sealed partial class MissionConverter
             return TrainScript(fd1);
         if (Mission.Equals("ecole", StringComparison.OrdinalIgnoreCase))
             return EcoleScript(fd1);
+        if (Mission.Equals("foret", StringComparison.OrdinalIgnoreCase))
+            return ForetScript(fd1);
         if (!Mission.Equals("Entrepot", StringComparison.OrdinalIgnoreCase))
             return ("", "", "");
         string T(string key) => _hasTexts ? TextKey(key) : key;

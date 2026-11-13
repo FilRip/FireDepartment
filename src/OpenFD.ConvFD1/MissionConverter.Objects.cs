@@ -18,7 +18,16 @@ namespace OpenFD.ConvFD1;
 /// </summary>
 public sealed partial class MissionConverter
 {
-    private enum ObjectRole { Standing, Fallen, Watched, Explosive, Drivable }
+    private enum ObjectRole { Standing, Fallen, Watched, Explosive, Drivable, Hidden }
+
+    /// <summary>
+    /// Objets cachés au départ que le script montre, par mission (nom FD1). Foret : la voiture accidentée contre le rocher
+    /// (FD1 : AccidentVoitureBis), l'épave de l'hélicoptère qui s'écrase (Epave_Helicoptere3Bis).
+    /// </summary>
+    private static readonly Dictionary<string, string[]> HiddenObjects = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "foret", new[] { "Voiture_Accident_Rocher", "Epave_Helicoptere3" } },
+    };
 
     /// <summary>Sensibilité au feu des étagères debout (1 : elles tombent 25 s après que le feu les a prises).</summary>
     private const float ShelfFireCoef = 0.25f;
@@ -96,6 +105,8 @@ public sealed partial class MissionConverter
                 ("Loco1", 0.33f), ("MiniConvoi", 0.25f), ("Silo1", 0.33f), ("Silo2", 0.33f), ("Silo3", 0.33f), ("VoitureExplo", 0f),
             }
         },
+        // Foret : les épaves de la voiture et de l'hélicoptère restent là, au milieu de leurs feux
+        { "foret", new[] { ("Voiture_Accident_Rocher", 0f), ("Epave_Helicoptere3", 0f) } },
     };
 
     /// <summary>Voitures à conduire, par mission : nom FD1, fonction du script appelée quand un ingénieur la prend.</summary>
@@ -122,6 +133,8 @@ public sealed partial class MissionConverter
                 if (name.Equals(s + "Bis", StringComparison.OrdinalIgnoreCase))
                     return (ObjectRole.Fallen, "FD1_Rien");
             }
+        if (HiddenObjects.TryGetValue(Mission, out string[]? hidden) && hidden.Contains(name, StringComparer.OrdinalIgnoreCase))
+            return (ObjectRole.Hidden, "FD1_Rien");
         if (DrivableObjects.TryGetValue(Mission, out (string name, string script)[]? drivable) && drivable.Any(d => d.name.Equals(name, StringComparison.OrdinalIgnoreCase)))
             return (ObjectRole.Drivable, WatchedScript(name) ?? "FD1_Rien");
         if (WatchedObjects.TryGetValue(Mission, out (string prefix, string script)[]? watched))
@@ -324,7 +337,7 @@ public sealed partial class MissionConverter
                 classes[(model, explosive)] = cls = WriteObjectClass(model, parts, explosive);
             LevelObject x = LevelEdit.Clone(template, LevelEdit.NewId(level), name, cls);
             x = LevelEdit.WithTransform(x, new Vector3(w.M41, w.M42, w.M43), euler);
-            x = LevelEdit.WithStartVisible(x, role != ObjectRole.Fallen);
+            x = LevelEdit.WithStartVisible(x, role is not (ObjectRole.Fallen or ObjectRole.Hidden));
             x = WithComponentScript(x, 0xA024, script);
             // étagère debout : elle tient un moment dans le feu avant de tomber (sinon elle tombe en 25 s)
             float coef = role == ObjectRole.Standing ? ShelfFireCoef : 1f;
