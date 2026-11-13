@@ -23,10 +23,19 @@ public sealed partial class UnitManager
     {
         foreach (Civilian c in Civilians.Where(c => c.Hidden))
         {
+            // case de la victime : les gravats la couvrent (une porte cassable à côté d'une victime cachée, elle, ne la couvre
+            // pas : FD1 Station-service, le client derrière la porte de la réserve)
+            int cell = -1;
+            if (_s.Grid is { } g)
+            {
+                (int cx, int cy) = g.CellOf(c.Position);
+                cell = g.Index(cx, cy);
+            }
             // gravats cassables (Paris : « remains », classe de porte) posés sur la victime, à peu près à sa hauteur
             List<Opening> over = Openings.Where(o => o.Breakable && !o.IsWindow
                 && Vector2.Distance(new(o.Position.X, o.Position.Y), new(c.Position.X, c.Position.Y)) < RubbleOverVictim
-                && MathF.Abs(o.Position.Z - c.Position.Z) < 300).ToList();
+                && MathF.Abs(o.Position.Z - c.Position.Z) < 300
+                && (cell < 0 || o.Cells.Count == 0 || o.Cells.Contains(cell))).ToList();
             if (over.Count == 0)
                 continue;
             foreach (Opening o in over)
