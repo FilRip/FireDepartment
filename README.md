@@ -7,6 +7,8 @@ A new engine that reads files from an original installation of Fire Department 2
 
 A converter is now included to convert missions/files of Fire Department 1, to be played in Fire Department 3 and OpenFD.
 
+This engine support multiplayers
+
 No game data is included in this repository.
 
 -----------
