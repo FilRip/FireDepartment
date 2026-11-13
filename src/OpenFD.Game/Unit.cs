@@ -107,6 +107,16 @@ public sealed class Unit
     public HotPoint? Target;                              // feu à éteindre
     public string Status = "";
     public bool Moving => Path.Count > 0;
+    /// <summary>
+    /// File d'attente devant l'échelle d'un camion (réglage OnlyOneOnLadder, Ladders.cs) : l'échelle attendue, le bout où il
+    /// attend (au sol : il montera), depuis quand ; arrêté à sa place (ou devant une échelle pas encore dressée) : LadderHold.
+    /// </summary>
+    public Ladder? LadderWait;
+    public bool LadderWaitUp;
+    public float LadderWaitSince;
+    public bool LadderHold;
+    /// <summary>En marche pour l'affichage : il a un chemin et n'attend pas, arrêté, devant une échelle.</summary>
+    public bool ShownMoving => Moving && !LadderHold;
     /// <summary>Retenu par le script (IA_CmdStop, répété par la boucle de la mission) jusqu'à cet instant : l'IA ne le fait pas arroser.</summary>
     public float ScriptHold = -1;
     /// <summary>Portes fermées sur le chemin d'un IA_CmdMoveTo : il les ouvre en arrivant devant.</summary>
