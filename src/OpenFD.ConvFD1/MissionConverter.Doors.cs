@@ -231,6 +231,92 @@ public sealed partial class MissionConverter
             "ECO_RESEAU_ELEC_BUT_ETAT1" } },
     };
 
+    /// <summary>
+    /// Obstacles que le bulldozer déblaie, par mission (début du modèle FD1). Foret : les broussailles « butinables » que le
+    /// Wildland (le bulldozer) défriche ; sept d'entre elles (Brousaille1 à 7) occupent la clairière de l'héliport 2.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> DemolishModels = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "foret", new[] { "FOR_BROUSSAILS_BUTINABLES" } },
+    };
+
+    /// <summary>Points de vie des obstacles à déblayer (un coup de pelle en enlève 32).</summary>
+    private const float DemolishLife = 100;
+
+    /// <summary>Obstacles à déblayer trouvés dans le niveau FD1 (objet, maillages en cm dans le repère du modèle).</summary>
+    private readonly List<(Fd1Object o, List<Fd3Mesh> meshes)> _demolishables = new List<(Fd1Object, List<Fd3Mesh>)>();
+
+    private bool IsDemolishable(string model) =>
+        DemolishModels.TryGetValue(Mission, out string[]? models) && models.Any(m => model.StartsWith(m, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>La carte donne-t-elle à cet objet du jeu la capacité « déblayable » (composant A026, octet 37) ?</summary>
+    private static bool CanBeDemolished(LevelObject o)
+    {
+        if (o.GetComponent(0xA026) is not { } cc)
+            return false;
+        ReadOnlySpan<byte> b = o.ComponentBytes(cc);
+        return b.Length > 37 && b[22] == 0xAA && b[26] == 0x09 && b[37] == 1;
+    }
+
+    /// <summary>
+    /// Obstacles à déblayer dans le niveau du moteur : copies d'un objet du jeu que la carte marque déblayable (le moteur
+    /// en fait un obstacle qui ferme ses cases jusqu'à ce que le bulldozer l'ait enlevé : Openings.LoadDemolishable), sous
+    /// leur nom FD1 (le script lit leur état : « Broken » une fois déblayés).
+    /// </summary>
+    private void AddDemolishables(Level level)
+    {
+        if (_demolishables.Count == 0)
+            return;
+        LevelObject? template = TemplateWhere(o => o.Kind == EntityKind.Placeable && CanBeDemolished(o));
+        if (template == null)
+        {
+            Report.Add("obstacles à déblayer : objet modèle introuvable dans les missions du jeu");
+            return;
+        }
+        string classDir = Path.Combine(Data, "Design", "placeable", "levels");
+        Directory.CreateDirectory(classDir);
+        Dictionary<string, string> classes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        int k = 0;
+        foreach ((Fd1Object o, List<Fd3Mesh> meshes) in _demolishables)
+        {
+            if (!classes.TryGetValue(o.Model, out string? cls))
+            {
+                (string safe, List<(string node, Matrix4x4 world)> _, float _) = WritePlaceableModel(o.Model, meshes);
+                string text = $"""
+                    [#INCLUDE]
+                    FILE0 = "base_levels.class"
+
+                    [DISPLAY]
+                    MODEL = {Name}\{safe}
+
+                    [OCCUPATION]
+                    OCCUPATION_TYPE = ITEM
+
+                    [DAMAGE]
+                    USEDAMAGE = 1
+                    FIREDAMAGECOEF = 0
+                    LIFEPOINTS = {DemolishLife}
+                    MAXLIFEPOINTS = {DemolishLife}
+
+                    [CAPACITIES_ACTIONS]
+                    COULDBEDEMOLISH = 1
+
+                    """;
+                File.WriteAllBytes(Path.Combine(classDir, safe + "_bulldo.class"), Encoding.Latin1.GetBytes(text.Replace("\n", "\r\n")));
+                classes[o.Model] = cls = "design\\placeable\\levels\\" + safe + "_bulldo";
+            }
+            Vector3 at = new Vector3(o.World.M41, o.World.M42, o.World.M43) * WorldToCm;
+            float yaw = MathF.Atan2(o.World.M12, o.World.M11);
+            k++;
+            string name = InstanceName(o) is { } fd1Name && !fd1Name.Equals(o.Model, StringComparison.OrdinalIgnoreCase) ? fd1Name : $"deblai_{k}";
+            LevelObject d = LevelEdit.Clone(template, LevelEdit.NewId(level), name, cls);
+            d = LevelEdit.WithTransform(d, at, new Vector3(0, 0, yaw));
+            d = LevelEdit.WithStartVisible(d, true);
+            level.Objects.Add(d);
+        }
+        Report.Add($"obstacles à déblayer : {_demolishables.Count}");
+    }
+
     /// <summary>Points de vie des gravats à découper (la scie du désincarcérateur).</summary>
     private const float ExtricableLife = 100;
 

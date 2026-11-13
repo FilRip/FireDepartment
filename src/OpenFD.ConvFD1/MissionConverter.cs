@@ -43,6 +43,32 @@ public sealed partial class MissionConverter
     };
 
     /// <summary>
+    /// Véhicules des pompiers propres à une mission (classe FD1 → véhicule du moteur), en plus de Vehicles. Foret : le
+    /// « Wildland » (WdExtrem), le bulldozer qui débroussaille (ailleurs, la classe WdExtrem est un engin du décor).
+    /// </summary>
+    private static readonly Dictionary<string, Dictionary<string, string>> MissionVehicles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "foret", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { { "WdExtrem", "Firevehicle\\Veh_P_bulldozer" } } },
+    };
+
+    /// <summary>Véhicule du moteur pour ce véhicule FD1 (null : ce n'en est pas un).</summary>
+    private string? VehicleOf(Fd1Object o)
+    {
+        if (Vehicles.TryGetValue(o.Class, out string? v))
+            return v;
+        return MissionVehicles.TryGetValue(Mission, out Dictionary<string, string>? extra) && extra.TryGetValue(o.Class, out string? x) ? x : null;
+    }
+
+    /// <summary>
+    /// Bombardier d'eau de la mission (Canadair, caserne du jeu « classic_canadair ») : le script accorde ses passages
+    /// (LEV_GrantAirSupport), le joueur choisit la zone ; délai (s) entre l'appel et le largage. Foret : FD1 CanadairAvailable.
+    /// </summary>
+    private static readonly Dictionary<string, int> AirSupportEta = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "foret", 30 },
+    };
+
+    /// <summary>
     /// Poteaux de barrière, par mission (modèle FD1) : un mur les relie l'un à l'autre (BarrierWalls). Banque : les
     /// poteaux des guichets du comptoir en arc de cercle du hall.
     /// </summary>
@@ -66,6 +92,8 @@ public sealed partial class MissionConverter
         { "train", 1 },
         // Ecole : le script FD1 fait venir la grande échelle et le bras élévateur à l'acte 2 (animRenforts0)
         { "ecole", 1 },
+        // Foret : l'ambulance et le médecin arrivent par la route à l'acte 5 (FD1 : CutObjTrans4, AddVehiculeEntrance)
+        { "foret", 1 },
     };
 
     /// <summary>Véhicules FD1 (classe) qui arrivent avec le premier renfort, par mission (Banque : acte 3).</summary>
@@ -106,6 +134,8 @@ public sealed partial class MissionConverter
         { "train", new[] { "FireProof1", "FireProof2" } },
         // Ecole : le médecin qui arrive avec l'échelle (acte 2)
         { "ecole", new[] { "pompier3" } },
+        // Foret : l'ambulance et le médecin de la fin (acte 5)
+        { "foret", new[] { "MMaster", "Medic" } },
     };
 
     /// <summary>
@@ -157,6 +187,8 @@ public sealed partial class MissionConverter
         { "train", new Vector2(11000, 500) },
         // Ecole : la rue devant le chantier, depuis le nord
         { "ecole", new Vector2(22400, 21000) },
+        // Foret : la route goudronnée, depuis le bord sud-ouest de la carte (elle passe devant la clairière de l'héliport 2)
+        { "foret", new Vector2(4400, 24200) },
     };
 
     private string Data => Fd3.DataDir;
@@ -456,7 +488,7 @@ public sealed partial class MissionConverter
         bool IsRoomModel(string model) => !model.StartsWith("SOL", StringComparison.OrdinalIgnoreCase)
             && smaps.Any(t => t.Contains("_" + model + "_", StringComparison.OrdinalIgnoreCase));
         List<(string name, Vector3 min, Vector3 max)> rooms = new List<(string, Vector3, Vector3)>();
-        foreach (Fd1Object o in level.Objects.Where(o => !NotScenery.Contains(o.Class)))
+        foreach (Fd1Object o in level.Objects.Where(o => !NotScenery.Contains(o.Class) && VehicleOf(o) == null))
         {
             // couvercles des petites pièces (« PIECES_TOP ») : un toit par pièce
             bool lids = o.Model.EndsWith("_TOP", StringComparison.OrdinalIgnoreCase);
@@ -487,7 +519,7 @@ public sealed partial class MissionConverter
                 // machines et camion : toujours là, leurs cases restent fermées dans la grille (les étagères, cachées ou
                 // montrées par le script, ferment leurs cases par le moteur)
                 // (la voiture à conduire non plus : le véhicule qui la remplace part de là)
-                if (objectRole.role is not (ObjectRole.Standing or ObjectRole.Fallen or ObjectRole.Drivable))
+                if (objectRole.role is not (ObjectRole.Standing or ObjectRole.Fallen or ObjectRole.Drivable or ObjectRole.Hidden))
                 {
                     Matrix4x4 ow = o.World;
                     ow.M41 *= WorldToCm;
@@ -543,10 +575,12 @@ public sealed partial class MissionConverter
                     continue;
             }
             // grandes portes : des portes du moteur (MissionConverter.Doors.cs), pas du décor ; gravats à découper aussi
-            if (IsBigDoor(o.Model) || IsBreakableDoor(o, UpperFloorHeights()) || IsExtricable(o.Model))
+            if (IsBigDoor(o.Model) || IsBreakableDoor(o, UpperFloorHeights()) || IsExtricable(o.Model) || IsDemolishable(o.Model))
             {
                 if (IsExtricable(o.Model))
                     _extricables.Add((o, meshes));
+                else if (IsDemolishable(o.Model))
+                    _demolishables.Add((o, meshes));
                 else if (IsBigDoor(o.Model))
                     _bigDoors.Add((o, meshes));
                 else
@@ -681,13 +715,13 @@ public sealed partial class MissionConverter
         string[] laterClasses = ReinforcementVehicles.TryGetValue(Mission, out string[]? lc) ? lc : Array.Empty<string>();
         // véhicules et pompiers FD1 des équipes (sans ceux posés à part : l'hélicoptère de la Banque et son équipe)
         bool Apart(Fd1Object o) => LevelUnitOf(o) != null || (ExcludedUnits.TryGetValue(Mission, out string[]? ex) && ex.Contains(InstanceName(o) ?? "", StringComparer.OrdinalIgnoreCase));
-        List<Fd1Object> allTrucks = level.Objects.Where(o => Vehicles.ContainsKey(o.Class) && !Apart(o)).ToList();
+        List<Fd1Object> allTrucks = level.Objects.Where(o => VehicleOf(o) != null && !Apart(o)).ToList();
         bool Later(Fd1Object o) => laterClasses.Contains(o.Class, StringComparer.OrdinalIgnoreCase) || IsReinforcementInstance(o);
         List<Fd1Object> trucks = allTrucks.Where(o => !Later(o))
             .OrderBy(o => o.Class.Equals("MMaster", StringComparison.OrdinalIgnoreCase) ? 1 : 0).ToList();
         List<Fd1Object> laterTrucks = allTrucks.Where(Later).ToList();
         List<Fd1Object> men = level.Objects.Where(o => o.Class.Equals("ActeurUnit", StringComparison.OrdinalIgnoreCase) && Firemen.ContainsKey(o.Name) && !Apart(o)).ToList();
-        List<string> first = trucks.Select(t => Vehicles[t.Class]).ToList();
+        List<string> first = trucks.Select(t => VehicleOf(t)!).ToList();
         // pompiers d'abord, spécialistes ensuite (comme la barre des unités de FD1)
         bool LaterMan(Fd1Object m) => Firemen[m.Name].reinforcement || IsReinforcementInstance(m);
         first.AddRange(men.Where(m => !LaterMan(m)).Select(m => Firemen[m.Name].unit).OrderBy(u => u.EndsWith("_sp_us", StringComparison.OrdinalIgnoreCase) ? 0 : 1));
@@ -710,7 +744,7 @@ public sealed partial class MissionConverter
         }
         if (later.Count > 0 || laterTrucks.Count > 0)
         {
-            List<string> units = laterTrucks.Select(t => Vehicles[t.Class]).Concat(later.Select(m => Firemen[m.Name].unit)).ToList();
+            List<string> units = laterTrucks.Select(t => VehicleOf(t)!).Concat(later.Select(m => Firemen[m.Name].unit)).ToList();
             File.WriteAllBytes(Path.Combine(dir, Name + "_2.cfg"), Encoding.Latin1.GetBytes(Station("&E10", units)));
             mis = IniText.Set(mis, "FIRESTATION", "REINFORCEMENT1", Name + "_2");
             mis = IniText.Set(mis, "FIRESTATION", "REINFORCEMENT1SPAWNPOINT", "2");
@@ -884,6 +918,9 @@ public sealed partial class MissionConverter
         // Ecole : le pied de la grue, le baraquement de l'ouvrier, la chaufferie (MissionConverter.Ecole.cs)
         if (mission.Equals("ecole", StringComparison.OrdinalIgnoreCase))
             return EcoleLitAtStart(at, type);
+        // Foret : le front de flammes à l'ouest, les abords de l'héliport du bûcheron (MissionConverter.Foret.cs)
+        if (mission.Equals("foret", StringComparison.OrdinalIgnoreCase))
+            return ForetLitAtStart(at, type);
         if (StartFires.TryGetValue(mission, out (float x0, float x1, float y0, float y1)[]? zones))
             return zones.Any(z => at.X >= z.x0 && at.X <= z.x1 && at.Y >= z.y0 && at.Y <= z.y1);
         return type.StartsWith("torche", StringComparison.OrdinalIgnoreCase);
@@ -916,6 +953,8 @@ public sealed partial class MissionConverter
             o = LevelEdit.WithTransform(o, cm, Vector3.Zero);
             o = LevelEdit.WithStartVisible(o, true);
             o = LevelEdit.WithFire(o, on, intensity);
+            if (FireLightingRanges.TryGetValue(Mission, out float range))
+                o = WithLightingRange(o, range);
             level.Objects.Add(o);
             if (on)
                 lit++;
@@ -931,6 +970,40 @@ public sealed partial class MissionConverter
     private bool ElectricFire(Vector3 at, string type) =>
         Mission.Equals("ecole", StringComparison.OrdinalIgnoreCase)
         && EcoleGroupOf(at, type) is EcoleHut or EcoleCraneElec;
+
+    /// <summary>
+    /// Portée de propagation des foyers (cm), par mission, quand ceux du jeu (3 m pour un foyer moyen) ne se rejoignent pas.
+    /// Foret : les points de feu FD1 sont à 6,5 m les uns des autres (médiane) ; à 9 m, chacun en touche trois ou quatre et
+    /// le feu de forêt avance.
+    /// </summary>
+    private static readonly Dictionary<string, float> FireLightingRanges = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "foret", 900 },
+    };
+
+    /// <summary>
+    /// Portée de propagation d'un foyer (LightingRange) dans son bloc d'instance (composant FE00 : les 96 octets de la fin,
+    /// qui remplacent les paramètres de sa classe ; mêmes positions que FireWorld.InstanceState et LevelEdit.WithFireParams).
+    /// </summary>
+    private static LevelObject WithLightingRange(LevelObject o, float range)
+    {
+        if (o.GetComponent(0xFE00) is not { } comp)
+            return o;
+        byte[] b = o.ComponentBytes(comp).ToArray();
+        int last = -1, prev = -1;
+        for (int i = b.Length - 4; i >= 0 && prev < 0; i--)
+            if (Chunks.IsEnd(b, i))
+            {
+                if (last < 0)
+                    last = i;
+                else
+                    prev = i;
+            }
+        if (last < 0 || prev < 0 || last - (prev + 4) != 96)
+            return o;
+        BitConverter.GetBytes(range).CopyTo(b, prev + 4 + 58);
+        return LevelEdit.WithComponent(o, comp, b);
+    }
 
     /// <summary>Type de feu FD1 → classe de foyer du moteur : torche → grand foyer, « light » → petit, autres → moyen.</summary>
     private static string FireClass(string type)
@@ -990,10 +1063,19 @@ public sealed partial class MissionConverter
             if (IniText.Get(mis, "FIRESTATION", $"REINFORCEMENT{i}") != null)
                 mis = IniText.Set(mis, "FIRESTATION", $"REINFORCEMENT{i}", "");
         List<(string name, Vector2 at)> points = WriteStations(fd1, ref mis);
+        if (AirSupportEta.TryGetValue(Mission, out int airEta))
+        {
+            // la caserne aérienne du jeu, au rang suivant le premier renfort
+            int slot = IniText.Get(mis, "FIRESTATION", "REINFORCEMENT1") is { Length: > 0 } ? 2 : 1;
+            mis = IniText.Set(mis, "FIRESTATION", $"REINFORCEMENT{slot}", "classic_canadair");
+            mis = IniText.Set(mis, "FIRESTATION", $"REINFORCEMENT{slot}ETA", airEta.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            Report.Add($"aide aérienne : Canadair (renfort {slot}, {airEta} s)");
+        }
         AddFires(level, fd1);
         AddBigDoors(level, fd1);
         AddBreakableDoors(level);
         AddExtricables(level);
+        AddDemolishables(level);
         AddBombs(level);
         AddScriptDoors(level);
         AddScriptButtons(level);

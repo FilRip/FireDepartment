@@ -39,6 +39,16 @@ public sealed partial class MissionConverter
         // Ecole : les éclairs bleus autour de la grue et de l'armoire électrique (FD1 : un effet animé, mélangé ; le moteur le
         // dessinerait plein, une grue toute bleue)
         { "ecole", new[] { "effetElec0", "effetElec1" } },
+        // Foret : les cercles des héliports que le script FD1 allume et éteint (zone occupée, feux trop proches), l'aire de
+        // l'hélicoptère qui s'écrase, l'hélicoptère et la voiture animés des cinématiques (FD1 : leurs épaves, montrées par
+        // le script, les remplacent), le Canadair posé hors de la carte
+        {
+            "foret", new[]
+            {
+                "Heliport1_NO", "Heliport2_NO", "Zone1_FireOff", "Zone2_FireOff", "Heliport3_YES", "Helicoptere3", "Voiture_Accident",
+                "Vehicule_canadair",
+            }
+        },
     };
 
     /// <summary>
@@ -70,6 +80,8 @@ public sealed partial class MissionConverter
         { "station_service", new[] { ("Citerne", "@citerne") } },
         // Ecole (MissionConverter.Ecole.cs) : le bulldozer du chantier, que l'ouvrier prête (acte 2), le sapeur de l'acte 3
         { "ecole", new[] { ("buldo", "firevehicle\\Veh_P_bulldozer"), ("pompier5", "fireman\\fireman_des") } },
+        // Foret (MissionConverter.Foret.cs) : les deux hélicoptères de secours, qui se posent quand leur héliport est dégagé
+        { "foret", new[] { ("MM_Helicoptere1", "@helico"), ("MM_helicoptere2", "@helico") } },
     };
 
     /// <summary>Unité posée à part pour cet objet FD1 (null : il fait partie des équipes, ou du décor).</summary>
@@ -126,7 +138,7 @@ public sealed partial class MissionConverter
                 continue;
             string name = cls switch
             {
-                "@helico" => "Helicoptere",
+                "@helico" when Mission.Equals("banque", StringComparison.OrdinalIgnoreCase) => "Helicoptere",
                 "@excalibur" => "Excalibur",
                 "@citerne" => StationTruckUnit,
                 _ => instance,
