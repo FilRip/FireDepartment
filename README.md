@@ -1,7 +1,7 @@
 -----------
 ## OpenFD
 
-OpenFD — C# re-implementation of Fire Department 2 and 3 and a mission editor (and missions of Fire Department 1 with a converter included)
+OpenFD — C# re-implementation of Fire Department 2 and 3 and a mission editor (and missions of Fire Department 1 with a converter included) (Original game from MonteCristo game studio)
 
 A new engine that reads files from an original installation of Fire Department 2 and 3. For Windows and Linux (x64)
 
