@@ -673,7 +673,7 @@ public sealed partial class OpenFDGame
         if (_screen == 0)
         {
             // mention en bas à gauche du menu principal
-            const string copyright = "(C) 2026 CoolBytes - FilRip. Build 181";
+            const string copyright = "(C) 2026 CoolBytes - FilRip. Build 182";
             float cx = 18 * _scale, cy = _fbH - _ui.LineHeight - 16 * _scale;
             // blanc, avec une ombre noire pour rester lisible sur la vidéo du menu
             _ui.TextItalic(cx + 2 * _scale, cy + 2 * _scale, copyright, new SN.Vector4(0, 0, 0, 1));

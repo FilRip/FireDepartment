@@ -161,15 +161,18 @@ public sealed partial class OpenFDGame
         : u.GoTo != null && u.HealTimer > 0 ? "HEAL"
         : "WAIT1";
 
-    private static string LadderTag(Unit u, Ladder l)
+    private static string LadderTag(Unit u, Ladder l) => LadderStepTag(u.LadderStep, l, u.Opening != null && u.OpeningBreak);
+
+    // les mêmes animations pour un civil qui suit son guide sur l'échelle (SingleChar : même squelette)
+    private static string LadderStepTag(LadderPhase step, Ladder l, bool breaking)
     {
         bool steep = l.Pitch > 0.6f;
-        return u.LadderStep switch
+        return step switch
         {
             LadderPhase.Mount => "@SingleChar\\sc_ladder_get_on_top",
             LadderPhase.Up => steep ? "~SingleChar\\sc_ladder_climb" : "WALK",
             LadderPhase.Down => steep ? "~SingleChar\\sc_ladder_descend" : "WALK",
-            LadderPhase.Top when u.Opening != null && u.OpeningBreak => "~SingleChar\\sc_ladder_break_window",
+            LadderPhase.Top when breaking => "~SingleChar\\sc_ladder_break_window",
             LadderPhase.Enter => "@SingleChar\\sc_ladder_get_out_top",
             LadderPhase.Leave => "@SingleChar\\sc_ladder_get_on_top",
             LadderPhase.Dismount => "@SingleChar\\sc_ladder_get_out_top",
@@ -178,7 +181,8 @@ public sealed partial class OpenFDGame
     }
 
     private static string CivTag(Civilian c, bool moving) =>
-        c.Carrier is { } cu ? cu.Carry switch { CarryPhase.Lifting => "@CharChar\\cc_lift_body_lifted", CarryPhase.Dropping => "@CharChar\\cc_drop_body_droped", _ => "CARRIEDWALK" }
+        c.OnLadder is { } ol ? LadderStepTag(c.LadderStep, ol, false)
+        : c.Carrier is { } cu ? cu.Carry switch { CarryPhase.Lifting => "@CharChar\\cc_lift_body_lifted", CarryPhase.Dropping => "@CharChar\\cc_drop_body_droped", _ => "CARRIEDWALK" }
         : c.State is CivilianState.Unconscious or CivilianState.Dead ? "FAINT"
         : moving ? "WALK" : c.Leader != null ? "WAIT1" : "WAITSHOCKED";
 
