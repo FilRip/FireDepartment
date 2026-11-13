@@ -277,6 +277,24 @@ public sealed partial class UnitManager
         Vector2 me = new Vector2(c.Position.X, c.Position.Y);
         Vector2 to = new Vector2(l.Position.X, l.Position.Y);
         float d = Vector2.Distance(me, to);
+        // dans la file d'attente d'une échelle (OnlyOneOnLadder) : il attend son tour, puis la prend ; son guide revenu
+        // près de lui (même étage), il n'en a plus besoin
+        if (c.LadderWait is { } w)
+        {
+            bool guideHere = d < 400 && MathF.Abs(l.Position.Z - c.Position.Z) < 150 && l.OnLadder == null;
+            if (OnlyOneOnLadder && w.Ready && w.Truck.Ladder == w && !guideHere)
+            {
+                if (LadderTurn(w, c))
+                {
+                    c.LadderWait = null;
+                    StartCivilianLadder(c, w, me, c.LadderUp ? w.Inside : w.Foot);
+                }
+                else
+                    HoldCivilianAtLadder(c, w, dt);
+                return;
+            }
+            c.LadderWait = null;
+        }
         if (d < FollowDistance)
         {
             c.FollowPath.Clear();
@@ -328,7 +346,16 @@ public sealed partial class UnitManager
             // prochain pas : l'autre bout de l'échelle d'un camion → il y monte (ou descend), quand personne n'y monte
             if (LadderBetween(me, t) is { } ladder)
             {
-                if (!LadderFree(ladder))
+                // une seule personne à la fois (OnlyOneOnLadder) : il prend sa place dans la file
+                if (OnlyOneOnLadder && !LadderTurn(ladder, c))
+                {
+                    c.FollowPath.Clear();
+                    c.LadderUp = _s.Grid is { } gq && CellIndex(gq, t) == ladder.InsideCell;
+                    c.LadderWait = ladder;
+                    c.LadderWaitSince = _s.Time;
+                    return;
+                }
+                if (!OnlyOneOnLadder && !LadderFree(ladder))
                     break;
                 c.FollowPath.Clear();
                 StartCivilianLadder(c, ladder, me, t);

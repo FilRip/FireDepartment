@@ -196,13 +196,13 @@ public sealed partial class OpenFDGame
     /// </summary>
     private string CanonTag(Unit u, CharAnim a)
     {
-        string tag = UnitTag(u, u.Moving);
+        string tag = UnitTag(u, u.ShownMoving);
         if (tag == "FAINT")
         {
             a.Deployed = false;
             return tag;
         }
-        if (u.Moving)
+        if (u.ShownMoving)
         {
             a.Deployed = false;
             return "WALK";
@@ -413,14 +413,14 @@ public sealed partial class OpenFDGame
         {
             CharAnim a = Char(u, u.Model, "Design\\Unit\\" + u.ClassPath + ".class");
             bool axe = u.Opening != null && u.OpeningBreak && !u.Moving;
-            float rate = u.Moving ? Math.Clamp(u.Speed / RunAnimSpeed, 0.6f, 1.6f) : 1f;
+            float rate = u.ShownMoving ? Math.Clamp(u.Speed / RunAnimSpeed, 0.6f, 1.6f) : 1f;
             if (u.Carry == CarryPhase.Walking)
-                rate = u.Moving ? Math.Clamp(u.Speed * UnitManager.CarrySpeed / WalkAnimSpeed, 0.5f, 1.6f) : 0f;   // arrêté avec le corps : figé
-            string tag = UnitTag(u, u.Moving);
+                rate = u.ShownMoving ? Math.Clamp(u.Speed * UnitManager.CarrySpeed / WalkAnimSpeed, 0.5f, 1.6f) : 0f;   // arrêté avec le corps : figé
+            string tag = UnitTag(u, u.ShownMoving);
             if (u.IsCanon)
             {
                 tag = CanonTag(u, a);
-                if (u.Moving)
+                if (u.ShownMoving)
                     rate = Math.Clamp(u.Speed / WalkAnimSpeed, 0.5f, 1.6f);
             }
             if (!DrawCharacter(a, tag, PoseOf(u, u.Position, u.Heading).p, SmoothHeading(u, PoseOf(u, u.Position, u.Heading).h, dt), dt, axe, rate, u.IsCanon))

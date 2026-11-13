@@ -654,6 +654,7 @@ public sealed partial class UnitManager
         }
         u.Target = target;
         u.ScriptDoors.Clear();
+        u.LadderWait = null;   // nouvel ordre : il quitte la file d'attente d'une échelle (il y revient si son chemin y passe)
         if (PlayerOrder)
             u.ScriptHold = -1;   // le joueur reprend la main
         if (PlayerOrder && target == null)
@@ -981,12 +982,13 @@ public sealed partial class UnitManager
             UpdateClimb(u, dt);
             return;
         }   // au grappin : voir Grapple.cs
+        u.LadderHold = false;
         if (u.OnLadder != null)
         {
             UpdateLadderClimb(u, dt);
             return;
         }   // sur l'échelle : voir Ladders.cs
-        if (u.Path.Count > 0 && StartLadderIfNeeded(u, u.Path.Peek()))
+        if (u.Path.Count > 0 && StartLadderIfNeeded(u, u.Path.Peek(), dt))
             return;
         if (u.Stairs != null)
         {

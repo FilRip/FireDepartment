@@ -42,4 +42,7 @@ public sealed class Civilian
     public float LadderTimer;
     public Vector3 ClimbFrom;
     public bool LadderUp;
+    /// <summary>File d'attente devant l'échelle (réglage OnlyOneOnLadder) : l'échelle attendue (sens : LadderUp), depuis quand.</summary>
+    public Ladder? LadderWait;
+    public float LadderWaitSince;
 }

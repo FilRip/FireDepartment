@@ -361,17 +361,29 @@ public sealed partial class UnitManager
 
     /// <summary>
     /// Pompier en marche dont le prochain point passe par une échelle (de son pied à l'étage, ou l'inverse) : il commence
-    /// à monter ou à descendre. L'échelle pas encore dressée : il attend à son pied.
+    /// à monter ou à descendre. L'échelle pas encore dressée : il attend à son pied. Une seule personne à la fois sur
+    /// l'échelle (OnlyOneOnLadder) : il attend son tour devant elle, à sa place dans la file.
     /// </summary>
-    private bool StartLadderIfNeeded(Unit u, Vector2 next)
+    private bool StartLadderIfNeeded(Unit u, Vector2 next, float dt)
     {
         if (!u.CanLadder || u.IsVehicle || _s.Grid is not { } g)
             return false;
-        (int mx, int my) = g.CellOf(u.Position);
         (int nx, int ny) = g.CellOf(new Vector3(next, 0));
-        if (!g.Inside(mx, my) || !g.Inside(nx, ny))
+        if (!g.Inside(nx, ny))
             return false;
-        int me = g.Index(mx, my), nc = g.Index(nx, ny);
+        int nc = g.Index(nx, ny);
+        // dans la file d'attente : il y reste (même un peu à l'écart du pied), tant que son chemin passe par cette échelle
+        if (u.LadderWait is { } w)
+        {
+            bool stillWanted = u.LadderWaitUp ? (nc == w.InsideCell || next == w.Inside) : nc == w.FootCell;
+            if (OnlyOneOnLadder && stillWanted && w.Placed && w.Truck.Ladder == w && !w.Retracting)
+                return BeginLadder(u, w, u.LadderWaitUp, dt);
+            u.LadderWait = null;
+        }
+        (int mx, int my) = g.CellOf(u.Position);
+        if (!g.Inside(mx, my))
+            return false;
+        int me = g.Index(mx, my);
         foreach (Unit t in Units.Where(v => v.Ladder != null))
         {
             Ladder l = t.Ladder!;
@@ -379,40 +391,170 @@ public sealed partial class UnitManager
             bool down = me == l.InsideCell && nc == l.FootCell;
             if (!up && !down)
                 continue;
-            if (!l.Ready)
-            {
-                u.Status = "attend que l'échelle soit dressée";
-                return true;
-            }
-            // descendre depuis l'étage par une fenêtre fermée : il la casse (ou l'ouvre) d'abord, sans quitter son chemin
-            if (down && l.Window.State == OpeningState.Closed)
-            {
-                if (!CanPass(u, l))
-                {
-                    u.Path.Clear();
-                    u.Status = "fenêtre fermée : impossible de passer";
-                    return true;
-                }
-                if (u.Opening != l.Window)
-                {
-                    u.Opening = l.Window;
-                    u.OpeningBreak = !(l.Window.Usable && u.CanUse) && u.CanBreak && l.Window.Breakable;
-                    u.ActionTimer = 0;
-                    u.PassingWindow = true;
-                }
-                return true;
-            }
-            u.PassingWindow = false;
-            u.Path.Dequeue();
-            u.OnLadder = l;
-            u.LadderTimer = 0;
-            u.ClimbFrom = u.Position;
-            u.LadderEnter = up;
-            u.LadderStep = up ? LadderPhase.Mount : LadderPhase.Leave;
-            u.Status = up ? "monte à l'échelle" : "descend par l'échelle";
-            return true;
+            return BeginLadder(u, l, up, dt);
         }
         return false;
+    }
+
+    /// <summary>Le pompier est devant l'échelle (au pied s'il monte, à l'étage s'il descend) : il y monte, ou attend.</summary>
+    private bool BeginLadder(Unit u, Ladder l, bool up, float dt)
+    {
+        bool down = !up;
+        if (!l.Ready)
+        {
+            u.Status = "attend que l'échelle soit dressée";
+            u.LadderHold = true;
+            return true;
+        }
+        // descendre depuis l'étage par une fenêtre fermée : il la casse (ou l'ouvre) d'abord, sans quitter son chemin
+        if (down && l.Window.State == OpeningState.Closed)
+        {
+            if (!CanPass(u, l))
+            {
+                u.Path.Clear();
+                u.LadderWait = null;
+                u.Status = "fenêtre fermée : impossible de passer";
+                return true;
+            }
+            if (u.Opening != l.Window)
+            {
+                u.Opening = l.Window;
+                u.OpeningBreak = !(l.Window.Usable && u.CanUse) && u.CanBreak && l.Window.Breakable;
+                u.ActionTimer = 0;
+                u.PassingWindow = true;
+            }
+            return true;
+        }
+        // une seule personne à la fois sur l'échelle : il attend son tour (il ne refuse pas l'ordre)
+        if (OnlyOneOnLadder && !LadderTurn(l, u))
+        {
+            if (u.LadderWait != l)
+            {
+                u.LadderWait = l;
+                u.LadderWaitUp = up;
+                u.LadderWaitSince = _s.Time;
+            }
+            Vector2 spot = LadderQueueSpot(l, up, u);
+            u.LadderHold = StepToward(u, spot, u.Speed * 0.5f * dt);
+            u.Status = "attend son tour pour l'échelle";
+            return true;
+        }
+        u.LadderWait = null;
+        u.PassingWindow = false;
+        u.Path.Dequeue();
+        u.OnLadder = l;
+        u.LadderTimer = 0;
+        u.ClimbFrom = u.Position;
+        u.LadderEnter = up;
+        u.LadderStep = up ? LadderPhase.Mount : LadderPhase.Leave;
+        u.Status = up ? "monte à l'échelle" : "descend par l'échelle";
+        return true;
+    }
+
+    /// <summary>
+    /// Réglage « Gameplay » OnlyOneOnLadder (fichier d'options, faux par défaut) : une seule personne à la fois sur l'échelle
+    /// d'un camion ; les autres attendent leur tour devant elle, en bas derrière le camion ou en haut derrière la fenêtre.
+    /// </summary>
+    public static bool OnlyOneOnLadder;
+
+    /// <summary>Écart entre deux personnes de la file d'attente devant une échelle (cm).</summary>
+    private const float LadderQueueGap = 90f;
+
+    /// <summary>Quelqu'un (pompier ou civil, autre que <paramref name="self"/>) est sur l'échelle.</summary>
+    private bool LadderOccupied(Ladder l, object self) =>
+        Units.Any(x => x.OnLadder == l && x != self) || Civilians.Any(x => x.OnLadder == l && x != self);
+
+    /// <summary>Ceux qui attendent cette échelle (pompiers et civils), du premier arrivé au dernier : qui, à quel bout, depuis quand.</summary>
+    private List<(object who, bool up, float since)> LadderWaiters(Ladder l)
+    {
+        List<(object who, bool up, float since)> list = new List<(object, bool, float)>();
+        // seulement ceux qui attendent encore (pas évanoui, toujours en route ; civil toujours guidé)
+        foreach (Unit x in Units.Where(x => x.LadderWait == l && x.Path.Count > 0 && !x.Unconscious && !x.Hidden && !x.Destroyed))
+            list.Add((x, x.LadderWaitUp, x.LadderWaitSince));
+        foreach (Civilian x in Civilians.Where(x => x.LadderWait == l && x.State == CivilianState.Conscious && x.Leader != null && !x.Hidden))
+            list.Add((x, x.LadderUp, x.LadderWaitSince));
+        return list.OrderBy(w => w.since).ToList();
+    }
+
+    /// <summary>À son tour : l'échelle est libre et personne n'attend avant lui (à l'un ou l'autre bout).</summary>
+    private bool LadderTurn(Ladder l, object self)
+    {
+        if (LadderOccupied(l, self))
+            return false;
+        List<(object who, bool up, float since)> waiters = LadderWaiters(l);
+        return waiters.Count == 0 || waiters[0].who == self;
+    }
+
+    /// <summary>
+    /// Sa place dans la file : au pied de l'échelle (derrière le camion) ou derrière la fenêtre, puis tous les 90 cm en
+    /// s'éloignant de l'échelle, dans l'ordre d'arrivée ; une place hors des cases praticables : celle d'avant.
+    /// </summary>
+    private Vector2 LadderQueueSpot(Ladder l, bool up, object self)
+    {
+        Vector2 entry = up ? l.Foot : l.Inside;
+        Vector2 from = up ? new Vector2(l.Base.X, l.Base.Y) : new Vector2(l.Window.Center.X, l.Window.Center.Y);
+        Vector2 away = entry - from;
+        away = away.LengthSquared() > 1 ? Vector2.Normalize(away) : Vector2.UnitX;
+        List<(object who, bool up, float since)> same = LadderWaiters(l).Where(w => w.up == up).ToList();
+        int rank = same.FindIndex(w => w.who == self);
+        if (rank < 0)
+            rank = same.Count;
+        float floor = Ground(entry);
+        Vector2 spot = entry;
+        for (int k = 1; k <= rank; k++)
+        {
+            Vector2 p = entry + away * (LadderQueueGap * k);
+            if (_s.Grid == null || !WalkableCell((int)MathF.Floor(p.X / Grid.CellSize), (int)MathF.Floor(p.Y / Grid.CellSize)) || MathF.Abs(Ground(p) - floor) > 150)
+                break;
+            spot = p;
+        }
+        return spot;
+    }
+
+    /// <summary>Un pas vers sa place dans la file ; true : il y est (arrêté, tourné vers l'échelle).</summary>
+    private bool StepToward(Unit u, Vector2 spot, float step)
+    {
+        Vector2 p = new Vector2(u.Position.X, u.Position.Y);
+        Vector2 d = spot - p;
+        float len = d.Length();
+        if (len <= step)
+        {
+            u.Position = new Vector3(spot, Ground(spot));
+            if (u.LadderWait is { } l)
+            {
+                Vector2 to = u.LadderWaitUp ? new Vector2(l.Base.X, l.Base.Y) : new Vector2(l.Window.Center.X, l.Window.Center.Y);
+                if (Vector2.DistanceSquared(to, spot) > 1)
+                    u.Heading = MathF.Atan2(to.Y - spot.Y, to.X - spot.X);
+            }
+            return true;
+        }
+        u.Heading = MathF.Atan2(d.Y, d.X);
+        p += d / len * step;
+        u.Position = new Vector3(p, Ground(p));
+        return false;
+    }
+
+    /// <summary>Le civil attend son tour devant l'échelle (OnlyOneOnLadder) : il va à sa place dans la file et s'y tient.</summary>
+    private void HoldCivilianAtLadder(Civilian c, Ladder l, float dt)
+    {
+        Vector2 spot = LadderQueueSpot(l, c.LadderUp, c);
+        Vector2 p = new Vector2(c.Position.X, c.Position.Y);
+        Vector2 d = spot - p;
+        float len = d.Length();
+        float step = 200f * dt;
+        if (len <= step)
+        {
+            p = spot;
+            Vector2 to = c.LadderUp ? new Vector2(l.Base.X, l.Base.Y) : new Vector2(l.Window.Center.X, l.Window.Center.Y);
+            if (Vector2.DistanceSquared(to, p) > 1)
+                c.Heading = MathF.Atan2(to.Y - p.Y, to.X - p.X);
+        }
+        else
+        {
+            c.Heading = MathF.Atan2(d.Y, d.X);
+            p += d / len * step;
+        }
+        c.Position = new Vector3(p, Ground(p));
     }
 
     /// <summary>Échelle dressée dont les deux bouts (pied, étage) sont les cases de ces deux points (un pas « lien » d'un chemin).</summary>

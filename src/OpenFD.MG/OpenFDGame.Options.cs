@@ -190,6 +190,7 @@ public sealed partial class OpenFDGame
         UnitManager.StaminaLoss = Math.Clamp(gp.StaminaLoss, 0f, 5f);
         ExplosionSystem.ObjectiveTimeFactor = Math.Clamp(gp.ObjectiveTimeFactor, 0.1f, 20f);
         UnitManager.CarrySpeed = Math.Clamp(gp.CarrySpeed, 0.2f, 1f);
+        UnitManager.OnlyOneOnLadder = gp.OnlyOneOnLadder;
         // ancienne valeur par défaut (1,6, trop lente) : remplacée par la nouvelle, trois fois plus rapide
         if (MathF.Abs(gp.ArrowShiftSpeed - OldArrowShift) < 0.001f)
             gp.ArrowShiftSpeed = new GameplaySettings().ArrowShiftSpeed;
@@ -673,7 +674,7 @@ public sealed partial class OpenFDGame
         if (_screen == 0)
         {
             // mention en bas à gauche du menu principal
-            const string copyright = "(C) 2026 CoolBytes - FilRip. Build 182";
+            const string copyright = "(C) 2026 CoolBytes - FilRip. Build 183";
             float cx = 18 * _scale, cy = _fbH - _ui.LineHeight - 16 * _scale;
             // blanc, avec une ombre noire pour rester lisible sur la vidéo du menu
             _ui.TextItalic(cx + 2 * _scale, cy + 2 * _scale, copyright, new SN.Vector4(0, 0, 0, 1));
