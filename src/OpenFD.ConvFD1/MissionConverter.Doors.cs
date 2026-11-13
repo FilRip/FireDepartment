@@ -33,7 +33,9 @@ public sealed partial class MissionConverter
             // Train : la porte de l'écurie (le palefrenier est derrière)
             || o.Model.StartsWith("TRA_PORTE_ECURIES", StringComparison.OrdinalIgnoreCase)
             // Ecole : les fenêtres du bâtiment administratif (cassées, la fumée des pièces s'en va)
-            || o.Model.StartsWith("ECO_FENETRE_BUT1", StringComparison.OrdinalIgnoreCase))
+            || o.Model.StartsWith("ECO_FENETRE_BUT1", StringComparison.OrdinalIgnoreCase)
+            // Centrale : le ventilateur du mur des vestiaires (Porte0 : le sapeur le casse, la fumée s'en va)
+            || o.Model.StartsWith("VENTILO_BUTINABLE", StringComparison.OrdinalIgnoreCase))
         && (o.World.M43 * WorldToCm < 50 || floors.Any(z => MathF.Abs(o.World.M43 * WorldToCm - z) < 50));
 
     /// <summary>

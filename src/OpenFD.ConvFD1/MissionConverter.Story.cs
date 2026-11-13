@@ -102,12 +102,15 @@ public sealed partial class MissionConverter
                 ("Scout3", "civilian\\civilian_man7"), ("Scout4", "civilian\\civilian_woman5"), ("Scout5", "civilian\\civilian_man8"),
             }
         },
+        // Centrale (MissionConverter.Centrale.cs) : le chef de la sécurité (acte 1), l'ingénieur en état de choc (acte 3)
+        { "Centrale_Nucleaire", new[] { ("Garde1", "civilian\\civilian_cop_1"), ("Scientifique", "civilian\\civilian_man9") } },
     };
 
     /// <summary>Civils du déroulement qui sont conscients (ils suivent un pompier), par mission ; les autres sont évanouis.</summary>
     private static readonly Dictionary<string, string[]> ConsciousCivilians = new(StringComparer.OrdinalIgnoreCase)
     {
         { "foret", new[] { "Scout0", "Scout1", "Scout2", "Scout3", "Scout4", "Scout5" } },
+        { "Centrale_Nucleaire", new[] { "Scientifique" } },
     };
 
     /// <summary>
@@ -220,6 +223,16 @@ public sealed partial class MissionConverter
                 ("ZoneHeliport1", "ForetZone0", new Vector3(257, 203, -200), new Vector3(9360, 12009, 800)),
                 ("Heliport1", "ForetEntre1", new Vector3(3480, 5150, -200), new Vector3(5030, 6500, 800)),
                 ("Heliport2", "ForetEntre2", new Vector3(4863, 17510, -200), new Vector3(6524, 19133, 800)),
+            }
+        },
+        {
+            // Centrale : zones FD1 (Centrale.xfl ; cercles → carrés de même rayon) : l'entrée de la salle de sécurité
+            // (Acte1Cache3), le couloir où paraît le chef de la sécurité (Acte1Cache4) ; la salle de commande (l'ingénieur)
+            "Centrale_Nucleaire", new[]
+            {
+                ("Acte1Cache3", "EntreeSecurite", new Vector3(6094, 13241, -200), new Vector3(6894, 14041, 500)),
+                ("Acte1Cache4", "GardeVu", new Vector3(7830, 14156, -200), new Vector3(8530, 14856, 500)),
+                ("SalleCommande", "ScientifiqueVu", new Vector3(13600, 7641, 1300), new Vector3(14937, 10359, 1900)),
             }
         },
     };
@@ -372,6 +385,8 @@ public sealed partial class MissionConverter
             return EcoleScript(fd1);
         if (Mission.Equals("foret", StringComparison.OrdinalIgnoreCase))
             return ForetScript(fd1);
+        if (IsCentrale)
+            return CentraleScript(fd1);
         if (!Mission.Equals("Entrepot", StringComparison.OrdinalIgnoreCase))
             return ("", "", "");
         string T(string key) => _hasTexts ? TextKey(key) : key;

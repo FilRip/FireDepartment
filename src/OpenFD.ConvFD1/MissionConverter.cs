@@ -136,7 +136,47 @@ public sealed partial class MissionConverter
         { "ecole", new[] { "pompier3" } },
         // Foret : l'ambulance et le médecin de la fin (acte 5)
         { "foret", new[] { "MMaster", "Medic" } },
+        // Centrale : les quatre pompiers aux lances à poudre de l'acte 4 (FD1 : CutActe45)
+        { "Centrale_Nucleaire", new[] { "pompier6", "pompier7", "pompier8", "pompier9" } },
     };
+
+    /// <summary>
+    /// Pompiers FD1 de l'équipe de départ, par mission (nom de l'instance), même quand leur spécialité arrive d'habitude en
+    /// renfort. Centrale : le scout (« commandos ») et le pompier ignifugé arrivent avec les autres.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> StartInstances = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Centrale_Nucleaire", new[] { "pompier1", "pompier2" } },
+    };
+
+    /// <summary>
+    /// Unité du moteur imposée à un pompier FD1, par mission (nom de l'instance). Centrale : les pompiers aux lances à poudre
+    /// de l'acte 4, seuls à éteindre les feux de sodium → pompiers à l'agent anti-métal du jeu (« fireman_bio »).
+    /// </summary>
+    private static readonly Dictionary<string, (string instance, string unit)[]> FiremanOverrides = new(StringComparer.OrdinalIgnoreCase)
+    {
+        {
+            "Centrale_Nucleaire", new[]
+            {
+                ("pompier6", "Fireman\\fireman_bio"), ("pompier7", "Fireman\\fireman_bio"), ("pompier8", "Fireman\\fireman_bio"),
+                ("pompier9", "Fireman\\fireman_bio"),
+            }
+        },
+    };
+
+    /// <summary>
+    /// Véhicules du jeu ajoutés au premier renfort, par mission (sans objet FD1) : ils vont près du premier pompier du renfort.
+    /// Centrale : le camion qui ravitaille en agent anti-métal les pompiers de l'acte 4.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> ExtraReinforcementVehicles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Centrale_Nucleaire", new[] { "Firevehicle\\Veh_P_toxic" } },
+    };
+
+    /// <summary>Unité du moteur pour ce pompier FD1 (classe imposée par la mission, sinon celle de sa spécialité).</summary>
+    private string FiremanUnit(Fd1Object m) =>
+        FiremanOverrides.TryGetValue(Mission, out (string instance, string unit)[]? ov) && InstanceName(m) is { } n
+        && ov.FirstOrDefault(x => x.instance.Equals(n, StringComparison.OrdinalIgnoreCase)) is { unit: not null } hit ? hit.unit : Firemen[m.Name].unit;
 
     /// <summary>
     /// Unités FD1 laissées de côté, par mission (nom de l'instance) : Train, l'hélicoptère qui dépose le renfort (une
@@ -189,6 +229,8 @@ public sealed partial class MissionConverter
         { "ecole", new Vector2(22400, 21000) },
         // Foret : la route goudronnée, depuis le bord sud-ouest de la carte (elle passe devant la clairière de l'héliport 2)
         { "foret", new Vector2(4400, 24200) },
+        // Centrale : la route d'accès, depuis le bord de la carte, jusque devant la barrière de l'entrée
+        { "Centrale_Nucleaire", new Vector2(8750, 23800) },
     };
 
     private string Data => Fd3.DataDir;
@@ -467,7 +509,7 @@ public sealed partial class MissionConverter
             ?? throw new DirectoryNotFoundException($"mission FD1 introuvable : Logic\\Missions\\{Mission}");
         string xfl = Directory.EnumerateFiles(misDir, "*.xfl").FirstOrDefault()
             ?? throw new FileNotFoundException($"niveau .xfl introuvable dans {misDir}");
-        Fd1Level level = Fd1Level.Load(File.ReadAllBytes(xfl));
+        Fd1Level level = Fd1Level.Load(File.ReadAllBytes(xfl), IsCentrale);
         _fd1 = level;
         ReadCinematics(misDir);
         Report.Add($"{level.Objects.Count} objets dans {Path.GetFileName(xfl)}");
@@ -723,8 +765,9 @@ public sealed partial class MissionConverter
         List<Fd1Object> men = level.Objects.Where(o => o.Class.Equals("ActeurUnit", StringComparison.OrdinalIgnoreCase) && Firemen.ContainsKey(o.Name) && !Apart(o)).ToList();
         List<string> first = trucks.Select(t => VehicleOf(t)!).ToList();
         // pompiers d'abord, spécialistes ensuite (comme la barre des unités de FD1)
-        bool LaterMan(Fd1Object m) => Firemen[m.Name].reinforcement || IsReinforcementInstance(m);
-        first.AddRange(men.Where(m => !LaterMan(m)).Select(m => Firemen[m.Name].unit).OrderBy(u => u.EndsWith("_sp_us", StringComparison.OrdinalIgnoreCase) ? 0 : 1));
+        bool ForcedStart(Fd1Object m) => StartInstances.TryGetValue(Mission, out string[]? si) && InstanceName(m) is { } sn && si.Contains(sn, StringComparer.OrdinalIgnoreCase);
+        bool LaterMan(Fd1Object m) => (Firemen[m.Name].reinforcement && !ForcedStart(m)) || IsReinforcementInstance(m);
+        first.AddRange(men.Where(m => !LaterMan(m)).Select(FiremanUnit).OrderBy(u => u.EndsWith("_sp_us", StringComparison.OrdinalIgnoreCase) ? 0 : 1));
         List<Fd1Object> later = men.Where(LaterMan).ToList();
         string dir = Path.Combine(Data, "Design", "FireStation");
         Directory.CreateDirectory(dir);
@@ -742,9 +785,10 @@ public sealed partial class MissionConverter
             }
             Report.Add($"équipe de départ : {first.Count} unités ({trucks.Count} véhicules)");
         }
+        string[] extra = ExtraReinforcementVehicles.TryGetValue(Mission, out string[]? xv) ? xv : Array.Empty<string>();
         if (later.Count > 0 || laterTrucks.Count > 0)
         {
-            List<string> units = laterTrucks.Select(t => VehicleOf(t)!).Concat(later.Select(m => Firemen[m.Name].unit)).ToList();
+            List<string> units = laterTrucks.Select(t => VehicleOf(t)!).Concat(extra).Concat(later.Select(FiremanUnit)).ToList();
             File.WriteAllBytes(Path.Combine(dir, Name + "_2.cfg"), Encoding.Latin1.GetBytes(Station("&E10", units)));
             mis = IniText.Set(mis, "FIRESTATION", "REINFORCEMENT1", Name + "_2");
             mis = IniText.Set(mis, "FIRESTATION", "REINFORCEMENT1SPAWNPOINT", "2");
@@ -757,14 +801,16 @@ public sealed partial class MissionConverter
                 eta = delay.ToString(System.Globalization.CultureInfo.InvariantCulture);
             mis = IniText.Set(mis, "FIRESTATION", "REINFORCEMENT1ETA", eta);
             _reinforcementEta = float.TryParse(eta, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float r) ? r : 60;
-            if (laterTrucks.Count > 0)
+            if (laterTrucks.Count > 0 || extra.Length > 0)
             {
                 // véhicules du renfort : ils entrent comme ceux du départ (ou par leur propre entrée) et vont à leur place FD1
                 // (l'équipage descend)
                 Vector2 entry2 = ReinforcementEntries.TryGetValue(Mission, out Vector2 e2) ? e2 : entry;
-                for (int k = 0; k < laterTrucks.Count; k++)
+                for (int k = 0; k < laterTrucks.Count + extra.Length; k++)
                 {
-                    Vector2 end = new Vector2(laterTrucks[k].World.M41, laterTrucks[k].World.M42) * WorldToCm;
+                    // (véhicule ajouté : près du premier pompier du renfort)
+                    Fd1Object near = k < laterTrucks.Count ? laterTrucks[k] : later[0];
+                    Vector2 end = new Vector2(near.World.M41, near.World.M42) * WorldToCm + (k < laterTrucks.Count ? Vector2.Zero : new Vector2(600, 0));
                     // (entrée propre au renfort : les camions à la file le long de la rue, en x)
                     Vector2 step = ReinforcementEntries.ContainsKey(Mission) ? new Vector2(600 * k, 0) : new Vector2(0, 600 * k);
                     Vector2 start = entry2 != Vector2.Zero ? entry2 + step : end - new Vector2(3000, 0);
@@ -921,6 +967,9 @@ public sealed partial class MissionConverter
         // Foret : le front de flammes à l'ouest, les abords de l'héliport du bûcheron (MissionConverter.Foret.cs)
         if (mission.Equals("foret", StringComparison.OrdinalIgnoreCase))
             return ForetLitAtStart(at, type);
+        // Centrale : la salle de sécurité, les vestiaires enfumés (MissionConverter.Centrale.cs)
+        if (mission.Equals(CentraleMission, StringComparison.OrdinalIgnoreCase))
+            return CentraleLitAtStart(at, type);
         if (StartFires.TryGetValue(mission, out (float x0, float x1, float y0, float y1)[]? zones))
             return zones.Any(z => at.X >= z.x0 && at.X <= z.x1 && at.Y >= z.y0 && at.Y <= z.y1);
         return type.StartsWith("torche", StringComparison.OrdinalIgnoreCase);
@@ -948,7 +997,10 @@ public sealed partial class MissionConverter
             float intensity = LevelEdit.FireState(template) is { intensity: > 0 } st ? st.intensity : 50;
             n++;
             // feu électrique (classe du jeu « …_elec », type C) : on ne l'arrose qu'une fois le courant coupé
-            string classPath = ElectricFire(cm, type) ? template.ClassPath + "_elec" : template.ClassPath;
+            string classPath = ElectricFire(cm, type) || CentraleElectric(type) ? template.ClassPath + "_elec" : template.ClassPath;
+            // feu de sodium (Centrale) : un feu de type D du jeu, que seul l'agent anti-métal éteint
+            if (SodiumFire(type))
+                classPath = "design\\hotpoint\\groundS_type_D1";
             LevelObject o = LevelEdit.Clone(template, LevelEdit.NewId(level), $"foyer_{n}", classPath);
             o = LevelEdit.WithTransform(o, cm, Vector3.Zero);
             o = LevelEdit.WithStartVisible(o, true);
@@ -1081,6 +1133,7 @@ public sealed partial class MissionConverter
         AddScriptButtons(level);
         AddGrapples(level);
         AddScriptStairs(level);
+        AddCentraleLadders(level);
         AddStory(level, fd1);
         AddLevelUnits(level, fd1);
         AddScriptObjects(level);
