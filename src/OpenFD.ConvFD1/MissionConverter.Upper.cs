@@ -37,6 +37,20 @@ public sealed partial class MissionConverter
                 ("ECO_SALLE_PROF02", 1500f), ("ECO_SALLE_PROF04", 1500f), ("ECO_SALLE_PROF05", 1500f), ("ECO_SALLE_PROF06", 1500f),
             }
         },
+        // Centrale : les planchers à 15 m (salle des turbines, passerelles, tranche électrique, salle de commande, balcons
+        // des halls des pompes, couronne du réacteur) ; on y monte par les échelles métalliques (CentraleLadders)
+        {
+            "Centrale_Nucleaire", new[]
+            {
+                ("PART02_BASE01", 1500f), ("PART02_BASE02", 1500f), ("PART02_BASEBALCON01", 1500f), ("PART02_BASEBALCON02", 1500f),
+                ("PART02_PASSERELLE02_01", 1500f), ("PART02_PASSERELLE02_02", 1500f), ("PART02_PASSERELLEGRILLE01", 1500f),
+                ("PART02_PASSERELLEGRILLE02", 1500f), ("PART03_PARTELECTRIC01", 1500f), ("PART03_PARTELECTRIC02", 1500f),
+                ("PART03_PARTELECTRIC_GRILLAGE01", 1500f), ("PART03_PARTELECTRIC_GRILLAGE02", 1500f), ("PART03_SALLECOMMANDE", 1500f),
+                ("PART03_GARAGE_BALCON01", 1500f), ("PART03_GARAGE_BALCON02", 1500f), ("PART03_PISCINE_BALCON", 1500f),
+                ("PART04_BALCON01", 1500f), ("PART04_BALCON02", 1500f), ("PART04_COEUR_01", 1500f), ("PART04_COEUR_02", 1500f),
+                ("PART04_COEUR_03", 1500f), ("PART04_COEUR_04", 1500f), ("PART04_CORNICHE_BACK01", 1500f), ("PART04_CORNICHE_BACK02", 1500f),
+            }
+        },
         // Station-service : l'étage de l'immeuble ouest (appartements) ; on y monte à l'échelle (acte 4)
         { "station_service", new[] { ("STA_HABITAT_PIECE01", 1500f), ("STA_HABITAT_PIECE02", 1500f), ("STA_HABITAT_PIECE03", 1500f), ("STA_HABITAT_PIECE04", 1500f), ("STA_HABITAT_PIECE05", 1500f), ("STA_HABITAT_PIECE06", 1500f), ("STA_HABITAT_PIECE07", 1500f), ("STA_HABITAT_PIECE08", 1500f), ("STA_HABITAT_PIECE09", 1500f), ("STA_HABITAT_PIECE10", 1500f), ("STA_HABITAT_PIECE11", 1500f), ("STA_HABITAT_PIECE12", 1500f), ("STA_HABITAT_PIECE13", 1500f), ("STA_HABITAT_PIECE14", 1500f), ("STA_HABITAT_PIECE15", 1500f), ("STA_HABITAT_PIECE16", 1500f) } },
     };
@@ -74,6 +88,18 @@ public sealed partial class MissionConverter
         // Banque : la sortie de secours (toit voisin ↔ étage, ouverte à l'arrivée de l'hélicoptère), la porte de la salle de
         // surveillance (acte 4) et la porte blindée de la salle des coffres
         { "banque", new[] { ("ECO_PORTECOUPFEU01", "SortieSecours"), ("ECO_PORTECOUPEFEU_01", "PorteSurveillance"), ("BAN_PORTE_BLINDEE_SALLE", "PorteBlindeeCoffre") } },
+        // Centrale (MissionConverter.Centrale.cs) : les grandes portes de l'entrée et des garages (boutons rouges), la porte de
+        // la salle de commande, la barrière de l'entrée, les sas, les trois portes blindées du réacteur (acte 4), les portes
+        // vitrées automatiques (le joueur les ouvre, UsableDoors)
+        {
+            "Centrale_Nucleaire", new[]
+            {
+                ("Porte1", "Porte1"), ("Porte2", "Porte2"), ("Porte3", "Porte3"), ("Porte10", "Porte10"), ("Porte11", "Porte11"),
+                ("Porte12", "Porte12"), ("Porte20", "Porte20"), ("Barriere1", "Barriere1"), ("Porte4", "Sas1"), ("Porte5", "Sas2"),
+                ("SasAnim3", "Sas3"), ("SasAnim4", "Sas4"), ("Blindee1", "Blindee1"), ("Blindee2", "Blindee2"), ("Blindee3", "Blindee3"),
+                ("PorteA1", "PorteA1"), ("PorteA2", "PorteA2"), ("PorteA3", "PorteA3"), ("PorteA4", "PorteA4"), ("PorteA5", "PorteA5"), ("PorteA6", "PorteA6"), ("PorteA7", "PorteA7"), ("PorteA8", "PorteA8"), ("PorteA9", "PorteA9"), ("PorteA10", "PorteA10"), ("PorteA11", "PorteA11"), ("PorteA12", "PorteA12"), ("PorteA13", "PorteA13"), ("PorteA14", "PorteA14"),
+            }
+        },
         // Ecole : les portes coupe-feu entre les pièces de l'étage administratif (FD1 : mécanismes « openDoor » ; le joueur
         // les ouvre, UsableDoors)
         { "ecole", new[] { ("pcf0", "pcf0"), ("pcf1", "pcf1"), ("pcf2", "pcf2"), ("pcf3", "pcf3") } },
@@ -148,12 +174,28 @@ public sealed partial class MissionConverter
         { "train", new[] { ("eco_arm_cont_coupfeu01", "@Ventilation", "") } },
         // Ecole (MissionConverter.Ecole.cs) : le groupe électrogène du chantier (on coupe le courant)
         { "ecole", new[] { ("grpeElec", "@GEOff", "") } },
+        {
+            // Centrale (MissionConverter.Centrale.cs) : les boutons rouges des grandes portes et des sas, la ventilation de
+            // l'ingénieur, les vannes du refroidissement des trois turbines, les quatre coupe-circuits de la tranche électrique
+            "Centrale_Nucleaire", new[]
+            {
+                ("Cen_bout_GPorte1", "Porte1", ""), ("Cen_bout_GPorte2", "Porte2", ""), ("Cen_bout_GPorte3", "Porte3", ""),
+                ("Cen_bout_GPorte10", "Porte10", ""), ("Cen_bout_GPorte11", "Porte11", ""), ("Cen_bout_GPorte12", "Porte12", ""),
+                ("Cen_bout_GPorte20", "Porte20", ""), ("Cen_bout_GPorteAll", "@GPorteAll", ""), ("Cen_bout_GPorteAll2", "@GPorteAll2", ""),
+                ("Cen_bout_Sas1", "Sas1", ""), ("Cen_bout_Sas2", "@Sas2", ""), ("Cen_bout_Sas3", "Sas3", ""), ("Cen_bout_Sas4", "Sas4", ""),
+                ("VentIng", "@VentIngenieur", ""), ("vanHuile", "@Turbine1Stop", ""), ("vanHuile2", "@Turbine2Stop", ""),
+                ("vanHuile3", "@Turbine3Stop", ""), ("ce0", "@CoupElec1", ""), ("ce1", "@CoupElec2", ""), ("ce2", "@CoupElec3", ""),
+                ("ce3", "@CoupElec4", ""),
+            }
+        },
     };
 
     /// <summary>Boutons du script dont seul un ingénieur se sert (il « répare »), par mission (nom FD1).</summary>
     private static readonly Dictionary<string, string[]> EngineerButtons = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Villa", new[] { "Pompe_Arrosage_Mecanisme" } },
+        // Centrale : la ventilation de la salle des vestiaires (FD1 : VENTILO_ING, l'ingénieur la met en marche)
+        { "Centrale_Nucleaire", new[] { "VentIng" } },
     };
 
     /// <summary>Maillages des planchers en hauteur (dans le repère du monde) et hauteur de chacun.</summary>
@@ -231,6 +273,31 @@ public sealed partial class MissionConverter
     /// <summary>Missions où une case au sol prise entre deux cases de plancher d'étage (face à face) devient du plancher.</summary>
     private static readonly HashSet<string> LowFloorJoints = new(StringComparer.OrdinalIgnoreCase) { "ecole" };
 
+    /// <summary>
+    /// Missions où le seuil d'une porte d'étage est une ligne de deux cases au sol (le mur épais), entre deux planchers
+    /// (Centrale : la porte vitrée PorteA10 vers la passerelle autour du réacteur). Seules les cases à moins d'un mètre
+    /// d'une porte posée à la hauteur d'un plancher deviennent du plancher ; les murs de l'étage (montants, linteau) ne les
+    /// referment pas.
+    /// </summary>
+    private static readonly HashSet<string> WideDoorJoints = new(StringComparer.OrdinalIgnoreCase) { "Centrale_Nucleaire" };
+
+    /// <summary>Portes FD1 (modèle de porte, porte blindée) posées à la hauteur d'un plancher d'étage : position en cm.</summary>
+    private List<Vector3> UpperDoorPositions()
+    {
+        List<Vector3> doors = new List<Vector3>();
+        if (_fd1 == null)
+            return doors;
+        foreach (Fd1Object o in _fd1.Objects)
+        {
+            if (!o.Model.Contains("PORTE", StringComparison.OrdinalIgnoreCase) && !o.Model.Contains("_DOR_", StringComparison.OrdinalIgnoreCase))
+                continue;
+            Vector3 at = new Vector3(o.World.M41, o.World.M42, o.World.M43) * WorldToCm;
+            if (_upperFloors.Any(f => MathF.Abs(f.z - at.Z) < 50))
+                doors.Add(at);
+        }
+        return doors;
+    }
+
     private int ApplyUpperFloors(Grid g)
     {
         int n = 0;
@@ -289,6 +356,44 @@ public sealed partial class MissionConverter
                     }
                 }
             }
+        // seuil de deux cases (WideDoorJoints) : près d'une porte d'étage, une case au sol entre deux planchers à la même
+        // hauteur, à une ou deux cases de chaque côté
+        Dictionary<int, float> doorJoints = new Dictionary<int, float>();
+        if (WideDoorJoints.Contains(Mission))
+            foreach (Vector3 door in UpperDoorPositions())
+            {
+                int dx0 = (int)MathF.Floor(door.X / Grid.CellSize), dy0 = (int)MathF.Floor(door.Y / Grid.CellSize);
+                for (int cy = dy0 - 1; cy <= dy0 + 1; cy++)
+                    for (int cx = dx0 - 1; cx <= dx0 + 1; cx++)
+                    {
+                        if (cx < 3 || cy < 3 || cx + 3 >= g.Width || cy + 3 >= g.Height)
+                            continue;
+                        int k = g.Index(cx, cy);
+                        // la case peut être fermée (le mur au sol sous la porte) : le seuil est ouvert
+                        if (g.GroundHeight[k] >= door.Z - 200 || lowJoints.ContainsKey(k) || doorJoints.ContainsKey(k))
+                            continue;
+                        foreach ((int dx, int dy) in new[] { (1, 0), (0, 1) })
+                        {
+                            float? Floor(int sign)
+                            {
+                                for (int step = 1; step <= 2; step++)
+                                {
+                                    int q = g.Index(cx + sign * dx * step, cy + sign * dy * step);
+                                    if (g.ZoneA[q] != 0 && MathF.Abs(g.GroundHeight[q] - door.Z) < 50)
+                                        return g.GroundHeight[q];
+                                }
+                                return null;
+                            }
+                            if (Floor(-1) is float h && Floor(1) == h)
+                            {
+                                joints.Add(k);
+                                doorJoints[k] = h;
+                                g.GroundHeight[k] = h;
+                                break;
+                            }
+                        }
+                    }
+            }
         foreach (int k in joints)
             g.ZoneA[k] = 1;
         n += joints.Count;
@@ -309,6 +414,12 @@ public sealed partial class MissionConverter
                 g.GroundHeight[k] = h;
                 n--;
             }
+        // seuil d'une porte d'étage (WideDoorJoints) : il reste ouvert, à la hauteur du plancher
+        foreach ((int k, float h) in doorJoints)
+        {
+            g.ZoneA[k] = 1;
+            g.GroundHeight[k] = h;
+        }
         if (GrappleWalls.TryGetValue(Mission, out (Vector3 top, float yaw)[]? walls))
             foreach ((Vector3 top, float yaw) in walls)
             {
@@ -370,6 +481,7 @@ public sealed partial class MissionConverter
     private static readonly Dictionary<string, string[]> UsableDoors = new(StringComparer.OrdinalIgnoreCase)
     {
         { "ecole", new[] { "pcf0", "pcf1", "pcf2", "pcf3" } },
+        { "Centrale_Nucleaire", new[] { "PorteA1", "PorteA2", "PorteA3", "PorteA4", "PorteA5", "PorteA6", "PorteA7", "PorteA8", "PorteA9", "PorteA10", "PorteA11", "PorteA12", "PorteA13", "PorteA14" } },
     };
 
     /// <summary>Portes du script dans le niveau du moteur (fermées, elles montent quand le script les ouvre).</summary>
@@ -528,6 +640,8 @@ public sealed partial class MissionConverter
             LevelObject t = LevelEdit.Clone(stair, LevelEdit.NewId(level), name, stair.ClassPath);
             t = LevelEdit.WithTransform(t, (top + bottom) / 2, Vector3.Zero);
             t = LevelEdit.WithStartVisible(t, false);
+            // l'escalier modèle (une mission du jeu) appelle « Enter_NavigationRoom » : pas de fonction du script ici
+            t = WithComponentScript(t, 0xA02B, "");
             level.Objects.Add(t);
             foreach ((string end, Vector3 at) in new[] { ("haut", top), ("bas", bottom) })
             {

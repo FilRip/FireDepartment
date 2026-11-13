@@ -22,17 +22,27 @@ public sealed class Fd1Level
     public List<(Vector3 at, string type)> Fires = new();
 
     /// <summary>Type de point FD1 qui n'est pas un feu (lumières, jets d'eau).</summary>
-    private static bool NotFire(string ini) =>
-        NotFireTypes.Any(t => ini.StartsWith(t, StringComparison.OrdinalIgnoreCase));
+    private static bool NotFire(string ini, bool centrale) =>
+        NotFireTypes.Any(t => ini.StartsWith(t, StringComparison.OrdinalIgnoreCase))
+        || (centrale && CentraleNotFireTypes.Any(t => ini.StartsWith(t, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>
     /// Types de points FD1 qui ne sont pas des feux (Villa : lampadaires, jets d'eau ; Quartier : phares, feu orange, lueurs,
     /// jets de la fuite de gaz, fumée de porte). Les gyrophares (« giro_r », « giro_b ») restent des foyers : Entrepot et Banque
     /// en ont, leurs numéros de foyers en dépendent.
     /// </summary>
-    private static readonly string[] NotFireTypes = { "lampad", "fx_fontaine", "phare", "feu_orange", "nico_glow", "jet_flamme", "jet_gaz", "fumee_porte" };
+    private static readonly string[] NotFireTypes =
+    {
+        "lampad", "fx_fontaine", "phare", "feu_orange", "nico_glow", "jet_flamme", "jet_gaz", "fumee_porte",
+    };
 
-    public static Fd1Level Load(byte[] d)
+    /// <summary>
+    /// Centrale seulement : sprinklers, jets d'huile des turbines, coulées de sodium, fumée des ventilateurs. Banque et
+    /// StationService ont aussi des « sprinklers » : ils restent des foyers, leurs numéros de foyers en dépendent.
+    /// </summary>
+    private static readonly string[] CentraleNotFireTypes = { "sprinklers", "jet_oil", "flux_sodium", "fum_ventilo" };
+
+    public static Fd1Level Load(byte[] d, bool centrale)
     {
         Fd1Level lv = new Fd1Level();
         lv.Strings = ScanStrings(d);
@@ -81,7 +91,7 @@ public sealed class Fd1Level
                 continue;
             // effets du décor posés comme des points de feu (Villa : « lampad » les lampadaires, « fx_fontaine » les jets
             // d'eau ; Quartier : « phare ») : ils ne brûlent pas
-            if (NotFire(s))
+            if (NotFire(s, centrale))
                 continue;
             lv.Fires.Add((at, s[..^4]));
         }

@@ -49,6 +49,17 @@ public sealed partial class MissionConverter
                 "Vehicule_canadair",
             }
         },
+        // Centrale : les grandes portes et les sas animés de FD1 (doublons des portes du moteur), le ventilateur en marche
+        // (FD1 : VentSap), les flaques d'huile des turbines et de sodium des pompes (le moteur n'a que leurs feux)
+        {
+            "Centrale_Nucleaire", new[]
+            {
+                "GPorteAnim1", "GPorteAnim2", "GPorteAnim3", "GPorteAnim10", "GPorteAnim11", "GPorteAnim12", "GPorteAnim20", "SasAnim1",
+                "SasAnim2", "VentSap",
+                "T2F1", "T2F2", "T2F3", "T2F4", "T2F5", "T2F6", "T2F7", "T2F8", "T2F9", "T2F10", "T2F11", "T3F1", "T3F2", "T3F3", "T3F4", "T3F5", "T3F6", "T3F7", "T3F8",
+                "M1S1", "M1S2", "M1S3", "M1S4", "M1S5", "M2S1", "M2S2", "M2S3", "M2S4", "M2S5", "M3S1", "M3S2", "M3S3", "M3S4", "M3S5", "M4S1", "M4S2", "M4S3", "M4S4", "M4S5", "M5S1", "M5S2", "M5S3", "M5S4", "M5S5", "M6S1", "M6S2", "M6S3", "M6S4", "M6S5", "M7S1", "M7S2", "M7S3", "M7S4", "M7S5", "M8S1", "M8S2", "M8S3", "M8S4", "M8S5",
+            }
+        },
     };
 
     /// <summary>

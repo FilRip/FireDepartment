@@ -46,6 +46,16 @@ public sealed partial class MissionConverter
     };
 
     /// <summary>Objets qui explosent, par mission : nom FD1, fonction du script appelée à leur explosion.</summary>
+    /// <summary>
+    /// Objets du script posés sous un plancher d'étage (Centrale : la pompe primaire Machine1, sous la passerelle derrière
+    /// la porte blindée 1) : la grille n'a qu'une hauteur par case, leur forme fermerait la passerelle ; ils ne ferment rien
+    /// (leur classe : [OCCUPATION] BACKGROUND = 1).
+    /// </summary>
+    private static readonly Dictionary<string, string[]> UnderFloorObjects = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Centrale_Nucleaire", new[] { "Machine1" } },
+    };
+
     private static readonly Dictionary<string, (string name, string script)[]> ExplosiveObjects = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Entrepot", new[] { ("Truckabc", "FD1_Rien") } },
@@ -80,6 +90,16 @@ public sealed partial class MissionConverter
                 ("VoitureExplo", "FD1_Rien"),
             }
         },
+        // Centrale : la machine de la salle de sécurité (le script la fait sauter à 8 s), la charge du backdraft des vestiaires,
+        // les turbines 2 et 3, les huit pompes primaires et les huit générateurs de vapeur du réacteur (MissionConverter.Centrale.cs)
+        {
+            "Centrale_Nucleaire", new[]
+            {
+                ("ExploDebut", "FD1_Rien"), ("Back", "FD1_Rien"), ("Turbine2", "FD1_Rien"), ("Turbine3", "FD1_Rien"),
+                ("Machine1", "FD1_Rien"), ("Machine2", "FD1_Rien"), ("Machine3", "FD1_Rien"), ("Machine4", "FD1_Rien"), ("Machine5", "FD1_Rien"), ("Machine6", "FD1_Rien"), ("Machine7", "FD1_Rien"), ("Machine8", "FD1_Rien"),
+                ("Generateur1", "FD1_Rien"), ("Generateur2", "FD1_Rien"), ("Generateur3", "FD1_Rien"), ("Generateur4", "FD1_Rien"), ("Generateur5", "FD1_Rien"), ("Generateur6", "FD1_Rien"), ("Generateur7", "FD1_Rien"), ("Generateur8", "FD1_Rien"),
+            }
+        },
     };
 
     /// <summary>
@@ -107,6 +127,16 @@ public sealed partial class MissionConverter
         },
         // Foret : les épaves de la voiture et de l'hélicoptère restent là, au milieu de leurs feux
         { "foret", new[] { ("Voiture_Accident_Rocher", 0f), ("Epave_Helicoptere3", 0f) } },
+        // Centrale : la charge du backdraft ne saute que par le script ; les turbines, les pompes et les générateurs tiennent
+        // trois fois plus dans le feu
+        {
+            "Centrale_Nucleaire", new[]
+            {
+                ("Back", 0f), ("ExploDebut", 0f), ("Turbine2", 0.33f), ("Turbine3", 0.33f),
+                ("Machine1", 0.33f), ("Machine2", 0.33f), ("Machine3", 0.33f), ("Machine4", 0.33f), ("Machine5", 0.33f), ("Machine6", 0.33f), ("Machine7", 0.33f), ("Machine8", 0.33f),
+                ("Generateur1", 0.33f), ("Generateur2", 0.33f), ("Generateur3", 0.33f), ("Generateur4", 0.33f), ("Generateur5", 0.33f), ("Generateur6", 0.33f), ("Generateur7", 0.33f), ("Generateur8", 0.33f),
+            }
+        },
     };
 
     /// <summary>Voitures à conduire, par mission : nom FD1, fonction du script appelée quand un ingénieur la prend.</summary>
@@ -203,12 +233,18 @@ public sealed partial class MissionConverter
     /// Classe d'un objet du script : Design\placeable\functional\useable\&lt;nom&gt;_&lt;modèle&gt;_feu (ou _explo).class :
     /// il s'abîme au feu (100 points de vie), n'est pas utilisable ; explosif : un gros souffle (camion).
     /// </summary>
-    private string WriteObjectClass(string model, List<Fd3Mesh> meshes, bool explosive)
+    private string WriteObjectClass(string model, List<Fd3Mesh> meshes, bool explosive, bool underFloor)
     {
         (string safe, List<(string node, Matrix4x4 world)> _, float _) = WritePlaceableModel(model, meshes);
         string classDir = Path.Combine(Data, "Design", "placeable", "functional", "useable");
         Directory.CreateDirectory(classDir);
-        string name = safe + (explosive ? "_explo" : "_feu");
+        string name = safe + (explosive ? "_explo" : "_feu") + (underFloor ? "_dessous" : "");
+        string occupation = underFloor
+            ? """
+              [OCCUPATION]
+              BACKGROUND = 1
+              """
+            : "";
         string explosion = explosive
             ? """
               [EXPLOSION]
@@ -247,6 +283,8 @@ public sealed partial class MissionConverter
             COULDBEUSE = 0
 
             {explosion}
+
+            {occupation}
 
             """;
         File.WriteAllBytes(Path.Combine(classDir, name + ".class"), Encoding.Latin1.GetBytes(cls.Replace("\n", "\r\n")));
@@ -307,7 +345,7 @@ public sealed partial class MissionConverter
             Report.Add("objets du script : objet modèle introuvable dans les missions du jeu");
             return;
         }
-        Dictionary<(string model, bool explosive), string> classes = new Dictionary<(string, bool), string>();
+        Dictionary<(string model, bool explosive, bool underFloor), string> classes = new Dictionary<(string, bool, bool), string>();
         foreach ((Fd1Object o, List<Fd3Mesh> meshes, string name, ObjectRole role, string script) in _scriptObjects)
         {
             if (role == ObjectRole.Drivable)
@@ -333,8 +371,9 @@ public sealed partial class MissionConverter
                 model = o.Model + "_" + name;
                 euler = Vector3.Zero;
             }
-            if (!classes.TryGetValue((model, explosive), out string? cls))
-                classes[(model, explosive)] = cls = WriteObjectClass(model, parts, explosive);
+            bool underFloor = UnderFloorObjects.TryGetValue(Mission, out string[]? under) && under.Contains(name, StringComparer.OrdinalIgnoreCase);
+            if (!classes.TryGetValue((model, explosive, underFloor), out string? cls))
+                classes[(model, explosive, underFloor)] = cls = WriteObjectClass(model, parts, explosive, underFloor);
             LevelObject x = LevelEdit.Clone(template, LevelEdit.NewId(level), name, cls);
             x = LevelEdit.WithTransform(x, new Vector3(w.M41, w.M42, w.M43), euler);
             x = LevelEdit.WithStartVisible(x, role is not (ObjectRole.Fallen or ObjectRole.Hidden));
