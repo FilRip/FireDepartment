@@ -27,7 +27,11 @@ public sealed partial class MissionConverter
             // Villa : la grille du garage (entre les portes 4 et 5), les petites grilles du fond de la villa
             || o.Model.StartsWith("VIL_GRILLES02_GARAGE", StringComparison.OrdinalIgnoreCase)
             || o.Model.StartsWith("ECO_PTTGRILLE01_BUT", StringComparison.OrdinalIgnoreCase)
-            || QuartierBreakable.Any(m => o.Model.StartsWith(m, StringComparison.OrdinalIgnoreCase)))
+            || QuartierBreakable.Any(m => o.Model.StartsWith(m, StringComparison.OrdinalIgnoreCase))
+            // Station-service : les planches qui condamnent les ouvertures du chantier (Porte6 à Porte8)
+            || o.Model.StartsWith("sta_planches", StringComparison.OrdinalIgnoreCase)
+            // Train : la porte de l'écurie (le palefrenier est derrière)
+            || o.Model.StartsWith("TRA_PORTE_ECURIES", StringComparison.OrdinalIgnoreCase))
         && (o.World.M43 * WorldToCm < 50 || floors.Any(z => MathF.Abs(o.World.M43 * WorldToCm - z) < 50));
 
     /// <summary>

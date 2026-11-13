@@ -60,6 +60,29 @@ public sealed partial class MissionConverter
                 ("Civil0", "civilian\\civilian_man4"), ("Civil1", "civilian\\civilian_man5"), ("Civil2", "civilian\\civilian_woman3"), ("Civil3", "civilian\\civilian_woman4"), ("Civil4", "civilian\\civilian_woman1"), ("Civil5", "civilian\\civilian_man6"), ("Civil6", "civilian\\civilian_man7"), ("Civil7", "civilian\\civilian_man8"), ("Civil8", "civilian\\civilian_woman2"), ("Civil9", "civilian\\civilian_man1"), ("Civil10", "civilian\\civilian_man2"), ("Civil11", "civilian\\civilian_man3"),
             }
         },
+        {
+            // Station-service : le policier, le chauffeur du camion-citerne et l'otage (acte 1) ; la caissière, le patron et le
+            // client de la supérette (acte 2) ; les ouvriers du chantier (acte 3) ; les habitants de l'immeuble, « Poligote » et
+            // Johnston, le truand (acte 4) ; les deux policiers soufflés par la citerne de butane
+            "station_service", new[]
+            {
+                ("Policier", "civilian\\civilian_cop_1"), ("Citernedriver", "civilian\\civilian_worker2"), ("Otage1", "civilian\\civilian_man9"),
+                ("Caissiere", "civilian\\civilian_waitress"), ("Patron", "civilian\\civilian_man4"), ("Client", "civilian\\civilian_man5"),
+                ("Ouvrier0", "civilian\\civilian_worker1"), ("Ouvrier1", "civilian\\civilian_worker2"), ("Ouvrier3", "civilian\\civilian_worker1"),
+                ("Hab1", "civilian\\civilian_woman1"), ("Hab2", "civilian\\civilian_man6"), ("Hab3", "civilian\\civilian_man7"),
+                ("Hab4", "civilian\\civilian_woman2"), ("Poligote", "civilian\\civilian_man8"), ("Voleur", "civilian\\civilian_gangster_1"),
+                ("PolicierEvanoui", "civilian\\civilian_cop_2"), ("PolicierEvanoui2", "civilian\\civilian_cop_3"),
+            }
+        },
+        {
+            // Train : le conducteur du tracteur et le machiniste de la locomotive (acte 1), le palefrenier (acte 2), les deux
+            // techniciens du tunnel (acte 3)
+            "train", new[]
+            {
+                ("Conducteur1", "civilian\\civilian_worker1"), ("Conducteur2", "civilian\\civilian_man4"), ("Palefrenier", "civilian\\civilian_worker2"),
+                ("Conducteur3", "civilian\\civilian_man5"), ("Conducteur4", "civilian\\civilian_man6"),
+            }
+        },
     };
 
     /// <summary>
@@ -126,6 +149,21 @@ public sealed partial class MissionConverter
                 ("TriggerTrou", "TriggerTrou", new Vector3(7761, 9224, 1300), new Vector3(9229, 9644, 1800)),
                 ("T23", "T23", new Vector3(7306, 11690, 1300), new Vector3(8271, 12100, 1800)),
                 ("T21", "T21", new Vector3(5351, 11738, 1300), new Vector3(7277, 14147, 1800)),
+            }
+        },
+        {
+            // Station-service : zones FD1 (station_service.xfl ; cercles → carrés de même rayon) : l'unité d'arrosage à mousse
+            // (« TriggerTruck »), les pièces du chantier (TCache3 à 5) et de l'immeuble (TCache11, 17, 19) qui découvrent une
+            // victime ou la réserve de peinture
+            "station_service", new[]
+            {
+                ("TriggerTruck", "TriggerTruck", new Vector3(16355, 16637, 0), new Vector3(17639, 17384, 500)),
+                ("TCache3", "TCache3", new Vector3(17978, 11346, 0), new Vector3(18678, 12046, 300)),
+                ("TCache4", "TCache4", new Vector3(17909, 12394, 0), new Vector3(18809, 13294, 300)),
+                ("TCache5", "TCache5", new Vector3(19078, 13003, 0), new Vector3(19778, 13703, 300)),
+                ("TCache11", "TCache11", new Vector3(6701, 14028, 1300), new Vector3(7201, 14528, 1800)),
+                ("TCache17", "TCache17", new Vector3(3552, 12785, 1300), new Vector3(4252, 13485, 1800)),
+                ("TCache19", "TCache19", new Vector3(3859, 14681, 1300), new Vector3(4459, 15281, 1800)),
             }
         },
     };
@@ -266,6 +304,10 @@ public sealed partial class MissionConverter
             return VillaScript(fd1);
         if (Mission.Equals("quartier", StringComparison.OrdinalIgnoreCase))
             return QuartierScript(fd1);
+        if (Mission.Equals("station_service", StringComparison.OrdinalIgnoreCase))
+            return StationScript(fd1);
+        if (Mission.Equals("train", StringComparison.OrdinalIgnoreCase))
+            return TrainScript(fd1);
         if (!Mission.Equals("Entrepot", StringComparison.OrdinalIgnoreCase))
             return ("", "", "");
         string T(string key) => _hasTexts ? TextKey(key) : key;

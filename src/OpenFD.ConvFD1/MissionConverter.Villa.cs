@@ -154,7 +154,8 @@ public sealed partial class MissionConverter
     /// <summary>
     /// Classe d'une unité posée à part faite d'un objet FD1 : « @pompe », la pompe de la piscine (une autopompe qui ne roule
     /// pas : sa lance éteint les foyers à sa portée, l'eau de la piscine ne manque jamais) ; « @excalibur », la voiture de
-    /// collection (un véhicule sans équipage ni soins, que le joueur conduit). Rend son chemin (null : modèle absent).
+    /// collection, et « @citerne », le camion-citerne de GPL de la station-service (des véhicules sans équipage ni soins, que
+    /// le joueur conduit). Rend son chemin (null : modèle absent).
     /// </summary>
     private string? WriteObjectUnitClass(string instance, string kind)
     {
@@ -210,7 +211,7 @@ public sealed partial class MissionConverter
               EMBARKCAPACITY = 0
 
               [UNIT]
-              PUBLICNAME = Excalibur
+              PUBLICNAME = {(kind == "@citerne" ? "Citerne GPL" : "Excalibur")}
 
               [ANIM_PLAYER]
               ANIM01_FILENAME =
