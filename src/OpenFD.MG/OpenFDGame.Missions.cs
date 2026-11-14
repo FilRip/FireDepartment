@@ -13,7 +13,13 @@ public sealed partial class OpenFDGame
     public bool StartMenu;
     private bool _menu, _ended;
     private sealed record MissionEntry(string Dir, string Title, bool Playable);
+    /// <summary>Missions du menu affiché : « Autres missions », ou celles de Fire Department 1 (_fd1Menu).</summary>
     private List<MissionEntry> _missions = new();
+    /// <summary>Toutes les missions hors campagne (FD1_ comprises), dans l'ordre du menu.</summary>
+    private List<MissionEntry> _allMissions = new();
+    /// <summary>Le menu montre les missions de Fire Department 1 (dossiers « FD1_… », converties) : choisies par leur logo.</summary>
+    private bool _fd1Menu;
+    private static bool IsFd1Mission(string dir) => dir.StartsWith("FD1_", StringComparison.OrdinalIgnoreCase);
     private int _menuIndex, _menuDiff;
     private Texture2D? _menuBack;
     private Texture2D? _iconExit;
@@ -46,8 +52,9 @@ public sealed partial class OpenFDGame
     {
         _loc ??= Localization.Load(_files.DataDir);
         EnsureCampaign();
-        if (_missions.Count == 0)
+        if (_allMissions.Count == 0)
         {
+            _missions = new List<MissionEntry>();
             foreach (string lv in _files.List("Design\\Mission\\").Where(p => p.EndsWith(".level", StringComparison.OrdinalIgnoreCase)))
             {
                 string[] parts = lv.Split('\\');
@@ -78,8 +85,10 @@ public sealed partial class OpenFDGame
                 catch { }
                 _missions.Add(new MissionEntry(dir, title, gfx));
             }
-            _missions = _missions.OrderBy(m => m.Playable ? 0 : 1).ThenBy(m => m.Dir).ToList();
+            _allMissions = _missions.OrderBy(m => m.Playable ? 0 : 1).ThenBy(m => m.Dir).ToList();
         }
+        // « Autres missions » sans celles de Fire Department 1 (elles ont leur logo dans le choix du jeu de « Campagne »)
+        _missions = _allMissions.Where(m => IsFd1Mission(m.Dir) == _fd1Menu).ToList();
         _menuIndex = Math.Clamp(_menuIndex, 0, Math.Max(0, _missions.Count - 1));
     }
 
@@ -174,7 +183,7 @@ public sealed partial class OpenFDGame
         SN.Vector4 accent = new SN.Vector4(1f, 0.48f, 0.18f, 1);
         SN.Vector4 txt = new SN.Vector4(0.93f, 0.92f, 0.9f, 1);
         SN.Vector4 muted = new SN.Vector4(0.6f, 0.6f, 0.6f, 1);
-        const string title = "Autres missions";
+        string title = _fd1Menu ? "Fire Department" : "Autres missions";
         float ts = _scale * 1.6f;
         _ui.Rect(0, ly - lh * 3.5f, _fbW, _font.LineHeight * ts + 16 * _scale, new SN.Vector4(0, 0, 0, 0.55f));
         _ui.Text((_fbW - _font.Measure(title) * ts) / 2, ly - lh * 3.5f + 8 * _scale, title, accent, ts);

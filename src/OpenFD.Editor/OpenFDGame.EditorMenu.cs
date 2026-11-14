@@ -6,13 +6,14 @@ using SN = System.Numerics;
 
 namespace OpenFD.MG;
 
-// éditeur : la barre de menu (Nouveau, Charger, Sauver, Tester, Script) et ce que font ses boutons
+// éditeur : la barre de menu (Nouveau, Charger, Sauver, Tester, Script, Exporter) et ce que font ses boutons
 public sealed partial class OpenFDGame
 {
     private Process? _edScriptProc;
     private int _edControlSeq;
     private string? _edPendingLoad;   // mission choisie dans la liste : ouverte au début de l'image suivante (pas en plein dessin)
     private string? _edPendingMessage;   // message montré quand cette mission est ouverte
+    private string? _edExportDir;   // dossier du dernier zip exporté : la fenêtre « Enregistrer sous » s'y ouvre
 
     /// <summary>Dossier de travail des scripts de la mission ouverte (la fenêtre des scripts y écrit ; « Sauver » les recopie dans Data).</summary>
     private static string EdWork => Path.Combine(AppContext.BaseDirectory, "Travail", "Scripts");
@@ -38,6 +39,9 @@ public sealed partial class OpenFDGame
         x += bw + pad;
         if (EdButton(x, pad, bw, h - 2 * pad, Tr("Script", "Script"), false, _edLoaded))
             EdOpenScripts();
+        x += bw + pad;
+        if (EdButton(x, pad, bw, h - 2 * pad, Tr("Export", "Exporter"), false, _edLoaded))
+            EdExport();
         x += bw + 3 * pad;
         // message du moment (en rouge : une erreur), il pâlit au bout de quelques secondes
         float age = (float)(_edClock - _edStatusAt);
@@ -158,6 +162,44 @@ public sealed partial class OpenFDGame
                     then?.Invoke();
             }),
             (Tr("Cancel", "Annuler"), () => EdMessage(then != null ? Tr("TestCancelled", "Essai abandonné : rien n'a été écrit") : Tr("SaveCancelled", "Sauvegarde abandonnée"))));
+    }
+
+    /// <summary>
+    /// « Exporter » : la mission est d'abord sauvée (même confirmation que « Sauver »), puis ses fichiers et ceux dont elle
+    /// a besoin (hors fichiers du jeu) sont mis dans un zip, à l'endroit et sous le nom choisis ; on l'extrait à la racine
+    /// du jeu (le dossier qui contient Data) sur un autre PC.
+    /// </summary>
+    private void EdExport()
+    {
+        if (!_edLoaded)
+            return;
+        EdSaveAsk(EdExportZip);
+    }
+
+    private void EdExportZip()
+    {
+        string name = EdShortName;
+        string folder = _edExportDir ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        string? path = FileDialog.SaveZip(Tr("ExportTitle", "Exporter la mission « {0} »", name), folder, name + ".zip");
+        Sdl.Raise(Window.Handle);
+        if (path == null)
+        {
+            EdMessage(Tr("ExportCancelled", "Export abandonné : la mission est sauvée, aucun zip n'a été écrit"));
+            return;
+        }
+        try
+        {
+            List<string> files = MissionExport.Collect(_files.DataDir, name);
+            long bytes = MissionExport.WriteZip(_files.DataDir, files, path);
+            _edExportDir = Path.GetDirectoryName(path);
+            string size = (bytes / 1048576.0).ToString("0.0", System.Globalization.CultureInfo.CurrentCulture);
+            EdMessage(Tr("Exported", "Mission « {0} » exportée : {1} fichier(s), {2} Mo, dans {3}", name, files.Count, size, path));
+        }
+        catch (Exception e)
+        {
+            EdMessage(Tr("ExportError", "Export impossible : {0}", e.Message), true);
+            Console.WriteLine(e);
+        }
     }
 
     /// <summary>Ce qui sera écrit : niveau (objets à leur place), grille, .mis, scripts, classes de l'éditeur, textures.</summary>

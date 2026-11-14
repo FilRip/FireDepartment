@@ -110,7 +110,7 @@ public sealed partial class OpenFDGame
         }
         EdCopyScriptsToWork(mission);
         EdUndoReset();
-        Window.Title = Tr("Title", "Open Fire Department - éditeur de missions") + " - " + mission;
+        Window.Title = EdWindowTitle + " - " + mission;
         EdMessage(Tr("Opened", "{0} : {1} objets ({2} feux au départ)", mission, _edObjects.Count, _edObjects.Count(o => o.Kind == EditorItemKind.Fire && o.Lit)));
     }
 
@@ -613,6 +613,7 @@ public sealed partial class OpenFDGame
                 case EditorItemKind.Waypoint:
                     _ui.Disc(c.X, c.Y, 4 * px, new SN.Vector4(0.4f, 0.7f, 1, 1));
                     break;
+
                 default:
                     SN.Vector4 col = e.Kind switch
                     {

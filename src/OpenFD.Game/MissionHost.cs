@@ -552,7 +552,7 @@ public sealed class MissionHost : IScriptHost
                 // un groupe du niveau (Street : « CCTrash », les débris du tramway renversé) : chacun de ses membres
                 foreach (long id in VisibilityMembers(V(0).AsInt))
                     if (Units?.ById(id) is { } vu)
-                        vu.Hidden = V(1).AsInt == 0;
+                        Units.SetUnitVisible(vu, V(1).AsInt != 0);   // (hélicoptère : il atterrit ou repart, voir Helicopters.cs)
                     else if (Units?.CivilianById(id) is { } vc)
                         vc.Hidden = V(1).AsInt == 0;
                     else
@@ -711,7 +711,7 @@ public sealed class MissionHost : IScriptHost
             {
                 long id = V(0).AsInt;
                 if (Units?.ById(id) is { } gu)
-                    return Value.I(gu.Hidden ? 0 : 1);
+                    return Value.I(gu.Hidden || gu.HeliLeaving ? 0 : 1);   // (hélicoptère qui repart : déjà caché pour le script)
                 if (Units?.CivilianById(id) is { } gc)
                     return Value.I(gc.Hidden ? 0 : 1);
                 return Value.I(Visibility.TryGetValue((uint)id, out bool vis) && !vis ? 0 : 1);

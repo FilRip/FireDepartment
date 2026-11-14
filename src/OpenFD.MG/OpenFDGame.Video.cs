@@ -36,7 +36,7 @@ public sealed partial class OpenFDGame
             string? amb = AmbiencePath();
             if (amb == null)
                 _music.Want(tutorial ? null : "Intro", false);
-            else if (tutorial || _missions.Any(m => m.Dir.Equals(_session.Mission, StringComparison.OrdinalIgnoreCase)))
+            else if (tutorial || _allMissions.Any(m => m.Dir.Equals(_session.Mission, StringComparison.OrdinalIgnoreCase)))
                 _music.Want(amb, true);
             else
                 _music.Want("Intro", false, amb);

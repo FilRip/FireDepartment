@@ -174,6 +174,7 @@ public sealed partial class UnitManager
         }
         UpdateHealth(dt);
         UpdateLadders(dt);
+        UpdateHelicopters();   // voir Helicopters.cs
         UpdateWaterTowers(dt);
         UpdateAirStrike();
         foreach (Unit u in Units)
@@ -650,6 +651,11 @@ public sealed partial class UnitManager
         if (u.Fixed)
         {
             u.Status = "ne roule pas (posé par le script)";
+            return false;
+        }
+        if (u.IsCivilianCar && u.Passengers.Count == 0)
+        {
+            u.Status = "personne au volant";
             return false;
         }
         u.Target = target;

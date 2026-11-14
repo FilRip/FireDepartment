@@ -531,6 +531,13 @@ public sealed partial class OpenFDGame
             t = pa.loop ? (now - pa.start) % c.Duration : Math.Clamp(now - pa.start, 0, c.Duration);
         }
         SN.Matrix4x4[] world = rig.Pose(clip, t);
+        // hélicoptère posé (sans animation en cours) : ses rotors tournent (le rotor principal sur son axe Z, celui de queue sur X)
+        if (u.IsHelicopter && clip == null && !u.Destroyed)
+        {
+            float now = (float)(_session.Time + (_paused ? 0 : _owed * Session.Dt));
+            SpinNode(rig, world, "Rotor_Haut_Animation", SN.Matrix4x4.CreateRotationZ(-now * HeliMainRotorSpeed));
+            SpinNode(rig, world, "Rotor_Ar1_Animation", SN.Matrix4x4.CreateRotationX(-now * HeliTailRotorSpeed));
+        }
         string state = u.Destroyed ? "_e2" : "_e1";
         foreach (CharacterRig.Part part in rig.Parts)
         {
@@ -548,6 +555,26 @@ public sealed partial class OpenFDGame
                 DrawMesh(mesh, (world[part.Node] * place).X());
         }
         return true;
+    }
+
+    /// <summary>Vitesse des rotors d'un hélicoptère posé (radians par seconde) : principal, de queue.</summary>
+    private const float HeliMainRotorSpeed = 9f, HeliTailRotorSpeed = 24f;
+
+    // tourne un nœud du modèle sur lui-même (dans son repère), avec tout ce qui y est accroché
+    private static void SpinNode(CharacterRig rig, SN.Matrix4x4[] world, string node, SN.Matrix4x4 local)
+    {
+        int k = Array.FindIndex(rig.Names, n => n.Equals(node, StringComparison.OrdinalIgnoreCase));
+        if (k < 0 || !SN.Matrix4x4.Invert(world[k], out SN.Matrix4x4 inv))
+            return;
+        SN.Matrix4x4 change = inv * local * world[k];
+        for (int i = 0; i < world.Length; i++)
+        {
+            int a = i;
+            while (a >= 0 && a != k)
+                a = rig.Parent[a];
+            if (a == k)
+                world[i] = world[i] * change;
+        }
     }
 
     // sons : voix et bruits signalés par le jeu, puis sons entretenus (lances, haches, pas, moteurs, feux proches)

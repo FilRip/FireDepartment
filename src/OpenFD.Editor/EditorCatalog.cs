@@ -37,6 +37,7 @@ public sealed class EditorCatalog
         cat.Dynamic.Add(new EditorItem { Name = EditorText.T("ItemMask", "Masque de toit"), Kind = EditorItemKind.RoofMask, ClassPath = MaskClass });
         cat.Dynamic.Add(new EditorItem { Name = EditorText.T("ItemCamera", "Caméra de départ"), Kind = EditorItemKind.Camera, Entity = EntityKind.Waypoint, ClassPath = "design\\waypoint\\cam_startpos" });
         cat.Dynamic.Add(new EditorItem { Name = EditorText.T("ItemWaypoint", "Point de passage"), Kind = EditorItemKind.Waypoint, Entity = EntityKind.Waypoint, ClassPath = "design\\waypoint\\base_waypoint" });
+        int markers = cat.Dynamic.Count;
 
         foreach (string rel in files.List("Design\\Placeable\\").Where(p => p.EndsWith(".class", StringComparison.OrdinalIgnoreCase)).OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
         {
@@ -69,6 +70,14 @@ public sealed class EditorCatalog
             (functional ? cat.Dynamic : cat.Objects).Add(item);
         }
         cat.Objects.Sort((a, b) => string.Compare(a.Folder + "\\" + a.Name, b.Folder + "\\" + b.Name, StringComparison.OrdinalIgnoreCase));
+        // passage au grappin (repère « koshka_symbol » du jeu) : sous un nom parlant, avec les repères de l'éditeur
+        int koshka = cat.Dynamic.FindIndex(i => i.Name.Equals("koshka_symbol", StringComparison.OrdinalIgnoreCase));
+        if (koshka >= 0)
+        {
+            EditorItem k = cat.Dynamic[koshka];
+            cat.Dynamic.RemoveAt(koshka);
+            cat.Dynamic.Insert(markers, new EditorItem { Name = EditorText.T("ItemGrapple", "Grappin (passage)"), Kind = k.Kind, ClassPath = k.ClassPath, Model = k.Model, Entity = k.Entity, Folder = k.Folder });
+        }
 
         // civils : objets dynamiques (on les sauve)
         foreach (string rel in files.List("Design\\Unit\\Civilian\\").Where(p => p.EndsWith(".class", StringComparison.OrdinalIgnoreCase)).OrderBy(p => p, StringComparer.OrdinalIgnoreCase))

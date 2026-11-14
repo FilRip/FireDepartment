@@ -54,6 +54,13 @@ public sealed partial class OpenFDGame
         Rec("board", u.Id, veh.Id);
         _session.Units.BoardVehicle(u, veh);
     }
+    private void DoTakeCar(Unit u, uint car)
+    {
+        if (NetSubmit("car", u.Id, car))
+            return;
+        Rec("car", u.Id, car);
+        _session.Units.TakeCivilianCar(u, car);
+    }
     private void DoGoToVehicle(Unit u, Unit veh)
     {
         if (NetSubmit("goveh", u.Id, veh.Id))
@@ -189,6 +196,10 @@ public sealed partial class OpenFDGame
             case "goveh":
                 if (U(e.A) is { } a4 && U(e.B) is { } b4)
                     um.GoToVehicle(a4, b4);
+                break;
+            case "car":
+                if (U(e.A) is { } aC)
+                    um.TakeCivilianCar(aC, (uint)e.B);
                 break;
             case "airstrike":
                 um.CallAirStrike(new SN.Vector2(e.X, e.Y));
