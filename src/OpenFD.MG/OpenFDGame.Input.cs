@@ -642,6 +642,28 @@ public sealed partial class OpenFDGame
             return;
         }
         Unit? veh = _sel.Any(u => !u.IsVehicle) ? VehicleAt(x, y) : null;
+        // voiture civile : une unité à pied y monte (Ctrl + clic droit), puis on la conduit comme un véhicule de pompiers
+        KeyboardState carKeys = Keyboard.GetState();
+        bool carCtrl = carKeys.IsKeyDown(Keys.LeftControl) || carKeys.IsKeyDown(Keys.RightControl);
+        uint? car = carCtrl && veh == null && _sel.Any(u => !u.IsVehicle && !u.Unconscious && !u.OnBoard) ? CivilianCarAt(x, y) : null;
+        if (car != null || (carCtrl && veh is { IsCivilianCar: true }))
+        {
+            Unit? driver = _sel.Where(u => !u.IsVehicle && !u.Unconscious && !u.OnBoard && u.Carrying == null)
+                .OrderBy(u => SN.Vector3.Distance(u.Position, veh?.Position ?? _session.Explosions.ById[car!.Value].Position)).FirstOrDefault();
+            if (driver == null)
+            {
+                _ignoredOrder = true;
+                return;
+            }
+            if (veh is { } taken && taken.Passengers.Count >= taken.Seats)
+            {
+                Log("Ce véhicule n'a plus de place");
+                return;
+            }
+            DoTakeCar(driver, car ?? (uint)veh!.Id);
+            Log($"{UnitLabel(driver)} : {driver.Status}");
+            return;
+        }
         if (veh != null)
         {
             List<Unit> walkers = _sel.Where(u => !u.IsVehicle && !u.Unconscious).ToList();
@@ -847,6 +869,33 @@ public sealed partial class OpenFDGame
     }
 
     // véhicule visé : n'importe où sur sa carrosserie (le rayon de la souris traverse son gabarit entre le sol et le toit)
+    /// <summary>Voiture civile du décor (pas encore prise) sous la souris : son numéro dans le niveau ; null : aucune.</summary>
+    private uint? CivilianCarAt(double x, double y)
+    {
+        (float csx, float csy) = Fb(x, y);
+        float vd = Tol(48);
+        uint? best = null;
+        List<OpenFD.Game.ExplosiveItem> cars = _session.Explosions.Items.Where(it => !it.Exploded && _session.Units.IsDrivableCar(it.Id)).ToList();
+        foreach (OpenFD.Game.ExplosiveItem it in cars)
+            if (Project(it.Position + new SN.Vector3(0, 0, 100)) is { } p && SN.Vector2.Distance(p, new(csx, csy)) is float d && d < vd)
+            {
+                vd = d;
+                best = it.Id;
+            }
+        if (best != null)
+            return best;
+        // sinon le sol (ou le toit de la voiture) sous la souris, à moins de 2,5 m de son milieu
+        float bd = 250;
+        foreach (OpenFD.Game.ExplosiveItem it in cars)
+            foreach (float z in new[] { 150f, 0f })
+                if (RayAtZ(x, y, it.Position.Z + z) is { } g && SN.Vector2.Distance(g, new(it.Position.X, it.Position.Y)) is float d && d < bd)
+                {
+                    bd = d;
+                    best = it.Id;
+                }
+        return best;
+    }
+
     private Unit? VehicleAt(double x, double y)
     {
         (float csx, float csy) = Fb(x, y);

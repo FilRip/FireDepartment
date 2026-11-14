@@ -64,7 +64,7 @@ public sealed partial class OpenFDGame
             else if (hover)
                 _ui.Rect(x + 2 * s, ry, iw - 2 * s, rowH - 2 * s, EdHover);
             _ui.Rect(x + pad, ry + rowH / 2 - 3 * s, 6 * s, 6 * s, EdKindColor(e.Kind));
-            _ui.Text(x + pad + 12 * s, ry + 3 * s, EdFit(e.Name, iw - pad - 16 * s), e == _edSel ? EdText : EdMuted);
+            _ui.Text(x + pad + 12 * s, ry + 3 * s, EdMarquee(e.Name, iw - pad - 16 * s, hover, "carte:" + e.Source.Id), e == _edSel ? EdText : EdMuted);
             if (hover && _edPressL)
             {
                 _edPressL = false;

@@ -150,6 +150,12 @@ public sealed class FireWorld
     /// </summary>
     /// <summary>Portée utilisée pour la proximité : celle de la cible (true) ou de la source (false).</summary>
     public bool ProximityUsesTargetRange;
+
+    /// <summary>
+    /// Rayon de propagation du feu : la portée d'allumage (LightingRange) de chaque foyer est multipliée par ce facteur
+    /// (1 : comme le jeu d'origine). Réglage caché « FireSpreadRadiusFactor » du json.
+    /// </summary>
+    public static float SpreadRadiusFactor = 1f;
     /// <summary>Distance 3D (true, comme le code du jeu) ou à plat (false).</summary>
     public bool Proximity3D;
 
@@ -161,7 +167,7 @@ public sealed class FireWorld
             {
                 if (ReferenceEquals(src, dst))
                     continue;
-                float range = ProximityUsesTargetRange ? dst.Class.LightingRange : src.Class.LightingRange;
+                float range = SpreadRadiusFactor * (ProximityUsesTargetRange ? dst.Class.LightingRange : src.Class.LightingRange);
                 float r2 = range * range;
                 // pièces : la chaleur ne traverse pas directement d'une pièce à l'autre (seulement par les liens)
                 if (rooms != null && (rooms.TryGetValue(src.Id, out string? ra) ? ra : "") != (rooms.TryGetValue(dst.Id, out string? rb) ? rb : ""))
@@ -205,9 +211,9 @@ public sealed class FireWorld
             else
             {
                 float d = Vector3.Distance(l.A!.Position, l.B!.Position);
-                if (d <= l.A.Class.LightingRange)
+                if (d <= SpreadRadiusFactor * l.A.Class.LightingRange)
                     AddSource(l.B, l.A);
-                if (d <= l.B.Class.LightingRange)
+                if (d <= SpreadRadiusFactor * l.B.Class.LightingRange)
                     AddSource(l.A, l.B);
             }
         }

@@ -246,7 +246,7 @@ public sealed partial class OpenFDGame
                     _edWanted.Add(it);
                     _ui.Text(tx + tileW / 2 - _ui.Measure("...") / 2, ty + imgH / 2, "...", EdMuted);
                 }
-                string name = EdFit(it.Name, tileW - 6 * s);
+                string name = EdMarquee(it.Name, tileW - 6 * s, over, "objet:" + i + ":" + it.Name);
                 _ui.Text(tx + (tileW - _ui.Measure(name)) / 2, ty + imgH + gap * 0.5f, name, over ? EdText : EdMuted);
                 if (over)
                     _ui.Frame(tx, ty, tileW, tileH - gap, EdAccent, MathF.Max(1, s));

@@ -49,7 +49,7 @@ public sealed partial class OpenFDGame
                 }
         }
         foreach (Fire.HotPoint h in _session.Fire.HotPoints.Where(h => h.IsBurning))
-            Circle(h.Position, h.Class.LightingRange, new SN.Vector4(1f, 0.55f, 0.1f, 0.7f));
+            Circle(h.Position, FireWorld.SpreadRadiusFactor * h.Class.LightingRange, new SN.Vector4(1f, 0.55f, 0.1f, 0.7f));
         // unités : seulement celles qui sont choisies (sinon trop de cercles)
         foreach (Unit u in _session.Units.Active.Where(u => !u.IsVehicle && u.Nozzle != null && !u.Unconscious && _sel.Contains(u)))
         {

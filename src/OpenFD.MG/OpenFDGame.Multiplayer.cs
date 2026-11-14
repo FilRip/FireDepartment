@@ -23,6 +23,10 @@ public sealed partial class OpenFDGame
     private string _ipText = "";
     private int _textFocus;                      // 0 aucun, 1 pseudo, 2 adresse IP
     private int _netMissionIndex;
+    // liste des missions du serveur : première ligne montrée, barre de défilement tirée à la souris (décalage dans le curseur)
+    private int _netMissionScroll;
+    private bool _netScrollDrag;
+    private float _netScrollGrab;
     private bool _myReady;
     private double _lastHashStep = -1;
     private int _netLastProgress;
@@ -386,7 +390,7 @@ public sealed partial class OpenFDGame
         if (_campaign.FirstOrDefault(p => p.Dir.Equals(dir, StringComparison.OrdinalIgnoreCase)) is { } page)
             return $"{page.Number}. {Loc(page.NameKey)}";
         EnsureMissionList();
-        return _missions.FirstOrDefault(m => m.Dir.Equals(dir, StringComparison.OrdinalIgnoreCase))?.Title ?? dir;
+        return _allMissions.FirstOrDefault(m => m.Dir.Equals(dir, StringComparison.OrdinalIgnoreCase))?.Title ?? dir;
     }
 
     // missions proposées au serveur : la campagne dans l'ordre, puis les autres (installées)
@@ -395,7 +399,7 @@ public sealed partial class OpenFDGame
         EnsureCampaign();
         EnsureMissionList();
         List<string> list = _campaign.Select(p => p.Dir).ToList();
-        list.AddRange(_missions.Where(m => m.Playable).Select(m => m.Dir));
+        list.AddRange(_allMissions.Where(m => m.Playable).Select(m => m.Dir));
         return list.Where(d => _files.List("Gfx\\Mission\\" + d + "\\").Any()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
@@ -413,6 +417,7 @@ public sealed partial class OpenFDGame
         List<string> missions = NetMissions();
         _netMissionIndex = Math.Clamp(_netMissionIndex, 0, Math.Max(0, missions.Count - 1));
         _net.Mission = missions.Count > 0 ? missions[_netMissionIndex] : "";
+        _netMissionScroll = Math.Max(0, _netMissionIndex - 2);   // la mission choisie se voit en ouvrant la liste
         _net.Difficulty = Diffs[_menuDiff];
         _lanIp = NetAddresses.Lan();
         _wanIp = "…";
@@ -474,6 +479,58 @@ public sealed partial class OpenFDGame
     private float BtnH => _ui.LineHeight * 1.6f + 8 * _scale;
     private (float x, float y, float w, float h) BottomRight(int slot, float w) => (_fbW - NetMargin - (slot + 1) * w - slot * 12 * _scale, _fbH - NetMargin - BtnH, w, BtnH);
     private (float x, float y, float w, float h) BottomLeft(float w) => (NetMargin, _fbH - NetMargin - BtnH, w, BtnH);
+
+    // ---- défilement de la liste des missions du serveur : molette au-dessus de la liste, barre à droite (tirer le curseur,
+    // ou cliquer au-dessus ou au-dessous pour avancer d'une page) ----
+    private float NetScrollW(int count, int visible) => count > visible ? 16 * _scale : 0;
+
+    private (float x, float y, float w, float h) NetScrollTrack()
+    {
+        (float mx, float my, float mw, float mh) = HostMissionsRect();
+        float w = 16 * _scale;
+        return (mx + mw - w, my, w, mh);
+    }
+
+    private (float x, float y, float w, float h)? NetScrollThumb(int count, int visible)
+    {
+        if (count <= visible)
+            return null;
+        (float tx, float ty, float tw, float th) = NetScrollTrack();
+        float h = MathF.Max(24 * _scale, th * visible / count);
+        float y = ty + (th - h) * _netMissionScroll / Math.Max(1, count - visible);
+        return (tx, y, tw, h);
+    }
+
+    /// <summary>Molette et barre de défilement : la liste défile, la mission choisie ne change pas (false).</summary>
+    private bool NetMissionScrollInput(MouseState m, int count, int visible)
+    {
+        int max = Math.Max(0, count - visible);
+        (float fx, float fy) = Fb(m.X, m.Y);
+        int wheel = m.ScrollWheelValue - _mPrev.ScrollWheelValue;
+        if (wheel != 0 && Inside(HostMissionsRect(), fx, fy))
+            _netMissionScroll -= Math.Sign(wheel) * Math.Max(1, (int)MathF.Round(MathF.Abs(wheel) / 120f * 3));
+        if (NetScrollThumb(count, visible) is { } th)
+        {
+            (float tx, float ty, float tw, float tht) = NetScrollTrack();
+            bool press = m.LeftButton == ButtonState.Pressed && _mPrev.LeftButton == ButtonState.Released;
+            if (press && Inside((th.x, th.y, th.w, th.h), fx, fy))
+            {
+                _netScrollDrag = true;
+                _netScrollGrab = fy - th.y;
+            }
+            else if (press && Inside((tx, ty, tw, tht), fx, fy))
+                _netMissionScroll += fy < th.y ? -visible : visible;
+            if (_netScrollDrag && m.LeftButton == ButtonState.Pressed)
+            {
+                float k = (fy - _netScrollGrab - ty) / MathF.Max(1, tht - th.h);
+                _netMissionScroll = (int)MathF.Round(Math.Clamp(k, 0, 1) * max);
+            }
+        }
+        if (m.LeftButton == ButtonState.Released)
+            _netScrollDrag = false;
+        _netMissionScroll = Math.Clamp(_netMissionScroll, 0, max);
+        return false;
+    }
 
     private bool Clicked(MouseState m, (float x, float y, float w, float h) r)
     {
@@ -671,23 +728,34 @@ public sealed partial class OpenFDGame
         (float mx, float my, float mw, float mh) = HostMissionsRect();
         float rowH = _ui.LineHeight + 8 * _scale;
         int visible = Math.Max(1, (int)(mh / rowH));
-        int first = Math.Clamp(_netMissionIndex - visible / 2, 0, Math.Max(0, missions.Count - visible));
-        bool changed = false;
+        bool changed = NetMissionScrollInput(m, missions.Count, visible);
+        int first = _netMissionScroll;
+        float rowsW = mw - NetScrollW(missions.Count, visible);
         for (int i = 0; i < Math.Min(visible, missions.Count - first); i++)
-            if (Clicked(m, (mx, my + i * rowH, mw, rowH)))
+            if (Clicked(m, (mx, my + i * rowH, rowsW, rowH)))
             {
                 _netMissionIndex = first + i;
                 changed = true;
             }
+        bool key = false;
         if (Pressed(k, Keys.Down))
         {
             _netMissionIndex = Math.Min(missions.Count - 1, _netMissionIndex + 1);
-            changed = true;
+            key = true;
         }
         if (Pressed(k, Keys.Up))
         {
             _netMissionIndex = Math.Max(0, _netMissionIndex - 1);
+            key = true;
+        }
+        // au clavier : la mission choisie reste dans la partie visible de la liste
+        if (key)
+        {
             changed = true;
+            if (_netMissionIndex < _netMissionScroll)
+                _netMissionScroll = _netMissionIndex;
+            else if (_netMissionIndex >= _netMissionScroll + visible)
+                _netMissionScroll = _netMissionIndex - visible + 1;
         }
         for (int i = 0; i < 3; i++)
             if (Clicked(m, DifficultyRect(i, NetMargin + 120 * _scale, mx, mw)))
@@ -761,14 +829,23 @@ public sealed partial class OpenFDGame
         List<string> missions = NetMissions();
         float mrow = _ui.LineHeight + 8 * _scale;
         int visible = Math.Max(1, (int)(mh / mrow));
-        int first = Math.Clamp(_netMissionIndex - visible / 2, 0, Math.Max(0, missions.Count - visible));
+        _netMissionScroll = Math.Clamp(_netMissionScroll, 0, Math.Max(0, missions.Count - visible));
+        int first = _netMissionScroll;
+        float rowsW = mw - NetScrollW(missions.Count, visible);
         for (int i = 0; i < Math.Min(visible, missions.Count - first); i++)
         {
             int idx = first + i;
             float y = my + i * mrow;
             if (idx == _netMissionIndex)
-                _ui.Rect(mx, y, mw, mrow, new SN.Vector4(0.85f, 0.35f, 0.1f, 0.55f));
+                _ui.Rect(mx, y, rowsW, mrow, new SN.Vector4(0.85f, 0.35f, 0.1f, 0.55f));
             _ui.Text(mx + 12 * _scale, y + 4 * _scale, MissionTitle(missions[idx]), txt);
+        }
+        // barre de défilement : seulement si la liste ne tient pas
+        if (NetScrollThumb(missions.Count, visible) is { } th)
+        {
+            (float tx, float ty, float tw, float tht) = NetScrollTrack();
+            _ui.Rect(tx, ty, tw, tht, new SN.Vector4(0.12f, 0.12f, 0.15f, 0.95f));
+            _ui.Rect(th.x, th.y, th.w, th.h, _netScrollDrag ? new SN.Vector4(1f, 0.55f, 0.25f, 1) : new SN.Vector4(0.85f, 0.35f, 0.1f, 0.9f));
         }
         float bw = 230 * _scale;
         Button(BottomLeft(bw), L("&Back", "Retour"));

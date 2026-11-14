@@ -10,6 +10,9 @@ namespace OpenFD.MG;
 // menu principal (lancer une mission, charger une sauvegarde, options, quitter) et écran des options
 public sealed partial class OpenFDGame
 {
+    /// <summary>Numéro de la livraison (openfdN) : mention du menu principal et titre de l'éditeur.</summary>
+    internal const string BuildNumber = "186";
+
     private Settings _settings = new();
     private int _screen;          // 0 menu principal, 1 choix de la mission, 2 options, 3 pause, 4 sauvegardes, 9 choix du jeu
     private int _mainIndex, _optIndex;
@@ -150,6 +153,7 @@ public sealed partial class OpenFDGame
             Localization.Forced = _settings.Language;
             _loc = null;
             _missions.Clear();
+            _allMissions.Clear();
             _iniTexts.Clear();
         }
         UnitManager.Nationality = _settings.Nationality;
@@ -191,6 +195,7 @@ public sealed partial class OpenFDGame
         ExplosionSystem.ObjectiveTimeFactor = Math.Clamp(gp.ObjectiveTimeFactor, 0.1f, 20f);
         UnitManager.CarrySpeed = Math.Clamp(gp.CarrySpeed, 0.2f, 1f);
         UnitManager.OnlyOneOnLadder = gp.OnlyOneOnLadder;
+        OpenFD.Fire.FireWorld.SpreadRadiusFactor = Math.Clamp(gp.FireSpreadRadiusFactor, 0.1f, 5f);
         // ancienne valeur par défaut (1,6, trop lente) : remplacée par la nouvelle, trois fois plus rapide
         if (MathF.Abs(gp.ArrowShiftSpeed - OldArrowShift) < 0.001f)
             gp.ArrowShiftSpeed = new GameplaySettings().ArrowShiftSpeed;
@@ -674,7 +679,7 @@ public sealed partial class OpenFDGame
         if (_screen == 0)
         {
             // mention en bas à gauche du menu principal
-            const string copyright = "(C) 2026 CoolBytes - FilRip. Build 183";
+            const string copyright = "(C) 2026 CoolBytes - FilRip. Build " + BuildNumber;
             float cx = 18 * _scale, cy = _fbH - _ui.LineHeight - 16 * _scale;
             // blanc, avec une ombre noire pour rester lisible sur la vidéo du menu
             _ui.TextItalic(cx + 2 * _scale, cy + 2 * _scale, copyright, new SN.Vector4(0, 0, 0, 1));

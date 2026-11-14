@@ -258,7 +258,7 @@ public sealed partial class OpenFDGame
     private List<(string team, List<Unit> units)> PanelRows()
     {
         List<(string team, List<Unit> units)> rows = new List<(string team, List<Unit> units)>();
-        List<Unit> all = _session.Units.Units.Where(u => !u.Hidden).ToList();
+        List<Unit> all = _session.Units.Units.Where(u => !u.Hidden && !u.IsCivilianCar).ToList();   // (voitures civiles prises : pas dans la barre)
         foreach (string t in _session.Units.Teams)
             rows.Add((t, all.Where(u => u.TeamName == t).OrderBy(u => u.IsVehicle ? 0 : 1).ThenBy(u => u.Id).Take(PanelMax).ToList()));
         List<Unit> others = all.Where(u => u.TeamName == null || !_session.Units.Teams.Contains(u.TeamName)).OrderBy(u => u.IsVehicle ? 0 : 1).ThenBy(u => u.Id).Take(PanelMax).ToList();

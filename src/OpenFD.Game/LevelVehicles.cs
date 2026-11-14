@@ -56,6 +56,7 @@ public sealed partial class UnitManager
                 u.Fixed = true;
                 u.Speed = 0;
                 u.IsAmbulance = u.HealsUnits;
+                u.IsHelicopter = true;
             }
             Log.Add($"Véhicule du niveau : {o.Name} ({classRel}){(u.Fixed ? ", fixe" : "")}{(u.Hidden ? ", caché au départ" : "")}");
         }

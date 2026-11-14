@@ -610,6 +610,42 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 Console.WriteLine($"véhicule {vs[i].Name} ({vs[i].Position.X:0},{vs[i].Position.Y:0}) vie {vs[i].Life:0}/{vs[i].LifeMax:0}");
             SnapshotPoses();
         }
+        // essai : FD3_VOITURE=secondes → une unité à pied prend la voiture civile la plus proche et la conduit quelques mètres
+        // devant elle pendant ce temps ; la caméra regarde la voiture
+        if (_frame == 4 && Environment.GetEnvironmentVariable("FD3_VOITURE") is { } vsec && _session != null)
+        {
+            // (la cinématique du début peut ne commencer qu'après quelques secondes : on la passe dès qu'elle commence)
+            for (int i = 0; i < 300; i++)
+            {
+                _session.Step();
+                SkipCinematic();
+            }
+            UnitManager um = _session.Units;
+            for (int i = 0; i < 1200 && !um.Active.Any(u => !u.IsVehicle && !u.Moving); i++)
+                _session.Step();
+            Unit? man = um.Active.FirstOrDefault(u => !u.IsVehicle);
+            ExplosiveItem? car = man == null ? null : _session.Explosions.Items.Where(it => um.IsDrivableCar(it.Id)).OrderBy(it => SN.Vector3.Distance(it.Position, man.Position)).FirstOrDefault();
+            if (man != null && car != null && um.TakeCivilianCar(man, car.Id))
+            {
+                for (int i = 0; i < 1200 && !man.OnBoard; i++)
+                    _session.Step();
+                if (um.ById(car.Id) is { } cu)
+                {
+                    SN.Vector2 fwd = new SN.Vector2(MathF.Cos(cu.Heading), MathF.Sin(cu.Heading));
+                    um.Drive(cu, um.Paths.Walkable(new SN.Vector2(cu.Position.X, cu.Position.Y) + fwd * 1200));
+                    for (int i = 0; i < (int)(float.Parse(vsec, System.Globalization.CultureInfo.InvariantCulture) / Session.Dt); i++)
+                        _session.Step();
+                    SnapshotPoses();
+                    _sel.Clear();
+                    _sel.Add(cu);
+                    _target = cu.Position + new SN.Vector3(0, 0, 100);
+                    _dist = 1100;
+                    _pitch = 0.6f;
+                    _paused = true;
+                    Console.WriteLine($"voiture : {cu.Name} {cu.Status}, à bord {cu.Passengers.Count}");
+                }
+            }
+        }
         // essai : FD3_LANCE=1 → un pompier arrose le feu le plus proche ; la caméra le regarde de près
         if (_frame == 4 && Environment.GetEnvironmentVariable("FD3_LANCE") != null && _session != null)
         {
@@ -2304,6 +2340,17 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 SN.Vector3 vp = PoseOf(v, v.Position, v.Heading).p;
                 P(vp + new SN.Vector3(0, 0, 260), 300 + 200 * dmg, new SN.Vector4(0.9f, 0.35f, 0.08f, 0.06f), right, up);
                 FlamesAt(vp + new SN.Vector3(0, 0, 230), (1000f, SN.Vector2.Zero), 7919 + v.Id, 0.2f + 0.35f * dmg, time, right, up, 'A', 160, VehicleFireVolume, null);   // posé vers le toit, sinon caché dans la carrosserie
+                // d'autres feux ailleurs sur la carrosserie : un de plus à 40 %, 30 %, 20 % et 10 % de vie
+                float cos = MathF.Cos(v.Heading), sin = MathF.Sin(v.Heading);
+                for (int k = 0; k < VehicleExtraFlames.Length; k++)
+                {
+                    (float at, float fx, float fy) = VehicleExtraFlames[k];
+                    if (v.Life > v.LifeMax * at)
+                        break;
+                    SN.Vector3 off = new SN.Vector3(fx * cos - fy * sin, fx * sin + fy * cos, 210);
+                    float grow = Math.Clamp(1 - v.Life / (v.LifeMax * at), 0, 1);
+                    FlamesAt(vp + off, (1000f, SN.Vector2.Zero), 7919 + v.Id * 7 + k + 1, 0.18f + 0.25f * grow, time, right, up, 'A', 140, VehicleFireVolume, null);
+                }
             }
         foreach (HotPoint h in _session.Fire.HotPoints)
         {
@@ -2442,6 +2489,15 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
 
     private void Flames(HotPoint h, int seed, float k, float time, SN.Vector3 right, SN.Vector3 camUp) =>
         FlamesAt(h.Position, FireRoom(h), seed, k, time, right, camUp, h.Class.FireType, h.Class.LifeDamageRange, h.Class.Volume, h.Class.Fire1);
+
+    /// <summary>
+    /// Feux de plus sur un véhicule abîmé (en plus de celui du toit, dès la mi-vie) : part de vie où il s'allume, place
+    /// sur la carrosserie (cm, vers l'avant, vers la gauche).
+    /// </summary>
+    private static readonly (float at, float fx, float fy)[] VehicleExtraFlames =
+    {
+        (0.4f, 220, 0), (0.3f, -220, 0), (0.2f, 110, 80), (0.1f, -110, -80),
+    };
 
     /// <summary>Flammes d'un foyer (ou d'un véhicule en feu) posées en <paramref name="pos"/> ; room : place libre autour (murs).</summary>
     private void FlamesAt(SN.Vector3 pos, (float clear, SN.Vector2 away) room0, int seed, float k, float time, SN.Vector3 right, SN.Vector3 camUp,

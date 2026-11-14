@@ -146,7 +146,9 @@ public sealed partial class UnitManager
         else if (!v.CriticalWarned && v.LifeMax > 0 && v.Life <= v.LifeMax * CriticalWarning)
         {
             v.CriticalWarned = true;
-            Sounds.Add(("VOCAL_VEHICLE_CRITICAL", v.Position));
+            // voiture civile : pas d'annonce (ce n'est pas un véhicule des pompiers)
+            if (!v.IsCivilianCar)
+                Sounds.Add(("VOCAL_VEHICLE_CRITICAL", v.Position));
             Log.Add($"{_s.Time,6:0} s : {v.Name} est presque détruit ({100 * v.Life / v.LifeMax:0} %)");
         }
         if (v.Life > 0)
@@ -164,8 +166,11 @@ public sealed partial class UnitManager
                     p.InVehicle = null;
             v.Passengers.Clear();
         }
-        Sounds.Add(("VOCAL_VEHICLE_KILLED", v.Position));
         Log.Add($"{_s.Time,6:0} s : {v.Name} est détruit, hors service jusqu'à la fin de la mission");
+        // voiture civile : ni « vous venez de perdre un de vos véhicules », ni le script des véhicules perdus
+        if (v.IsCivilianCar)
+            return;
+        Sounds.Add(("VOCAL_VEHICLE_KILLED", v.Position));
         if (_s.Scripts?.HasFunction("OnVehicleDeath") == true)
             _s.Scripts.TryRun("OnVehicleDeath", Value.I(v.Id));
     }

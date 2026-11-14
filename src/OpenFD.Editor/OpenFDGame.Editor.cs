@@ -38,6 +38,9 @@ public sealed partial class OpenFDGame
     private static readonly SN.Vector4 EdHover = new(0.28f, 0.28f, 0.33f, 1);
     private static readonly SN.Vector4 EdError = new(1f, 0.35f, 0.3f, 1);
 
+    /// <summary>Titre de la fenêtre : « Open Fire Department Build N - » puis le titre traduit (languages\*.ini, clé Title).</summary>
+    private static string EdWindowTitle => $"Open Fire Department Build {BuildNumber} - {Tr("Title", "Éditeur de missions")}";
+
     private static string Tr(string key, string french) => EditorText.T(key, french);
     private static string Tr(string key, string french, params object?[] args) => EditorText.T(key, french, args);
 
@@ -81,7 +84,7 @@ public sealed partial class OpenFDGame
         _edStatus = Tr("StatusStart", "Cliquez sur « Charger » pour ouvrir une mission, ou « Nouveau » pour en créer une.");
         _miniHidden = true;   // mini-carte cachée au départ (touche M)
         _paused = true;
-        Window.Title = Tr("Title", "Open Fire Department - éditeur de missions");
+        Window.Title = EdWindowTitle;
         try
         {
             _edCatalog = EditorCatalog.Build(_files);
@@ -591,6 +594,34 @@ public sealed partial class OpenFDGame
     }
 
     /// <summary>Texte coupé (« … ») pour tenir dans la largeur.</summary>
+    // nom qui défile sous la souris : celui survolé, depuis quand
+    private string? _edMarqueeKey;
+    private double _edMarqueeAt;
+
+    /// <summary>
+    /// Nom à afficher dans <paramref name="w"/> : coupé (« ... ») s'il est trop long ; survolé par la souris, il défile
+    /// (une lettre de plus à gauche tous les 0,12 s, après une pause, jusqu'à la fin du nom, puis il recommence).
+    /// </summary>
+    private string EdMarquee(string s, float w, bool hover, string key)
+    {
+        if (!hover || _ui.Measure(s) <= w)
+            return EdFit(s, w);
+        if (_edMarqueeKey != key)
+        {
+            _edMarqueeKey = key;
+            _edMarqueeAt = _edClock;
+        }
+        // nombre de lettres à enlever au début pour que la fin du nom tienne
+        int steps = 0;
+        while (steps < s.Length - 1 && _ui.Measure(s[steps..]) > w)
+            steps++;
+        const double Pause = 0.8, Step = 0.12, End = 1.0;
+        double cycle = Pause + steps * Step + End;
+        double t = (_edClock - _edMarqueeAt) % cycle;
+        int k = t < Pause ? 0 : Math.Min(steps, (int)((t - Pause) / Step));
+        return EdFit(s[k..], w);
+    }
+
     private string EdFit(string s, float w)
     {
         if (_ui.Measure(s) <= w)

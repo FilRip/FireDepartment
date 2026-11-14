@@ -39,6 +39,19 @@ public sealed class Unit
     public bool FromLevel;
     /// <summary>Ne roule pas (l'hélicoptère sanitaire : le script le fait atterrir et décoller).</summary>
     public bool Fixed;
+    /// <summary>
+    /// Voiture civile du décor qu'un pompier a prise (CivilianCars.cs) : on la conduit comme un véhicule de pompiers, sans
+    /// sirène, seulement avec quelqu'un au volant ; elle n'est pas dans la barre des équipes.
+    /// </summary>
+    public bool IsCivilianCar;
+    /// <summary>
+    /// Hélicoptère du niveau ([UNIT] Type = HELICO) qui arrive (animation d'atterrissage du jeu) ou repart (décollage) :
+    /// jusqu'à cet instant, il ne sert pas d'ambulance ; reparti, il est caché (Helicopters.cs).
+    /// </summary>
+    public bool IsHelicopter;
+    public bool HeliLanding, HeliLeaving;
+    public float HeliUntil;
+    public bool HeliAmbulance, HeliHeals;
     public Civilian? GoTo;                                // civil vers lequel l'unité se dirige
     public Civilian? Carrying;                            // civil inconscient porté sur le dos
     public CarryPhase Carry;
