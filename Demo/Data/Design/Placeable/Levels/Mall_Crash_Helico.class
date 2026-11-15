@@ -1,0 +1,10 @@
+[#INCLUDE]
+FILE0 = "base_levels.class"
+
+[DISPLAY]
+SHADOWTYPE = NONE
+MODEL = helico_e1
+
+[DAMAGE]
+NBDAMAGESTEPS = 2
+USEDAMAGE = 1

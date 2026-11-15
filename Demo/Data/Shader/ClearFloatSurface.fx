@@ -1,0 +1,31 @@
+
+float4 ClearColor;
+
+///////////////////////////////////////////////////////////////////////////////
+struct PSIn
+{
+
+};
+
+struct PSOut
+{
+	float4 Col : COLOR0;
+};
+
+PSOut PS(PSIn In)
+{
+	PSOut Out;
+
+	Out.Col = ClearColor;
+
+	return Out;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+technique t0
+{
+	pass p0
+	{
+		PixelShader = compile ps_2_0 PS();
+	}
+}

@@ -1,0 +1,15 @@
+[#INCLUDE]
+FILE0="base_sound.class"
+
+;===================
+[SOUND]
+;===================
+SoundType  = STATIC_SOUND
+Label      = ""
+Range_Min      = 500
+Range_Min#TYPE = FLOAT 0 9999999
+Range_Max      = 1000
+Range_Max#TYPE = FLOAT 0 9999999
+Volume      = 100  
+Volume#TYPE = INT 0 100
+

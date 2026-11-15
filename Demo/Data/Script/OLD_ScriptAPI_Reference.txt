@@ -1,0 +1,699 @@
+
+
+
+
+// =========================
+// SYNCHRO
+// =========================
+
+// !!! Note !!! : these functions are only available in LATENT scripts
+
+// -------------------------------------------------------------------------
+s32 SYNC_WaitTime( f32& _fDuree)
+// -------------------------------------------------------------------------
+    // Stop script execution
+    // _fDuree : duration in seconds (float)
+
+// -------------------------------------------------------------------------
+s32 SYNC_WaitInterfaceEvent( mcString& _strEvent)
+// -------------------------------------------------------------------------
+    // Stop script execution until specified interface event
+    // _strEvent : interface event name
+    //         SELECT
+    //         TARGET   
+    //         REQUEST_STATE
+    //         CAMERA_MODE    
+    //         CONTACT_BRIEFING_END    
+    //         HOVER  
+    //         LEAVE    
+    //         START_CAMPAIGN    
+    //         START_CINEMATIC_INTRO    
+    //         START_CINEMATIC_BEGIN    
+    //         START_CINEMATIC_END    
+    //         END_CINEMATIC    
+    //         START_MISSION    
+    //         EXIT_PROGRAM    
+    //         ERROR
+    //         MISSION_COMPLETED
+
+// -------------------------------------------------------------------------
+s32 SYNC_WaitCharacterEvent( mcString& _strEntityName, mcString& _strEvent)
+s32 SYNC_WaitFournitureEvent( mcString& _strEntityName, mcString& _strEvent)
+// -------------------------------------------------------------------------
+    // Stop script execution until specified entity event
+    // _strEntityName : entity private name 
+    // _strEvent : entity event name 
+    //            TRAINING_REQUEST
+    //            NEED_EFFECT_STARTING
+    //            NEED_EFFECT_STOPING
+    //            TASK_EFFECT_STARTING
+    //            TASK_EFFECT_STOPING
+    //            PASSION_EFFECT_STARTING
+    //            PASSION_EFFECT_STOPING
+    //            EFFECT_INTERRUPTED
+    //            ACTION_START
+    //            ACTION_END
+    //            ACTION_INTERRUPT
+    //            BODY_ADD_CLOTH
+    //            BODY_REMOVE_CLOTH
+    //            BODY_MORPH
+    //            BODY_HEAD
+    //            BODY_SKIN
+    //            BODY_HAIR
+    //            ZONE_ADD_ENTITY
+    //            ZONE_REMOVE_ENTITY
+    //            REMOVE_ENTITY_REQUEST
+    //            ROOM_WALLCLASS
+    //            ROOM_FLOORCLASS
+    //            ROOM_OPENING
+    //            ROOM_POSITION
+
+// -------------------------------------------------------------------------
+s32 SYNC_WaitCharacterEmptyPlayList( mcString& _strEntityName)
+s32 SYNC_WaitContactEmptyPlayList( mcString& _strEntityName)
+// -------------------------------------------------------------------------
+    // Stop script execution until entity animation playlist is empty
+    // _strEntityName : entity private name 
+
+
+
+// =========================
+// ENTITY POSITION
+// =========================
+
+// -------------------------------------------------------------------------
+s32  ENTITY_GetPosition( mcString& _strEntityName, f32& _fX, f32& _fY)
+// -------------------------------------------------------------------------
+    // Get current entity position (in centimeter)
+    // _strEntityName : Entity private name
+    // _fX, _fY : current position (float)
+
+// -------------------------------------------------------------------------
+void ENTITY_SetPosition (mcString& _strEntityName, f32& _fX, f32& _fY)
+// -------------------------------------------------------------------------
+    // Fix entity position (in centimeter)
+    // _strEntityName : Entity private name
+    // _fX, _fY : new position (float)
+
+// -------------------------------------------------------------------------
+s32  ENTITY_GetGridPosition( mcString& _strEntityName, s32& _sX, s32& _sY)
+// -------------------------------------------------------------------------
+    // Get current entity grid position
+    // _strEntityName : Entity private name
+    // _sX, _sY : current grid position
+
+// -------------------------------------------------------------------------
+void ENTITY_SetGridPosition (mcString& _strEntityName, s32& _sX, s32& _sY)
+// -------------------------------------------------------------------------
+    // Fix entity grid position
+    // _strEntityName : Entity private name
+    // _sX, _sY : new grid position
+
+// -------------------------------------------------------------------------
+void ENTITY_SetOrientation (mcString& _strEntityName, mcString& _strOrientation)
+// -------------------------------------------------------------------------
+    // Fix entity orientation
+    // _strEntityName : Entity private name
+    // _strOrientation : NORTH, SOUTH, EAST, WEST
+
+// -------------------------------------------------------------------------
+void ENTITY_Turn (mcString& _strEntityName, mcString& _strOrientation)
+// -------------------------------------------------------------------------
+    // Rotate entity
+    // _strEntityName : Entity private name
+    // _strOrientation : R -> for a right turn
+    //                   L -> for a left turn
+    //                   B -> for a half turn
+
+// -------------------------------------------------------------------------
+void ENTITY_SetZ (mcString& _strEntityName, f32& _fZ)
+// -------------------------------------------------------------------------
+    // Fix entity Z position (in centimeter)
+    // _strEntityName : Entity private name
+    // _fZ : new Z position (float)
+
+
+// =========================
+// ENTITY ACCESS
+// =========================
+// -------------------------------------------------------------------------
+s32 GetEntityUID(mcString& _strEntityName)
+// -------------------------------------------------------------------------
+	//return the UID of the entity named _strEntityName
+// -------------------------------------------------------------------------
+s32 GetEntityUIDNoWarning(mcString& _strEntityName)
+// -------------------------------------------------------------------------
+	//same function as above, but with no warning if the object does not exist.
+
+// -------------------------------------------------------------------------
+s32  ENTITY_FindByClassName ( mcString _strClassName )
+// -------------------------------------------------------------------------
+	// Returns the entity ID of an item by specifying its class name.
+	// If there are multiple occurences of that item, the first one is
+	// returned.
+	// _strClassName : Classname.
+
+
+
+// =========================
+// EVENTS
+// =========================
+
+// -------------------------------------------------------------------------
+void SendEvent ( mcString _strEventType, s32 _sEntityUID)
+// -------------------------------------------------------------------------
+	// Note : only 'RemoveEntity' event is supported
+
+// -------------------------------------------------------------------------
+s32 IsInterfaceEventOccured (mcString& _Param1)
+// -------------------------------------------------------------------------
+	// name of the event
+	// return 1 if event occured
+
+// -------------------------------------------------------------------------
+void SendInterfaceEvent (mcString& _strEventName)
+// -------------------------------------------------------------------------
+
+
+
+// =========================
+// CAMERAS
+// =========================
+
+// -------------------------------------------------------------------------
+void SetCameraOnEntity ( s32 _sEntityUID, f32 _fZoom)
+// -------------------------------------------------------------------------
+
+// -------------------------------------------------------------------------
+void SetCamera ( mcString _strWaypointName, f32 _fTravellingTime)
+// -------------------------------------------------------------------------
+	// WaypointName   : waypoint private name
+	// TravellingTime : travelling time
+
+// -------------------------------------------------------------------------
+void SetCameraPosition ( f32 _X, f32 _Y, f32 _Z, f32 _TargetX, f32 _TargetY, f32 _TargetZ, s32 _bInterpolation)
+// -------------------------------------------------------------------------
+	// X,Y,Z          : Camera position
+	// TargetX,Y,Z    : Camera target position
+	// Interpolation  : 0 no interpolation, 1 use interpolation
+
+// -------------------------------------------------------------------------
+void SetCameraMode ( s32 _sCameraMode)
+// -------------------------------------------------------------------------
+	// CameraMode : 0 FREE, 1 PLAY_DEV, 2 PLAY, 3 PURSUIT, 4 TRACK, 5 CINEMATIC 
+
+
+
+// =========================
+// CINEMATICS
+// =========================
+
+// -------------------------------------------------------------------------
+void CIN_FadeOut( f32& _fduration, s32& _stayBlack)
+// -------------------------------------------------------------------------
+	//fade from normal screen to black screen in _fduration secondes
+	//_stayBlack : 1 keep black screen, 0 : fade out
+
+// -------------------------------------------------------------------------
+void CIN_FadeIn( f32& _fduration)
+// -------------------------------------------------------------------------
+	//fade from black screen to normal screen in _fduration secondes
+
+// -------------------------------------------------------------------------
+s32  CIN_PrintSubtitle( mcString& _strSpeaker, mcString& _strText)
+// -------------------------------------------------------------------------
+	// _strSpeaker : Speaker name keyloc
+	// _strText    : Text key loc
+	// (return nothing)
+
+// -------------------------------------------------------------------------
+s32  CIN_ClearSubtitle()
+// -------------------------------------------------------------------------
+    // Clear current speaker name and subtitle
+	// (return nothing)
+
+
+
+// =========================
+// PANELS (INTERFACE)
+// =========================
+
+// -------------------------------------------------------------------------
+void PANEL_SetInterfaceMode( mcString& _strMode)
+// -------------------------------------------------------------------------
+    // Change interface mode
+	// _strMode : new mode
+    //        PLAY
+    //        BUY
+    //        BUILDER
+    //        SHOW
+    //        CINEMATICS
+    //        CHOREGRAPHY
+    //        DANCERS
+    //        DRESSING
+    //        GARDEN
+    //        CONTACTS
+
+// -------------------------------------------------------------------------
+void PANEL_ShowBriefingPanelCall(mcString& _LockKey)
+// -------------------------------------------------------------------------
+	// show the breifing panel with comment : _LockKey
+
+
+// -------------------------------------------------------------------------
+void PANEL_SetSpecialBackground( mcString& _BackgroundName)
+// -------------------------------------------------------------------------
+void PANEL_ClearSpecialBackground()
+// -------------------------------------------------------------------------
+	// Activate/Desactivate a special page background
+    // Warning : you must call PANEL_ClearSpecialBackground before displaying a new panel/page
+
+
+// =========================
+// CONTACT / CHARACTER
+// =========================
+
+
+// -------------------------------------------------------------------------
+void AddMoveAction( mcString& _strActor, s32& _sX, s32& _sY)
+// -------------------------------------------------------------------------
+	//_strActor  : private name of entity to perform the action
+	//_sX : coord x of the square destination in the Grid
+	//_sY : coord y of the square destination in the Grid
+
+
+// -------------------------------------------------------------------------
+void AddAction( mcString& _strActor, mcString& _strAction, mcString& _strTarget)
+// -------------------------------------------------------------------------
+	//_strActor  : private name of entity to perform the action
+	//_strAction : name of the action on the item or Perso
+	//_strTarget : name of the item or Perso target of the action
+
+// -------------------------------------------------------------------------
+void FlushAction( mcString& _strActor)
+// -------------------------------------------------------------------------
+	//_strActor : private name of entity to interrupt
+	//this fonction flush the action stack
+
+// -------------------------------------------------------------------------
+void InterruptAction( mcString& _strActor)
+// -------------------------------------------------------------------------
+	//_strActor : private name of entity to interrupt
+	//this fonction stop the action, and flush the animation associated !
+
+// -------------------------------------------------------------------------
+void StopAction(mcString& _strActor)
+// -------------------------------------------------------------------------
+	//_strActor : private name of entity to interrupt
+	//this fonction stop the action, butlet the animation associeted until end !
+
+
+// -------------------------------------------------------------------------
+s32 IsContactPlayListEmpty (s32& _Param1)
+// -------------------------------------------------------------------------
+	//_param1 : entity's ID
+	// return 1 if playlist is empty
+
+// -------------------------------------------------------------------------
+s32 IsCharacterPlayListEmpty (s32& _Param1)
+// -------------------------------------------------------------------------
+	//_param1 : entity's ID
+	// return 1 if playlist is empty
+
+// -------------------------------------------------------------------------
+void AddFaceAnimToActor(mcString& _strActorName, mcString& _strAnimName, s32& _sMode)
+// -------------------------------------------------------------------------
+	//_strActorName : private name of entity
+	//_strAnimName : anim name
+	//_sMode : -1 LOOP, 0 HOLD, (1 ... n) REPEAT
+
+// -------------------------------------------------------------------------
+void NextFaceActorAnim(mcString& _strActorName)
+// -------------------------------------------------------------------------
+	//_strActorName : private name of entity
+
+// -------------------------------------------------------------------------
+void FlushFaceActorAnimPlayList(mcString& _strActorName)
+// -------------------------------------------------------------------------
+	//_strActorName : private name of entity
+
+
+// -------------------------------------------------------------------------
+void AddAnimToActor(mcString& _strActorName, mcString& _strAnimeName, s32& _sMode)
+// -------------------------------------------------------------------------
+	//_strActorName : private name of entity
+	//_strAnimName : anim name
+	//_sMode : -1 LOOP, 0 HOLD, (1 ... n) REPEAT
+
+// -------------------------------------------------------------------------
+void NextActorAnim(mcString& _strActorName)
+// -------------------------------------------------------------------------
+	//_strActorName : private name of entity
+
+// -------------------------------------------------------------------------
+void FlushActorAnimPlayList(mcString& _strActorName)
+// -------------------------------------------------------------------------
+	//_strActorName : private name of entity
+
+// -------------------------------------------------------------------------
+void AddAnimToItem(mcString& _strItemName, mcString& _strAnimeName, s32& _sMode)
+// -------------------------------------------------------------------------
+	//_strItemName : private name of entity
+	//_strAnimName : anim name
+	//_sMode : -1 LOOP, 0 HOLD, (1 ... n) REPEAT
+
+// -------------------------------------------------------------------------
+void FlushItemAnimPlayList(mcString& _strItemName)
+// -------------------------------------------------------------------------
+	//_strItemName : private name of entity
+
+// =========================
+// SOUND
+// =========================
+
+// -------------------------------------------------------------------------
+void SOUND_EnableAmbientShuffle(s32& _Enable);
+// -------------------------------------------------------------------------
+	// enables or disables the ambient music shuffle
+
+// -------------------------------------------------------------------------
+void SOUND_PlayMusic(mcString& _strStreamMusic);
+// -------------------------------------------------------------------------
+	// read stream music
+
+// -------------------------------------------------------------------------
+void SOUND_StopMusic();
+
+
+// -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+void SOUND_SetMusicVolume(f32& _fVolume);
+// -------------------------------------------------------------------------
+	// f32 volume of music
+
+
+// -------------------------------------------------------------------------
+void SOUND_PlaySound2D(mcString& _strSoundLabel);
+// -------------------------------------------------------------------------
+	// _strSoundLabel : Label of the sound to play
+
+// -------------------------------------------------------------------------
+void SOUND_FadeSound2D(mcString& _strSoundLabel, f32& _fDuration);
+// -------------------------------------------------------------------------
+	// _strSoundLabel : Label of the sound to fade
+	// _fDuration : duration of fade
+
+// -------------------------------------------------------------------------
+void SOUND_StopSound2D(mcString& _strSoundLabel);
+// -------------------------------------------------------------------------
+	// _strSoundLabel : Label of the sound to stop
+
+
+
+// =========================
+// IA
+// =========================
+
+// -------------------------------------------------------------------------
+void DisableIA()
+// -------------------------------------------------------------------------
+
+// -------------------------------------------------------------------------
+void EnableIA()
+// -------------------------------------------------------------------------
+
+
+
+// =========================
+// CHOREGRAPHY
+// =========================
+
+// -------------------------------------------------------------------------
+mcBool ClearChoregraphy ()
+// -------------------------------------------------------------------------
+
+// -------------------------------------------------------------------------
+mcBool AddGoodyMusic  ( mcString _strGoodyName)
+// -------------------------------------------------------------------------
+
+// -------------------------------------------------------------------------
+mcBool AddGoodyStep   ( s32 _sLine, s32 _sStep, mcString _strGoodyName)
+mcBool AddGoodyEffect ( s32 _sLine, s32 _sStep, mcString _strGoodyName)
+// -------------------------------------------------------------------------
+	// Line      : choregraphy line ( 1 - 3 )
+	// Step      : line step ( 1 - 8 )
+	// GoodyName : goody class name
+
+
+
+// =========================
+// WIDGET & TUTORIAL
+// =========================
+
+// -------------------------------------------------------------------------
+void WIDGET_TutorialPrompt ( mcString _strText, s32 _sShowOkButton, s32 _sModal)
+// -------------------------------------------------------------------------
+	// Displays the tutorial non-modal message box
+	// _strText	: Text to be displayed. if starting with '&', _strText
+	//		  is considered as a localization key.
+	// _sShowOkButton : To display/hide the "Ok" button.
+	// _sModal : Panel is modal or not
+
+// -------------------------------------------------------------------------
+void WIDGET_SetText ( mcString _strWidgetName, mcString _strText )
+// -------------------------------------------------------------------------
+	// Displays the tutorial non-modal message box
+	// _strWidgetName : Name of the target widget.
+	// _strText	: Text to be displayed. if starting with '&', _strText
+	//		  is considered as a localization key.
+
+// -------------------------------------------------------------------------
+void WIDGET_SetVisible ( mcString _strWidgetName, s32 _bVisible )
+// -------------------------------------------------------------------------
+	// Show or hide a widget (and its children).
+	// _strWidgetName : Name of the target widget.
+	// _bVisible	: 0 to hide, 1 to show the widget.
+
+// -------------------------------------------------------------------------
+void WIDGET_SetEnable ( mcString _strWidgetName, s32 _bEnable )
+// -------------------------------------------------------------------------
+	// Enable or disable a widget (and its children).
+	// _strWidgetName : Name of the target widget.
+	// _bEnable 	: 0 to disable, 1 to enable the widget.
+
+// -------------------------------------------------------------------------
+void WIDGET_SetPosition ( mcString _strWidgetName, f32 _fX, f32 _fY )
+// -------------------------------------------------------------------------
+	// Move a widget to the desired location.
+	// _strWidgetName : Name of the target widget.
+	// _fX, _fY 	: Coordinates of the desired location for the widget,
+	//		  expressed in pixels. The origin of the screen is
+	//		  the top left corner.
+
+// -------------------------------------------------------------------------
+void WIDGET_SetPositionRelative ( mcString _strWidgetName, f32 _fX, f32 _fY, mcString _strRefWidgetName )
+// -------------------------------------------------------------------------
+	//  Same as WIDGET_SetPosition except the x and y coordinates of
+	//  _strRefWidgetName are added. Used for high resolution settings
+	//  in page displays
+
+// -------------------------------------------------------------------------
+s32  SYNC_WaitWidgetEvent( mcString _strWidget, mcString _strEvent )
+// -------------------------------------------------------------------------
+
+// -------------------------------------------------------------------------
+s32  WIDGET_IsInterfaceEventOccured ( mcString _strWidgetName, mcString _strEvent )
+// -------------------------------------------------------------------------
+	// Returns 1 if the specified event occurred on the specified widget.
+	// Otherwise, returns 0.
+	// _strWidgetName : Name of the target widget.
+	// _strEvent 	: Event to look for, can be : "WidgetActionDown",
+	//		  "WidgetActionUp", "WidgetOverRoll", "WidgetBecomeVisible"
+	//		  and "WidgetBecomeEnable".
+
+// -------------------------------------------------------------------------
+void WIDGET_Highlight ( mcString _strWidgetName, s32 _bOneShot )
+// -------------------------------------------------------------------------
+	// Displays a blinking texture over the specified widget.
+	// _strWidgetName : Name of the target widget.
+	// _bOneShot 	: if 1, the blinking occurs only one time.
+	//		  Otherwise, it loops.
+
+// -------------------------------------------------------------------------
+void WIDGET_StopHighlight ( mcString _strWidgetName )
+// -------------------------------------------------------------------------
+	// Hides the blinking texture over the specified widget.
+	// _strWidgetName : Name of the target widget.
+
+// -------------------------------------------------------------------------
+s32  SYNC_WaitBuilderEvent( mcString _rstrEvent, mcString _strObject )
+// -------------------------------------------------------------------------
+	// Returns when the specified event occurred on the specified widget.
+	// _rstrEvent	: Event to look for, can be : "RoomCreated",
+	//		  "ItemBought", "FloorChanged", "DoorBought",
+	//		  "WindowBought" or "WallpaperChanged".
+	// _rstrObject	: if "ItemBought" is the event to look for, _rstrObject
+	//		  can be used to specify the object to be bought.
+	// 		  if _rstrObject is "" then the event occurs whatever
+	// 		  object has been bought.
+
+// -------------------------------------------------------------------------
+s32  BUILDER_IsEventOccured ( mcString _rstrEvent, mcString _rstrObject )
+// -------------------------------------------------------------------------
+	// Returns 1 if the specified event occurred on the specified widget.
+	// Otherwise, returns 0.
+	// _rstrEvent	: Event to look for, can be : "RoomCreated",
+	//		  "ItemBought" or "WallpaperChanged".
+	// _rstrObject	: if "ItemBought" is the event to look for, _rstrObject
+	//		  can be used to specify the object to be bought.
+	// 		  if _rstrObject is "" then the event occurs whatever
+	// 		  object has been bought.
+
+// -------------------------------------------------------------------------
+void BUILDER_SetRoomRange ( f32 _fMin, f32 _fMax)
+// -------------------------------------------------------------------------
+	// Sets the min and max size allowed for room creation.
+	// _fMin	: Minimum size.
+	// _fMax	: Guess!
+
+// -------------------------------------------------------------------------
+void ACTOR_SetNeed ( mcString _strActor, mcString _strNeed, f32 _fValue )
+// -------------------------------------------------------------------------
+	// Sets the specified need of the specified actor to the specified
+	// value.
+	// _strActor	: Actor to set need. 
+	// _strNeed	: Need to set.
+	// _fValue	: New value for the need.
+
+// -------------------------------------------------------------------------
+s32  SYNC_WaitActionSelected( mcString _strAction )
+// -------------------------------------------------------------------------
+	// Returns when the specified action has been selected.
+	// _strAction	: Action (on a character or item) to be selected.
+
+// -------------------------------------------------------------------------
+s32  ACTION_IsEventOccured ( mcString _strAction )
+// -------------------------------------------------------------------------
+	// Returns 1 if the specified action has been selected.
+	// Otherwise, returns 0.
+	// _strAction	: Action (on a character or item) to be selected.
+
+// -------------------------------------------------------------------------
+s32  SYNC_WaitGoodySelected( mcString _strGoody )
+// -------------------------------------------------------------------------
+	// Returns when the specified goody has been selected.
+	// _strGoody 	: Goody to be selected.
+
+// -------------------------------------------------------------------------
+s32  ACTION_IsGoodySelected ( mcString _strGoody )
+// -------------------------------------------------------------------------
+	// Returns 1 if the specified goody has been selected.
+	// Otherwise, returns 0.
+	// _strGoody 	: Goody to be selected.
+
+// -------------------------------------------------------------------------
+s32  SYNC_WaitTrainingCompleted()
+// -------------------------------------------------------------------------
+	// Returns when all tasks of the current training have been completed.
+
+// -------------------------------------------------------------------------
+s32  SYNC_WaitTaskCompleted( mcString _strTask )
+// -------------------------------------------------------------------------
+	// Returns when the specified task has been completed.
+	// _rstrTask 	: Task to be completed.
+
+// -------------------------------------------------------------------------
+s32  TASK_IsEventOccured ( mcString& _rstrTask )
+// -------------------------------------------------------------------------
+	// Returns 1 if the specified task has been completed.
+	// Otherwise, returns 0.
+	// _rstrTask 	: Task to be completed.
+
+// -------------------------------------------------------------------------
+f32  BAND_GetPassion ()
+// -------------------------------------------------------------------------
+	// Returns the value of the public's passion for the Band.
+
+//-----------------------------------------------------------------------------
+void BAND_SetPassion ( f32& _rfValue )
+// -------------------------------------------------------------------------
+	// Sets the value of the public's passion for the Band.
+	// _rfValue 	: New passion value.
+
+//-----------------------------------------------------------------------------
+void WIDGET_HighlightLB ( mcString& _rstrWidget, s32& _rsLine, s32& _rsCol, s32& _rbOneShot )
+//-----------------------------------------------------------------------------
+	// Displays a blinking texture over the specified listBox element.
+	// _strWidget	: Name of the target listbox.
+	// _rsLine	: Line of the listbox element to be highlighted.
+	// _rsCol	: Column of the listbox element to be highlighted.
+	// _bOneShot 	: if 1, the blinking occurs only one time.
+	//		  Otherwise, it loops.
+
+//-----------------------------------------------------------------------------
+void WIDGET_StopHighlightLB ( mcString& _rstrWidget, s32& _rsLine, s32& _rsCol )
+//-----------------------------------------------------------------------------
+	// Hides the blinking texture over the specified listBox element.
+	// _strWidget	: Name of the target listbox.
+	// _rsLine	: Line of the listbox element to be highlighted.
+	// _rsCol	: Column of the listbox element to be highlighted.
+
+//-----------------------------------------------------------------------------
+s32  WIDGET_IsInterfaceEventOccuredLB ( mcString& _rstrWidget, s32& _rsLine, s32& _rsCol, mcString& _rstrEvent)
+//-----------------------------------------------------------------------------
+	// Returns 1 if the specified event occurred on the specified widget.
+	// Otherwise, returns 0.
+	// _strWidget	: Name of the target listbox.
+	// _rsLine	: Line of the listbox element to be highlighted.
+	// _rsCol	: Column of the listbox element to be highlighted.
+	// _strEvent 	: Event to look for, can be : "WidgetActionDown",
+	//		  "WidgetActionUp", "WidgetOverRoll", "WidgetBecomeVisible"
+	//		  and "WidgetBecomeEnable".
+
+//-----------------------------------------------------------------------------
+void    BUILDER_SetAtmosphereEnable( s32& _rbEnable)
+//-----------------------------------------------------------------------------
+	// Enables or disables the room style panel.
+
+//-----------------------------------------------------------------------------
+void    BUILDER_SetBuilderNavigationEnables32& _rbEnable)
+//-----------------------------------------------------------------------------
+	// Enables or disables the builder navigation system
+
+//-----------------------------------------------------------------------------
+void    BAND_SetPassionEnable( s32& _rbEnable)
+//-----------------------------------------------------------------------------
+	// Enables or disables the passion system (Passion decrease and impact on
+	// the Contact button.)
+
+//-----------------------------------------------------------------------------
+void    WIDGET_SetKeyboardFocus( mcString& _rstrWidget, s32& _rsFocus)
+//-----------------------------------------------------------------------------
+	// Gives/releases the keyboard focus to/from an EditBox.
+	// _rstrWidget	: Name of the target editbox.
+	// _rsFocus	: 1 to give the focus, 0 to release it.
+
+//-----------------------------------------------------------------------------
+s32  SYNC_WaitTrainingCompleted()
+//-----------------------------------------------------------------------------
+	// Wait for a training to complete.
+
+//-----------------------------------------------------------------------------
+s32  SYNC_WaitMissionCompleted()
+//-----------------------------------------------------------------------------
+	// Wait for all the objectives of the current mission to be completed.
+
+//-----------------------------------------------------------------------------
+void	 IA_SetPathFollowingActivate ( mcString& _strEntityName, s32& _sVal )
+//-----------------------------------------------------------------------------
+	// if _val = 0 desactivate _strEntityName's PathFollowing (perso don't avoid other perso moving)
+
+//-----------------------------------------------------------------------------
+void	 IA_SetPathFindingActivate ( mcString& _strEntityName, s32& _sVal )
+//-----------------------------------------------------------------------------
+	// if _val = 0 desactivate _strEntityName's PathFinding (perso move in straight line)
+
+// -------------------------------------------------------------------------
+void    BUILDER_EnableSellItem( s32 _sEnable)
+// -------------------------------------------------------------------------
+	// Enable/Disable the possibility to sell items...

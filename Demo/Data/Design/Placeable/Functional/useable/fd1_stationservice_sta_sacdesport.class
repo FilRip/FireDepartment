@@ -1,0 +1,19 @@
+[#INCLUDE]
+FILE0 = "base_useable.class"
+
+[DISPLAY]
+MODEL = FD1_StationService\fd1_stationservice_sta_sacdesport
+
+[DAMAGE]
+USEDAMAGE = 0
+CARBONISABLE = 0
+
+[CAPACITIES_ACTIONS]
+COULDBEUSE = 1
+
+[EXPLOSION]
+CANEXPLODE = 0
+
+[LOGICAL_STATE]
+S01_USER_ANIM = ItemChar\ic_pick_up_down
+S01__NAME = use

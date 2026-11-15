@@ -1,0 +1,372 @@
+// Scripts Mall_Events
+// 18/05/04 : Création du fichier à partir de street
+// 28/07/04 Olivier : modifs
+
+
+//- [ondeath] apparition des policiers sous les blocs butinables
+void BridgeDesync (EntityID bridgePiece)
+{
+	mcString name;
+
+	name = ENT_GetName(bridgePiece);
+	
+	if ( name == "bridgepiece1" )
+		ENT_SetVisibility(SCR_GetVarS32("axe_debris_1") , 0 );
+	if ( name == "bridgepiece2" )
+		ENT_SetVisibility(SCR_GetVarS32("axe_debris_2") , 0 );
+	if ( name == "bridgepiece3" )
+		ENT_SetVisibility(SCR_GetVarS32("axe_debris_3") , 0 );
+	if ( name == "bridgepiece4" )
+		ENT_SetVisibility(SCR_GetVarS32("axe_debris_4") , 0 );
+	
+	// choix de la piece sans policier
+	if ( SCR_VarExists("bp_noCivilian_defined")==false() )
+	{
+		s32 n;
+		
+		n = RandomS32(1,4);
+		
+		SCR_SetVarS32( "BridgePiece"+n+"_noCivilian" ,1);
+		SCR_SetVarS32("bp_noCivilian_defined",1);
+	}
+
+	// le policier sous la pièce devient visible
+	if ( SCR_VarExists( name+"_noCivilian" )==false() )
+	{
+		ENT_SetVisibility( getEI( name+"_c" ) ,1);
+		SCR_SetVarS32("CopsFounds" , SCR_GetVarS32("CopsFounds") + 1 );
+		if ( SCR_GetVarS32("CopsFounds") >= 3 )
+		{
+			LEV_ValidateObjective( SCR_GetVarS32( "objIndex_saveCop" ) ,1);
+			SCR_SetVarS32("obj_saveCop_end",1);
+		}
+	}
+	
+	SCR_RunDelayedEntity("pieceEvanescence",3.0,bridgePiece);
+}
+
+//- [ondeath] disparition des blocs butinables de la passerelle
+void pieceEvanescence (EntityID piece)
+{
+	// TODO : remplacer par un fondu
+	ENT_SetVisibility(piece,0);
+}
+
+
+//- [ondeath] oeuvre d'art détruite
+void ArtDestruction( EntityID Art )
+{
+	s32 nbOADestructed;
+
+	nbOADestructed = SCR_GetVarS32("ArtDestructed");
+	nbOADestructed += 1;
+	
+	// au cas où l'objectif n'aurait pas été lancé
+	if ( SCR_GetVarS32("objIndex_oa")==-1 )
+	{
+		s32 obj;
+		f32 x, y;
+
+		obj = LEV_AddObjectiveBoolean("&Maul_Obj5",0);
+		SCR_SetVarS32("objIndex_oa",obj);
+
+		ENT_GetPosition( getEI("ent_fountain_parc") ,x,y);
+
+		PNL_AddMessage("VOCAL_MALL_Maul_Warn1","&Maul_Warn1",x,y);
+	}
+	
+	if ( SCR_GetVarS32("obj_oa_end")==0 )
+	{
+		if ( SCR_GetVarS32("obj_oa_nbOA")-nbOADestructed <5 )
+		{
+			LEV_ValidateObjective( SCR_GetVarS32("objIndex_oa") ,0);
+			SCR_SetVarS32("obj_oa_end",-1);
+		}
+	}
+	
+	SCR_SetVarS32("ArtDestructed",nbOADestructed);
+}
+
+
+//- [ondeath] propagation après explosion de la voiture de policer
+void carExplo1 (EntityID car)
+{
+	FIR_HPAddIntensity( getEI("hp_explo1") ,80.0);
+}
+
+
+//- [useable] armoire électrique
+void ElectricityCloset( EntityID User , EntityID Armoire , mcString State )
+{
+	s32 i;
+
+	if ( SCR_GetVarS32("ElectricityOn") == 1 )
+	{
+		SCR_SetVarS32("ElectricityOn" , 0 );
+		PNL_AddMessage("VOCAL_WINEMANSION_WineMansion_Warn3","&WineMansion_Warn3",0.0,0.0);
+		ENT_SetPropertyValueS32( getEI("gp_light_all") , "LIGHT" , "Light00_Active" , 0 );
+		
+		ENT_SetVisibility( getEI("ent_elec_symbol") ,0);
+		ENT_SetVisibility( getEI("ent_elec_symbol_off") ,1);
+		
+		// Je coupe les feux electriques (je les passe à 0 pour qu'il ne se rallument pas si je remet le courant)
+		for ( i=0 ; i<=8 ; i+=1 )
+		{
+			FIR_HPAddIntensity( getEI( "light_block"+i+"_hp" ) , -100.0 );
+			FIR_HPEnable( getEI( "light_block"+i+"_hp" ) , 0 );
+		}
+		
+		for ( i=1 ; i<=6 ; i+=1 )
+		{
+			SND_StopStaticSound( SCR_GetVarS32( "VentExt_"+i+"_sound" ) );
+		}
+	}
+	else
+	{
+		SCR_SetVarS32("ElectricityOn" , 1 );
+		PNL_AddMessage("VOCAL_WINEMANSION_WineMansion_Warn4","&WineMansion_Warn4",0.0,0.0);
+		ENT_SetPropertyValueS32( getEI("gp_light_all") , "LIGHT" , "Light00_Active" , 1 );
+		
+		ENT_SetVisibility( getEI("ent_elec_symbol") ,1);
+		ENT_SetVisibility( getEI("ent_elec_symbol_off") ,0);
+		
+		// Je réactive les feux electriques
+		for ( i=0 ; i<=8 ; i+=1 )
+		{
+			FIR_HPEnable( getEI( "light_block"+i+"_hp" ) , 1 );
+		}
+
+		for ( i=1 ; i<=6 ; i+=1 )
+		{
+			SND_PlayStaticSound( SCR_GetVarS32( "VentExt_"+i+"_sound" ) );
+		}
+	}
+}
+
+
+//- [trigger] décache toit cinéma
+void Trigger_Decache1( EntityID Cible , EntityID tid )
+{
+	LEV_RoofVisibility("mall_theater_roof",0);
+	ENT_SetPropertyValueString(tid,"TRIGGER","ON_ENTER","");
+	
+	SCR_SetVarS32("SkipSreetCrash" ,1);
+}
+
+
+//- [trigger] cache les gangsters pour simuler TP
+void hideGangster (EntityID unit, EntityID tid)
+{
+	if ( ENT_IsEntityInGroup( getEI("gp_civ_ganBridge") ,unit)==1 )
+	{	ENT_SetVisibility(unit,0);
+	}
+}
+
+
+/* téléporteurs **********************************************************************************/
+//- [tp] batiment cinéma
+void tp_onEnter1 (EntityID unit, EntityID tp)
+{
+	// pas pour les civils !
+	if ( ENT_GetType(unit)==18 || SCR_GetVarS32("tp1_flag")==1 )
+		return;
+	
+	LEV_RoofVisibility("mall_theater_roof",0);
+}
+
+
+//- [tp] batiment salles de jeu
+void tp_onEnter2 (EntityID unit, EntityID tp)
+{
+	// pas pour les civils !
+	if ( ENT_GetType(unit)==18 || SCR_GetVarS32("tp2_flag")==1 )
+		return;
+}
+
+
+//- [tp] batiment fin
+void tp_onEnter3 (EntityID unit, EntityID tp)
+{
+	// pas pour les civils !
+	if ( ENT_GetType(unit)==18 || SCR_GetVarS32("tp3_flag")==1 )
+		return;
+	
+	LEV_RoofVisibility("Mall_Building2_Rooftop_ROOF1",0);
+	LEV_MaskVisibility("Mall_Building2_ROOM2_MASK",0);
+}
+
+
+/* évenements civils *****************************************************************************/
+//-
+void OnCivilianDeath (EntityID civil)
+{
+	s32 civNum;
+	
+	civNum = getCivilNum(civil);
+	
+	if ( civNum==-1 )
+	{
+		// civil inconnu (non sauvable)
+		return;
+	}
+	
+	if ( civNum>=5 && civNum<=8 )
+	{
+		if ( SCR_GetVarS32("obj_civCine_end")==0 )
+		{
+			LEV_ValidateObjective( SCR_GetVarS32("objIndex_civCine") ,0);
+			SCR_SetVarS32("obj_civCine_end",-1);
+		}
+	}
+	else if ( civNum>=15 && civNum<=18 )
+	{
+		if ( SCR_GetVarS32("obj_saveCop_end")==0 )
+		{
+			LEV_ValidateObjective( SCR_GetVarS32("objIndex_saveCop") ,0);
+			SCR_SetVarS32("obj_saveCop_end",-1);
+		}
+	}
+	else if ( civNum>=12 && civNum<=14 )
+	{
+		if ( SCR_GetVarS32("obj_saveGan_end")==0 )
+		{
+			LEV_ValidateObjective( SCR_GetVarS32("objIndex_saveGan") ,0);
+			SCR_SetVarS32("obj_saveGan_end",-1);
+		}
+	}
+}
+
+
+//-
+void OnCivilianFirstDamage (EntityID civil)
+{
+	// idle
+}
+
+
+//-
+void OnCivilianSaved (EntityID civil)
+{
+	s32 civNum;
+	
+	civNum = getCivilNum(civil);
+	
+	if ( civNum==-1 )
+	{
+		// civil inconnu (non sauvable)
+		return;
+	}
+	
+	if ( civNum>=5 && civNum<=8 )
+	{
+		if ( SCR_GetVarS32("obj_civCine_end")!=1 )
+		{
+			updateIterativeObjective("civCine");
+		}
+	}
+/*	else if ( civNum>=15 && civNum<=18 )
+	{
+		SCR_SetVarF32( "obj_saveCop_nbSaved" , SCR_GetVarF32( "obj_saveCop_nbSaved" )+1.0 );
+		if ( SCR_GetVarF32( "obj_saveCop_nbSaved" ) == SCR_GetVarF32( "obj_saveCop_maxSaved" ) )
+		{
+			LEV_ValidateObjective( SCR_GetVarS32( "objIndex_saveCop" ) ,1);
+			SCR_SetVarS32("obj_saveCop_end",1);
+		}
+
+		if ( SCR_GetVarS32("obj_saveCop_end")!=1 )
+		{
+			updateIterativeObjective("saveCop");
+		}
+
+	}
+*/
+	else if ( civNum>=12 && civNum<=14 )
+	{
+		if ( SCR_GetVarS32("obj_saveGan_end")!=1 )
+		{
+			updateIterativeObjective("saveGan");
+		}
+	}
+}
+
+
+//-
+s32 updateIterativeObjective (mcString oName)
+{
+	f32 nbSaved;
+
+	nbSaved = SCR_GetVarF32( "obj_"+oName+"_nbSaved" );
+	nbSaved += 1.0;
+
+	LEV_UpdateObjective( SCR_GetVarS32( "objIndex_"+oName ) , nbSaved );
+
+	if ( nbSaved== SCR_GetVarF32( "obj_"+oName+"_maxSaved" ) )
+	{
+		LEV_ValidateObjective( SCR_GetVarS32( "objIndex_"+oName ) ,1);
+		SCR_SetVarS32("obj_"+oName+"_end",1);
+	}
+	
+	SCR_SetVarF32( "obj_"+oName+"_nbSaved" ,nbSaved);
+}
+
+
+//-
+void OnFiremanDeath (EntityID fireman)
+{
+	// idle
+}
+
+
+//-
+void OnVehicleDeath (EntityID vehicule)
+{
+	// idle
+}
+
+
+// TODO : move to common ...
+
+//- retourne le numéro du civil à partir de son EI
+// retourne -1 si le civil n'est pas répertorié
+s32 getCivilNum (EntityID civEI)
+{
+	mcString varName;
+	varName = "civil_ent"+civEI+"_num";
+	
+	if ( SCR_VarExists(varName)==false() )
+	{
+		return (-1);
+	}
+	else
+	{
+		return ( SCR_GetVarS32(varName) );
+	}
+}
+
+
+//- retourne l'EI d'un civil à partir de son numéro
+EntityID getCivilEI (s32 civNum)
+{
+	return ( SCR_GetVarS32( "civil"+civNum ) );
+}
+
+
+//- active un tp
+// Paramètres
+// tpNum			numéro du tp (les noms de tps sont de la forme ent_tp[num] )
+// activity			0 pour désactiver, 1 pour activer
+s32 setTPActivity (s32 tpNum, s32 activity)
+{
+	ENT_SetVisibility( getEI("ent_tp"+tpNum) ,activity);
+	
+	return (0);
+}
+
+
+
+void BorneDestruction( EntityID Borne )
+{
+	SND_StopStaticSound( SCR_GetVarS32( ENT_GetName( Borne ) + "_sound" ) );
+}
+
+

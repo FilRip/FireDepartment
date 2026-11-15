@@ -1,0 +1,162 @@
+void Duseldorf_StartScenar()
+{
+	SCR_SetVarS32("ScenarTrans", 0);
+	SCR_SetVarS32("ReinforcementsGranted", 0);
+	//
+}
+//END
+
+void Duseldorf_CheckScenar()
+{
+	
+	s32 tmp;
+
+	tmp = SCR_GetVarS32("ScenarTrans");
+	if(tmp == 0)
+	{
+		CheckScenario0();
+	}
+	if(tmp == 666)
+	{
+		Defeat();
+	}
+	if(tmp == 999)
+	{
+		Victory();
+	}
+}
+//END
+
+
+
+void CheckScenario0()
+{
+	f32 TotalIntensity, TotalLife;
+	s32 i, NbUnit;
+	
+	//lose conditions
+	if(LEV_GetNumVictims() >= SCR_GetVarS32("MaxDeadCivil"))
+	{
+		SCR_SetVarS32("ScenarTrans", 666);
+		SCR_SetVarString("DebriefText", "&CommonDefeatCivil");
+	}
+	
+	// if( (LEV_GetFireSizePercent() > 0.75) && (LEV_GetDifficultyLevel() == 2) )
+	// {
+	//	SCR_SetVarS32("ScenarTrans", 666);	
+	//	SCR_SetVarString("DebriefText", "&CommonDefeatPropagation");
+	// }
+	
+	//if( (LEV_IsHealVehicleRemaining() == 0) || (LEV_IsFiremanSupplierRemaining() == 0) )
+	//{
+	//	SCR_SetVarS32("ScenarTrans", 666);
+	//	SCR_SetVarString("DebriefText", "&CommonDefeatCapitalUnits");
+	//}
+	
+	if(LEV_GetNumKilledFiremen() >= SCR_GetVarS32("MaxDeadFiremen"))
+	{
+		 SCR_SetVarS32("ScenarTrans", 666);
+		 SCR_SetVarString("DebriefText", "&CommonDefeatCapitalUnits");
+	}
+	
+	//win conditions
+	//if(FIR_HPGetActiveIntensity(SCR_GetVarS32("AllHP")) == 0.0)
+	//{
+	//	SCR_SetVarS32("ScenarTrans", 999);
+	//}
+}
+//END CheckScenario
+
+void ComputeScoring()
+{
+	s32 NumMedals, Duration, VictimNumber, LostFiremen, FiremenWounds, LostVehicles, VehicleDamage, FireSize;
+
+	// Duration
+	Duration = UTL_GetGameTime()/60.0;
+	if 	(Duration>23)		NumMedals = 0;
+	else if (Duration>21)		NumMedals = 1;
+	else if (Duration>19)		NumMedals = 2;
+	else if (Duration>17)		NumMedals = 3;
+	else if (Duration>15)		NumMedals = 4;
+	else				NumMedals = 5;
+	LEV_AddScoringLine("&InterventionDuration", Duration, NumMedals );
+
+	// Number of victims
+	VictimNumber = LEV_GetNumVictims();
+	f32 fMaxDeadCivil,fNumDeadCivil, fRatio;
+	fMaxDeadCivil = SCR_GetVarS32("MaxDeadCivil");
+	fNumDeadCivil = LEV_GetNumVictims();
+	fRatio = 1.0-(fNumDeadCivil / fMaxDeadCivil);
+	if (fRatio >0.8)		NumMedals = 5;
+	else if (fRatio >0.6)		NumMedals = 4;
+	else if (fRatio >0.4)		NumMedals = 3;
+	else if (fRatio >0.3)		NumMedals = 2;
+	else if (fRatio >0.2)		NumMedals = 1;
+	else				NumMedals = 0;
+	LEV_AddScoringLine("&VictimNumber", VictimNumber, NumMedals );
+
+	// Lost Firemen
+	LostFiremen = LEV_GetNumKilledFiremen();
+	if 	(LostFiremen == 0)	NumMedals = 5;
+	else if (LostFiremen == 1)	NumMedals = 3;
+	else if (LostFiremen == 2)	NumMedals = 1;
+	else				NumMedals = 0;
+	LEV_AddScoringLine("&LostFiremen", LostFiremen, NumMedals );
+
+	// Firemen wounds
+	FiremenWounds = LEV_GetFiremenWounds();
+	if 	(FiremenWounds>160)	NumMedals = 0;
+	else if (FiremenWounds>130)	NumMedals = 1;
+	else if (FiremenWounds>100)	NumMedals = 2;
+	else if (FiremenWounds>70)	NumMedals = 3;
+	else if (FiremenWounds>40)	NumMedals = 4;
+	else 				NumMedals = 5;
+	LEV_AddScoringLine("&FiremenWounds", FiremenWounds, NumMedals );
+
+	// Lost Vehicles
+	LostVehicles = LEV_GetNumKilledVehicles();
+	if 	(LostVehicles == 0)	NumMedals = 5;
+	else if (LostVehicles == 1)	NumMedals = 3;
+	else if (LostVehicles == 2)	NumMedals = 1;
+	else				NumMedals = 0;
+	LEV_AddScoringLine("&LostVehicles", LostVehicles, NumMedals );
+
+	// Vehicle Damage
+	VehicleDamage = LEV_GetVehicleDamages();
+	if 	(VehicleDamage>90)	NumMedals = 0;
+	else if (VehicleDamage>70)	NumMedals = 1;
+	else if (VehicleDamage>50)	NumMedals = 2;
+	else if (VehicleDamage>30)	NumMedals = 3;
+	else if (VehicleDamage>10)	NumMedals = 4;
+	else 				NumMedals = 5;
+	LEV_AddScoringLine("&VehicleDamage", VehicleDamage, NumMedals );
+
+	// Fire Size
+	FireSize = 100.0 * LEV_GetFireSizePercent();
+	if 	(FireSize>68)		NumMedals = 0;
+	else if (FireSize>56)		NumMedals = 1;
+	else if (FireSize>44)		NumMedals = 2;
+	else if (FireSize>32)		NumMedals = 3;
+	else if (FireSize>20)		NumMedals = 4;
+	else 				NumMedals = 5;
+	LEV_AddScoringLine("&FireSize", FireSize, NumMedals );
+}
+//END ComputeScoring
+
+void Victory()
+{
+	ComputeScoring();
+	//check conditions and set debrief text here
+	LEV_TriggerVictory();
+	PANEL_SetInterfaceMode("SCORING");
+	LEV_SetDebriefText("&Duseldorf_Victory_Message");
+}
+//END Victory
+
+void Defeat()
+{
+	LEV_SetDebriefText(SCR_GetVarString("DebriefText"));
+	LEV_TriggerDefeat();
+	PANEL_SetInterfaceMode("SCORING");
+}
+//END Defeat

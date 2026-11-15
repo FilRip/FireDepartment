@@ -1,0 +1,20 @@
+[#INCLUDE]
+FILE0="base_sound.class"
+
+[SOUND]
+SoundType = FIRE_SOUND
+Label      = "FIRE"
+RANGE_MIN      = 700
+Range_Min#TYPE = FLOAT 0 9999999
+RANGE_MAX      = 4500
+Range_Max#TYPE = FLOAT 0 9999999
+Sphere_HP       = 500
+Sphere_HP#TYPE = FLOAT 0 9999999
+Intensity_Coeff = 1
+Intensity_Coeff#TYPE = FLOAT 0 9999999
+VOLUME      = 65
+Volume#TYPE = INT 0 100
+
+[ENTITY_SHAPE]
+Color = 255 223 000 255
+Size  = 500

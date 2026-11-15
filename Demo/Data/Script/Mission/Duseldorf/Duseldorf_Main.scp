@@ -1,0 +1,1053 @@
+void Duseldorf_Start()
+{
+	
+	SCR_RunDelayed("InitVar", 0.0);//init global variables
+	//Reinforcement
+	SCR_RunDelayed("Duseldorf_StartScenar", 0.0);
+	SCR_RunDelayed("PodzegOfis_Stor",300.0);
+	SCR_RunDelayed("Cat_1", 0.0);
+
+	//SCR_RunDelayed("Cat_HangarFire", 5.0);
+	//SCR_Rundelayed("Cat_2",5.0);
+	//SCR_RunDelayed("Cat_Radio",5.0);
+
+	///////////temp
+	
+
+//SCR_RunDelayed("Canadair_support",5.0);
+
+	//SCR_RunDelayed("Cat_Fly",10.0);
+
+	
+	
+}
+//end Duseldorf_Start8 096 220 19 55
+
+
+void InitVar()
+{
+		
+            s32 i, j;
+	s32 NbCivil;
+	s32 sRatio;
+	sRatio = 75 - LEV_GetDifficultyLevel() * 25;
+	SCR_SetVarS32("MaxDeadFiremen", (LEV_GetNumFiremen()*sRatio)/100);
+ 	SCR_SetVarS32("NumDestroyedPumpers", 0);
+	InitCivil();
+	PNL_RemoveAllFocus();
+	EntityID Group; 
+
+	//////////////////////////////// start initialize objectives
+	SCR_SetVarS32("Obj_1", 0);//spasite civilov v adminzdanii
+	SCR_SetVarS32("Obj_2", 0);//udergat ogon do priezda reinforsmenta s penoi
+	SCR_SetVarS32("Obj_3" ,0);//potushit baki s toplivom
+	SCR_SetVarS32("Obj_4" ,0);//Spasti samolet canadier
+	SCR_SetVarS32("Obj_8" ,0);//naiti i ispolzovat vspomagatelnuu radiostaniyu
+	SCR_SetVarS32("Obj_6" ,0);//Ispolzovat Radiostanziyu
+	SCR_SetVarS32("Obj_7" ,0);//Potushit ogon v angarach
+	//////////////////////////////// end  initialize objectives
+
+
+	//////////start flagi vipolneniya objectivov
+	SCR_SetVarS32("Obj1_Done" , 0);
+	SCR_SetVarS32("Obj2_Done" , 0);
+	SCR_SetVarS32("Obj3_Done" , 0);
+	SCR_SetVarS32("Obj4_Done" , 0);
+	SCR_SetVarS32("Obj8_Done" , 0);
+	SCR_SetVarS32("Obj6_Done" , 0);
+	SCR_SetVarS32("Obj7_Done" , 0);
+	SCR_SetVarS32("Obj8_Done",0);
+	//////////end flagi vipolneniya objectivov
+
+
+	/////////start flagi activazii objey
+	SCR_SetVarS32("Obj1_Activated",0);
+	SCR_SetVarS32("Obj2_Activated",0);
+	SCR_SetVarS32("Obj3_Activated",0);
+	SCR_SetVarS32("Obj4_Activated",0);
+	SCR_SetVarS32("Obj8_Activated",0);
+	SCR_SetVarS32("Obj6_Activated",0);	
+	SCR_SetVarS32("Obj7_Activated",0);
+	/////////end flagi activazii objey
+
+	//////// start sistemnie flagi
+	
+	SCR_SetVarS32("FrancID" , 0);
+	SCR_SetVarS32("Franc_sys" , 0);
+	SCR_SetVarS32("Ob1_sys" , 1);
+	SCR_SetVarS32("Ob2_sys" , 1);
+	SCR_SetVarS32("Ob3_sys" , 1);
+	SCR_SetVarS32("Ob4_sys" , 1);
+	SCR_SetVarS32("Ob8_sys" , 1);
+	SCR_SetVarS32("Ob6_sys" , 1);
+	SCR_SetVarS32("Ob7_sys" , 1);
+	//////// end sistemnie flagi
+
+	SCR_SetVarS32("Stor_Term_sys",1);
+
+
+	SCR_SetVarS32("Plane_lock",0);
+
+	///////start data variable
+	SCR_SetVarS32("Num_Civils" , 5);
+	SCR_SetVarS32("Cur_Num_Civils", 5);
+
+	SCR_SetVarF32("end_x",29097.66);
+	SCR_SetVarS32("Air_Run_Var",0);
+
+	SCR_SetVarF32("Time_Obj4",200.0);
+	SCR_SetVarF32("Time_Cur_Obj4" , 200.0);
+
+	SCR_SetVarS32("Plane_Vzletel",0);
+	SCR_SetVarS32("O2_vipol",0);
+	SCR_SetVarS32("Lock_On",0);
+
+	SCR_SetVarF32("HP_WorkShop", 260000.0);
+
+	SCR_SetVarS32("St_up_O8",0);
+	///////end data variable///
+
+	
+
+	//init global identifiers for fire groups
+   	Group = ENT_FindByName("Terminal_Fire");
+   	SCR_SetVarS32("Terminal_F", Group);
+
+	Group = ENT_FindByName("store_to_terminal_fire");
+   	SCR_SetVarS32("store_to_terminal_F", Group);
+
+	Group = ENT_FindByName("under_plane_fire");
+   	SCR_SetVarS32("under_plane_F", Group);
+
+	Group = ENT_FindByName("barell_fire");
+   	SCR_SetVarS32("Barell_F", Group);
+//
+	Group = ENT_FindByName("all_to_terminal_fire");
+   	SCR_SetVarS32("all_to_terminal_F", Group);
+
+	Group = ENT_FindByName("two_hangars_fire");
+	SCR_SetVarS32("two_hangars_F" , Group);
+
+	Group = ENT_FindByName("WorkShop_fire");
+	SCR_SetVarS32("WorkShop_F" , Group);
+
+	Group = ENT_FindByName("Workshop_all_fire");
+	SCR_SetVarS32("Workshop_all_F" , Group);
+
+	
+
+
+	//////////////////////Bugs
+	SCR_SetVarS32("CatFly_Start",0);
+	SCR_SetVarS32("CatFly_Stop",1);
+
+	SCR_SetVarS32("CatRadio_Start",0);
+
+
+
+
+
+}
+
+///end initvar
+
+
+////start main
+void Duseldorf_Main()
+{
+	if(UTL_GetGameTime()>1.0)
+	{
+
+
+
+
+		//////////////start identifikaziya franca
+		if(SCR_GetVarS32("Franc_sys") ==1)
+		{
+			if(ENT_GetUnitState(SCR_GetVarS32("FrancID")) == 4)
+			{
+			
+				SCR_SetVarS32("ScenarTrans", 666);
+				SCR_SetVarString("DebriefText", "&FrancDieText");
+		
+			}
+		}
+		//////////////end identifikaziya franca
+
+		////////////start proverca vipolneniya objectiva s civilami obj1
+		if(SCR_GetVarS32("Ob1_sys" )==1)
+		{
+			if(SCR_GetVarS32("Cur_Num_Civils")==0)
+			{
+				SCR_RunDelayed("Val_obbj1" , 0.0);
+				SCR_SetVarS32("Ob1_sys",0);
+				ENT_SetDamage(5004218,0.0);
+			}
+
+		}
+
+
+		////////////end  proverca vipolneniya objectiva s civilami
+		
+
+		if(SCR_GetVarS32("Air_Run_Var")==1)
+		{
+			AirPlane_Go();
+		}
+
+		//if(SCR_GetVarS32("Obj4_Activated")==1)
+		//{
+		//	if(SCR_GetVarS32("Ob4_sys")==1)
+		//	{
+		//		update_obbj4();
+		//	}
+		//}
+
+		/////////////////////////////////start proverka zgoraniya samoleta
+
+		if(FIR_HPGetActiveIntensity(SCR_GetVarS32("under_plane_F")) != 0.0)
+		{
+			if(SCR_GetVarS32("Plane_Vzletel")==0)
+			{
+				SCR_SetVarS32("Plane_Vzletel",1);
+				ENT_SetVisibility(5008619,0);
+				SCR_SetVarS32("Ob4_sys",0);
+				Proval_obj4();
+				SCR_SetVarS32("Plane_lock",1);
+
+				//////////Sdelat samolet ne usabilnim
+			}
+		}
+		
+		/////////Start Proverca proigrasha po vozgoraniyu Terminala
+		if(FIR_HPGetActiveIntensity(SCR_GetVarS32("Terminal_F")) >40.0)
+		{
+			if(SCR_GetVarS32("Ob2_sys")==1)
+			{
+				SCR_SetVarS32("ScenarTrans", 666);
+				SCR_SetVarString("DebriefText", "&Duseldorf_Terminal_Defeat");
+				SCR_SetVarS32("Ob2_sys",0);
+			}
+		} 
+		/////////end Proverca proigrasha po vozgoraniyu Terminala
+
+		if(FIR_HPGetActiveIntensity(SCR_GetVarS32("store_to_terminal_F"))!=0.0)
+		{
+			if(SCR_GetVarS32("Stor_Term_sys")==1)
+			{
+				SCR_SetVarS32("Stor_Term_sys",0);
+				SCR_RunDelayed("Cat_2",5.0);
+				SCR_RunDelayed("Second_Reinforsment",15.0);
+				
+			}
+		}
+		
+
+		////////////////////start proverka obj2
+		if(FIR_HPGetActiveIntensity(SCR_GetVarS32("all_to_terminal_F"))==0.0)
+		{
+			if(UTL_GetGameTime()>4.0)
+			{
+				if(SCR_GetVarS32("O2_vipol")==0)
+				{
+				
+					SCR_SetVarS32("O2_vipol" , 1);
+					Val_obbj2();
+				}
+			}
+
+		}
+
+		/////////Start Proverca vipolneniya Obj3 Potushit Bareli
+		if(FIR_HPGetActiveIntensity(SCR_GetVarS32("Barell_F")) == 0.0)
+		{
+			if(SCR_GetVarS32("Ob3_sys")==1)
+			{
+				if(UTL_GetGameTime()>4.0)
+			
+				{
+				SCR_RunDelayed("Val_obbj3",0.0);
+				SCR_SetVarS32("Ob3_sys",0);
+				}
+			}
+		}
+		/////////end Proverca vipolneniya Obj3 Potushit Bareli
+		
+
+	///////////////////////////strat proverka pobedy
+	if(SCR_GetVarS32("Obj1_Done")==1&&SCR_GetVarS32("Obj3_Done")==1&&SCR_GetVarS32("Obj6_Done")==1&&SCR_GetVarS32("Obj7_Done")==1)
+	{
+		Victory();
+	}
+	///////////////////////////end  proverka pobedy
+
+	if(FIR_HPGetActiveIntensity(SCR_GetVarS32("two_hangars_F"))==0.0)
+		{
+			if(UTL_GetGameTime()>4.0)
+			{
+				if(SCR_GetVarS32("Ob7_sys")==0)
+				{
+				
+					SCR_SetVarS32("Ob7_sys" , 1);
+					Val_obbj7();
+				}
+			}
+
+		}
+
+	
+
+	///////////////////////////dobavleniye 8 objectiva
+
+	if(FIR_HPGetActiveIntensity(SCR_GetVarS32("WorkShop_F")) !=0.0)
+	{
+		if(SCR_GetVarS32("Ob8_sys")==1)
+		{
+			SCR_SetVarS32("Ob8_sys" , 0);
+			SCR_RunDelayed("add_obbj8",0.0);
+			SCR_RunDelayed("Start_Upd_Obj8",1.0);
+
+		}
+
+	}		
+
+	if(SCR_GetVarS32("St_up_O8")==1)
+	{
+		Update_Obj8();
+
+	}
+
+	
+
+	
+	}
+
+}
+/////end Main
+
+void Start_Upd_Obj8()
+{
+	SCR_SetVarS32("St_up_O8",1);
+}
+
+void End_Upd_Obj8()
+{
+	SCR_SetVarS32("St_up_O8",0);
+}
+
+void PodzegOfis_Stor()
+{
+	FIR_HPEnable(ENT_FindByName("Ofice1_fire"),1);
+	FIR_HPEnable(ENT_FindByName("Ofice2_fire"),1);
+	FIR_HPEnable(ENT_FindByName("Storage_fire"),1);
+}
+
+void InitCivil()
+{
+	s32 i ,  j , NbCivil, NumCivilActive;
+	f32 x , y , z; 
+
+	NbCivil = 5;
+	SCR_SetVarS32("NbCivil"  , NbCivil);
+	SCR_SetVarS32("MaxDeadCivil" , 3 - LEV_GetDifficultyLevel());
+
+}
+
+////////////////////////////////////////start dobavleniya objectivov
+
+void add_obbj1()//Spasti ludey v ofisnych zdaniyach
+{
+	s32 j;
+	SCR_SetVarS32("Obj_1", LEV_AddObjectiveBoolean("&DUSS_Obj1", 1));
+	j = LEV_SetObjectivePos(SCR_GetVarS32("Obj_1"), 4571.19, 12604.97);
+	SCR_SetVarS32("Obj1_Activated",1);
+	LEV_ActivateObjectivesPanel(1);
+}
+
+void add_obbj2()//Predotvratit vozgoranie terminala
+{
+	s32 j,i,k,n;
+	SCR_SetVarS32("Obj_2", LEV_AddObjectiveBoolean("&DUSS_Obj2", 1));
+	j = LEV_SetObjectivePos(SCR_GetVarS32("Obj_2"), 5511.61, 7281.88);
+	SCR_SetVarS32("Obj2_Activated",1);
+	LEV_ActivateObjectivesPanel(1);
+}
+
+void add_obbj3()//Potushit baki s toplivom
+{
+	s32 j;
+	SCR_SetVarS32("Obj_3", LEV_AddObjectiveBoolean("&DUSS_Obj3",1));
+	j = LEV_SetObjectivePos(SCR_GetVarS32("Obj_3"), 10154.73, 11464.66);
+	LEV_ActivateObjectivesPanel(1);
+	SCR_SetVarS32("Obj3_Activated",1);
+}
+
+
+void add_obbj4()//Spasti samolet canandir
+{
+	s32 j;
+	SCR_SetVarS32("Obj_4", LEV_AddObjectiveBoolean("&DUSS_Obj4",1)); 
+	//SCR_SetVarS32("Obj_4", LEV_AddObjectiveBoolean("&DUSS_Obj4", 1));
+	j = LEV_SetObjectivePos(SCR_GetVarS32("Obj_4"), 18059.87, 15413.69);
+	LEV_ActivateObjectivesPanel(1);
+	SCR_SetVarS32("Obj4_Activated",1);
+
+	ENT_SetVisibility(5008619,1);
+}
+
+void update_obbj4()
+{
+	LEV_UpdateObjective(SCR_GetVarS32("Obj_4") , SCR_GetVarF32("Time_Cur_Obj4"));
+	f32 t;
+	t=SCR_GetVarF32("Time_Cur_Obj4");
+	t=t-0.5;
+	SCR_SetVarF32("Time_Cur_Obj4" , t);
+	if(SCR_GetVarF32("Time_Cur_Obj4") <2.0)
+	{
+		SCR_SetVarS32("Ob4_sys",0);
+		SCR_RunDelayed("Val_obbj4",1.0);
+		SCR_RunDelayed("Cat_Fly" ,2.0);
+
+	}
+} 
+
+void add_obbj5()//Naiti poka ne sgorel Dopolnitelnuyu radiostanziyu
+{
+	s32 j;
+	SCR_SetVarS32("Obj_5", LEV_AddObjectiveProgress("&DUSS_Obj5", 0.0 ,ENT_GetDamage(5003470), 0 ,1));
+	j = LEV_SetObjectivePos(SCR_GetVarS32("Obj_5"), 18614.42, 8459.86);
+	SCR_SetVarS32("Obj5_Activated",1);
+	LEV_ActivateObjectivesPanel(1);
+} 
+
+void add_obbj6()//Ispolzovat radiostanziyu? poka ona ne naebnulas
+{
+	s32 j;
+	SCR_SetVarS32("Obj_6", LEV_AddObjectiveProgress("&DUSS_Obj6", 0.0 ,ENT_GetDamage(5003470), 0 ,1));
+	j = LEV_SetObjectivePos(SCR_GetVarS32("Obj_6"), 18614.42, 8459.86);
+	SCR_SetVarS32("Obj6_Activated",1);
+	LEV_ActivateObjectivesPanel(1);
+}
+
+void add_obbj7()//potushit angary
+{
+	s32 j;
+	SCR_SetVarS32("Obj_7", LEV_AddObjectiveBoolean("&DUSS_Obj7", 1));
+	j = LEV_SetObjectivePos(SCR_GetVarS32("Obj_7"), 17916.12, 9218.01);
+	LEV_ActivateObjectivesPanel(1);
+	SCR_SetVarS32("Obj7_Activated",1);
+}
+
+void add_obbj8()//Potushit workshop
+{
+	s32 j;
+	SCR_SetVarS32("Obj_8", LEV_AddObjectiveProgress("&DUSS_Obj8", 0.0 ,SCR_GetVarF32("HP_WorkShop"), 0 ,0));
+	j = LEV_SetObjectivePos(SCR_GetVarS32("Obj_8"), 8133.24, 3246.03);
+	SCR_SetVarS32("Obj8_Activated",1);
+	LEV_ActivateObjectivesPanel(1);
+}
+
+void Update_Obj8()
+{
+	f32 k,m;
+
+	m=FIR_HPGetIntensity(SCR_GetVarS32("WorkShop_F")) * 0.03;
+
+	k = SCR_GetVarF32("HP_WorkShop");
+	
+	k = k - m;
+	
+	SCR_SetVarF32("HP_WorkShop", k);
+
+	LEV_UpdateObjective(SCR_GetVarS32("Obj_8") , SCR_GetVarF32("HP_WorkShop"));
+
+
+	if(SCR_GetVarF32("HP_WorkShop") <= 2.0)
+	{
+		SCR_RunDelayed("End_Upd_Obj8",0.0);
+		SCR_RunDelayed("Proval_obj8",1.0);
+		
+	}
+
+	if(FIR_HPGetActiveIntensity(SCR_GetVarS32("Workshop_all_F")) ==0.0)
+	{
+		SCR_RunDelayed("End_Upd_Obj8",0.0);
+		SCR_RunDelayed("Val_obbj8",1.0);
+	}
+
+}
+////////////////////////////////////////end Dobavleniya objectivov
+
+
+///////////////////////////////////////start vipolneniye objectivov
+void Val_obbj1()
+{
+	LEV_ValidateObjective(SCR_GetVarS32("Obj_1") , 1); 
+	SCR_SetVarS32("Obj1_Done",1);
+}
+
+void Val_obbj2()
+{
+	LEV_ValidateObjective(SCR_GetVarS32("Obj_2") , 1);
+	SCR_SetVarS32("Obj2_Done",1);
+}
+
+
+void Val_obbj3()
+{
+	LEV_ValidateObjective(SCR_GetVarS32("Obj_3") , 1);
+	SCR_SetVarS32("Obj3_Done" , 1);
+}
+
+void Val_obbj4()
+{
+	LEV_ValidateObjective(SCR_GetVarS32("Obj_4") , 1);
+	SCR_SetVarS32("Obj4_Done",1);
+}
+
+void Proval_obj4()
+{
+	LEV_ValidateObjective(SCR_GetVarS32("Obj_4") , 0);
+}
+
+void Val_obbj5()
+{
+	LEV_ValidateObjective(SCR_GetVarS32("Obj_5") , 1);
+	SCR_SetVarS32("Obj5_Done",1);
+}
+
+void Val_obbj6()
+{
+	LEV_ValidateObjective(SCR_GetVarS32("Obj_6") , 1);
+	SCR_SetVarS32("Obj6_Done",1);
+}
+
+void Val_obbj7()
+{
+	LEV_ValidateObjective(SCR_GetVarS32("Obj_7") , 1);
+	SCR_SetVarS32("Obj7_Done",1);
+}
+
+void Val_obbj8()
+{
+	LEV_ValidateObjective(SCR_GetVarS32("Obj_8") , 1);
+	SCR_SetVarS32("Obj8_Done",1);
+}
+
+
+void Proval_obj8()
+{
+	LEV_ValidateObjective(SCR_GetVarS32("Obj_8") , 0);
+}
+///////////////////////////////////////end vipolneniye objectivov
+
+//////start reinforsment
+void Renfort_0()
+{
+	LEV_CallInitialDispatch();
+}
+
+////////////////////start calling canadier
+void Canadair_support()
+{
+	
+	LEV_GrantAirSupport();
+	SCR_RunDelayed("Canadair_support",70.0);
+
+}
+
+void Second_Reinforsment()
+{
+	LEV_GrantReinforcement();
+	SCR_RunDelayed("add_obbj3",180.0);
+}
+////////////////////end  calling canadier
+/////end reinforsment
+
+
+////////////////////////start catsceny
+
+////////////////////start cat1
+void Cat_1()
+{
+	CAM_Cinematic(1);
+	CAM_ModeCinematic();
+	CAM_SetInertia(1.0);
+	SCR_RunDelayed("add_obbj1",22.0);
+	SCR_RunDelayed("cat1_tel_camstart" ,0.0);
+
+	SCR_RunDelayed("c1_mas1",1.0);	
+
+	SCR_RunDelayed("cat1_go_cam2",2.0);
+
+
+	SCR_RunDelayed("cat1_Podzeg_f1",1.0);
+	SCR_RunDelayed("cat1_Podzeg_f2", 3.0);
+	SCR_RunDelayed("Cat1_Destroy_barrel",5.0);
+
+	SCR_RunDelayed("cat1_go_cam3", 11.0);
+
+	SCR_RunDelayed("c1_mas2",11.3);
+
+	SCR_RunDelayed("cat1_tel_cam4" , 18.0);
+
+	SCR_RunDelayed("Eneble_Start_Fire",19.0);
+	
+	SCR_RunDelayed("Renfort_0", 17.0);	
+
+	SCR_RunDelayed("cam_play",21.0);
+
+}
+
+void Eneble_Start_Fire()
+{
+	FIR_HPEnable(ENT_FindByName("start_fire"),1);
+}
+
+void c1_mas1()
+{
+	PNL_PrintSubtitle("&Duss_cat1_mess1");
+	SND_PlaySound2D("");
+
+}
+
+void c1_mas2()
+{
+	PNL_PrintSubtitle("&Duss_cat1_mess2");
+
+}
+
+void cat1_Podzeg_f1()
+{
+	FIR_HPAddIntensity(5002491, 60.0 ); 
+}
+
+void cat1_Podzeg_f2()
+{
+	FIR_HPAddIntensity(5002492, 150.0 ); 
+}
+
+void Cat1_Destroy_barrel()
+{
+	ENT_SetDamage(5000297,0.0);
+}
+
+void cat1_tel_camstart()
+{
+	CAM_TeleportToWayPoint(ENT_FindByName("cam_startpos")); 
+}
+
+void cat1_go_cam2()
+{
+	CAM_CinematicSetToWaypoint(ENT_FindByName("cat1_cam2"), 7.0);
+}
+
+void cat1_go_cam3()
+{
+	CAM_CinematicSetToWaypoint(ENT_FindByName("cat1_cam3"), 5.0);
+}
+
+
+void cat1_tel_cam4()
+{
+	CAM_TeleportToWayPoint(ENT_FindByName("cat1_cam4")); 
+}
+
+
+////////////////////END cat1
+
+
+///////////////////start cat2
+void Cat_2()
+{
+	CAM_Cinematic(1);
+	CAM_ModeCinematic();
+	CAM_SetInertia(1.0);
+	SCR_RunDelayed("cat2_tel_cam1",0.0);
+	SCR_RunDelayed("cat2_go_cam2",3.0);
+	SCR_RunDelayed("c2_mas1",3.0);
+	SCR_RunDelayed("cat2_tel_cam3",14.5);
+	SCR_RunDelayed("cam_play",15.0);
+	SCR_RunDelayed("add_obbj2",16.0);
+
+	SCR_RunDelayed("Start_WorkShoop_Event" , 40.0);
+
+}
+
+void c2_mas1()
+{
+	PNL_PrintSubtitle("&Duss_cat2_mess1");
+}
+
+void cat2_tel_cam1()
+{
+	CAM_TeleportToWayPoint(ENT_FindByName("cat2_cam1")); 
+}
+
+void cat2_go_cam2()
+{
+	CAM_CinematicSetToWaypoint(ENT_FindByName("cat2_cam2"), 11.0);
+}
+
+void cat2_tel_cam3()
+{
+	CAM_TeleportToWayPoint(ENT_FindByName("cat2_cam3"));
+}
+///////////////////end cat2
+
+void Cat_HangarFire()
+{
+	CAM_Cinematic(1);
+	CAM_ModeCinematic();
+	CAM_SetInertia(1.0);
+
+	SCR_RunDelayed("Cat_Radio",150.0);
+
+	LEV_RoofVisibility("Duss_Angar_Build_ROOF",0);
+	LEV_RoofVisibility("Duss_Angar_ROOF_steklo",0);
+	LEV_RoofVisibility("Duss_Angar2_ROOF",0);
+	LEV_RoofVisibility("Duss_Angar2_ROOF_steklo",0);
+
+	//ENT_SetCapacityTarget(5000849, "CouldBeUse" ,1);
+	SCR_RunDelayed("activity_air",10.0);
+
+	SCR_RunDelayed("cathang_tel_cam1",0.0);
+	SCR_RunDelayed("Podzeg_fire1",1.5);
+	
+	SCR_RunDelayed("cathang_mes1" ,1.8);
+
+	SCR_RunDelayed("cathang_go_cam2", 4.0);
+	SCR_RunDelayed("Podzeg_fire2",4.8);
+
+	SCR_RunDelayed("cathang_go_cam3", 8.0);
+	
+	SCR_RunDelayed("Exploid_Tube", 11.0);
+	SCR_RunDelayed("cathang_tel_cam4",13.0);
+
+	SCR_RunDelayed("cathang_mes2" , 13.1);
+
+	SCR_RunDelayed("Podzeg_balonov" , 11.0);
+
+	SCR_RunDelayed("add_obbj4",20.0);
+
+	SCR_RunDelayed("add_obbj7" , 20.0);
+	
+	SCR_RunDelayed("cathang_tel_cam5" , 18.5);
+
+	SCR_RunDelayed("cam_play",19.0);
+
+	SCR_RunDelayed("Podzeg_Radiorubka_Fires",25.0);
+	//SCR_RunDelayed("Activate_Radiorubka_Fires",130.0);
+	SCR_SetVarS32("Ob5_sys" , 0);
+	
+}
+
+void activity_air()
+{
+	ENT_SetCapacityTarget(5000849, "CouldBeUse" ,1);
+	ENT_SetVisibility(5008619,1);
+}
+
+void cathang_mes1()
+{
+	PNL_PrintSubtitle("&Duss_cathang_mess1");
+}
+
+void cathang_mes2()
+{
+	PNL_PrintSubtitle("&Duss_cathang_mess2");
+}
+
+void cathang_tel_cam1()
+{
+	CAM_TeleportToWayPoint(ENT_FindByName("cathang_cam1"));
+}
+
+void cathang_go_cam2()
+{
+	CAM_CinematicSetToWaypoint(ENT_FindByName("cathang_cam2"), 3.0);
+}
+
+void cathang_go_cam3()
+{
+	CAM_CinematicSetToWaypoint(ENT_FindByName("cathang_cam3"), 3.0);
+
+}
+
+void cathang_tel_cam4()
+{
+	CAM_TeleportToWayPoint(ENT_FindByName("cathang_cam4"));
+}
+
+void cathang_tel_cam5()
+{
+	CAM_TeleportToWayPoint(ENT_FindByName("cathang_cam5"));
+}
+
+void Podzeg_fire1()
+{
+	FIR_HPAddIntensity(5004358, 130.0 ); 
+}
+
+void Podzeg_fire2()
+{
+	FIR_HPAddIntensity(ENT_FindByName("tube_fire"), 60.0 ); 
+
+}
+
+void Podzeg_balonov()
+{
+	FIR_HPAddIntensity(ENT_FindByName("balony_fire"), 160.0 ); 
+	SCR_SetVarS32("Ob7_sys" , 0);
+}
+
+void Podzeg_Radiorubka_Fires()
+{
+	FIR_HPAddIntensity(ENT_FindByName("radiorubka_podzeg_fire"), 60.0 );
+
+}
+
+void Activate_Radiorubka_Fires()
+{
+	FIR_HPEnable(ENT_FindByName("radiorubka_fire"),1);
+
+}
+
+void Exploid_Tube()
+{
+	ENT_SetDamage(5004320,0.0);
+	ENT_SetDamage(5004578,0.0);
+	FIR_HPAddIntensity(5004319, 130.0 );
+}
+///////////////////start catFly
+void Cat_Fly()
+{
+	
+	if(SCR_GetVarS32("CatRadio_Start")==1)
+	{
+		SCR_RunDelayed("Cat_Fly",16.0);
+	}
+	
+	else
+	{
+	SCR_RunDelayed("flag_fly_start",0.0);
+	CAM_Cinematic(1);
+	CAM_ModeCinematic();
+	CAM_SetInertia(1.0);
+
+	SCR_SetVarS32("Plane_Vzletel",1);
+
+	SCR_RunDelayed("catfly_tel_cam1",0.0);
+	SCR_RunDelayed("Start_Propelers",2.0);
+	SCR_RunDelayed("Start_Fly",4.0);
+	SCR_RunDelayed("catfly_go_cam2",5.0);
+	SCR_RunDelayed("Stop_Fly",17.0);
+	SCR_RunDelayed("Hide_Plane",17.4);
+	SCR_RunDelayed("catfly_tel_cam4",17.0);
+	SCR_RunDelayed("cam_play",17.5);
+	SCR_RunDelayed("Canadair_support",20.0);
+	ENT_SetVisibility(5008619,0);
+	SCR_RunDelayed("flag_fly_end",18.0);
+
+	}
+}
+
+void flag_fly_start()
+{
+	SCR_SetVarS32("CatFly_Start",1);
+}
+
+void flag_fly_end()
+{
+	SCR_SetVarS32("CatFly_Start",0);
+}
+
+
+void cam_play()
+{
+	CAM_Cinematic(0);
+	CAM_SetInertia(0.0);
+	CAM_ModePlay();
+	PNL_ClearSubtitle();
+} 
+
+void Hide_Plane()
+{
+	ENT_SetVisibility(5000849,0);
+}
+void Start_Propelers()
+{
+	ENT_SwitchState(5000849);
+}
+
+void Start_Fly()
+{
+	SCR_SetVarS32("Air_Run_Var",1);
+}
+
+void Stop_Fly()
+{
+	SCR_SetVarS32("Air_Run_Var",0);
+}
+
+void catfly_tel_cam1()
+{
+	CAM_TeleportToWayPoint(ENT_FindByName("catfly_cam1")); 
+}
+
+void catfly_go_cam2()
+{
+	CAM_CinematicSetToWaypoint(ENT_FindByName("catfly_cam2"), 7.0);
+}
+
+void catfly_tel_cam4()
+{
+	CAM_TeleportToWayPoint(ENT_FindByName("catfly_cam4")); 
+}
+
+void AirPlane_Go()
+{
+	f32  x, y;
+
+	ENT_GetPosition(5000849, x , y ) ; 
+
+	if(SCR_GetVarF32("end_x") >x)
+   	 {
+	
+		f32 S;
+		S = 130;
+		ENT_SetPosition(5000849, x+S, y);
+	}
+}
+	
+
+///////////////////End CatFly
+
+////////////////////start Cat_Radio
+
+void Cat_Radio()
+{
+
+	if(SCR_GetVarS32("CatFly_Start")==1)
+	{
+		SCR_RunDelayed("Cat_Radio",25.0);
+	}
+	else
+	{
+	CAM_Cinematic(1);
+	CAM_ModeCinematic();
+	CAM_SetInertia(1.0);
+
+	SCR_RunDelayed("flag_radio_start" ,0.0);
+	
+	ENT_SetCapacityTarget(5003470, "CouldBeUse" ,1);
+	ENT_SetVisibility(5005328,1);
+
+	SCR_RunDelayed("Samolet_Disactivate" , 0.0);	
+
+	SCR_RunDelayed("catradio_tel_cam1",0.0);
+
+	SCR_RunDelayed("catradio_mes1" , 1.0);
+
+	SCR_RunDelayed("catradio_go_cam2",2.0);
+
+	SCR_RunDelayed("catradio_tel_cam3" , 8.0);
+	
+	SCR_RunDelayed("catradio_mes2", 8.5);
+
+	SCR_RunDelayed("cam_play",15.0);
+
+	SCR_RunDelayed("flag_radio_end",16.0);
+
+	SCR_RunDelayed("add_obbj6",16.0);
+	if(SCR_GetVarS32("Lock_On")==0)
+	{
+		SCR_RunDelayed("Samolet_Activate",16.0);
+	}
+	}
+}
+
+void flag_radio_start()
+{
+	SCR_SetVarS32("CatRadio_Start",1);
+}
+
+void flag_radio_end()
+{
+	SCR_SetVarS32("CatRadio_Start",0);
+}
+
+void Samolet_Disactivate()
+{
+	ENT_SetCapacityTarget(5000849, "CouldBeUse" ,0);
+}
+
+void Samolet_Activate()
+{
+	ENT_SetCapacityTarget(5000849, "CouldBeUse" ,1);
+}
+
+void catradio_mes1()
+{
+
+	PNL_PrintSubtitle("&Duss_catradio_mess1");
+}
+
+void catradio_mes2()
+{
+
+	PNL_PrintSubtitle("&Duss_catradio_mess2");
+}
+
+void catradio_tel_cam1()
+{
+	CAM_TeleportToWayPoint(ENT_FindByName("catradio_cam1"));
+}
+
+void catradio_go_cam2()
+{
+	CAM_CinematicSetToWaypoint(ENT_FindByName("catradio_cam2"), 5.0);
+}
+
+void catradio_tel_cam3()
+{
+	CAM_TeleportToWayPoint(ENT_FindByName("catradio_cam3"));
+}
+////////////////////end Cat_Radio
+////////////////////////end catsceny 
+
+
+//////////////////////////////////start dopolnitelniy objectiv
+
+void Start_WorkShoop_Event()
+{
+	SCR_RunDelayed("Podzeg_Gruzovika", 1.0);
+	SCR_RunDelayed("Podzeg_Bochki" , 4.0);
+	SCR_RunDelayed("Vzriv_Bochki" , 8.0);
+	SCR_RunDelayed("Podzog_Trailera",8.3);
+}
+
+void Podzeg_Gruzovika()
+{
+	FIR_HPAddIntensity(5004996,150.0);
+	FIR_HPAddIntensity(5004995, 60.0);
+	FIR_HPAddIntensity(5004994, 60.0);
+}
+
+void Podzeg_Bochki()
+{
+	FIR_HPAddIntensity(5010081, 60.0);
+}
+
+void Vzriv_Bochki()
+{
+	ENT_SetDamage(5010077,0.0);
+}
+
+void Podzog_Trailera()
+{
+	FIR_HPAddIntensity(5010114,150.0);
+	FIR_HPAddIntensity(5010116, 60.0);
+	FIR_HPAddIntensity(5010118, 20.0);
+}
+//////////////////////////////////end dopolnitelniy objectiv

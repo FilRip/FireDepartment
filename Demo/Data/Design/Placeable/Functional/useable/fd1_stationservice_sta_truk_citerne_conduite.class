@@ -1,0 +1,23 @@
+[#INCLUDE]
+FILE0 = "base_useable.class"
+
+[DISPLAY]
+MODEL = FD1_StationService\fd1_stationservice_sta_truk_citerne
+
+[DAMAGE]
+USEDAMAGE = 1
+CARBONISABLE = 0
+FIREDAMAGECOEF = 1
+LIFEPOINTS = 100
+MAXLIFEPOINTS = 100
+
+[CAPACITIES_ACTIONS]
+COULDBEUSE = 0
+COULDBEREPAIR = 1
+
+[EXPLOSION]
+CANEXPLODE = 0
+
+[LOGICAL_STATE]
+S01_USER_ANIM = ItemChar\ic_pick_up_down
+S01__NAME = use

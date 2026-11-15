@@ -1,0 +1,1022 @@
+// Scripts Mall_Scenar
+// 18/05/04 : Création à partir de street
+// 27/07/04 Olivier : modifs
+
+
+/* init ******************************************************************************************/
+//-
+void Mall_StartScenar()
+{
+	// passer ScenarTrans à 0 quand y'aura des checks
+	SCR_SetVarS32("ScenarTrans",0);
+	SCR_SetVarS32("CurrentScenar",1);
+
+	// permet de faire souffler le joueur
+	// par défaut 3 sec avant d'enchaîner les actes
+	SCR_SetVarF32("ScenarTempo",3.0);
+	// pour attendre un moment avant les checks de passage aux actes suivants
+	SCR_SetVarF32("TimerScenar", UTL_GetGameTime() + 10.0 );
+}
+
+
+/* main ******************************************************************************************/
+//-
+void Mall_CheckScenar()
+{
+	if ( UTL_GetGameTime() > 1.0 )
+	{
+		s32 ScenarTrans;
+		s32 CurrentScenar;
+
+		ScenarTrans = SCR_GetVarS32("ScenarTrans");
+		CurrentScenar = SCR_GetVarS32("CurrentScenar");
+
+		// si on est pas en train de faire une transition
+		if (ScenarTrans != -1)
+		{
+			// si on a une transition à faire
+			if (ScenarTrans != 0)
+			{
+				// on lance la transition
+				SCR_SetVarS32("ScenarTrans" , -1 );
+				SCR_RunDelayed("TransitionS" + ScenarTrans , SCR_GetVarF32("ScenarTempo") );
+			}
+			else
+			{
+				// sinon on check le scenar
+				SCR_RunDelayed("CheckScenario" + CurrentScenar , 0.0 );
+			}
+		}
+	}
+}
+
+
+/* partie 1 **************************************************************************************/
+//-
+void CheckScenario1()
+{
+	s32 fps , t;
+	
+	t = SCR_GetVarS32("script_t");
+	fps = SCR_GetVarS32("script_fps");
+	
+	// anims de tirs sur le pont
+	if ( mod(t, SCR_GetVarS32("civ_anim_nextStep")*fps )==0 )
+	{
+		animTirs( getEI("gp_civ_copBridge") );
+		animTirs( getEI("gp_civ_ganBridge") );
+		SCR_SetVarS32("civ_anim_nextStep", RandomS32(1,3) );
+	}
+	
+	if ( UTL_GetGameTime() > SCR_GetVarF32("TimerScenar") )
+		if ( ( FIR_HPGetActiveIntensity( getEI("gp_hp_sc1") ) ==0.0 ) || ( SCR_GetVarS32("SkipSreetCrash") ==1 ) )
+			SCR_SetVarS32("ScenarTrans",2);
+}
+
+
+//-
+void TransitionS2()
+{
+	s32 obj;
+	f32 x, y;
+	
+	LEV_RoofVisibility("mall_theater_roof",0);
+	SCR_SetVarS32("CurrentScenar" , 2 );
+	
+	// activation des tps du cinéma
+	//setTPActivity(1,1);
+	//setTPActivity(2,1);
+
+	// [edit] l'électricité se s'allume plus
+	
+	obj = LEV_AddObjectiveIterate("&Maul_Obj2",0.0, SCR_GetVarF32("obj_civCine_maxSaved") ,1,0);
+	SCR_SetVarS32("objIndex_civCine",obj);
+	
+	ENT_GetPosition( getEI("wp_obj_civCine") ,x,y);
+	LEV_SetObjectivePos(obj,x,y);
+	
+	SCR_SetVarS32("ScenarTrans" , 0 );
+	SCR_SetVarF32("TimerScenar" , UTL_GetGameTime() + 30.0 );
+}
+
+/* partie 2 **************************************************************************************/
+//-
+void CheckScenario2()
+{
+	s32 fps , t;
+	f32 randomF;
+	
+	randomF = UTL_GetRandom();
+	
+	t = SCR_GetVarS32("script_t");
+	fps = SCR_GetVarS32("script_fps");
+	
+	// anims de tirs sur le pont
+	if ( mod(t, SCR_GetVarS32("civ_anim_nextStep")*fps )==2 )
+	{
+		animTirs( getEI("gp_civ_copBridge") );
+		animTirs( getEI("gp_civ_ganBridge") );
+		SCR_SetVarS32("civ_anim_nextStep", RandomS32(1,3) );
+	}
+
+	if ( mod(t,2*fps)==0 )
+	{
+		smokeDistribution(1);
+		
+		if ( SCR_GetVarS32("ElectricityOn") ==1 )
+		{
+			if ( randomF<0.15 ) elecGresil(1);
+			else if ( randomF>0.75 ) elecExplo(1);
+		}
+	}
+	
+	
+	if ( UTL_GetGameTime() > SCR_GetVarF32("TimerScenar") )
+	{
+		if ( SCR_GetVarF32("timerNextScenar")!=0.0 )
+		{
+			if ( UTL_GetGameTime() > SCR_GetVarF32("timerNextScenar") )
+				SCR_SetVarS32("ScenarTrans",3);
+			else if ( SCR_GetVarS32("obj_civCine_end")!=0 && FIR_HPGetActiveIntensity( getEI("gp_hp_sc2") ) <=300.0 )
+				SCR_SetVarS32("ScenarTrans",3);
+		}
+/*		else if ( SCR_GetVarS32("obj_civCine_end")!=0 || FIR_HPGetActiveIntensity( getEI("gp_hp_sc2") ) <=300.0 )
+		{
+			// dès qu'un des objectifs remplis, timer lancé pour forcer le passage au scénar suivant
+			SCR_SetVarF32("timerNextScenar", UTL_GetGameTime()+RandomF32(20.0,50.0) );
+		}
+*/		else if ( FIR_HPGetActiveIntensity( getEI("gp_hp_sc2") ) <=2000.0 )
+		{
+			// dès qu'un des objectifs remplis, timer lancé pour forcer le passage au scénar suivant
+			SCR_SetVarF32("timerNextScenar", UTL_GetGameTime()+RandomF32(20.0,50.0) );
+		}
+		else if ( UTL_GetGameTime() > SCR_GetVarF32("TimerScenar") + 300.0 )
+		{
+			// timer, au bout de 6 minutes on passe à l'hélico de toute façon
+			SCR_SetVarF32("timerNextScenar", UTL_GetGameTime()+RandomF32(20.0,40.0) );
+		}
+	}
+}
+
+
+//-
+void TransitionS3()
+{
+	f32 x, y;
+	
+	LEV_RoofVisibility("mall_shops_roof",0);
+	
+	PNL_StartCutscene("data/video/mall_bridge.bik");
+	
+	ENT_GetPosition( getEI("ent_grenade_bridge") ,x,y);
+	PNL_AddMessage("VOCAL_MALL_Maul_Warn4","&Maul_Warn4",x,y);
+	
+	SCR_RunDelayed("animBridge1",0.0);
+	
+	SCR_SetVarF32("TimerScenar" , UTL_GetGameTime() + 90.0 );
+	SCR_SetVarF32("timerNextScenar",0.0);
+}
+
+
+/* partie 3 **************************************************************************************/
+//-
+void CheckScenario3()
+{
+	s32 fps , t;
+	f32 randomF;
+	
+	randomF = UTL_GetRandom();
+	
+	t = SCR_GetVarS32("script_t");
+	fps = SCR_GetVarS32("script_fps");
+	
+	if ( mod(t,2*fps)==0 )
+	{
+		smokeDistribution(2);
+		
+		if ( SCR_GetVarS32("ElectricityOn") ==1 )
+		{
+			if ( randomF<0.15 ) elecGresil(2);
+			else if ( randomF>0.75 ) elecExplo(2);
+		}
+	}
+
+
+	if ( UTL_GetGameTime() > SCR_GetVarF32("TimerScenar") )
+	{
+		if ( SCR_GetVarF32("timerNextScenar")!=0.0 )
+		{
+			if ( UTL_GetGameTime() > SCR_GetVarF32("timerNextScenar") )
+				SCR_SetVarS32("ScenarTrans",4);
+			else if ( SCR_GetVarS32("obj_saveCop_end")!=0 && FIR_HPGetActiveIntensity( getEI("gp_hp_sc3") ) <=300.0 )
+				SCR_SetVarS32("ScenarTrans",4);
+		}
+		else if ( /*SCR_GetVarS32("obj_saveCop_end")!=0 ||*/ FIR_HPGetActiveIntensity( getEI("gp_hp_sc3") ) <=1500.0 )
+		{
+			// dès qu'un des objectifs remplis, timer lancé pour forcer le passage au scénar suivant
+			SCR_SetVarF32("timerNextScenar", UTL_GetGameTime()+RandomF32(20.0,50.0) );
+		}
+		else if ( UTL_GetGameTime() > SCR_GetVarF32("TimerScenar") + 360.0 )
+		{
+			// timer, au bout de 6 minutes on passe à l'hélico de toute façon
+			SCR_SetVarF32("timerNextScenar", UTL_GetGameTime()+RandomF32(20.0,40.0) );
+		}
+	}
+}
+
+
+void TransitionS4()
+{
+	PNL_StartCutscene("data/video/mall_helico.bik");
+	PNL_AddMessage("VOCAL_MALL_Maul_Warn2","&Maul_Warn2",0.0,0.0);
+	PNL_AddMessage("VOCAL_MALL_Maul_Warn3","&Maul_Warn3",0.0,0.0);	
+	SCR_RunDelayed("CrashHelico" , 0.0 );
+	
+	SCR_RunDelayed("Renfort_2",45.0);
+}
+
+
+/* partie 4 **************************************************************************************/
+//-
+void CheckScenario4()
+{
+	s32 fps , t;
+	
+	t = SCR_GetVarS32("script_t");
+	fps = SCR_GetVarS32("script_fps");
+	
+	if ( mod(t,2*fps)==5 )
+	{
+		smokeDistribution(3);
+	}
+
+	if ( UTL_GetGameTime() > SCR_GetVarF32("TimerScenar") )
+	{
+		if ( FIR_HPGetActiveIntensity( getEI("gp_hp_all") ) ==0.0 )
+		{	SCR_SetVarS32("ScenarTrans",999);
+			LEV_ValidateObjective( SCR_GetVarS32("objIndex_extinguishFire") ,1);
+			// Si l'objectif des oeuvres à été lancé
+			if ( SCR_GetVarS32("objIndex_oa")!=-1 )
+			{
+				LEV_ValidateObjective( SCR_GetVarS32("objIndex_oa") ,1);
+				SCR_SetVarS32("obj_oa_end",-1);
+			}
+		}
+	}
+}
+
+
+/* transitions de fin de niveau ******************************************************************/
+//-
+void TransitionS666()
+{
+	PNL_AddMessage("VOCAL_MISSION_FAILURE","&MissionFailure",0.0,0.0);
+	SCR_RunDelayed("Defeat",2.0);
+}
+
+
+//-
+void TransitionS999()
+{
+	PNL_AddMessage("VOCAL_MISSION_SUCCESS","&MissionSuccess",0.0,0.0);
+	SCR_RunDelayed("Victory",2.0);
+}
+
+
+/* cinématiques **********************************************************************************/
+//- début intro
+void CameraIntro ()
+{
+	CAM_ModeCinematic();
+	CAM_Cinematic(1);
+
+	SCR_SetVarF32("InertiaBackup", CAM_GetInertia() );
+	CAM_SetInertia(1.0);
+	
+	SCR_RunDelayed("CameraCarambolage",3.0);
+}
+
+void CameraCarambolage ()
+{
+	CAM_TeleportToWayPoint( getEI("cam_carambolage") );
+
+	SCR_RunDelayed("CameraDispatch1",3.2);
+}
+
+void CameraDispatch1 ()
+{
+	CAM_TeleportToWayPoint( getEI("cam_dispatch1") );
+
+	SCR_RunDelayed("CameraDispatch2",1.5);
+}
+
+void CameraDispatch2 ()
+{
+	CAM_TeleportToWayPoint( getEI("cam_dispatch2") );
+
+	SCR_RunDelayed("CameraDispatch3",1.5);
+}
+
+void CameraDispatch3 ()
+{
+	CAM_TeleportToWayPoint( getEI("cam_dispatch3") );
+
+	SCR_RunDelayed("CameraDispatch4",2.0);
+}
+
+void CameraDispatch4 ()
+{
+	//CAM_SetToWayPoint( getEI("cam_dispatch4") );
+
+	SCR_RunDelayed("CameraOutro",2.0);
+}
+
+
+//- fin intro
+void CameraOutro ()
+{
+	s32 obj;
+	f32 x, y;
+	
+	CAM_SetInertia( SCR_GetVarF32("InertiaBackup") );
+	
+	CAM_TeleportToWayPoint( getEI("cam_outro") );
+	
+	CAM_ModePlay();
+	CAM_Cinematic(0);
+	
+	obj = LEV_AddObjectiveBoolean("&Maul_Obj1",0);
+	SCR_SetVarS32("objIndex_street",obj);
+	
+	ENT_GetPosition( getEI("wp_obj_street") ,x,y);
+	LEV_SetObjectivePos(obj,x,y);
+}
+
+
+/* renforts **************************************************************************************/
+//-
+void Renfort_0 ()
+{
+	LEV_CallInitialDispatch();
+}
+
+void Renfort_1 ()
+{
+//	LEV_GrantReinforcement();
+	LEV_GrantSpecificReinforcement(1);
+}
+
+void Renfort_2 ()
+{
+//	LEV_GrantReinforcement();
+	LEV_GrantSpecificReinforcement(2);
+}
+
+
+/* anims explosion du pont ***********************************************************************/
+//- 1 les policiers qui courent
+void animBridge1 ()
+{
+	SCR_RunDelayedEntity("ExploBridgeAnimCop",0.2,1);
+
+	SCR_RunDelayed("animBridge2",2.0);
+}
+
+
+//- 2 explosion
+void animBridge2 ()
+{
+	s32 i, length;
+	EntityID trig, group, unit;
+	
+	// bloque le déplacement des policiers puis les rend invisibles
+	SCR_SetVarS32("stopSTFC",1);
+	
+	for (i=2; i<=4; i+=1)
+	{	ENT_SetVisibility( getEI( "civil_cop"+i ) ,0);
+	}
+	
+	// explo grenade
+	ENT_SetDamage( getEI("ent_grenade_bridge") ,0.0);
+	FIR_HPAddIntensity( SCR_GetVarS32("HPPont") , 50.0 );
+	
+	// destruction du pont et vitre dessous
+	ENT_SetDamage( getEI("Bridge") ,0.0);
+	ENT_SetDamage( getEI("ent_bridgePane") ,0.0);
+	
+	PlayParticle( getEI("Bridge") ,1.0,"Smoke_Outside1");
+	
+	SCR_RunDelayed("animBridge3",2.0);
+	SCR_RunDelayed("animBridge4",2.0);
+	
+	// tue les unités sous le pont
+	group = ENT_GroupCreate("__gp_bridge__");
+	
+	TRG_FillGroupWithContent( getEI("trig_bridge") ,group);
+	length = ENT_GroupGetNbEntities(group);
+	
+	for (i=0; i<length; i+=1)
+	{	
+		unit = ENT_GroupGetEntityAt(group,i);
+		if ( ENT_GetType(unit)==13 || ENT_GetType(unit)==14 )
+		{	
+			ENT_SetDamage(unit,0.0);
+		}
+	}
+	ENT_Destroy(group);
+}
+
+
+//- 3 débris
+void animBridge3 ()
+{
+	EntityID e;
+	s32 i, obj;
+	f32 x, y;
+
+	for (i=1; i<=4; i+=1)
+	{
+		e = getEI( "BridgePiece"+i );
+		ENT_SetVisibility(e,1);
+		SCR_RunDelayedArgs("PlayParticleDelayed",1.0,e,1.0,"Smoke_Outside1");
+	}
+
+//	ENT_SetVisibility(SCR_GetVarS32("gp_axe_debris") , 1 );
+
+	for (i=1; i<=4; i+=1)
+	{
+		ENT_SetVisibility(SCR_GetVarS32("axe_debris_" + i ) , 1 );
+	}
+
+	ENT_SetVisibility( getEI("gp_ent_trashBridge") ,1);
+
+	// ajout obj : trouver les policiers
+// Délivrer les 3 policiers avant la fin du timer
+	obj = LEV_AddObjectiveProgress("&Maul_Obj3",0.0, SCR_GetVarF32("TimerDiff") ,1,0);
+	SCR_SetVarF32("TimerEboulis" , 1.0 );
+
+//	obj = LEV_AddObjectiveIterate("&Maul_Obj3",0.0, SCR_GetVarF32("obj_saveCop_maxSaved") ,1,0);
+	SCR_SetVarS32("objIndex_saveCop",obj);
+	
+	ENT_GetPosition( getEI("wp_obj_saveCop") ,x,y);
+	LEV_SetObjectivePos(obj,x,y);
+	
+	// renfort
+	SCR_RunDelayed("Renfort_1",35.0);
+	
+	// activation des TPs du batiment
+	//setTPActivity(3,1);
+	//setTPActivity(4,1);
+	setTPActivity(5,1);
+	SCR_RunDelayed("CorrectionTeleport",25.0);
+	//setTPActivity(6,1);
+
+	
+	// passage au scénario suivant
+	SCR_SetVarS32("CurrentScenar",3);
+	SCR_SetVarS32("ScenarTrans",0);
+}
+
+void CorrectionTeleport()
+{
+	setTPActivity(5,0);	
+}
+
+//- 4 déplacement des gangsters et du policier bloquant l'entrée
+void animBridge4 ()
+{
+	entMoveToWP( getEI("gp_civ_ganBridge") , getEI("wp_gan1") );
+	
+	entMoveToWP( getEI("civil_cop1") , getEI("wp_cop1_move1"));
+	
+	// ouverture de la porte invisible pour accès au batiment scénario 3
+	ENT_SwitchState( getEI("ent_invisiDoor") );
+	
+	SCR_RunDelayed("animBridge5",7.0);
+	SCR_RunDelayed("animBridge5b",6.0);
+}
+
+
+//- 5bis joue l'anim d'attente sur le policier
+void animBridge5b ()
+{
+	ANM_Play( getEI("civil_cop1") ,"SingleChar\sc_wait_civil_man1","loop",1);
+}
+
+
+//- 5 déplacement des gangsters
+void animBridge5 ()
+{
+	entMoveToWP( getEI("gp_civ_ganBridge") , getEI("wp_gan2") );
+	SCR_RunDelayed("animBridge6",40.0);
+	SCR_RunDelayed("animBridge_clearGan",35.0);
+}
+
+
+//- debug : disparition des gangsters
+// évite que les gangsters soient présents en 2 endroits différents si
+// le joueur les empêche de prendre le téléport en bloquant le passage
+void animBridge_clearGan ()
+{
+	ENT_SetVisibility( getEI("gp_civ_ganBridge") ,0);
+}
+
+
+//- 6 fenêtre cassée
+void animBridge6 ()
+{
+	ENT_SetDamage( getEI("ent_windowRoof") ,0.0);
+	
+	SCR_RunDelayed("animBridge7",1.0);
+}
+
+
+//- 7 déplacement gangsters sur le toit
+void animBridge7 ()
+{
+	s32 i;
+	
+	for (i=3; i<=5; i+=1)
+	{	
+		entMoveToWP( getCivilEI(i+9) , getEI( "wp_gan"+i ) );
+	}
+	
+	SCR_RunDelayed("animBridge8",13.0);
+}
+
+
+//- 8 anim d'attente sur gangsters
+void animBridge8 ()
+{
+	// direction des gangsters vers l'hélico
+	ENT_SetFullOrientation( getCivilEI(12) ,0.0,0.0,1.40);
+	ENT_SetFullOrientation( getCivilEI(13) ,0.0,0.0,1.22);
+	ENT_SetFullOrientation( getCivilEI(14) ,0.0,0.0,0.87);
+}
+
+
+//- déplacement des policiers pendant l'anim
+void ExploBridgeAnimCop (s32 runAnim)
+{
+	s32 i;
+	f32 x, y;
+	EntityID cop;
+	
+	if ( SCR_GetVarS32("stopSTFC")==0 )
+	{
+		for (i=2; i<=4; i+=1)
+		{
+			cop = getEI( "civil_cop"+i );
+
+			if ( runAnim==1 )
+			{
+				ANM_Stop(cop);
+				ANM_Play(cop,"SingleChar\sc_run_generic_fireman","loop",1);
+				SCR_SetVarS32("animCopNoFire",1);
+			}
+
+			ENT_GetPosition(cop,x,y);
+			x += SCR_GetVarF32( "vect_p"+i+"_x" );
+			y += SCR_GetVarF32( "vect_p"+i+"_y" );
+			ENT_SetForcedPosition(cop,x,y);
+		}
+
+		if ( x>13950.0 )
+		{
+			SCR_RunDelayedEntity("ExploBridgeAnimCop",0.2,0);
+		}
+		else
+		{
+			for (i=2; i<=4; i+=1)
+			{
+				cop = getEI( "civil_cop"+i );
+
+				ANM_Stop(cop);
+				ANM_Play(cop,"SingleChar\sc_shoot_gun","loop",1);
+			}
+		}
+	}
+}
+
+
+/* animations crash hélico ***********************************************************************/
+//- 1 arrivée hélico
+void CrashHelico ()
+{
+	EntityID helico;
+	
+	helico = getEI("ent_helico");
+	
+	ENT_SetVisibility(helico,1);
+	ENT_SetDamage(helico,50.0);
+	
+	SCR_RunDelayedEntity("tirsGan",17.0,12);
+	SCR_RunDelayedEntity("tirsGan",17.2,13);
+	SCR_RunDelayedEntity("tirsGan",17.4,14);
+	
+	SCR_RunDelayed("Boom1",26.0);
+}
+
+
+//- 2 anims tir sur hélico
+void tirsGan (s32 civNum)
+{
+	EntityID ei;
+	ei = getCivilEI(civNum);
+		
+	ANM_Stop(ei);
+	ANM_Play(ei,"SingleChar\sc_shoot_gun","loop",1);
+}
+
+
+//- 3 explosion1 hélico
+void Boom1 ()
+{
+	ENT_SetDamage( getEI("ent_grenade_helico1") ,0.0);
+	ENT_SetUnitState( getCivilEI(12) , 3 );
+	//ENT_AddStamina( getCivilEI(12) , -100.0);
+// Rajout Tef
+	ENT_SetUnitState( getCivilEI(14) , 3 );
+	//ENT_SetStamina( getCivilEI(14) ,0.0);
+	ENT_SetUnitState( getCivilEI(19) , 3 );
+	
+	SCR_RunDelayed("moveGan",1.0);
+	SCR_RunDelayed("Boom2",4.0);
+}
+
+
+//- 4 fuite des gangsters
+void moveGan ()
+{
+	s32 i, iWP;
+	EntityID ei;
+
+	iWP = 6;
+	for (i=12; i<=14; i+=1)
+	{
+		ei = getCivilEI(i);
+		
+		//ENT_SetUnitState(ei,1);
+		
+		if ( ENT_GetStamina(ei)!=0.0 )
+		{
+			entMoveToWP(ei, getEI( "wp_gan"+iWP ) );
+			iWP += 1;
+		}
+	}
+}
+
+
+//- 5 crash hélico au sol
+void Boom2 ()
+{
+	s32 obj, i;
+	f32 x, y;
+	
+	ENT_SetDamage( getEI("ent_grenade_helico2") ,0.0);
+	FIR_HPAddIntensity( SCR_GetVarS32("HPHeli") , 50.0 );
+		
+	// fin de la transition -> passage au scénar 4
+		
+	obj = LEV_AddObjectiveIterate("&Maul_Obj4",0.0, SCR_GetVarF32("obj_saveGan_maxSaved") ,1,0);
+	SCR_SetVarS32("objIndex_saveGan",obj);
+	
+	ENT_GetPosition( getEI("wp_obj_saveGan") ,x,y);
+	LEV_SetObjectivePos(obj,x,y);
+	
+	obj = LEV_AddObjectiveBoolean("&Fireworks_Obj_4",0);
+	SCR_SetVarS32("objIndex_extinguishFire",obj);
+	
+	// activation du tp du batiment
+	setTPActivity(7,1);
+	
+	// les gangsters deviennent sauvables
+//	for (i=12; i<=14; i+=1)
+//	{
+//		ENT_SetCapacityTarget( getCivilEI(i) ,"CouldBeRescue",1);
+//	}
+	ENT_SetUnitState( getCivilEI(13) , 1 );
+	
+	SCR_SetVarS32("ScenarTrans",0);
+	SCR_SetVarS32("CurrentScenar",4);
+	SCR_SetVarF32("TimerScenar", UTL_GetGameTime() +30.0 );
+	
+	SCR_RunDelayed("Boom3",4.0);
+}
+
+void Boom3()
+{
+	FIR_HPEnable( SCR_GetVarS32("hpafterboom") , 1 );
+}
+
+/* animations de policiers ***********************************************************************/
+
+//- joue des anims aléatoires sur les civils du groupe
+s32 animTirs (EntityID civGroup)
+{
+	s32 l, i;
+	EntityID civ;
+	
+	if ( SCR_GetVarS32("animCopNoFire")==1 )
+		return;
+	
+	l = ENT_GroupGetNbEntities(civGroup);
+	i = getEI( "gp_"+civGroup+"_currI" );
+	
+	if ( i>=l )
+		i = 0;
+
+	civ = ENT_GroupGetEntityAt(civGroup,i);
+	ANM_Stop(civ);
+	ANM_Play(civ, getRandomAnim() ,"loop",1);
+	
+	i += 1;
+	
+	SCR_SetVarS32( "gp_"+civGroup+"_currI" ,i);
+}
+
+
+//- retourne une anim aléatoire
+mcString getRandomAnim ()
+{
+	mcString anim;
+	s32 n;
+	
+	n = RandomS32(1,6);
+	
+	if ( n==1 )
+	{
+		anim = "SingleChar\sc_wait_civil_man1";
+	}
+	else if ( n==2 )
+	{
+		anim = "SingleChar\sc_wait_civil_man2";
+	}
+	else
+	{
+		anim = "SingleChar\sc_shoot_gun";
+	}
+	
+	return (anim);
+}
+
+
+/* [debut] explosions et gresillements électriques ***********************************************/
+
+//- explosion aléatoire
+s32 elecExplo (s32 elecNum)
+{
+	s32 rI;
+	
+	rI = getRandomLightNum(elecNum);
+	
+	if ( SCR_GetVarS32( "light_block"+rI+"_status" )==1 )
+	{
+		FIR_HPAddIntensity( getEI( "light_block"+rI+"_hp" ) ,100.0);
+		SCR_SetVarS32( "light_block"+rI+"_status" ,-1);
+	}
+	
+	return (0);
+}
+
+
+//- déclenche un grésillement aléatoire
+s32 elecGresil (s32 elecNum)
+{
+	s32 rI;
+	EntityID hp, light, item;
+	
+	rI = getRandomLightNum(elecNum);
+	
+	if ( SCR_GetVarS32( "light_block"+rI+"_status" )==0 )
+	{
+		hp = getEI( "light_block"+rI+"_hp" );
+		item = getEI( "light_block"+rI+"_i" );
+		light = getEI( "light_block"+rI+"_l" );
+		
+		SCR_SetVarS32( "light_block"+rI+"_status" ,1);
+		
+		// effet électrique sur item
+		ENT_SetPropertyValueS32(item,"PARTICLES","00ACTIVE",1);
+		
+		// le hp électrique s'active
+		FIR_HPEnable(hp,1);
+		
+		/* MAJ les clignotements de lumière sont supprimés
+		
+			// la lumière se coupe
+			ENT_SetPropertyValueS32(light,"LIGHT","Light00_Active",0);
+		
+		*/
+		
+		SCR_RunDelayedArgs("GresilUpdate", UTL_GetRandom() ,rI,0.0,"");
+	}
+	
+	return (0);
+}
+
+
+//- clignotement de la pièce
+// MAJ s'occupe uniquement de désactiver le hotpoint électrique
+void GresilUpdate (EntityID rI, f32 cpt, mcString useless)
+{
+	s32 n;
+	f32 coef;
+	EntityID light;
+	
+	light = getEI( "light_block"+rI+"_l" );
+	
+	n = cpt;
+	
+	// la pièce arrete de grésiller au bout de 41 ou si on coupe l'électricité
+	if ( n==41 || SCR_GetVarS32("ElectricityOn")==0 )
+	{
+		EntityID hp, item;
+		s32 status;
+		
+		hp = getEI( "light_block"+rI+"_hp" );
+		item = getEI( "light_block"+rI+"_i" );
+		status = SCR_GetVarS32( "light_block"+rI+"_status" );
+		
+		if ( status==1 )
+		{
+			SCR_SetVarS32( "light_block"+rI+"_status" ,0);
+		}
+		
+		// effet électrique sur item disparaît
+		ENT_SetPropertyValueS32(item,"PARTICLES","00ACTIVE",0);
+		
+		// le hp électrique se désactive
+		FIR_HPEnable(hp,0);
+		
+		/* MAJ les clignotements de lumière sont supprimés
+		
+			// la lumière se coupe
+			ENT_SetPropertyValueS32(light,"LIGHT","Light00_Active",0);
+		
+		*/
+		
+		return;
+	}
+	
+	/* MAJ les clignotements de lumière sont supprimés
+
+		if ( mod(n,2)==0 )
+		{
+			ENT_SetPropertyValueS32(light,"LIGHT","Light00_Active",1);
+			coef = 2.0;
+		}
+		else
+		{
+			ENT_SetPropertyValueS32(light,"LIGHT","Light00_Active",0);
+			coef = 0.8;
+		}
+
+	*/
+	coef = 2.0;
+	SCR_RunDelayedArgs("GresilUpdate", UTL_GetRandom()*coef ,rI, cpt+1.0 ,useless);
+}
+
+
+//- retourne un numéro de zone électrique aléatoire
+s32 getRandomLightNum (s32 elecNum)
+{
+	s32 rI;
+	s32 borneInf, borneSup;
+	
+	if ( elecNum==1 )
+	{
+		borneInf = 0;
+		borneSup = SCR_GetVarS32("nLightBlocks1")-1;
+	}
+	else
+	{
+		borneInf = SCR_GetVarS32("nLightBlocks1");
+		borneSup = SCR_GetVarS32("nLightBlocks2")-1;
+	}
+	
+	rI = RandomS32(borneInf,borneSup);
+	
+	return (rI);
+}
+
+/* [fin] explosions et gresillements électriques *************************************************/
+
+
+/* transferts de fumée scriptés ******************************************************************/
+
+
+//- propagation de fumée
+// Paramètre :
+// i	indice de progression du joueur (1 pour début du jeu, 2 pour scénario 3, 3 pour la fin)
+s32 smokeDistribution (s32 i)
+{
+	s32 j;
+	mcBool elecIsOn;	
+	elecIsOn = SCR_GetVarS32("ElectricityOn")==1;
+	
+	for (j=1; j<=6; j+=1)
+	{
+		DSP_PartEnable( getEI("VentExt_"+j) ,"vent",0);
+	}
+	
+	if ( i==1 )
+	{
+		// propagation en fonction de l'électricité
+		if ( elecIsOn )
+		{
+			smokeScattering(1);
+		}
+		else
+		{
+			smokeGeneration(1,10);
+		}
+	}
+	else if ( i==2 )
+	{
+		// dispertion sur le premier batiment
+		smokeScattering(1);
+		
+		// propagation en fonction de l'électricité
+		if ( elecIsOn )
+		{
+			smokeScattering(2);
+		}
+		else
+		{
+			smokeGeneration(11,18);
+		}
+	}
+	else
+	{
+		// fin de mission, dispertion totale
+		smokeScattering(1);
+		smokeScattering(2);
+	}
+	
+	return (0);
+}
+
+
+//- génération de fumée entre les sp_evac_in et sp_evac_out
+// Paramètres :
+// start	numéro du smokepoint du début
+// end		numéro du smokepoint de fin
+s32 smokeGeneration (s32 start, s32 end)
+{
+	EntityID spI, spO;
+	f32 vI , vO;
+	s32 i;
+
+	for (i=start; i<=end; i+=1)
+	{
+		// modifier ici si la propagation est trop rapide
+		spI = getEI("sp_evac_in" + i );
+		spO = getEI("sp_evac_out" + i );
+
+		vO = FIR_SPGetIntensity(spO);
+		vI = FIR_SPGetIntensity(spI);
+
+		FIR_SPAddIntensity(spI,-100.0);
+		FIR_SPAddIntensity(spO,-100.0);
+		
+		if ( vO>vI )
+		{
+
+			FIR_SPAddIntensity(spI, vI*0.35 + vO*0.6 );
+			FIR_SPAddIntensity(spO, vO*0.95 );
+		}
+		else
+		{
+			FIR_SPAddIntensity(spI, vI*0.95 );
+			FIR_SPAddIntensity(spO, vI*0.6 + vO*0.35 );
+		}
+	}
+
+	return (0);
+}
+
+
+//- dispersion de la fumée
+// Paramètre :
+// gNum		numéro du groupe de smokepoint
+s32 smokeScattering (s32 spNum)
+{
+	EntityID spGroup;
+	s32 n;
+	
+	spGroup = getEI( "gp_sp_part"+spNum );
+	
+	FIR_SPAddIntensity(spGroup,-6.0);
+	
+	n = (spNum-1)*3;
+	
+	if ( FIR_SPGetIntensity(spGroup) > 100.0 )
+	{
+		DSP_PartEnable( getEI("VentExt_"+ (n+1) ) ,"vent",1);
+		DSP_PartEnable( getEI("VentExt_"+ (n+2) ) ,"vent",1);
+		DSP_PartEnable( getEI("VentExt_"+ (n+3) ) ,"vent",1);
+	}
+	
+	return (0);
+}

@@ -1,0 +1,23 @@
+[#INCLUDE]
+FILE0 = "base_window_break.class"
+
+[DISPLAY]
+MODEL = Functional\Mall_Big_shopwindow_3_corner
+
+[DAMAGE]
+
+[OCCUPATION]
+RECT_SIZEX = 4
+OCCUPATION_MODE = Rectangle
+OCCUPATION_TYPE = ITEM
+
+[CAPACITIES_ACTIONS]
+COULDBEBREAK = 0
+
+[SOUND]
+LABEL = 
+RANGE_MIN = 700
+RANGE_MAX = 4500
+
+[PICKING]
+USEPICKINGBOX = 0

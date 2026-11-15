@@ -1,0 +1,50 @@
+[#INCLUDE]
+FILE0="..\ROOT.cfg"
+
+;===================
+[ENTITY]
+;===================
+Type      = SOUND
+Type#TYPE = ENUM INVALID CHARACTER ITEM ROOM OPENING CAMERA SETTINGS LEVEL WAYPOINT CONTACT CLONE HOTPOINT SMOKEPOINT FIREMAN FIREVEHICLE GROUP TRIGGER LIGHT CIVIL STATICITEM SOUND
+ClassFile       = ""
+ClassFile#TYPE  = FILE "" .class
+FeaturesAuto      = 1
+FeaturesAuto#TYPE = INT 0 1
+
+;===================
+[ENTITY_POSITION]
+;===================
+Movable      = 0
+Movable#TYPE = INT 0 1
+
+;===================
+[ENTITY_SHAPE]
+;===================
+Shape = sphere
+Shape#TYPE = ENUM sphere cube torus pyramid arrow repere solidsphere lightdir
+Color = 000 223 000 255
+Size  = 500
+
+;===================
+[OCCUPATION]
+;===================
+Occupation_Mode = "Rectangle"
+Occupation_Mode#TYPE = ENUM AGO Rectangle Manual
+Rect_SizeX      = 0
+Rect_SizeX#TYPE = INT 0 0
+Rect_SizeY      = 0
+Rect_SizeY#TYPE = INT 0 0
+Occupation_Type      = WAYPOINT
+Occupation_Type#TYPE = ENUM ITEM FIREMAN FIREVEHICLE FIREPOINT WINDOW DOOR WAYPOINT GHOST
+AGO_VPickDistance = 5000
+AGO_VPickDistance#TYPE = FLOAT 1 10000
+AGO_VPickNumber = 2
+AGO_VPickNumber#TYPE = INT 0 4
+Background        = 0
+Background#TYPE   = INT 0 1
+
+;===================
+[SOUND]
+;===================
+SoundType  = STATIC_SOUND
+SoundType#TYPE = ENUM STATIC_SOUND FIRE_SOUND

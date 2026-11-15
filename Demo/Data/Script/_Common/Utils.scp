@@ -1,0 +1,648 @@
+// Les fonctions récurentes concernants les fonctions de distance, calculs, particules...
+// 29/04/04 Tef : Création du fichier
+// 08/07/04 Olivier : ajout des fonctions mod, true, false
+
+// FONCTIONS :
+
+// f32 Distance( EntityID Ent1 , EntityID Ent2 )
+// f32 DistY( EntityID Ent1 , EntityID Ent2 )
+// f32 DistX( EntityID Ent1 , EntityID Ent2 )
+// s32 GetNearestS32( f32 X )
+// s32 RandomS32( s32 Min , s32 Max )
+// s32 PlayParticle( s32 Cible , f32 ModeAndNum , mcString ParticleName )
+// void PlayParticleDelayed( s32 Cible , f32 ModeAndNum , mcString ParticleName )
+// s32 PlaySmallExplosion( s32 Cible , mcString ParticleName )
+
+
+f32 Distance( EntityID Ent1 , EntityID Ent2 )
+{
+	f32 x1 , y1 , x2 , y2 , xDist , yDist , Dist ;
+	ENT_GetPosition( Ent1 , x1 , y1 );
+	ENT_GetPosition( Ent2 , x2 , y2 );
+
+	xDist = x1 - x2;
+	if ( xDist < 0.0 ) xDist = -xDist;
+
+	yDist = y1 - y2;
+	if ( yDist < 0.0 ) yDist = -yDist;
+
+	Dist = xDist + yDist;
+	return (Dist);
+}
+
+//---------------------------------------------------------------
+
+f32 DistY( EntityID Ent1 , EntityID Ent2 )
+{
+	f32 x1 , y1 , x2 , y2 , Dist;
+	ENT_GetPosition( Ent1 , x1 , y1 );
+	ENT_GetPosition( Ent2 , x2 , y2 );
+
+	Dist = y1 - y2;
+	if ( Dist < 0.0 ) Dist = -Dist;
+	return (Dist);
+}
+
+//---------------------------------------------------------------
+
+f32 DistX( EntityID Ent1 , EntityID Ent2 )
+{
+	f32 x1 , y1 , x2 , y2 , Dist;
+	ENT_GetPosition( Ent1 , x1 , y1 );
+	ENT_GetPosition( Ent2 , x2 , y2 );
+
+	Dist = x1 - x2;
+	if ( Dist < 0.0 ) Dist = -Dist;
+	return (Dist);
+}
+
+//---------------------------------------------------------------
+
+f32 DistZ( EntityID Ent1 , EntityID Ent2 )
+{
+	f32 z1 , z2 , Dist;
+	z1 = ENT_GetZ( Ent1 );
+	z2 = ENT_GetZ( Ent2 );
+	Dist = z1 - z2;
+	if ( Dist < 0.0 ) Dist = -Dist;
+	return (Dist);
+}
+
+//---------------------------------------------------------------
+
+s32 GetNearestS32( f32 X )
+{
+	s32 ReturnedValue , sX;
+	f32 fX;
+
+	sX = X;
+	fX = sX;
+
+	if ( X < 0.0)
+	{
+		if ( fX-X < 0.5 )	return ( sX );
+		else	return ( sX - 1 );
+	}
+	else if ( X > 0.0 )
+	{
+		if ( X-fX < 0.5 )	return ( sX );
+		else	return ( sX + 1 );
+	}
+	else return (0);
+}
+
+
+s32 RandomS32( s32 Min , s32 Max )
+{
+	f32 Randf32 , fMax , fMin;
+	s32 Rands32;
+
+	Randf32 = UTL_GetRandom();
+	fMax = Max;
+	fMin = Min;
+
+	Rands32 = GetNearestS32(Randf32 * (fMax - fMin) + fMin);
+	return(Rands32);
+}
+
+
+f32 RandomF32( f32 Min , f32 Max )
+{
+	f32 Randf32;
+	Randf32 = ( UTL_GetRandom() * (Max - Min) + Min );
+	return(Randf32);
+}
+
+
+s32 PlayParticle( s32 Cible , f32 ModeAndNum , mcString ParticleName )
+{
+	if ( ( ModeAndNum == 0.0 ) || ( ModeAndNum == 1.0 ) )
+		ENT_SetPropertyValueString( Cible , "PARTICLES" , "00_NAME" , "Custom" );
+	else
+		ENT_SetPropertyValueString( Cible , "PARTICLES" , "01_NAME" , "Custom" );
+	ENT_SetPropertyValueString( Cible , "PARTICLES" , "00PARTICLES_FILE" , ParticleName );
+	if ( ( ModeAndNum == 0.0 ) || ( ModeAndNum == 0.1 ) )
+		ENT_SetPropertyValueS32( Cible , "PARTICLES" , "00PLAYMODE" , 0 );
+	else
+		ENT_SetPropertyValueS32( Cible , "PARTICLES" , "00PLAYMODE" , 1 );
+	ENT_SetPropertyValueS32( Cible , "PARTICLES" , "00ACTIVE" , 1 );
+}
+
+void PlayParticleDelayed( s32 Cible , f32 ModeAndNum , mcString ParticleName )
+{
+	if ( ( ModeAndNum == 0.0 ) || ( ModeAndNum == 1.0 ) )
+		ENT_SetPropertyValueString( Cible , "PARTICLES" , "00_NAME" , "Custom" );
+	else
+		ENT_SetPropertyValueString( Cible , "PARTICLES" , "01_NAME" , "Custom" );
+	ENT_SetPropertyValueString( Cible , "PARTICLES" , "00PARTICLES_FILE" , ParticleName );
+	if ( ( ModeAndNum == 0.0 ) || ( ModeAndNum == 0.1 ) )
+		ENT_SetPropertyValueS32( Cible , "PARTICLES" , "00PLAYMODE" , 0 );
+	else
+		ENT_SetPropertyValueS32( Cible , "PARTICLES" , "00PLAYMODE" , 1 );
+	ENT_SetPropertyValueS32( Cible , "PARTICLES" , "00ACTIVE" , 1 );
+}
+
+
+s32 PlaySmallExplosion( s32 Cible , f32 pipo , mcString ParticleName )
+{
+	ENT_SetPropertyValueS32( Cible , "EXPLOSION" , "CANEXPLODE" , 1 );
+	ENT_SetPropertyValueF32( Cible , "EXPLOSION" , "HP_EXPLODE_POWER" , 30.0 );
+	ENT_SetPropertyValueF32( Cible , "EXPLOSION" , "HP_EXPLODE_RADIUS" , 150.0 );
+	ENT_SetPropertyValueF32( Cible , "EXPLOSION" , "LP_EXPLODE_POWER" , 10.0 );
+	ENT_SetPropertyValueF32( Cible , "EXPLOSION" , "LP_EXPLODE_RADIUS" , 200.0 );
+	ENT_SetPropertyValueF32( Cible , "EXPLOSION" , "STAMINA_EXPLODE_POWER" , 20.0 );
+	ENT_SetPropertyValueF32( Cible , "EXPLOSION" , "STAMINA_EXPLODE_RADIUS" , 250.0 );
+
+	ENT_SetPropertyValueString( Cible , "PARTICLES" , "00_NAME" , "Explode" );
+	ENT_SetPropertyValueString( Cible , "PARTICLES" , "00PARTICLES_FILE" , ParticleName );
+	ENT_SetPropertyValueS32( Cible , "PARTICLES" , "00PLAYMODE" , 1 );
+	ENT_SetPropertyValueS32( Cible , "PARTICLES" , "00ACTIVE" , 1 );
+	
+	ENT_SetDamage( Cible , 0.0 );
+}
+
+void PlaySmallExplosionDelayed( s32 Cible , f32 pipo , mcString ParticleName )
+{
+	ENT_SetPropertyValueS32( Cible , "EXPLOSION" , "CANEXPLODE" , 1 );
+	ENT_SetPropertyValueF32( Cible , "EXPLOSION" , "HP_EXPLODE_POWER" , 30.0 );
+	ENT_SetPropertyValueF32( Cible , "EXPLOSION" , "HP_EXPLODE_RADIUS" , 150.0 );
+	ENT_SetPropertyValueF32( Cible , "EXPLOSION" , "LP_EXPLODE_POWER" , 10.0 );
+	ENT_SetPropertyValueF32( Cible , "EXPLOSION" , "LP_EXPLODE_RADIUS" , 200.0 );
+	ENT_SetPropertyValueF32( Cible , "EXPLOSION" , "STAMINA_EXPLODE_POWER" , 20.0 );
+	ENT_SetPropertyValueF32( Cible , "EXPLOSION" , "STAMINA_EXPLODE_RADIUS" , 250.0 );
+
+	ENT_SetPropertyValueString( Cible , "PARTICLES" , "00_NAME" , "Explode" );
+	ENT_SetPropertyValueString( Cible , "PARTICLES" , "00PARTICLES_FILE" , ParticleName );
+	ENT_SetPropertyValueS32( Cible , "PARTICLES" , "00PLAYMODE" , 1 );
+	ENT_SetPropertyValueS32( Cible , "PARTICLES" , "00ACTIVE" , 1 );
+	
+	ENT_SetDamage( Cible , 0.0 );
+}
+
+void MouvementPipo( s32 Cible , s32 pipo2 , s32 pipo3 , f32 CoefX , f32 CoefY , f32 pipo4 , mcString pipo5 , mcString pipo6 , mcString pipo7 )
+{
+	f32 xC , yC;
+	ENT_GetPosition( Cible , xC , yC );
+	ENT_SetPosition( Cible , xC + CoefX , yC + CoefY );
+}
+
+
+void GoodOrientation()
+{
+	EntityID Group , Cible;
+	s32 Nb , i;
+	
+	Group = ENT_FindByName("GroupTest");
+	Nb = ENT_GroupGetNbEntities( Group );
+	for ( i=0 ; i<Nb ; i+=1 )
+	{
+		Cible = ENT_GroupGetEntityAt( Group , i );
+		ENT_SetPropertyValueF32( Cible , "ENTITY_POSITION" , "Orient_x" , 0.0 );
+		ENT_SetPropertyValueF32( Cible , "ENTITY_POSITION" , "Orient_y" , 0.0 );
+		ENT_SetPropertyValueF32( Cible , "ENTITY_POSITION" , "Orient_z" , 0.0 );
+		ENT_SetPropertyValueF32( Cible , "ENTITY_POSITION" , "Local_X" , ENT_GetPropertyValueF32( Cible , "ENTITY_POSITION" , "Local_X") + 0.1 );
+
+	}
+}
+
+void test()
+{
+	ANM_Play( ENT_FindByName("CrashHelico") , "SingleItem/si_helico_crash" , "hold" , 1);
+}
+
+
+mcBool false ()
+{
+	return (1==0);
+}
+
+
+mcBool true ()
+{
+	return (1==1);
+}
+
+/* gestion widgets *******************************************************************************/
+//- cree un widget
+s32 createWDG (mcString wName, mcString wColor, mcString wText, f32 wDuree)
+{
+	SCR_SetVarString( wName+"_c" ,wColor);
+	SCR_SetVarString( wName+"_t" ,wText);
+	
+	if ( wDuree<=0.0 )
+	{
+		SCR_SetVarS32( wName+"_b" ,1);
+		SCR_SetVarF32( wName+"_d" ,1.0);
+	}
+	else
+	{
+		SCR_SetVarS32( wName+"_b" ,0);
+		SCR_SetVarF32( wName+"_d" ,wDuree);
+	}
+
+	return (0);
+}
+
+
+//- affiche un widget
+s32 displayWDG (mcString wName)
+{
+	SCR_RunDelayedArgs("displayWDG_C",0.0,0,0.0,wName);
+
+	return (0);
+}
+
+
+//- efface un widget
+s32 cleanWDG_ (mcString wName)
+{
+	SCR_RunDelayedArgs("cleanWDG_C",0.0,SCR_GetVarS32( wName+"_b" ) ,0.0,wName);
+
+	return (0);
+}
+
+
+//- supprime un widget qui était en boucle
+s32 stopWDG (mcString wName)
+{
+	SCR_SetVarS32( wName+"_b" ,0);
+
+	return (0);
+}
+
+
+//- (private ne pas utiliser directement)
+void cleanWDG_C (s32 enBoucle ,f32 pipo ,mcString wName)
+{
+	WDG_SetVisible( SCR_GetVarString( wName+"_c" ) ,0);
+	SCR_SetVarS32("WarningOn",0);
+
+	if ( enBoucle==1 )
+		SCR_RunDelayedArgs("displayWDG_C",0.3,0,0.0,wName);
+}
+
+
+//- (private ne pas utiliser directement)
+void displayWDG_C (s32 pipoI, f32 pipoF, mcString wName)
+{
+	if ( SCR_GetVarS32("WarningOn")==0 )
+	{
+		WDG_SetText( SCR_GetVarString( wName+"_c" ) , SCR_GetVarString( wName+"_t" ) );
+		WDG_SetVisible( SCR_GetVarString( wName+"_c" ) ,1);
+		
+		SCR_SetVarS32("WarningOn",1);
+		SCR_RunDelayedArgs("CleanWDG_C", SCR_GetVarF32( wName+"_d" ) , SCR_GetVarS32( wName+"_b" ) ,pipoF,wName);
+	}
+	else SCR_RunDelayedArgs("displayWDG_C",1.0,pipoI,pipoF,wName);
+}
+
+/* fin gestion widgets ***************************************************************************/
+
+
+//- load an entity id in a global var
+EntityID loadEI (mcString eName)
+{
+	EntityID ei;
+	
+	ei = ENT_FindByName(eName);
+	SCR_SetVarS32(ename,ei);
+
+	return (ei);
+}
+
+
+//-
+EntityID getEI (mcString eName)
+{
+	return ( SCR_GetVarS32(eName) );
+}
+
+
+//- déplace l'unité jusqu'au wp
+// ent peut être un groupe
+s32 entMoveToWP (EntityID ent, EntityID wp)
+{
+	f32 x, y;
+	
+	ENT_GetPosition(wp,x,y);
+	
+	// si ent est un groupe
+	if ( ENT_GetType(ent)==15 )
+	{
+		s32 i, l;
+		l = ENT_GroupGetNbEntities(ent);
+	
+		for (i=0; i<l; i+=1)
+		{
+			IA_CmdMoveTo( ENT_GroupGetEntityAt(ent,i) ,x,y,1);
+		}
+	}
+	else
+	{
+		IA_CmdMoveTo(ent,x,y,1);
+	}
+
+	return (0);
+}
+
+
+//- valeur absolue
+f32 abs (f32 a)
+{
+	if ( a<0.0 )
+	{	return (-a);
+	}
+	else
+	{	return (a);
+	}
+}
+
+
+//- conversion en s32
+s32 castS32 (f32 f)
+{
+	s32 i;
+	i = f;
+	
+	return (i);
+}
+
+
+//- conversion en f32
+f32 castF32 (s32 i)
+{
+	f32 f;
+	f = i;
+	
+	return (f);
+}
+
+
+//- simule un tableau, écriture
+s32 tabSet (mcString tabName, s32 i, s32 value)
+{
+	SCR_SetVarS32( tabName+"["+i+"]" ,value);
+	
+	return (value);
+}
+
+
+//- simule un tableau, lecture
+s32 tabGet (mcString tabName, s32 i)
+{
+	return ( SCR_GetVarS32( tabName+"["+i+"]" ) );
+}
+
+
+//- retourne vrai si 2 entités ont la même position
+mcBool ENT_positionEqual (EntityID e1, EntityID e2)
+{
+	f32 xE, yE, xW, yW;
+	f32 epsilon;
+	epsilon = 0.1;
+	
+	ENT_GetPosition(e1,xE,yE);
+	ENT_GetPosition(e2,xW,yW);
+	
+	return ( abs(xE-xW)<epsilon && abs(yE-yW)<epsilon );
+}
+
+
+void Tapis()
+{
+	f32 i, j , x, y;
+	s32 HP ,group;
+
+	group = ENT_GroupCreate("Tapis");
+
+	for (i=450.0; i<50000.0; i+=900.0)
+	{
+		for (j=450.0; j<50000.0; j+=900.0)
+		{
+			HP = ENT_CreatePath( "Data/Design/Hotpoint/fireGrassMulti_LF.class" , "" , i , j , 10000.0 );
+			ENT_GetPosition( HP , x ,y );
+			ENT_SetPosition( HP , x+0.1 , y+0.5 );
+			ENT_GroupAddEntity( group , HP );
+		}
+	}
+	
+	SCR_RunDelayed("Tapis2" , 1.0);
+}
+
+void Tapis2()
+{
+	s32 group, i, HP;
+	f32 z;
+	group = ENT_FindByName("Tapis");
+
+	for ( i=0 ; i< ENT_GroupGetNbEntities( group ) ; i+=1 )
+	{	
+		HP = ENT_GroupGetEntityAt( group , i );	
+		z = ENT_GetZ( HP );
+		ENT_SetZ( HP , z+50.0 );
+	}
+}
+
+
+///////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////// BONUS CALENDRIER ////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////
+
+void Bonus_Calendar( EntityID Unit , EntityID Calendar , mcString pipo )
+{
+	s32 i;
+	mcString Name;
+
+	Name = ENT_GetName( Calendar );
+	for ( i=1 ; i<=12 ; i+=1 )
+	{
+		if ( Name == "Calendar_"+i )
+		{
+			LEV_UnlockLP(i);
+		}
+			
+	}
+
+	// Fonction compteur de bonus à mettre
+	// Message bonus découvert
+	// Son de bonus
+	SND_PlaySound2D("Calendar");
+	SCR_RunDelayedEntity("Bonus_CalendarUpdate" , 2.0 , Calendar );
+}
+
+void Bonus_CalendarUpdate( EntityID Calendar )
+{
+	ENT_SetVisibility( Calendar , 0 );
+}
+
+///////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////
+
+void LoveTeam()
+{
+	s32 i;
+	for ( i=1 ; i<=13 ; i+=1 )
+	{
+		LEV_UnlockLP(i);
+	}
+}
+
+
+void Pyroman()
+{
+	EntityID Pyro;
+	s32 i , Level;
+	f32 x , y;
+
+	for ( i=1 ; i<=12 ; i+=1 )
+	{
+		if ( ENT_FindByName("Calendar_"+i ) != 0 )
+			Level = i;
+	}
+
+	if ( Level == 1 )
+	{	SCR_SetVarF32("PyroX" , 11000.0 );
+		SCR_SetVarF32("PyroXmin" , 2000.0 );
+		SCR_SetVarF32("PyroY" , 11000.0 );
+		SCR_SetVarF32("PyroYmin" , 2000.0 );
+	}
+	else if ( Level == 2 )
+	{	SCR_SetVarF32("PyroX" , 16500.0 );
+		SCR_SetVarF32("PyroXmin" , 2500.0 );
+		SCR_SetVarF32("PyroY" , 17500.0 );
+		SCR_SetVarF32("PyroYmin" , 3500.0 );
+	}
+	else if ( Level == 3 )
+	{	SCR_SetVarF32("PyroX" , 26500.0 );
+		SCR_SetVarF32("PyroXmin" , 6000.0 );
+		SCR_SetVarF32("PyroY" , 16000.0 );
+		SCR_SetVarF32("PyroYmin" , 3000.0 );
+	}
+	else if ( Level == 4 )
+	{	SCR_SetVarF32("PyroX" , 12500.0 );
+		SCR_SetVarF32("PyroXmin" , 2500.0 );
+		SCR_SetVarF32("PyroY" , 12500.0 );
+		SCR_SetVarF32("PyroYmin" , 2500.0 );
+	}
+	else if ( Level == 5 )
+	{	SCR_SetVarF32("PyroX" , 25000.0 );
+		SCR_SetVarF32("PyroXmin" , 3500.0 );
+		SCR_SetVarF32("PyroY" , 16500.0 );
+		SCR_SetVarF32("PyroYmin" , 2500.0 );
+	}
+	else if ( Level == 6 )
+	{	SCR_SetVarF32("PyroX" , 27000.0 );
+		SCR_SetVarF32("PyroXmin" , 4000.0 );
+		SCR_SetVarF32("PyroY" , 27000.0 );
+		SCR_SetVarF32("PyroYmin" , 4000.0 );
+	}
+	else if ( Level == 7 )
+	{	SCR_SetVarF32("PyroX" , 17000.0 );
+		SCR_SetVarF32("PyroXmin" , 4000.0 );
+		SCR_SetVarF32("PyroY" , 17000.0 );
+		SCR_SetVarF32("PyroYmin" , 4000.0 );
+	}
+	else if ( Level == 8 )
+	{	SCR_SetVarF32("PyroX" , 40000.0 );
+		SCR_SetVarF32("PyroXmin" , 10000.0 );
+		SCR_SetVarF32("PyroY" , 40000.0 );
+		SCR_SetVarF32("PyroYmin" , 10000.0 );
+	}
+	else if ( Level == 9 )
+	{	SCR_SetVarF32("PyroX" , 34000.0 );
+		SCR_SetVarF32("PyroXmin" , 5000.0 );
+		SCR_SetVarF32("PyroY" , 33000.0 );
+		SCR_SetVarF32("PyroYmin" , 5000.0 );
+	}
+	else if ( Level == 10 )
+	{	SCR_SetVarF32("PyroX" , 23500.0 );
+		SCR_SetVarF32("PyroXmin" , 10500.0 );
+		SCR_SetVarF32("PyroY" , 18500.0 );
+		SCR_SetVarF32("PyroYmin" , 5000.0 );
+	}
+	else if ( Level == 11 )
+	{	SCR_SetVarF32("PyroX" , 30000.0 );
+		SCR_SetVarF32("PyroXmin" , 6500.0 );
+		SCR_SetVarF32("PyroY" , 20000.0 );
+		SCR_SetVarF32("PyroYmin" , 5000.0 );
+	}
+	else if ( Level == 12 )
+	{	SCR_SetVarF32("PyroX" , 27500.0 );
+		SCR_SetVarF32("PyroXmin" , 11500.0 );
+		SCR_SetVarF32("PyroY" , 26000.0 );
+		SCR_SetVarF32("PyroYmin" , 6000.0 );
+	}
+	else
+	{	SCR_SetVarF32("PyroX" , 14000.0 );
+		SCR_SetVarF32("PyroXmin" , 4000.0 );
+		SCR_SetVarF32("PyroY" , 16500.0 );
+		SCR_SetVarF32("PyroYmin" , 5500.0 );
+	}
+
+	ENT_GetPosition( ENT_FindByName("locstart1_1") , x , y );
+	Pyro = ENT_CreateUnitPath( "Data/Design/Unit/Fireman/fireman_pyro.class" , "" , x , y , 10000.0 );
+	ENT_SetPosition( Pyro , x+0.1 , y+0.1 );
+
+	SCR_RunDelayedEntity("PyroMove" , 1.0 , Pyro );
+
+	mcBool bTrue;
+	bTrue = 1;
+	ENT_SetFakeUnit( Pyro ,bTrue );
+	
+}
+
+
+void PyroMove( EntityID Pyro )
+{
+	f32 x , y , x2 , y2 , Tempo , Dist;
+	ENT_GetPosition( Pyro , x , y );
+
+	x2 = RandomF32( SCR_GetVarF32("PyroXmin") , SCR_GetVarF32("PyroX") );
+	y2 = RandomF32( SCR_GetVarF32("PyroYmin") , SCR_GetVarF32("PyroY") );
+
+	IA_CmdMoveTo( Pyro , x2 , y2 , 1 );
+
+//	Dist = ( (x2-x)*(x2-x) + (y2-y)*(y2-y) );
+//	Tempo = Dist/2000000.0;
+
+//	if ( RandomS32( 1 , 5 ) == 1 )
+//		SCR_RunDelayedEntity("PyroTele" , 0.0 , Pyro );
+//	else
+//		SCR_RunDelayedEntity("PyroMove" , Tempo , Pyro );
+		
+	SCR_RunDelayedMultiArgs( "CheckPyroPos" , 3.0 , Pyro , 0 , 0 , x , y , "pipo" );
+}
+
+void CheckPyroPos( EntityID Pyro , s32 pipo , s32 pipo2 , f32 x , f32 y , mcString pipo3 )
+{
+	f32 xNew , yNew;
+	ENT_GetPosition( Pyro , xNew , yNew );
+	
+	if ( ( x == xNew ) && ( y == yNew ) )
+		SCR_RunDelayedEntity("PyroMove" , 1.0 , Pyro );
+	else
+		SCR_RunDelayedMultiArgs( "CheckPyroPos" , 3.0 , Pyro , 0 , 0 , xNew , yNew , "pipo" );
+}
+
+/*
+void PyroTele( EntityID Pyro )
+{
+	f32 x , y;
+	EntityID Explo;
+
+	ENT_GetPosition( Pyro , x , y );
+	Explo = ENT_CreatePath( "Data/Design/Placeable/Functional/Explosive/Pyro_Teleport.class" , "" , x , y , 10000.0 );
+	ENT_SetPosition( Explo , x+0.1 , y+0.1 );
+	ENT_AddDamage( Explo , -100.0 );
+
+	IA_CmdStop( Pyro );
+	ENT_SetZ( Pyro , 10000.0 );
+	x = RandomF32( SCR_GetVarF32("PyroXmin") , SCR_GetVarF32("PyroX") );
+	y = RandomF32( SCR_GetVarF32("PyroYmin") , SCR_GetVarF32("PyroY") );
+
+	ENT_SetPosition( Pyro , x , y );
+
+	SCR_RunDelayedEntity("PyroMove" , 10.0 , Pyro );
+}
+*/
+

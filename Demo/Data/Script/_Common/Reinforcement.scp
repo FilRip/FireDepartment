@@ -1,0 +1,347 @@
+// Les fonctions récurentes concernants les arrivées d'unités
+// 29/04/04 Tef : Création du fichier
+
+
+void SpawnPlayerUnits()
+{
+	s32 i, Nb;
+	f32 x1 , x2 , y1 , y2 , z1 , z2 , Orient , CheminX , CheminY;
+	EntityID LocStart , LocEnd , Unit;
+
+	Nb = SCR_GetVarS32("NumberOfUnit");
+	for ( i = 1 ; i<=Nb ; i +=1)
+	{
+		LocStart = SCR_GetVarS32("LocStart" + SCR_GetVarS32("UnitSpawn_" + i ) );
+		LocEnd = SCR_GetVarS32("LocEnd" + SCR_GetVarS32("UnitSpawn_" + i ) );
+
+		ENT_GetPosition( LocStart , x1 , y1 );
+		z1 = ENT_GetZ( LocStart );
+		ENT_GetPosition( LocEnd , x2 , y2 );
+		z2 = ENT_GetZ( LocEnd );
+
+		CheminX = x2 - x1;
+		SCR_SetVarF32("CheminX" + i , CheminX );
+		CheminY = y2 - y1;
+		SCR_SetVarF32("CheminY" + i , CheminY );
+
+		Unit = ENT_CreatePath( SCR_GetVarString("UnitClass_" + i ) , "", x1 , y1 , z1 );
+		ENT_GroupAddEntity( SCR_GetVarS32("PlayerUnits") , Unit );
+		ENT_GroupAddEntity( SCR_GetVarS32("AllUnit") , Unit );
+		SCR_SetVarS32("UnitID_" + i , Unit );
+
+		Orient = ENT_GetOrientationToEntity( LocStart , LocEnd );
+		ENT_SetOrientation( Unit , Orient );
+		ENT_SetVisibility( Unit , 0 );
+
+		if ( SCR_GetVarF32("UnitCombinaison_" + i ) == 1.1 )
+		{
+			Unit = ENT_CreatePath( "Data/Design/Unit/Fireman/fireman_scout.class" , "", x2 + 200.0 * cos(Orient) , y2 + 200.0 * sin(Orient) , z2 );
+			ENT_GroupAddEntity( SCR_GetVarS32("PlayerUnits") , Unit );
+			ENT_SetVisibility( Unit , 0 );
+			SCR_SetVarS32("UnitID_" + i + "1" , Unit );
+		}
+		if ( SCR_GetVarF32("UnitCombinaison_" + i ) == 1.0 )
+		{
+			Unit = ENT_CreatePath( "Data/Design/Unit/Fireman/fireman_medic.class" , "", x2 + 200.0 * cos(Orient) , y2 + 200.0 * sin(Orient) , z2 );
+			ENT_GroupAddEntity( SCR_GetVarS32("PlayerUnits") , Unit );
+			ENT_SetVisibility( Unit , 0 );
+			SCR_SetVarS32("UnitID_" + i + "1" , Unit );
+		}
+		if ( SCR_GetVarF32("UnitCombinaison_" + i ) == 2.0 )
+		{
+			Unit = ENT_CreatePath( "Data/Design/Unit/Fireman/fireman_sp_us.class" , "", x2 + 200.0 * cos(Orient) , y2 + 200.0 * sin(Orient) , z2 );
+			ENT_GroupAddEntity( SCR_GetVarS32("PlayerUnits") , Unit );
+			ENT_SetVisibility( Unit , 0 );
+			SCR_SetVarS32("UnitID_" + i + "1" , Unit );
+
+			Unit = ENT_CreatePath( "Data/Design/Unit/Fireman/fireman_sp_us.class", "", x2 + 300.0 * cos(Orient) , y2 + 300.0 * sin(Orient) , z2 );
+			ENT_GroupAddEntity( SCR_GetVarS32("PlayerUnits") , Unit );
+			ENT_SetVisibility( Unit , 0 );
+			SCR_SetVarS32("UnitID_" + i + "2" , Unit );
+		}
+		if ( SCR_GetVarF32("UnitCombinaison_" + i ) == 4.0 )
+		{
+			Unit = ENT_CreatePath( "Data/Design/Unit/Fireman/fireman_sp_us.class" , "", x2 + 200.0 * cos(Orient) , y2 + 200.0 * sin(Orient) , z2 );
+			ENT_GroupAddEntity( SCR_GetVarS32("PlayerUnits") , Unit );
+			ENT_SetVisibility( Unit , 0 );
+			SCR_SetVarS32("UnitID_" + i + "1" , Unit );
+
+			Unit = ENT_CreatePath( "Data/Design/Unit/Fireman/fireman_sp_us.class", "", x2 + 300.0 * cos(Orient) , y2 + 300.0 * sin(Orient) , z2 );
+			ENT_GroupAddEntity( SCR_GetVarS32("PlayerUnits") , Unit );
+			ENT_SetVisibility( Unit , 0 );
+			SCR_SetVarS32("UnitID_" + i + "2" , Unit );
+			
+			Unit = ENT_CreatePath( "Data/Design/Unit/Fireman/fireman_sp_us.class" , "", x2 - 200.0 * cos(Orient) , y2 - 200.0 * sin(Orient) , z2 );
+			ENT_GroupAddEntity( SCR_GetVarS32("PlayerUnits") , Unit );
+			ENT_SetVisibility( Unit , 0 );
+			SCR_SetVarS32("UnitID_" + i + "3" , Unit );
+
+			Unit = ENT_CreatePath( "Data/Design/Unit/Fireman/fireman_sp_us.class", "", x2 - 300.0 * cos(Orient) , y2 - 300.0 * sin(Orient) , z2 );
+			ENT_GroupAddEntity( SCR_GetVarS32("PlayerUnits") , Unit );
+			ENT_SetVisibility( Unit , 0 );
+			SCR_SetVarS32("UnitID_" + i + "4" , Unit );
+		}
+	}
+}
+
+//----------------------------------------------------------------------------------------------------
+
+void PlayerUnitsCheckMove()
+{
+	s32 i, Nb, Numero;
+	f32 Compteur;
+	mcString pipo;
+
+	Compteur = 0.0;
+	pipo = "ouioui";
+
+	Nb = SCR_GetVarS32("NumberOfUnit");
+
+	for ( i = 1 ; i<=Nb ; i +=1)
+	{
+		if ( SCR_GetVarS32("UnitStatut_" + i ) == -1 )
+		{
+			Numero = i;
+			SCR_RunDelayedArgs("PlayerUnitsMove" , 0.0 , Numero , Compteur , pipo );
+			SCR_SetVarS32("UnitStatut_" + i , 0 );
+		}
+	}
+}
+
+//----------------------------------------------------------------------------------------------------
+
+void PlayerUnitsMove( s32 Numero , f32 Compteur , mcString Pipo )
+{
+	f32 x , y , CheminX , CheminY;
+	EntityID Unit;
+
+	Unit = SCR_GetVarS32("UnitID_" + Numero );
+	ENT_SetVisibility( Unit , 1 );
+
+	CheminX = SCR_GetVarF32("CheminX" + Numero );
+	CheminY = SCR_GetVarF32("CheminY" + Numero );
+	ENT_GetPosition( Unit , x , y );
+	ENT_SetPosition( Unit , x + CheminX/15.0 , y + CheminY/15.0 );
+
+	Compteur += 1.0;
+	if ( Compteur < 15.0 )
+		SCR_RunDelayedArgs("PlayerUnitsMove" , 0.1 , Numero , Compteur , Pipo );
+
+	else if ( SCR_GetVarF32("UnitCombinaison_" + Numero ) != 0.0 )
+		SCR_RunDelayedArgs("PlayerUnitsMoveOut" , 1.0 , Numero , Compteur , Pipo );
+}
+
+//----------------------------------------------------------------------------------------------------
+
+void PlayerUnitsMoveOut( s32 Numero , f32 Compteur , mcString Pipo )
+{
+	EntityID Unit;
+
+	if ( SCR_GetVarF32("UnitCombinaison_" + Numero ) == 1.0 )
+	{
+		Unit = SCR_GetVarS32("UnitID_" + Numero + "1" );
+		ENT_SetVisibility( Unit , 1 );
+		ENT_GroupAddEntity( SCR_GetVarS32("PlayerUnits") , Unit );
+	}
+
+	if ( SCR_GetVarF32("UnitCombinaison_" + Numero ) == 2.0 )
+	{
+		Unit = SCR_GetVarS32("UnitID_" + Numero + "1" );
+		ENT_SetVisibility( Unit , 1 );
+		ENT_GroupAddEntity( SCR_GetVarS32("PlayerUnits") , Unit );
+
+		Unit = SCR_GetVarS32("UnitID_" + Numero + "2" );
+		ENT_SetVisibility( Unit , 1 );
+		ENT_GroupAddEntity( SCR_GetVarS32("PlayerUnits") , Unit );
+	}
+	
+	if ( SCR_GetVarF32("UnitCombinaison_" + Numero ) == 4.0 )
+	{
+		Unit = SCR_GetVarS32("UnitID_" + Numero + "1" );
+		ENT_SetVisibility( Unit , 1 );
+		ENT_GroupAddEntity( SCR_GetVarS32("PlayerUnits") , Unit );
+
+		Unit = SCR_GetVarS32("UnitID_" + Numero + "2" );
+		ENT_SetVisibility( Unit , 1 );
+		ENT_GroupAddEntity( SCR_GetVarS32("PlayerUnits") , Unit );
+
+		Unit = SCR_GetVarS32("UnitID_" + Numero + "3" );
+		ENT_SetVisibility( Unit , 1 );
+		ENT_GroupAddEntity( SCR_GetVarS32("PlayerUnits") , Unit );
+
+		Unit = SCR_GetVarS32("UnitID_" + Numero + "4" );
+		ENT_SetVisibility( Unit , 1 );
+		ENT_GroupAddEntity( SCR_GetVarS32("PlayerUnits") , Unit );
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//-------------------------------------------------------------------------------------------------
+
+/*
+
+s32 CreateRenfort( mcString UnitName , s32 UnitNumber , f32 Combinaison)
+{
+	SCR_RunDelayedArgs("SpawnArrivee" , 0.0 , UnitNumber , Combinaison , UnitName );
+}
+
+//-------------------------------------------------------------------------------------------------
+
+void SpawnArrivee( s32 UnitNumber , f32 Combinaison , mcString UnitName )
+{
+	f32 x1 , x2 , y1 , y2 , z1 , z2 , Orient , CheminX , CheminY , UnitFlottant , Delay;
+	EntityID LocStart , LocEnd , Unit , AllUnit;
+
+	LocStart = SCR_GetVarS32("LocArriveeStart" + UnitNumber);
+	LocEnd = SCR_GetVarS32("LocArriveeEnd" + UnitNumber);
+
+	ENT_GetPosition( LocStart , x1 , y1 );
+	z1 = ENT_GetZ( LocStart );
+	ENT_GetPosition( LocEnd , x2 , y2 );
+	z2 = ENT_GetZ( LocEnd );
+
+	CheminX = x2 - x1;
+	SCR_SetVarF32("CheminX" + UnitNumber , CheminX );
+	CheminY = y2 - y1;
+	SCR_SetVarF32("CheminY" + UnitNumber , CheminY );
+
+	Unit = ENT_CreatePath( UnitName, "", x1 , y1 , z1 );
+	ENT_GroupAddEntity( SCR_GetVarS32("PlayerUnits") , Unit );
+
+	AllUnit = SCR_GetVarS32("AllUnit");
+	ENT_GroupAddEntity( AllUnit , Unit );
+
+	SCR_SetVarS32("Unit" + UnitNumber , Unit );
+	Orient = ENT_GetOrientationToEntity( LocStart , LocEnd );
+	ENT_SetOrientation( Unit , Orient );
+	SCR_SetVarS32("Vitesse" + UnitNumber , 0 );
+
+	ENT_SetVisibility( Unit , 0 );
+
+	UnitFlottant = UnitNumber;
+	Delay = 10.0 + UnitFlottant;
+	SCR_RunDelayedArgs("MoveArrivee" , Delay , UnitNumber , Combinaison , UnitName );
+
+	if ( Combinaison == 1.0 )
+	{
+		Unit = ENT_CreatePath( "Data/Design/Unit/Fireman/fireman_sp_us.class" , "", x2 + 200.0 * cos(Orient) , y2 + 200.0 * sin(Orient) , z2 );
+		ENT_GroupAddEntity( SCR_GetVarS32("PlayerUnits") , Unit );
+		ENT_SetVisibility( Unit , 0 );
+		SCR_RunDelayedEntity("OutArrivee" , Delay + 2.0 , Unit );
+		Unit = ENT_CreatePath( "Data/Design/Unit/Fireman/fireman_sp_us.class", "", x2 + 300.0 * cos(Orient) , y2 + 300.0 * sin(Orient) , z2 );
+		ENT_GroupAddEntity( SCR_GetVarS32("PlayerUnits") , Unit );
+		ENT_SetVisibility( Unit , 0 );
+		SCR_RunDelayedEntity("OutArrivee" , Delay + 2.0 , Unit );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+
+void MoveArrivee( s32 UnitNumber , f32 Combinaison , mcString UnitName )
+{
+	f32 x , y , CheminX , CheminY , VitesseArriveeFlottante;
+	s32 Vitesse , VitesseArrivee;
+	EntityID Unit;
+
+	Unit = SCR_GetVarS32("Unit" + UnitNumber );
+	ENT_SetVisibility( Unit , 1 );
+	CheminX = SCR_GetVarF32("CheminX" + UnitNumber );
+	CheminY = SCR_GetVarF32("CheminY" + UnitNumber );
+	Vitesse = SCR_GetVarS32("Vitesse" + UnitNumber );
+	VitesseArrivee = SCR_GetVarS32("VitesseArrivee");
+	VitesseArriveeFlottante = VitesseArrivee;
+
+	ENT_GetPosition( Unit , x , y );
+	ENT_SetPosition( Unit , x + CheminX/VitesseArriveeFlottante , y + CheminY/VitesseArriveeFlottante );
+	Vitesse += 1;
+	SCR_SetVarS32("Vitesse" + UnitNumber , Vitesse );
+
+	if ( Vitesse < VitesseArrivee )
+		SCR_RunDelayedArgs("MoveArrivee" , 0.1 , UnitNumber , Combinaison , UnitName );
+}
+
+//-------------------------------------------------------------------------------------------------
+
+
+void OutArrivee( EntityID Unit )
+{
+	ENT_SetVisibility( Unit , 1 );
+}
+//-------------------------------------------------------------------------------------------------
+
+
+
+void StatutVeh( s32 NumUnit , s32 NumCaserne , s32 NumSpawn , mcString UnitClasse )
+{
+	f32 x1 , y1 , z1;
+	EntityID LocStart;
+
+	LocStart = SCR_GetVarS32("LocArriveeStart" + NumSpawn );
+
+	ENT_GetPosition( LocStart , x1 , y1 );
+	z1 = ENT_GetZ( LocStart );
+
+	Unit = ENT_CreatePath( UnitClasse, "", x1 , y1 , z1 );
+
+//	GrCaserne = SCR_GetVarS32("Caserne" + NumCaserne );
+//	ENT_GroupAddEntity( GrCaserne , Unit );
+
+	SCR_SetVarS32("Unit" + UnitNumber , Unit );
+	Orient = ENT_GetOrientation( LocStart );
+	ENT_SetOrientation( Unit , Orient );
+
+
+	ENT_SetVisibility( Unit , 0 );
+
+
+
+
+}
+
+void SpawnCaserne( s32 NumCaserne )
+{
+	SCR_GetVarS32("NbUnit
+
+}
+
+*/

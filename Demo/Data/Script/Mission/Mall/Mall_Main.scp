@@ -1,0 +1,517 @@
+// Scripts Mall_Main
+// 18/05/04 : Création du fichier à partir de street
+// 27/07/04 Olivier : modifs
+
+
+/* initialisation du niveau **********************************************************************/
+//- init général
+void Mall_Start()
+{
+	SCR_RunDelayed("Mall_StartScenar" , 0.0 );
+	SCR_RunDelayed("InitVar" , 0.0 );
+	SCR_RunDelayed("CameraIntro" , 0.0 );
+	SCR_RunDelayed("Renfort_0" , 6.0 );
+}
+
+
+//- initialisation des variables globales
+void InitVar()
+{
+	s32 i, n;
+	EntityID ei;
+
+// general
+
+	i = 1.0/UTL_GetDeltaGameTime();
+	SCR_SetVarS32("script_fps",i);
+	SCR_SetVarS32("script_t",0);
+
+// scenar
+
+	SCR_SetVarS32("FacadeWarn" , 0 );
+
+	// groupes de hotpoints de chaque scénario
+	loadEI("gp_hp_sc1");
+	loadEI("gp_hp_sc2");
+	loadEI("gp_hp_sc3");
+	
+	// flags pour utilisation des tps
+	for (i=1; i<=3; i+=1)
+		SCR_SetVarS32( "tp"+i+"_flag" ,0);
+	
+	// symbol axe debris du bridge	
+	for (i=1; i<=4; i+=1)
+	{
+		SCR_SetVarS32 ( "axe_debris_" + i , ENT_FindByName("axe_debris_" + i ) );
+	}
+		
+	// groupe symbols axe
+	SCR_SetVarS32( "gp_axe_debris" , ENT_FindByName("gp_axe_debris" ) );
+		
+	SCR_SetVarF32("timerNextScenar",0.0);
+	
+	loadEI("gp_hp_all"); // tous les HPs du niveau
+	
+	loadEI("gp_hp_street_facade"); // hotpoints façades des batiments de la rue
+	loadEI("gp_hp_proxiOA"); // hotpoints à proximité des oeuvres d'art
+	
+	loadEI("ent_invisiDoor"); // porte invisible bloquant scénar 3
+	
+	loadEI("hp_explo1"); // hotpoint allumé par explosion voiture de police
+	
+	// sauve l'état de réussite des objectifs (0 en cours, 1 réussi, -1 raté)
+	SCR_SetVarS32("obj_street_end",0);
+	SCR_SetVarS32("obj_civCine_end",0);
+	SCR_SetVarS32("obj_oa_end",0);
+	SCR_SetVarS32("obj_saveGan_end",0);
+	SCR_SetVarS32("obj_saveCop_end",0);
+	
+	// variables liées aux objectifs
+	SCR_SetVarS32("obj_oa_nbOA",12); // définir ici le nombre d'oeuvres d'art
+	
+	SCR_SetVarF32("obj_civCine_nbSaved",0.0);
+	SCR_SetVarF32("obj_civCine_maxSaved",4.0); // définir ici le nombre de civils dans le cinéma
+
+	SCR_SetVarF32("obj_saveGan_nbSaved",0.0);
+	SCR_SetVarF32("obj_saveGan_maxSaved",3.0); // définir ici le nombre de gangster à sauver
+
+	SCR_SetVarF32("obj_saveCop_nbSaved",0.0);
+	SCR_SetVarF32("obj_saveCop_maxSaved",3.0); // définir ici le nombre de policiers à sauver
+	
+	SCR_SetVarF32("TimerEboulis" , -1.0 );
+	SCR_SetVarS32("CopsFounds" , 0 );
+	
+	SCR_SetVarS32("obj_civDeath_limit", 3-LEV_GetDifficultyLevel() );
+	
+	n = 75- LEV_GetDifficultyLevel()*25;
+	SCR_SetVarS32("obj_firemenDeath_limit", (LEV_GetNumFiremen()*n) /100 );
+	
+	SCR_SetVarS32("SkipSreetCrash",0);
+	
+	// waypoints pour pings objectifs
+	loadEI("wp_obj_street");
+	loadEI("wp_obj_civCine");
+	loadEI("wp_obj_oa");
+	loadEI("wp_obj_saveCop");
+	loadEI("wp_obj_saveGan");
+	
+	// index objectifs
+	SCR_SetVarS32("objIndex_oa",-1);
+
+
+// civils
+
+	initCivil(19);
+	
+	// groupes pour anims scenar (poursuites, coups de feu, etc)
+	SCR_SetVarS32( "gp_"+loadEI("gp_civ_copBridge")+"_currI" ,0);
+	SCR_SetVarS32( "gp_"+loadEI("gp_civ_ganBridge")+"_currI" ,0);
+	
+	// policiers :
+	// 1	= policier décors
+	// 2-4	= policiers anims tirs
+	for (i=1; i<=4; i+=1)
+	{
+		loadEI( "civil_cop"+i );
+	}
+	
+	// policiers civils évanouis -> invisibles
+	for (i=15; i<=18; i+=1)
+	{
+		ENT_SetVisibility( getCivilEI(i) ,0);
+	}
+	
+	SCR_SetVarS32("civ_anim_nextStep",2); // sert pour les anims aléatoires
+	
+	// waypoint pour déplacement policier
+	loadEI("wp_cop1_move1");
+
+	// waypoints pour déplacement des gangsters
+	for (i=1; i<=8; i+=1)
+	{
+		loadEI( "wp_gan"+i );
+	}
+
+
+// bridge et co
+
+	loadEI("ent_grenade_bridge");
+	
+	loadEI("Bridge");
+	
+	f32 pipo;
+	pipo = LEV_GetDifficultyLevel();
+	
+	SCR_SetVarF32("TimerDiff" , 360.0-pipo*60.0 );
+	
+	loadEI("HPPont");
+	
+	for (i=1; i<=4; i+=1)
+	{
+		loadEI( "BridgePiece"+i );
+	}
+
+	
+	// on associe chaque policier évanoui à son caillou
+	for (i=1; i<=4; i+=1)
+	{
+		n = i+14; // numéro du civil (commence à 15)
+		ei = getEI( "civil"+n );
+		SCR_SetVarS32( "BridgePiece"+i+"_c" ,ei);
+	}
+	
+	
+	loadEI("gp_ent_trashBridge");
+	loadEI("ent_bridgePane");
+	loadEI("trig_bridge");
+	
+	
+	// vecteurs pour déplacement des policiers lors de la cut scene
+	SCR_SetVarF32("vect_p2_x",-70.0); SCR_SetVarF32("vect_p2_y",2.0);
+	SCR_SetVarF32("vect_p3_x",-70.0); SCR_SetVarF32("vect_p3_y",0.0);
+	SCR_SetVarF32("vect_p4_x",-70.0); SCR_SetVarF32("vect_p4_y",0.0);
+	
+	SCR_SetVarS32("stopSTFC",0);
+	SCR_SetVarS32("animCopNoFire",0);
+
+// helico
+
+	loadEI("ent_helico");
+	loadEI("ent_grenade_helico1");
+	loadEI("ent_grenade_helico2");
+	
+	loadEI("HPHeli");
+	loadEI("HPAfterBoom");
+	
+	loadEI("ent_windowRoof");
+
+// artStatues
+
+	SCR_SetVarS32("ArtDestructed",0);
+
+// evac fumée & lights
+
+	SCR_SetVarS32("ElectricityOn",0);
+	
+	loadEI("ent_elec_symbol");
+	loadEI("ent_elec_symbol_off");
+	
+	SCR_SetVarS32("nLightBlocks1",5); // nombre de zones à danger électrique du batiment 1
+	SCR_SetVarS32("nLightBlocks2",9); // idem batiment 2
+	
+	// smokepoints du système d'évacuation
+	for ( i=1 ; i<=18 ; i+=1 )
+	{
+		loadEI( "sp_evac_in"+i );
+		loadEI( "sp_evac_out"+i );
+	}
+	loadEI("gp_sp_part1");
+	loadEI("gp_sp_part2");
+	
+	// ventillo extérieurs
+	for ( i=1 ; i<=6 ; i+=1 )
+	{
+		loadEI( "VentExt_"+i );
+		loadEI( "VentExt_"+i+"_sound" );
+	}
+	
+	n = SCR_GetVarS32("nLightBlocks2");
+	
+	// zones de danger électrique
+	for (i=0; i<n; i+=1)
+	{
+		SCR_SetVarS32( "light_block"+i+"_status" ,0);
+		loadEI( "light_block"+i+"_l" ); // light
+		loadEI( "light_block"+i+"_i" ); // item
+		loadEI( "light_block"+i+"_hp" ); // hotpoint
+	}
+	
+	loadEI("gp_light_all");
+	
+// camera waypoints
+
+	loadEI("cam_startpos");
+	loadEI("cam_carambolage");
+	loadEI("cam_dispatch1");
+	loadEI("cam_dispatch2");
+	loadEI("cam_dispatch3");
+	loadEI("cam_dispatch4");
+	loadEI("cam_outro");
+
+
+// téléports
+
+	for (i=1; i<=7; i+=1)
+	{
+		loadEI( "ent_tp"+i );
+	}
+	
+// Bornes d'arcade (sounds)
+	for ( i=1 ; i<=11 ; i+=1 )
+	{
+		SCR_SetVarS32("Borne_"+i+"_sound" , ENT_FindByName("arcade_games_"+i+"_sound") );
+		SND_PlayStaticSound( SCR_GetVarS32( "Borne_"+i+"_sound" ) );
+	}
+}
+
+
+//- init les variables liées aux civils
+s32 initCivil (s32 nbCivils)
+{
+	s32 i;
+	EntityID civ;
+	
+	for (i=1; i<=nbCivils; i+=1)
+	{
+		civ = loadEI( "civil"+i );
+		SCR_SetVarS32( "civil_ent"+civ+"_num" ,i);
+	}
+}
+
+
+/* main ******************************************************************************************/
+//-
+void Mall_Main ()
+{
+	if ( UTL_GetGameTime() >5.0 )
+	{
+		s32 fps , t;
+		t = SCR_GetVarS32("script_t");
+		fps = SCR_GetVarS32("script_fps");
+		
+		if ( mod(t,4*fps)==0 )
+		{	checkStreetFire();
+		}
+		
+		if ( mod(t,5*fps)==0 )
+		{	checkOAFire();
+		}
+		
+		if ( ( mod(t,1*fps)==0 ) && ( SCR_GetVarF32("TimerEboulis") > 0.0 ) && ( SCR_GetVarS32("CopsFounds") < 3 ) )
+		{
+			SCR_SetVarF32("TimerEboulis" , SCR_GetVarF32("TimerEboulis") + 1.0 );
+			LEV_UpdateObjective( SCR_GetVarS32( "objIndex_saveCop" ) , SCR_GetVarF32("TimerEboulis") );
+			if ( SCR_GetVarF32("TimerEboulis") > SCR_GetVarF32("TimerDiff") )
+			{
+				LEV_ValidateObjective( SCR_GetVarS32( "objIndex_saveCop" ) ,0);
+				SCR_SetVarString("DebriefText", "&Mall_Defeat_Cops");
+				SCR_SetVarS32("ScenarTrans",666);
+			}
+		}
+		
+		if ( mod(t,3*fps)==0 )
+		{	checkDefeat();
+		}
+		
+		SCR_SetVarS32("script_t" , t+1 );
+	}
+}
+
+
+//- vérifie si le feu de rue a atteint les batiments
+void checkStreetFire ()
+{
+	if ( SCR_GetVarS32("obj_street_end")==0 )
+	{
+		if ( FIR_HPGetIntensity( getEI("gp_hp_street_facade") ) >700.0 )
+		{
+			SCR_SetVarS32("obj_street_end",-1);
+			LEV_ValidateObjective( SCR_GetVarS32("objIndex_street") ,0);
+			SCR_SetVarString("DebriefText", "&Common_Defeat_Propagation");
+			SCR_SetVarS32("ScenarTrans",666);
+		}
+		else if ( ( FIR_HPGetIntensity( getEI("gp_hp_street_facade") ) > 0.0 ) && ( SCR_GetVarS32("FacadeWarn") == 0 ) )
+		{
+			PNL_AddMessage("VOCAL_MALL_Maul_Warn0","&Maul_Warn0",25994.22,3896.01);
+			SCR_SetVarS32("FacadeWarn" , 1 );
+		}
+		else if ( FIR_HPGetActiveIntensity( getEI("gp_hp_sc1") ) + FIR_HPGetIntensity( getEI("gp_hp_street_facade") ) ==0.0 )
+		{
+			SCR_SetVarS32("obj_street_end",1);
+			LEV_ValidateObjective( SCR_GetVarS32("objIndex_street") ,1);
+		}
+	}
+}
+
+
+//- lance l'objectif des oeuvres d'art si le feu s'approche
+void checkOAFire ()
+{
+	if ( SCR_GetVarS32("objIndex_oa")==-1 )
+	{
+		if ( FIR_HPGetActiveIntensity( getEI("gp_hp_proxiOA") ) >0.0 )
+		{
+			s32 obj;
+			f32 x, y;
+			
+			PNL_AddMessage("VOCAL_MALL_Maul_Warn1","&Maul_Warn1",0.0,0.0);
+			
+			obj = LEV_AddObjectiveBoolean("&Maul_Obj5",0);
+			SCR_SetVarS32("objIndex_oa",obj);
+			
+			ENT_GetPosition( getEI("wp_obj_oa") ,x,y);
+			LEV_SetObjectivePos(obj,x,y);
+		}
+	}
+}
+
+
+//- défaites pour causes générales
+void checkDefeat ()
+{
+	if ( SCR_GetVarS32("ScenarTrans") ==666 )
+	{ return;
+	}
+	
+	// trop de propagation
+	if ( LEV_GetFireSizePercent() >0.85 && LEV_GetDifficultyLevel() ==2 )
+	{	SCR_SetVarS32("ScenarTrans",666);
+		SCR_SetVarString("DebriefText", "&Common_Defeat_Propagation");
+	}
+	
+	// trop de civils morts
+	else if ( LEV_GetNumVictims() >= SCR_GetVarS32("obj_civDeath_limit") )
+	{	SCR_SetVarS32("ScenarTrans",666);
+		SCR_SetVarString("DebriefText", "&Common_Defeat_Civil");
+	}
+	
+	// perte d'unité critique
+	else if ( LEV_IsHealVehicleRemaining() ==0 || LEV_IsFiremanSupplierRemaining() ==0 )
+	{	SCR_SetVarS32("ScenarTrans",666);
+		SCR_SetVarString("DebriefText", "&Common_Defeat_Capital_Units");
+	}
+	
+	// trop de pompiers morts
+	else if ( LEV_GetNumKilledFiremen() >= SCR_GetVarS32("obj_firemenDeath_limit") )
+	{	SCR_SetVarS32("ScenarTrans",666);
+		SCR_SetVarString("DebriefText", "&Common_Defeat_Firemen");
+	}
+}
+
+
+/* misc ******************************************************************************************/
+
+
+void ComputeScoring()
+{
+	s32 i, NumMedals, Duration, VictimNumber, LostFiremen, FiremenWounds, VehicleDamage, FireSize, DesyncDone, ArtDestructed;
+
+	// Duration
+	Duration = UTL_GetGameTime()/60.0;
+	if 	(Duration>40)		NumMedals = 0;
+	else if (Duration>30)		NumMedals = 1;
+	else if (Duration>26)		NumMedals = 2;
+	else if (Duration>24)		NumMedals = 3;
+	else if (Duration>22)		NumMedals = 4;
+	else				NumMedals = 5;
+	LEV_AddScoringLine("&InterventionDuration",Duration,NumMedals);
+
+	// Number of victims
+	VictimNumber = LEV_GetNumVictims();
+	if 	(VictimNumber == 0)	NumMedals = 5;
+	else if (VictimNumber == 1)	NumMedals = 3;
+	else if (VictimNumber == 2)	NumMedals = 1;
+	else				NumMedals = 0;
+	LEV_AddScoringLine("&VictimNumber",VictimNumber,NumMedals);
+
+	// Lost Firemen
+	LostFiremen = LEV_GetNumKilledFiremen();
+	if 	(LostFiremen == 0)	NumMedals = 5;
+	else if (LostFiremen == 1)	NumMedals = 3;
+	else if (LostFiremen == 2)	NumMedals = 1;
+	else				NumMedals = 0;
+	LEV_AddScoringLine("&LostFiremen",LostFiremen,NumMedals);
+
+	// Firemen wounds
+	FiremenWounds = LEV_GetFiremenWounds();
+	if 	(FiremenWounds>700)	NumMedals = 0;
+	else if (FiremenWounds>600)	NumMedals = 1;
+	else if (FiremenWounds>500)	NumMedals = 2;
+	else if (FiremenWounds>400)	NumMedals = 3;
+	else if (FiremenWounds>300)	NumMedals = 4;
+	else 				NumMedals = 5;
+	LEV_AddScoringLine("&FiremenWounds",FiremenWounds,NumMedals);
+
+	// Vehicle Damage
+	VehicleDamage = LEV_GetVehicleDamages();
+	if 	(VehicleDamage>200)	NumMedals = 0;
+	else if (VehicleDamage>150)	NumMedals = 1;
+	else if (VehicleDamage>125)	NumMedals = 2;
+	else if (VehicleDamage>100)	NumMedals = 3;
+	else if (VehicleDamage>75)	NumMedals = 4;
+	else 				NumMedals = 5;
+	LEV_AddScoringLine("&VehicleDamage",VehicleDamage,NumMedals);
+
+	// Fire Size
+	FireSize = 100.0 * LEV_GetFireSizePercent();
+	if 	(FireSize>70)		NumMedals = 0;
+	else if (FireSize>60)		NumMedals = 1;
+	else if (FireSize>55)		NumMedals = 2;
+	else if (FireSize>50)		NumMedals = 3;
+	else if (FireSize>45)		NumMedals = 4;
+	else 				NumMedals = 5;
+	LEV_AddScoringLine("&FireSize",FireSize,NumMedals);
+	
+	// Policiers dégagés des décombres
+	DesyncDone = 0;
+	for (i=1; i<=4; i+=1)
+	{
+		if ( ENT_GetDamage( SCR_GetVarS32("BridgePiece"+i) ) == 0.0 )
+			DesyncDone += 1;
+	}
+	if 	(DesyncDone == 0)	NumMedals = 0;
+	else if (DesyncDone == 1)	NumMedals = 1;
+	else if (DesyncDone == 2)	NumMedals = 2;
+	else if (DesyncDone == 3)	NumMedals = 5;
+	else 				NumMedals = 5;
+	LEV_AddScoringLine("&Mall_Scor1",DesyncDone,NumMedals);
+	
+	// Nb d'oeuvre d'art perdues
+	ArtDestructed = SCR_GetVarS32("ArtDestructed");
+	if 	(ArtDestructed > 6)		NumMedals = 0;
+	else if (ArtDestructed > 5)		NumMedals = 1;
+	else if (ArtDestructed > 3)		NumMedals = 2;
+	else if (ArtDestructed > 2)		NumMedals = 3;
+	else if (ArtDestructed > 0)		NumMedals = 4;
+	else 					NumMedals = 5;
+	LEV_AddScoringLine("&Mall_Scor2",ArtDestructed,NumMedals);
+}
+
+
+
+//- fin de niveau : victoire
+void Victory ()
+{
+	ComputeScoring();
+
+	s32 MatosOk , CivilsOk;
+	MatosOk = 0;
+	CivilsOk = 0;
+	if ( ( SCR_GetVarS32("obj_street_end") == 1 ) && ( SCR_GetVarS32("ArtDestructed") < 4 ) )
+		MatosOk = 1;
+	if ( LEV_GetNumVictims() == 0 )	
+		CivilsOk = 1;
+
+
+	if ( CivilsOk = 0 )
+		LEV_SetDebriefText("&Mall_Victory2_Debrief");
+	else
+	{
+		if ( MatosOk = 1 )
+			LEV_SetDebriefText("&Mall_Victory1_Debrief");
+		else
+			LEV_SetDebriefText("&Mall_Victory3_Debrief");
+	}
+
+	LEV_TriggerVictory();
+	PANEL_SetInterfaceMode("SCORING");
+}
+
+
+//- fin de niveau : défaite
+void Defeat ()
+{
+	LEV_SetDebriefText( SCR_GetVarString("DebriefText") );
+	LEV_TriggerDefeat();
+	PANEL_SetInterfaceMode("SCORING");
+}

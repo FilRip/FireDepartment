@@ -1,0 +1,1376 @@
+// FD1_StationService : mission convertie de Fire Department 1 (station_service)
+
+// ===== cinématiques FD1 (.ccs) =====
+void Cine_VALVE()
+{
+	if(SCR_GetVarS32("CineEnCours") == 1)
+		return;
+	SCR_SetVarS32("CineEnCours", 1);
+	CAM_Cinematic(1);
+	CAM_SetInertia(1.0);
+	LEV_RoofVisibility("fd1_sta_station_service_toit_0_385_ROOF", 0);
+	LEV_RoofVisibility("fd1_lid_sta_station_service_partie02_4_ROOF", 0);
+	CAM_TeleportToWayPoint(ENT_FindByName("cine_VALVE_0"));
+	PNL_PrintSubtitle("&FD1_StationService_STA_CUT_VALVE");
+	CAM_CinematicSetToWayPoint(ENT_FindByName("cine_VALVE_1"), 1.5);
+	SCR_RunDelayed("Cine_VALVE_1", 1.5);
+	SCR_RunDelayed("Cine_VALVE_Fin", 4.5);
+}
+void Cine_VALVE_1()
+{
+}
+void Cine_VALVE_Fin()
+{
+	PNL_ClearSubtitle();
+	CAM_ModePlay();
+	SCR_SetVarS32("CineEnCours", 0);
+}
+
+void Cine_SUPERETTE()
+{
+	if(SCR_GetVarS32("CineEnCours") == 1)
+		return;
+	SCR_SetVarS32("CineEnCours", 1);
+	CAM_Cinematic(1);
+	CAM_SetInertia(1.0);
+	LEV_RoofVisibility("fd1_sta_station_service_toit_0_385_ROOF", 0);
+	CAM_TeleportToWayPoint(ENT_FindByName("cine_SUPERETTE_0"));
+	PNL_PrintSubtitle("&FD1_StationService_STA_CUT_SUPERETTE1");
+	CAM_CinematicSetToWayPoint(ENT_FindByName("cine_SUPERETTE_1"), 6.0);
+	SCR_RunDelayed("Cine_SUPERETTE_1", 6.0);
+	SCR_RunDelayed("Cine_SUPERETTE_2", 6.1);
+	SCR_RunDelayed("Cine_SUPERETTE_3", 12.1);
+	SCR_RunDelayed("Cine_SUPERETTE_Fin", 15.1);
+}
+void Cine_SUPERETTE_1()
+{
+	CAM_TeleportToWayPoint(ENT_FindByName("cine_SUPERETTE_2"));
+}
+void Cine_SUPERETTE_2()
+{
+	CAM_CinematicSetToWayPoint(ENT_FindByName("cine_SUPERETTE_3"), 6.0);
+	PNL_PrintSubtitle("&FD1_StationService_STA_CUT_SUPERETTE2");
+}
+void Cine_SUPERETTE_3()
+{
+}
+void Cine_SUPERETTE_Fin()
+{
+	PNL_ClearSubtitle();
+	CAM_ModePlay();
+	SCR_SetVarS32("CineEnCours", 0);
+}
+
+void Cine_ETAGE()
+{
+	if(SCR_GetVarS32("CineEnCours") == 1)
+		return;
+	SCR_SetVarS32("CineEnCours", 1);
+	CAM_Cinematic(1);
+	CAM_SetInertia(1.0);
+	CAM_TeleportToWayPoint(ENT_FindByName("cine_ETAGE_0"));
+	PNL_PrintSubtitle("&FD1_StationService_STA_CUT_ETAGE1");
+	CAM_CinematicSetToWayPoint(ENT_FindByName("cine_ETAGE_1"), 5.0);
+	SCR_RunDelayed("Cine_ETAGE_1", 5.0);
+	SCR_RunDelayed("Cine_ETAGE_2", 9.0);
+	SCR_RunDelayed("Cine_ETAGE_3", 9.1);
+	SCR_RunDelayed("Cine_ETAGE_4", 14.1);
+	SCR_RunDelayed("Cine_ETAGE_5", 17.1);
+	SCR_RunDelayed("Cine_ETAGE_Fin", 20.1);
+}
+void Cine_ETAGE_1()
+{
+	CAM_CinematicSetToWayPoint(ENT_FindByName("cine_ETAGE_2"), 4.0);
+}
+void Cine_ETAGE_2()
+{
+	CAM_TeleportToWayPoint(ENT_FindByName("cine_ETAGE_3"));
+	PNL_PrintSubtitle("&FD1_StationService_STA_CUT_ETAGE2");
+}
+void Cine_ETAGE_3()
+{
+	CAM_CinematicSetToWayPoint(ENT_FindByName("cine_ETAGE_4"), 5.0);
+	PNL_PrintSubtitle("&FD1_StationService_STA_CUT_ETAGE3");
+}
+void Cine_ETAGE_4()
+{
+	CAM_CinematicSetToWayPoint(ENT_FindByName("cine_ETAGE_5"), 3.0);
+}
+void Cine_ETAGE_5()
+{
+}
+void Cine_ETAGE_Fin()
+{
+	PNL_ClearSubtitle();
+	CAM_ModePlay();
+	SCR_SetVarS32("CineEnCours", 0);
+}
+
+void Cine_ARROSAGE()
+{
+	if(SCR_GetVarS32("CineEnCours") == 1)
+		return;
+	SCR_SetVarS32("CineEnCours", 1);
+	CAM_Cinematic(1);
+	CAM_SetInertia(1.0);
+	CAM_TeleportToWayPoint(ENT_FindByName("cine_ARROSAGE_0"));
+	PNL_PrintSubtitle("&FD1_StationService_STA_CUT_ARROSAGE");
+	CAM_CinematicSetToWayPoint(ENT_FindByName("cine_ARROSAGE_1"), 2.0);
+	SCR_RunDelayed("Cine_ARROSAGE_1", 2.0);
+	SCR_RunDelayed("Cine_ARROSAGE_Fin", 5.0);
+}
+void Cine_ARROSAGE_1()
+{
+}
+void Cine_ARROSAGE_Fin()
+{
+	PNL_ClearSubtitle();
+	CAM_ModePlay();
+	SCR_SetVarS32("CineEnCours", 0);
+}
+
+void Cine_BACK1()
+{
+	if(SCR_GetVarS32("CineEnCours") == 1)
+		return;
+	SCR_SetVarS32("CineEnCours", 1);
+	CAM_Cinematic(1);
+	CAM_SetInertia(1.0);
+	LEV_RoofVisibility("fd1_sta_station_maison_abandonnee_toit_0_110_ROOF", 0);
+	LEV_RoofVisibility("fd1_lid_sta_station_maison_abandonnee_piece02_13_ROOF", 0);
+	CAM_TeleportToWayPoint(ENT_FindByName("cine_BACK1_0"));
+	PNL_PrintSubtitle("&FD1_StationService_STA_CUT_BACK");
+	CAM_CinematicSetToWayPoint(ENT_FindByName("cine_BACK1_1"), 2.0);
+	SCR_RunDelayed("Cine_BACK1_1", 2.0);
+	SCR_RunDelayed("Cine_BACK1_Fin", 5.0);
+}
+void Cine_BACK1_1()
+{
+}
+void Cine_BACK1_Fin()
+{
+	PNL_ClearSubtitle();
+	CAM_ModePlay();
+	SCR_SetVarS32("CineEnCours", 0);
+}
+
+void Cine_REFECTION()
+{
+	if(SCR_GetVarS32("CineEnCours") == 1)
+		return;
+	SCR_SetVarS32("CineEnCours", 1);
+	CAM_Cinematic(1);
+	CAM_SetInertia(1.0);
+	CAM_TeleportToWayPoint(ENT_FindByName("cine_REFECTION_0"));
+	PNL_PrintSubtitle("&FD1_StationService_STA_CUT_REFECTION1");
+	CAM_CinematicSetToWayPoint(ENT_FindByName("cine_REFECTION_1"), 4.0);
+	SCR_RunDelayed("Cine_REFECTION_1", 4.0);
+	SCR_RunDelayed("Cine_REFECTION_2", 8.0);
+	SCR_RunDelayed("Cine_REFECTION_Fin", 11.0);
+}
+void Cine_REFECTION_1()
+{
+	CAM_CinematicSetToWayPoint(ENT_FindByName("cine_REFECTION_2"), 4.0);
+	PNL_PrintSubtitle("&FD1_StationService_STA_CUT_REFECTION2");
+}
+void Cine_REFECTION_2()
+{
+}
+void Cine_REFECTION_Fin()
+{
+	PNL_ClearSubtitle();
+	CAM_ModePlay();
+	SCR_SetVarS32("CineEnCours", 0);
+}
+
+void Cine_PEINTURE()
+{
+	if(SCR_GetVarS32("CineEnCours") == 1)
+		return;
+	SCR_SetVarS32("CineEnCours", 1);
+	CAM_Cinematic(1);
+	CAM_SetInertia(1.0);
+	LEV_RoofVisibility("fd1_sta_station_maison_abandonnee_toit_0_110_ROOF", 0);
+	LEV_RoofVisibility("fd1_lid_sta_station_maison_abandonnee_piece03_16_ROOF", 0);
+	CAM_TeleportToWayPoint(ENT_FindByName("cine_PEINTURE_0"));
+	PNL_PrintSubtitle("&FD1_StationService_STA_CUT_PEINTURE");
+	CAM_CinematicSetToWayPoint(ENT_FindByName("cine_PEINTURE_1"), 4.0);
+	SCR_RunDelayed("Cine_PEINTURE_1", 4.0);
+	SCR_RunDelayed("Cine_PEINTURE_Fin", 7.0);
+}
+void Cine_PEINTURE_1()
+{
+}
+void Cine_PEINTURE_Fin()
+{
+	PNL_ClearSubtitle();
+	CAM_ModePlay();
+	SCR_SetVarS32("CineEnCours", 0);
+}
+
+void Cine_BACK2()
+{
+	if(SCR_GetVarS32("CineEnCours") == 1)
+		return;
+	SCR_SetVarS32("CineEnCours", 1);
+	CAM_Cinematic(1);
+	CAM_SetInertia(1.0);
+	LEV_RoofVisibility("fd1_sta_habitat_toit_0_56_ROOF", 0);
+	LEV_RoofVisibility("fd1_lid_sta_habitat_piece05_8_ROOF", 0);
+	CAM_TeleportToWayPoint(ENT_FindByName("cine_BACK2_0"));
+	PNL_PrintSubtitle("&FD1_StationService_STA_CUT_BACK");
+	CAM_CinematicSetToWayPoint(ENT_FindByName("cine_BACK2_1"), 2.0);
+	SCR_RunDelayed("Cine_BACK2_1", 2.0);
+	SCR_RunDelayed("Cine_BACK2_Fin", 5.0);
+}
+void Cine_BACK2_1()
+{
+}
+void Cine_BACK2_Fin()
+{
+	PNL_ClearSubtitle();
+	CAM_ModePlay();
+	SCR_SetVarS32("CineEnCours", 0);
+}
+
+void Cine_BOMBONNE()
+{
+	if(SCR_GetVarS32("CineEnCours") == 1)
+		return;
+	SCR_SetVarS32("CineEnCours", 1);
+	CAM_Cinematic(1);
+	CAM_SetInertia(1.0);
+	LEV_RoofVisibility("fd1_sta_station_service_toit_0_385_ROOF", 0);
+	CAM_TeleportToWayPoint(ENT_FindByName("cine_BOMBONNE_0"));
+	PNL_PrintSubtitle("&FD1_StationService_STA_CUT_BOMBONNE");
+	CAM_CinematicSetToWayPoint(ENT_FindByName("cine_BOMBONNE_1"), 6.0);
+	SCR_RunDelayed("Cine_BOMBONNE_1", 6.0);
+	SCR_RunDelayed("Cine_BOMBONNE_Fin", 9.0);
+}
+void Cine_BOMBONNE_1()
+{
+}
+void Cine_BOMBONNE_Fin()
+{
+	PNL_ClearSubtitle();
+	CAM_ModePlay();
+	SCR_SetVarS32("CineEnCours", 0);
+}
+
+void Cine_BOMBONNEDANGER()
+{
+	if(SCR_GetVarS32("CineEnCours") == 1)
+		return;
+	SCR_SetVarS32("CineEnCours", 1);
+	CAM_Cinematic(1);
+	CAM_SetInertia(1.0);
+	LEV_RoofVisibility("fd1_sta_station_service_toit_0_385_ROOF", 0);
+	CAM_TeleportToWayPoint(ENT_FindByName("cine_BOMBONNEDANGER_0"));
+	PNL_PrintSubtitle("&FD1_StationService_STA_CUT_BOMBONNEDANGER");
+	CAM_CinematicSetToWayPoint(ENT_FindByName("cine_BOMBONNEDANGER_1"), 4.0);
+	SCR_RunDelayed("Cine_BOMBONNEDANGER_1", 4.0);
+	SCR_RunDelayed("Cine_BOMBONNEDANGER_Fin", 7.0);
+}
+void Cine_BOMBONNEDANGER_1()
+{
+}
+void Cine_BOMBONNEDANGER_Fin()
+{
+	PNL_ClearSubtitle();
+	CAM_ModePlay();
+	SCR_SetVarS32("CineEnCours", 0);
+}
+
+void Cine_CUT_ARRIVEE()
+{
+	if(SCR_GetVarS32("CineEnCours") == 1)
+		return;
+	SCR_SetVarS32("CineEnCours", 1);
+	CAM_Cinematic(1);
+	CAM_SetInertia(1.0);
+	CAM_TeleportToWayPoint(ENT_FindByName("cine_CUT_ARRIVEE_0"));
+	CAM_CinematicSetToWayPoint(ENT_FindByName("cine_CUT_ARRIVEE_1"), 1.0);
+	SCR_RunDelayed("Cine_CUT_ARRIVEE_1", 1.0);
+	SCR_RunDelayed("Cine_CUT_ARRIVEE_2", 3.0);
+	SCR_RunDelayed("Cine_CUT_ARRIVEE_3", 4.0);
+	SCR_RunDelayed("Cine_CUT_ARRIVEE_4", 4.1);
+	SCR_RunDelayed("Cine_CUT_ARRIVEE_5", 6.1);
+	SCR_RunDelayed("Cine_CUT_ARRIVEE_6", 11.1);
+	SCR_RunDelayed("Cine_CUT_ARRIVEE_7", 12.1);
+	SCR_RunDelayed("Cine_CUT_ARRIVEE_Fin", 15.1);
+}
+void Cine_CUT_ARRIVEE_1()
+{
+	CAM_CinematicSetToWayPoint(ENT_FindByName("cine_CUT_ARRIVEE_2"), 2.0);
+}
+void Cine_CUT_ARRIVEE_2()
+{
+	CAM_CinematicSetToWayPoint(ENT_FindByName("cine_CUT_ARRIVEE_3"), 1.0);
+}
+void Cine_CUT_ARRIVEE_3()
+{
+	CAM_TeleportToWayPoint(ENT_FindByName("cine_CUT_ARRIVEE_4"));
+}
+void Cine_CUT_ARRIVEE_4()
+{
+	CAM_CinematicSetToWayPoint(ENT_FindByName("cine_CUT_ARRIVEE_5"), 2.0);
+}
+void Cine_CUT_ARRIVEE_5()
+{
+	CAM_CinematicSetToWayPoint(ENT_FindByName("cine_CUT_ARRIVEE_6"), 5.0);
+}
+void Cine_CUT_ARRIVEE_6()
+{
+	CAM_CinematicSetToWayPoint(ENT_FindByName("cine_CUT_ARRIVEE_7"), 1.0);
+}
+void Cine_CUT_ARRIVEE_7()
+{
+}
+void Cine_CUT_ARRIVEE_Fin()
+{
+	PNL_ClearSubtitle();
+	CAM_ModePlay();
+	SCR_SetVarS32("CineEnCours", 0);
+}
+
+// Sac : appelle Pick_Sac
+void Use_Sac(EntityID User, EntityID Bouton, mcString State)
+{
+	if(SCR_GetVarS32("Sac") == 0)
+	{
+		SCR_SetVarS32("Sac", 1);
+		SCR_SetVarS32("User_Sac", User);
+		Pick_Sac();
+		ENT_SetCapacityTarget(Bouton, "CouldBeUse", 0);
+	}
+}
+
+// valveessence : appelle ValveEssence
+void Use_valveessence(EntityID User, EntityID Bouton, mcString State)
+{
+	if(SCR_GetVarS32("valveessence") == 0)
+	{
+		SCR_SetVarS32("valveessence", 1);
+		SCR_SetVarS32("User_valveessence", User);
+		ValveEssence();
+		ENT_SetCapacityTarget(Bouton, "CouldBeUse", 0);
+	}
+}
+
+// ===== Station-service : déroulement (traduit des scripts FD1) =====
+
+// un groupe de foyers FD1 prend feu (SetHotpointGroupActivated(n, 1)) : il peut brûler, les foyers de a prennent
+void Allume(s32 g, s32 a)
+{
+	if(g != 0)
+		FIR_HPEnable(g, 1);
+	if(a != 0)
+		FIR_HPSetIntensity(a, 20.0);
+}
+// un groupe s'éteint et ne peut plus brûler (SetHotpointGroupActivated(n, 0))
+void Eteint(s32 g)
+{
+	if(g == 0)
+		return;
+	FIR_HPSetIntensity(g, 0.0);
+	FIR_HPEnable(g, 0);
+}
+// intensité d'un groupe (0 s'il n'a aucun foyer)
+f32 Feu(s32 g)
+{
+	if(g == 0)
+		return 0.0;
+	return FIR_HPGetIntensity(g);
+}
+// une victime paraît (une seule fois : une victime sauvée ne revient pas)
+void Montre(mcString nom)
+{
+	if(SCR_GetVarS32("Vu_" + nom) == 1)
+		return;
+	SCR_SetVarS32("Vu_" + nom, 1);
+	ENT_SetVisibility(ENT_FindByName(nom), 1);
+}
+
+void Station_Init()
+{
+	s32 g;
+	SCR_SetVarS32("Acte", 1);
+	g = ENT_GroupCreate("groupe_0");
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_52"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_64"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_245"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_263"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_264"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_295"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_326"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_343"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_357"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_421"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_470"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_489"));
+	SCR_SetVarS32("G_0", g);
+	g = ENT_GroupCreate("groupe_1");
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_59"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_66"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_73"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_79"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_98"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_100"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_144"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_194"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_214"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_240"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_271"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_272"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_279"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_298"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_440"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_447"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_485"));
+	SCR_SetVarS32("G_1", g);
+	g = ENT_GroupCreate("groupe_2");
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_2"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_5"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_13"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_24"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_31"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_33"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_39"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_45"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_53"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_54"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_56"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_75"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_77"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_82"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_84"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_85"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_90"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_101"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_114"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_116"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_118"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_122"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_139"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_150"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_164"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_172"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_174"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_176"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_185"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_189"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_195"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_198"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_203"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_204"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_208"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_212"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_213"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_220"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_227"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_233"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_237"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_238"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_239"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_249"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_253"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_257"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_267"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_269"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_287"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_291"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_296"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_297"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_303"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_304"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_311"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_322"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_327"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_329"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_335"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_340"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_342"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_344"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_351"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_354"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_355"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_364"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_366"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_374"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_383"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_387"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_390"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_391"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_397"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_401"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_403"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_408"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_423"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_424"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_425"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_426"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_451"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_452"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_454"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_456"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_457"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_479"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_483"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_496"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_503"));
+	SCR_SetVarS32("G_2", g);
+	FIR_HPEnable(g, 0);
+	g = ENT_GroupCreate("allume_2");
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_101"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_176"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_227"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_364"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_397"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_401"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_408"));
+	SCR_SetVarS32("A_2", g);
+	g = ENT_GroupCreate("groupe_3");
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_1"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_3"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_9"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_10"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_17"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_20"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_22"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_34"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_36"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_49"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_55"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_63"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_80"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_81"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_86"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_92"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_93"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_95"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_119"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_123"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_124"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_131"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_135"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_136"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_143"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_145"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_147"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_153"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_155"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_159"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_160"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_178"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_183"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_184"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_193"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_197"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_200"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_215"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_222"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_229"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_232"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_234"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_235"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_241"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_246"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_248"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_252"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_254"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_255"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_258"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_262"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_266"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_270"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_278"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_283"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_293"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_302"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_307"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_310"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_323"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_332"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_338"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_349"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_353"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_356"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_359"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_372"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_380"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_384"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_394"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_398"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_405"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_407"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_411"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_422"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_427"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_429"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_431"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_434"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_441"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_445"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_446"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_449"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_462"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_463"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_474"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_477"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_478"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_482"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_490"));
+	SCR_SetVarS32("G_3", g);
+	FIR_HPEnable(g, 0);
+	g = ENT_GroupCreate("allume_3");
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_9"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_22"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_252"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_255"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_384"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_398"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_474"));
+	SCR_SetVarS32("A_3", g);
+	g = ENT_GroupCreate("groupe_4");
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_8"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_12"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_15"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_18"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_19"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_21"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_29"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_37"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_42"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_57"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_65"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_76"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_88"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_103"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_108"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_113"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_126"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_127"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_130"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_137"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_161"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_162"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_166"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_168"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_179"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_180"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_181"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_188"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_196"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_211"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_236"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_243"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_265"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_282"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_290"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_309"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_312"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_315"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_319"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_324"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_331"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_333"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_334"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_336"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_361"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_371"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_378"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_388"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_392"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_400"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_409"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_412"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_419"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_435"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_448"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_460"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_464"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_469"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_471"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_472"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_487"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_488"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_493"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_494"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_499"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_500"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_505"));
+	SCR_SetVarS32("G_4", g);
+	FIR_HPEnable(g, 0);
+	g = ENT_GroupCreate("allume_4");
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_37"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_65"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_168"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_290"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_319"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_331"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_488"));
+	SCR_SetVarS32("A_4", g);
+	g = ENT_GroupCreate("groupe_5");
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_67"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_74"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_78"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_104"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_109"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_132"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_151"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_156"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_218"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_223"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_273"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_358"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_365"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_381"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_428"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_433"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_442"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_444"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_473"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_497"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_498"));
+	SCR_SetVarS32("G_5", g);
+	FIR_HPEnable(g, 0);
+	g = ENT_GroupCreate("allume_5");
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_67"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_74"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_78"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_104"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_109"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_132"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_151"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_156"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_218"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_223"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_358"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_365"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_381"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_428"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_433"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_442"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_444"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_473"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_497"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_498"));
+	SCR_SetVarS32("A_5", g);
+	g = ENT_GroupCreate("groupe_6");
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_16"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_51"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_60"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_71"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_190"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_191"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_274"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_276"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_330"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_370"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_393"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_420"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_437"));
+	SCR_SetVarS32("G_6", g);
+	FIR_HPEnable(g, 0);
+	g = ENT_GroupCreate("allume_6");
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_190"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_274"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_393"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_420"));
+	SCR_SetVarS32("A_6", g);
+	g = ENT_GroupCreate("groupe_7");
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_7"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_14"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_23"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_25"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_28"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_30"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_32"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_35"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_40"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_50"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_58"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_61"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_62"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_69"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_83"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_89"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_97"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_102"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_107"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_110"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_111"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_115"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_117"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_120"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_125"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_128"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_129"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_134"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_138"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_140"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_148"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_157"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_158"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_163"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_165"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_167"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_170"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_171"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_177"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_187"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_202"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_205"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_206"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_216"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_217"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_219"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_221"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_225"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_226"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_230"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_231"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_242"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_250"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_260"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_261"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_268"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_277"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_285"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_286"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_288"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_289"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_292"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_299"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_300"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_301"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_306"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_313"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_318"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_321"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_337"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_339"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_346"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_347"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_348"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_350"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_368"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_373"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_379"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_382"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_385"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_386"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_406"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_410"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_413"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_430"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_450"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_453"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_459"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_466"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_475"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_484"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_492"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_501"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_502"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_504"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_508"));
+	SCR_SetVarS32("G_7", g);
+	FIR_HPEnable(g, 0);
+	g = ENT_GroupCreate("groupe_8");
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_6"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_11"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_26"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_38"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_41"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_43"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_44"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_47"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_48"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_68"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_70"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_72"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_87"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_91"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_94"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_96"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_99"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_106"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_121"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_141"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_142"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_146"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_149"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_152"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_154"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_169"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_173"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_182"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_186"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_192"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_199"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_201"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_207"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_210"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_224"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_228"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_247"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_251"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_275"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_280"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_284"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_305"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_308"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_314"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_316"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_320"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_325"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_328"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_345"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_352"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_360"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_362"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_363"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_367"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_375"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_376"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_377"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_389"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_395"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_396"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_399"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_402"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_404"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_414"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_416"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_417"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_418"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_432"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_436"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_438"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_439"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_443"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_455"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_458"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_461"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_465"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_467"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_468"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_476"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_480"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_486"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_491"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_495"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_506"));
+	SCR_SetVarS32("G_8", g);
+	g = ENT_GroupCreate("groupe_20");
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_27"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_105"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_415"));
+	SCR_SetVarS32("G_20", g);
+	FIR_HPEnable(g, 0);
+	g = ENT_GroupCreate("groupe_21");
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_112"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_175"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_259"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_294"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_341"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_369"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_481"));
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_507"));
+	SCR_SetVarS32("G_21", g);
+	FIR_HPEnable(g, 0);
+	g = ENT_GroupCreate("feux_peinture");
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_22"));
+	SCR_SetVarS32("G_Peinture", g);
+	g = ENT_GroupCreate("feux_sac");
+	ENT_GroupAddEntity(g, ENT_FindByName("foyer_83"));
+	SCR_SetVarS32("G_Sac", g);
+	Montre("Policier");
+	Montre("Citernedriver");
+	Montre("Otage1");
+	Cine_CUT_ARRIVEE();
+	SCR_SetVarS32("Obj_Acte1", LEV_AddObjectiveBoolean("&FD1_StationService_STATION_DES_S1O0"));
+}
+
+// l'ingénieur prend le camion-citerne (il le « répare ») : le camion du décor laisse la place au véhicule à conduire ;
+// le feu du camion part avec lui
+void Use_Citerne(EntityID User, EntityID Bouton, mcString State)
+{
+	if(SCR_GetVarS32("Conduite") == 1)
+		return;
+	SCR_SetVarS32("Conduite", 1);
+	SCR_SetVarS32("Arrosage", 1);
+	Eteint(SCR_GetVarS32("G_0"));
+	ENT_SetVisibility(ENT_FindByName("Citerne"), 0);
+	ENT_SetVisibility(ENT_FindByName("CiterneGPL"), 1);
+}
+// le camion-citerne entre dans l'unité d'arrosage à mousse (FD1 : Trigger_truckrescue) : 5 s d'arrosage
+void TriggerTruck(EntityID Unit, EntityID Zone)
+{
+	if(Unit != ENT_FindByName("CiterneGPL") || SCR_GetVarS32("Arrose") != 0)
+		return;
+	SCR_SetVarS32("Arrose", 1);
+	if(SCR_GetVarS32("G_21") != 0)
+		FIR_HPSetSprinkler(SCR_GetVarS32("G_21"), 10.0);
+	SCR_RunDelayed("ApplySprinkler", 5.0);
+}
+// fin de l'arrosage (FD1 : ApplySprinkler) : le camion est hors de danger
+void ApplySprinkler()
+{
+	if(SCR_GetVarS32("G_21") != 0)
+		FIR_HPSetSprinkler(SCR_GetVarS32("G_21"), 0.0);
+	Eteint(SCR_GetVarS32("G_0"));
+	SCR_SetVarS32("CamionSauve", 1);
+	if(SCR_GetVarS32("Acte") == 1)
+		Station_Acte2();
+}
+// la vanne de la supérette (FD1 : ValveEssence) : les pompes et la fuite de propane s'éteignent
+void ValveEssence()
+{
+	if(SCR_GetVarS32("ValveDone") == 1)
+		return;
+	SCR_SetVarS32("ValveDone", 1);
+	Eteint(SCR_GetVarS32("G_1"));
+	Eteint(SCR_GetVarS32("G_20"));
+	Cine_VALVE();
+}
+// la fuite de propane se rallume toutes les 10 s tant que la vanne est ouverte (FD1 : JetFlamme)
+void JetFlamme()
+{
+	if(SCR_GetVarS32("ValveDone") == 1)
+		return;
+	Allume(SCR_GetVarS32("G_20"), SCR_GetVarS32("G_20"));
+	SCR_RunDelayed("JetFlamme", 10.0);
+}
+
+// acte 2 (FD1 : Scenario1 réussi) : la supérette prend feu
+void Station_Acte2()
+{
+	SCR_SetVarS32("Acte", 2);
+	LEV_ValidateObjective(SCR_GetVarS32("Obj_Acte1"), 1);
+	Montre("Caissiere");
+	Montre("Patron");
+	Montre("Client");
+	Allume(SCR_GetVarS32("G_2"), SCR_GetVarS32("A_2"));
+	JetFlamme();
+	Cine_SUPERETTE();
+	LEV_RoofVisibility("fd1_sta_station_service_toit_0_385_ROOF", 0);
+	SCR_SetVarS32("Obj_Acte2", LEV_AddObjectiveIterate("&FD1_StationService_STATION_DES_S2O0", 6));
+}
+// acte 3 (FD1 : Scenario2 réussi) : le chantier prend feu
+void Station_Acte3()
+{
+	SCR_SetVarS32("Acte", 3);
+	LEV_ValidateObjective(SCR_GetVarS32("Obj_Acte2"), 1);
+	Allume(SCR_GetVarS32("G_3"), SCR_GetVarS32("A_3"));
+	Cine_REFECTION();
+	LEV_RoofVisibility("fd1_sta_station_maison_abandonnee_toit_0_110_ROOF", 0);
+	SCR_SetVarS32("Obj_Acte3", LEV_AddObjectiveIterate("&FD1_StationService_STATION_DES_S3O0", 3));
+}
+// acte 4 (FD1 : Scenario3 réussi) : la cour de la station s'éteint d'elle-même, une voiture embrase l'immeuble ouest
+void Station_Acte4()
+{
+	SCR_SetVarS32("Acte", 4);
+	LEV_ValidateObjective(SCR_GetVarS32("Obj_Acte3"), 1);
+	if(SCR_GetVarS32("G_8") != 0)
+		FIR_HPSetGrowthRate(SCR_GetVarS32("G_8"), -2.0);
+	SCR_RunDelayed("ExplVoiture", 1.0);
+	SCR_RunDelayed("EtageCut", 2.0);
+	Montre("Hab2");
+	Allume(SCR_GetVarS32("G_7"), 0);
+	LEV_RoofVisibility("fd1_sta_habitat_toit_0_56_ROOF", 0);
+	SCR_SetVarS32("Obj_Habitants", LEV_AddObjectiveIterate("&FD1_StationService_STATION_DES_S4O0", 5));
+	SCR_SetVarS32("Obj_Voleur", LEV_AddObjectiveBoolean("&FD1_StationService_STATION_DES_S4O1"));
+	SCR_SetVarS32("Obj_Sac", LEV_AddObjectiveBoolean("&FD1_StationService_STATION_DES_S4O2"));
+	if(SCR_GetVarS32("SacOK") == 1)
+		LEV_ValidateObjective(SCR_GetVarS32("Obj_Sac"), 1);
+	if(SCR_GetVarS32("Sauve_Voleur") == 1)
+		LEV_ValidateObjective(SCR_GetVarS32("Obj_Voleur"), 1);
+}
+void ExplVoiture()
+{
+	ENT_SetDamage(ENT_FindByName("VoitActe4"), 0.0);
+	Allume(SCR_GetVarS32("G_4"), SCR_GetVarS32("A_4"));
+}
+// la cinématique de l'immeuble, puis l'échelle et le bras élévateur arrivent (FD1 : EtageCut, ArriveeMega)
+void EtageCut()
+{
+	Cine_ETAGE();
+	SCR_RunDelayed("Renfort", 9.0);
+}
+void Renfort()
+{
+	LEV_CallReinforcement(1);
+}
+
+s32 Cassee(mcString porte)
+{
+	if(ENT_GetState(ENT_FindByName(porte)) == "Broken")
+		return 1;
+	return 0;
+}
+void Back1Cut()
+{
+	Cine_BACK1();
+}
+void Back2Cut()
+{
+	Cine_BACK2();
+}
+// portes cassées (à partir de l'acte 3, FD1 : CheckGlobalCache) : victimes découvertes, backdrafts
+void Station_Portes()
+{
+	if(SCR_GetVarS32("Cache1") == 0 && Cassee("Porte6") == 1)
+	{
+		SCR_SetVarS32("Cache1", 1);
+		Montre("Ouvrier1");
+	}
+	if(SCR_GetVarS32("Cache1") == 0 && Cassee("Porte4") == 1)
+	{
+		SCR_SetVarS32("Cache1", 1);
+		ENT_SetDamage(ENT_FindByName("Back1"), 0.0);
+		SCR_RunDelayed("Back1Cut", 1.0);
+		Montre("Ouvrier1");
+	}
+	if(Cassee("Porte3") == 1)
+		Montre("Ouvrier3");
+	if(Cassee("Porte5") == 1 || Cassee("Porte7") == 1 || Cassee("Porte8") == 1)
+		Montre("Ouvrier0");
+	if(Cassee("Porte9") == 1)
+	{
+		Montre("Hab3");
+		Montre("Hab4");
+	}
+	if(SCR_GetVarS32("Cache14") == 0 && (Cassee("Porte12") == 1 || Cassee("Porte13") == 1 || Cassee("Porte14") == 1))
+	{
+		SCR_SetVarS32("Cache14", 1);
+		Allume(SCR_GetVarS32("G_5"), SCR_GetVarS32("A_5"));
+		ENT_SetDamage(ENT_FindByName("Back2"), 0.0);
+		ENT_SetDamage(ENT_FindByName("Back3"), 0.0);
+		ENT_SetDamage(ENT_FindByName("Back4"), 0.0);
+		SCR_RunDelayed("Back2Cut", 1.0);
+	}
+	if(Cassee("Porte13") == 1 || Cassee("Porte14") == 1)
+		Montre("Hab1");
+	if(Cassee("Porte15") == 1)
+	{
+		Montre("Poligote");
+		Montre("Voleur");
+	}
+}
+// zones FD1 qui découvrent une pièce (TCache3, 5, 11, 17, 19) ; la réserve de peinture (TCache4)
+void TCache3(EntityID Unit, EntityID Zone)
+{
+	if(SCR_GetVarS32("Acte") < 3)
+		return;
+	Montre("Ouvrier3");
+}
+void TCache5(EntityID Unit, EntityID Zone)
+{
+	if(SCR_GetVarS32("Acte") < 3)
+		return;
+	Montre("Ouvrier0");
+}
+void TCache11(EntityID Unit, EntityID Zone)
+{
+	if(SCR_GetVarS32("Acte") < 4)
+		return;
+	Montre("Hab1");
+}
+void TCache17(EntityID Unit, EntityID Zone)
+{
+	if(SCR_GetVarS32("Acte") < 4)
+		return;
+	Montre("Poligote");
+}
+void TCache19(EntityID Unit, EntityID Zone)
+{
+	if(SCR_GetVarS32("Acte") < 4)
+		return;
+	Montre("Voleur");
+}
+void TCache4(EntityID Unit, EntityID Zone)
+{
+	if(SCR_GetVarS32("PeintureVue") == 1 || Feu(SCR_GetVarS32("G_Peinture")) <= 1.0)
+		return;
+	SCR_SetVarS32("PeintureVue", 1);
+	Cine_PEINTURE();
+}
+
+// la citerne de butane détruite par le feu (FD1 : CheckBombonne) : deux policiers soufflés, la rue prend feu
+void BombonneExplosee(EntityID Bombonne)
+{
+	SCR_SetVarS32("BombonneExp", 1);
+	Montre("PolicierEvanoui");
+	Montre("PolicierEvanoui2");
+	Allume(SCR_GetVarS32("G_6"), SCR_GetVarS32("A_6"));
+	Cine_BOMBONNE();
+}
+// le sac des 3 millions (FD1 : OnPickMe)
+void Pick_Sac()
+{
+	if(SCR_GetVarS32("SacOK") == 1 || SCR_GetVarS32("SacBrule") == 1)
+		return;
+	SCR_SetVarS32("SacOK", 1);
+	ENT_SetVisibility(ENT_FindByName("Sac"), 0);
+	PNL_AddMessage("", "&FD1_StationService_EVENT_STA_BUTIN", 0.0, 0.0);
+	if(SCR_GetVarS32("Acte") == 4)
+		LEV_ValidateObjective(SCR_GetVarS32("Obj_Sac"), 1);
+}
+// civil mis à l'abri (rappel du moteur)
+void OnCivilianSaved(EntityID Civil)
+{
+	if(Civil == ENT_FindByName("Client"))
+		SCR_SetVarS32("Sauve_Client", 1);
+	if(Civil == ENT_FindByName("Policier"))
+		SCR_SetVarS32("Sauve_Policier", 1);
+	if(Civil == ENT_FindByName("Citernedriver"))
+		SCR_SetVarS32("Sauve_Citernedriver", 1);
+	if(Civil == ENT_FindByName("Otage1"))
+		SCR_SetVarS32("Sauve_Otage1", 1);
+	if(Civil == ENT_FindByName("Caissiere"))
+		SCR_SetVarS32("Sauve_Caissiere", 1);
+	if(Civil == ENT_FindByName("Patron"))
+		SCR_SetVarS32("Sauve_Patron", 1);
+	if(Civil == ENT_FindByName("Ouvrier0"))
+		SCR_SetVarS32("Sauve_Ouvrier0", 1);
+	if(Civil == ENT_FindByName("Ouvrier1"))
+		SCR_SetVarS32("Sauve_Ouvrier1", 1);
+	if(Civil == ENT_FindByName("Ouvrier3"))
+		SCR_SetVarS32("Sauve_Ouvrier3", 1);
+	if(Civil == ENT_FindByName("Hab1"))
+		SCR_SetVarS32("Sauve_Hab1", 1);
+	if(Civil == ENT_FindByName("Hab2"))
+		SCR_SetVarS32("Sauve_Hab2", 1);
+	if(Civil == ENT_FindByName("Hab3"))
+		SCR_SetVarS32("Sauve_Hab3", 1);
+	if(Civil == ENT_FindByName("Hab4"))
+		SCR_SetVarS32("Sauve_Hab4", 1);
+	if(Civil == ENT_FindByName("Poligote"))
+		SCR_SetVarS32("Sauve_Poligote", 1);
+	if(Civil == ENT_FindByName("Voleur"))
+		SCR_SetVarS32("Sauve_Voleur", 1);
+	if(Civil == ENT_FindByName("Voleur"))
+	{
+		PNL_AddMessage("", "&FD1_StationService_EVENT_STA_GANGSTER", 0.0, 0.0);
+		if(SCR_GetVarS32("Acte") == 4)
+			LEV_ValidateObjective(SCR_GetVarS32("Obj_Voleur"), 1);
+	}
+}
+void Station_Defaite()
+{
+	LEV_TriggerDefeat();
+}
+// victoire (FD1 : Victory_OnTimer) : le sac sauvé ou non
+void Station_Victoire()
+{
+	LEV_ValidateObjective(SCR_GetVarS32("Obj_Habitants"), 1);
+	if(SCR_GetVarS32("SacOK") == 1)
+		LEV_SetDebriefText("&FD1_StationService_VICTORY1");
+	else
+		LEV_SetDebriefText("&FD1_StationService_VICTORY2");
+	LEV_TriggerVictory();
+}
+
+// boucle : défaites, citerne de butane, sac, portes, victimes de l'acte en cours
+void Station_Main()
+{
+	s32 n;
+	if(SCR_GetVarS32("Fin") != 0)
+		return;
+	if(LEV_IsHealVehicleRemaining() == 0)
+	{
+		SCR_SetVarS32("Fin", 2);
+		LEV_SetDebriefText("&FD1_StationService_DEFEAT4");
+		SCR_RunDelayed("Station_Defaite", 5.0);
+		return;
+	}
+	if(SCR_GetVarS32("Conduite") == 0 && ENT_GetDamage(ENT_FindByName("Citerne")) <= 0.0)
+	{
+		SCR_SetVarS32("Fin", 2);
+		LEV_SetDebriefText("&FD1_StationService_DEFEAT1");
+		SCR_RunDelayed("Station_Defaite", 5.0);
+		return;
+	}
+	if(SCR_GetVarS32("Conduite") == 1 && SCR_GetVarS32("CamionSauve") == 0 && ENT_GetUnitState(ENT_FindByName("CiterneGPL")) == 4)
+	{
+		SCR_SetVarS32("Fin", 2);
+		LEV_SetDebriefText("&FD1_StationService_DEFEAT1");
+		SCR_RunDelayed("Station_Defaite", 5.0);
+		return;
+	}
+	if(SCR_GetVarS32("Conduite") == 0 && Feu(SCR_GetVarS32("G_0")) > 0.0)
+		SCR_SetVarS32("CiterneChaleur", SCR_GetVarS32("CiterneChaleur") + 1);
+	if(SCR_GetVarS32("CiterneChaleur") >= 1200)
+	{
+		ENT_SetDamage(ENT_FindByName("Citerne"), 0.0);
+		SCR_SetVarS32("Fin", 2);
+		LEV_SetDebriefText("&FD1_StationService_DEFEAT1");
+		SCR_RunDelayed("Station_Defaite", 5.0);
+		return;
+	}
+	if(SCR_GetVarS32("SacOK") == 0 && Feu(SCR_GetVarS32("G_Sac")) > 0.0)
+		SCR_SetVarS32("SacChaleur", SCR_GetVarS32("SacChaleur") + 1);
+	if(SCR_GetVarS32("SacOK") == 0 && SCR_GetVarS32("SacChaleur") >= 300)
+	{
+		SCR_SetVarS32("SacBrule", 1);
+		ENT_SetVisibility(ENT_FindByName("Sac"), 0);
+		if(SCR_GetVarS32("Acte") == 4)
+			LEV_ValidateObjective(SCR_GetVarS32("Obj_Sac"), 0);
+		SCR_SetVarS32("Fin", 2);
+		LEV_SetDebriefText("&FD1_StationService_DEFEAT7");
+		SCR_RunDelayed("Station_Defaite", 5.0);
+		return;
+	}
+	if(SCR_GetVarS32("BombonneDanger") == 0 && SCR_GetVarS32("BombonneExp") == 0 && ENT_GetDamage(ENT_FindByName("Bombonne")) < 99.0)
+	{
+		SCR_SetVarS32("BombonneDanger", 1);
+		Cine_BOMBONNEDANGER();
+	}
+	if(Feu(SCR_GetVarS32("G_0")) > 0.0)
+		SCR_SetVarS32("CamionEnFeu", 1);
+	if(SCR_GetVarS32("Arrosage") == 0 && SCR_GetVarS32("CamionEnFeu") == 1 && Feu(SCR_GetVarS32("G_0")) <= 0.0)
+	{
+		SCR_SetVarS32("Arrosage", 1);
+		Cine_ARROSAGE();
+	}
+	if(SCR_GetVarS32("Acte") >= 3)
+		Station_Portes();
+	if(SCR_GetVarS32("Acte") == 2)
+	{
+		n = SCR_GetVarS32("Sauve_Client") + SCR_GetVarS32("Sauve_Policier") + SCR_GetVarS32("Sauve_Citernedriver") + SCR_GetVarS32("Sauve_Otage1") + SCR_GetVarS32("Sauve_Caissiere") + SCR_GetVarS32("Sauve_Patron");
+		LEV_UpdateObjective(SCR_GetVarS32("Obj_Acte2"), n);
+		if(n >= 6)
+			Station_Acte3();
+		return;
+	}
+	if(SCR_GetVarS32("Acte") == 3)
+	{
+		n = SCR_GetVarS32("Sauve_Ouvrier0") + SCR_GetVarS32("Sauve_Ouvrier1") + SCR_GetVarS32("Sauve_Ouvrier3");
+		LEV_UpdateObjective(SCR_GetVarS32("Obj_Acte3"), n);
+		if(n >= 3)
+			Station_Acte4();
+		return;
+	}
+	if(SCR_GetVarS32("Acte") == 4)
+	{
+		n = SCR_GetVarS32("Sauve_Hab1") + SCR_GetVarS32("Sauve_Hab2") + SCR_GetVarS32("Sauve_Hab3") + SCR_GetVarS32("Sauve_Hab4") + SCR_GetVarS32("Sauve_Poligote");
+		LEV_UpdateObjective(SCR_GetVarS32("Obj_Habitants"), n);
+		if(n >= 5 && SCR_GetVarS32("Sauve_Voleur") == 1)
+		{
+			SCR_SetVarS32("Fin", 1);
+			SCR_RunDelayed("Station_Victoire", 5.0);
+		}
+	}
+}
+
+void FD1_StationService_Start()
+{
+	Station_Init();
+}
+
+void FD1_StationService_Main()
+{
+	Station_Main();
+}

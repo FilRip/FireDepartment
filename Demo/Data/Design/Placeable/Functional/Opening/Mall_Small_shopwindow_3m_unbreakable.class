@@ -1,0 +1,8 @@
+[#INCLUDE]
+FILE0 = "Mall_Small_shopwindow_3m.class"
+
+[CAPACITIES_ACTIONS]
+COULDBEBREAK = 0
+
+[DAMAGE]
+HITDAMAGECOEF = 0

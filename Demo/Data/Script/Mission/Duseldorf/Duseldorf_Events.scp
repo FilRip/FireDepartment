@@ -1,0 +1,216 @@
+
+
+void Civil_Death(EntityID Civilian)///////////// for function OnLifepoint0
+{
+	s32 c;
+	c=SCR_GetVarS32("Cur_Num_Civils");
+	c=c-1;
+	SCR_SetVarS32("Cur_Num_Civils" , c);
+	
+}
+
+
+
+void OnCivilianSaved(EntityID Civilian)
+{
+	s32 k;
+	k=SCR_GetVarS32("Cur_Num_Civils");
+	k=k-1;
+	SCR_SetVarS32("Cur_Num_Civils" , k);
+
+} 
+
+////////////////////////////unique pesonalize script function
+void OnEnterStartTRG(EntityID unitID, EntityID id_PIPO)
+{
+	if(ENT_GetUnitType(unitID) ==0)
+	{
+		//PNL_AddMessage("", "&OpenDoor", 0.0,0.0);
+		SCR_SetVarS32("FrancID" , unitID);
+		SCR_SetVarS32("Franc_sys" , 1);
+	}
+}
+//////////////////////////////////////////end initialaize franc
+
+/////////////////////////////////////////start objectivs trigers
+void Found_Radio_ValObj5(EntityID unitID, EntityID id_PIPO)
+{
+	if(SCR_GetVarS32("Ob5_sys")==0)
+	{
+	SCR_RunDelayed("Val_obbj5",0.0);
+	SCR_RunDelayed("add_obbj6",0.2);
+	ENT_Destroy(5006352);
+	}
+}
+
+/////////////////////////////////////////end objectivs trigers
+
+////////////////////////////////////////start usable objects
+void Radio_Use(EntityID User , EntityID Armoire , mcString State)
+{	
+	SCR_RunDelayed("Val_obbj6",0.0);
+	SCR_SetVarS32("Ob6_sys" , 0);
+	ENT_SetCapacityTarget(5003470, "CouldBeUse" ,0);
+	ENT_SetVisibility(5005328,0);
+
+}
+
+////////////////////////////////////////END usable objects
+
+////////////////////////////start atack nepravilnie ogni
+
+// the type of the fire agent of the unit. (Fire agents : 0=Water, 1=Foam, 3=Powder, 4=Metal)
+// the type of fire.FireTypes : (0=A, 1=B, 2=C, 3=D)
+void AttackWrongFire( s32 Unit , s32 Fire , s32 FireAgent , s32 FireType )
+{
+	s32 i , optim;
+	f32 x , y;
+	ENT_GetPosition( Fire , x , y );
+
+	if ( ( FireAgent == 0 ) && ( FireType == 1 ) )
+	{
+		
+		PNL_AddMessage( "VOCAL_PETRO_Petro_WrongFire" , "&Petro_WrongFire" , x , y );
+		
+	}
+	
+	else if ( ( FireAgent == 1 ) && ( FireType == 0 ) )
+	{
+		PNL_AddMessage( "VOCAL_PETRO_Petro_WrongFire2" , "&Petro_WrongFire2" , x , y );
+	}
+
+
+}
+
+////////////////////////////end atack nepravilnie ogni
+
+
+//////////////////////////start Activate fire triggers
+void First_Office_Fire_Activate(EntityID unitID, EntityID id_PIPO)
+{
+	FIR_HPEnable(ENT_FindByName("Ofice1_fire"),1);
+	ENT_Destroy(5003351);
+}
+
+void Second_Office_Fire_Activate(EntityID unitID, EntityID id_PIPO)
+{
+	FIR_HPEnable(ENT_FindByName("Ofice2_fire"),1);
+	ENT_Destroy(5003353);
+}
+
+void Store_Fire_Activate(EntityID unitID, EntityID id_PIPO)
+{
+	ENT_SetVisibility(5000079,1);
+	ENT_SetVisibility(5000073,1);
+	ENT_Destroy(5003357);
+	ENT_Destroy(5003355);
+	LEV_RoofVisibility("Duss_Storeg_ROOF",0);
+	FIR_HPEnable(ENT_FindByName("Storage_fire"),1);
+	
+}
+
+void Blow_Tube_Trigg(EntityID unitID, EntityID id_PIPO)
+{
+	if(ENT_GetUnitType(unitID)==13)
+	{
+		ENT_Destroy(5005591);
+		SCR_RunDelayed("Cat_HangarFire" , 190.0);
+		//PNL_AddMessage("", "&OpenDoor", 0.0,0.0);
+	}
+}
+
+void RadiRoom_Fire_Activate(EntityID unitID, EntityID id_PIPO)
+{
+	FIR_HPEnable(ENT_FindByName("radiorubka_fire"),1);
+	ENT_Destroy(5006353);
+}
+//////////////////////////end Activate fire triggers
+
+////////////////////start hide_mask
+void Mask_ofice1_room2_hide(EntityID unitID, EntityID id_PIPO)
+{
+	LEV_MaskVisibility("Building_ofice_ROOM2_MASK",0);
+}
+
+void Mask_ofice1_room4_hide(EntityID unitID, EntityID id_PIPO)
+{
+	LEV_MaskVisibility("Building_ofice_ROOM4_MASK",0);
+}
+
+void Mask_ofice2_room3_hide(EntityID unitID, EntityID id_PIPO)
+{
+	LEV_MaskVisibility("Building_ofice2_ROOM3_MASK",0);
+}
+
+
+////////////////////end hide_mask
+
+///////////////////start hide roofs
+void Hide_Building_Ofice_Roof(EntityID unitID, EntityID id_PIPO)
+{
+	LEV_RoofVisibility("Building_ofice_ROOF",0);
+}
+
+void Hide_Building_Ofice2_Roof(EntityID unitID, EntityID id_PIPO)
+{
+	LEV_RoofVisibility("Building_ofice2_ROOF",0);
+}
+
+void Hide_Hangar2_Roof(EntityID unitID, EntityID id_PIPO)
+{
+	
+	LEV_RoofVisibility("Duss_Angar2_ROOF",0);
+	LEV_RoofVisibility("Duss_Angar2_ROOF_steklo",0);
+}
+
+void Hide_Hangar1_Roof(EntityID unitID, EntityID id_PIPO)
+{
+	LEV_RoofVisibility("Duss_Angar_Build_ROOF",0);
+	//LEV_RoofVisibility("Duss_Angar_ROOF",0);
+	LEV_RoofVisibility("Duss_Angar_ROOF_steklo",0);
+}
+
+void Hide_Hang2_Build(EntityID unitID, EntityID id_PIPO)
+{
+	LEV_RoofVisibility("Duss_Angar2_Build_Bud_ROOF",0);
+}
+
+void Hide_Hangar1_Build(EntityID unitID, EntityID id_PIPO)
+{
+	LEV_RoofVisibility("Duss_Angar2_Build_Bud2_ROOF",0);
+}
+///////////////////end hide roofs
+
+void Hide_Axe(EntityID Civilian)
+{
+	ENT_SetVisibility(5004673,0);
+}
+
+void RadioRele(EntityID Civilian)
+{
+	if(SCR_GetVarS32("Ob6_sys")==1)
+	{
+	SCR_SetVarS32("ScenarTrans", 666);
+	SCR_SetVarString("DebriefText", "&Duseldorf_RadioRele_Defeat");
+	}
+
+}
+
+void Fly_Use(EntityID User , EntityID Armoire , mcString State)
+{
+		if(SCR_GetVarS32("Lock_On")==0)
+		{
+
+		if(SCR_GetVarS32("Plane_lock")==0)
+		{
+		SCR_SetVarS32("Ob4_sys",0);
+		SCR_RunDelayed("Val_obbj4",1.0);
+		SCR_RunDelayed("Cat_Fly" ,1.1);
+		ENT_SetVisibility(5008619,0);
+		ENT_SetCapacityTarget(5000849, "CouldBeUse" ,0);
+		SCR_SetVarS32("Lock_On",1);
+		}
+	
+		}
+		//////////Sdelat samolet ne usabilnim
+}
