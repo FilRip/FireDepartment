@@ -171,6 +171,35 @@ public sealed partial class OpenFDGame
         foreach (RoomLid lid in _lids.Where(l => l.Shown && l.Rooms.Count == 0))
             if (_session.Units.Active.Any(u => !u.IsVehicle && Inside(new(u.Position.X, u.Position.Y), lid.Min, lid.Max, -50)))
                 lid.Shown = false;
+        // couvercle lié à des pièces, mais qui couvre aussi des couloirs (Eurotunnel : « GROUND_MASK » noircit tous les
+        // tunnels, et les wagons sont ses pièces) : il part aussi quand un pompier est dessous, sous l'un de ses triangles
+        foreach (RoomLid lid in _lids.Where(l => l.Shown && l.Rooms.Count > 0))
+            if (_session.Units.Active.FirstOrDefault(u => !u.IsVehicle && u.Position.Z < lid.MaxZ && UnderLid(lid, new(u.Position.X, u.Position.Y))) is { } under)
+            {
+                lid.Shown = false;
+                Console.WriteLine($"Couvercle retiré ({under.Name} dessous) : {lid.Name}");
+            }
+    }
+
+    /// <summary>Ce point (vu de dessus) est sous l'un des triangles du couvercle.</summary>
+    private static bool UnderLid(RoomLid lid, SN.Vector2 p)
+    {
+        if (!Inside(p, lid.Min, lid.Max, 0))
+            return false;
+        for (int t = 0; t + 2 < lid.Flat.Length; t += 3)
+        {
+            SN.Vector2 a = lid.Flat[t];
+            SN.Vector2 b = lid.Flat[t + 1];
+            SN.Vector2 c = lid.Flat[t + 2];
+            float d1 = (p.X - b.X) * (a.Y - b.Y) - (a.X - b.X) * (p.Y - b.Y);
+            float d2 = (p.X - c.X) * (b.Y - c.Y) - (b.X - c.X) * (p.Y - c.Y);
+            float d3 = (p.X - a.X) * (c.Y - a.Y) - (c.X - a.X) * (p.Y - a.Y);
+            bool neg = d1 < 0 || d2 < 0 || d3 < 0;
+            bool pos = d1 > 0 || d2 > 0 || d3 > 0;
+            if (!(neg && pos))
+                return true;
+        }
+        return false;
     }
 
     private readonly HashSet<uint> _revealedWindows = new();
@@ -222,6 +251,10 @@ public sealed partial class OpenFDGame
         public required VertexBuffer Vb;
         public required int Tris;
         public SN.Vector2 Min, Max;
+        /// <summary>Hauteur la plus haute du couvercle.</summary>
+        public float MaxZ = float.MinValue;
+        /// <summary>Ses triangles vus de dessus (x, y), trois points par triangle.</summary>
+        public SN.Vector2[] Flat = Array.Empty<SN.Vector2>();
         public readonly List<int> Rooms = new();
         public bool Shown = true;
         /// <summary>Objet posé qui porte ce couvercle (0 : décor de la mission).</summary>
@@ -272,6 +305,8 @@ public sealed partial class OpenFDGame
         VertexBuffer vb = new VertexBuffer(GraphicsDevice, VertexPosition.VertexDeclaration, v.Length, BufferUsage.WriteOnly);
         vb.SetData(v);
         RoomLid lid = new RoomLid { Name = name, Vb = vb, Tris = v.Length / 3, Min = mn, Max = mx, Owner = owner };
+        lid.Flat = v.Select(p => new SN.Vector2(p.Position.X, p.Position.Y)).ToArray();
+        lid.MaxZ = v.Max(p => p.Position.Z);
         // pièces dont au moins un tiers des cases est sous le couvercle (vu de dessus)
         if (g != null && _roomOf.Length == g.Width * g.Height)
         {
