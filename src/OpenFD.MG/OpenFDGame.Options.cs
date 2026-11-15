@@ -11,7 +11,7 @@ namespace OpenFD.MG;
 public sealed partial class OpenFDGame
 {
     /// <summary>Numéro de la livraison (openfdN) : mention du menu principal et titre de l'éditeur.</summary>
-    internal const string BuildNumber = "186";
+    internal const string BuildNumber = "188";
 
     private Settings _settings = new();
     private int _screen;          // 0 menu principal, 1 choix de la mission, 2 options, 3 pause, 4 sauvegardes, 9 choix du jeu
@@ -196,6 +196,11 @@ public sealed partial class OpenFDGame
         UnitManager.CarrySpeed = Math.Clamp(gp.CarrySpeed, 0.2f, 1f);
         UnitManager.OnlyOneOnLadder = gp.OnlyOneOnLadder;
         OpenFD.Fire.FireWorld.SpreadRadiusFactor = Math.Clamp(gp.FireSpreadRadiusFactor, 0.1f, 5f);
+        UnitManager.EnableDeath = gp.EnableDeath;
+        UnitManager.DeathTime = Math.Clamp(gp.DeathTime, 5f, 7200f);
+        UnitManager.ConsciousTime = Math.Clamp(gp.ConsciousTime, 5f, 7200f);
+        UnitManager.DeathFireFactor = Math.Clamp(gp.DeathFireFactor, 1f, 100f);
+        UnitManager.DeathFireRange = Math.Clamp(gp.DeathFireRange, 0f, 5000f);
         // ancienne valeur par défaut (1,6, trop lente) : remplacée par la nouvelle, trois fois plus rapide
         if (MathF.Abs(gp.ArrowShiftSpeed - OldArrowShift) < 0.001f)
             gp.ArrowShiftSpeed = new GameplaySettings().ArrowShiftSpeed;

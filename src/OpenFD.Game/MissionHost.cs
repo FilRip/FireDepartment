@@ -515,7 +515,8 @@ public sealed class MissionHost : IScriptHost
                 Scoring.Add((V(0).AsText, V(1).AsNum, (int)V(2).AsInt));
                 return Value.Zero;
             case "LEV_GETNUMVICTIMS": return Value.I(Units?.Victims ?? 0);
-            case "LEV_GETNUMKILLEDFIREMEN": case "LEV_GETNUMKILLEDVEHICLES": return Value.I(0);
+            case "LEV_GETNUMKILLEDFIREMEN": return Value.I(Units?.KilledFiremen ?? 0);   // morts (réglage EnableDeath) ; 0 sinon
+            case "LEV_GETNUMKILLEDVEHICLES": return Value.I(0);
             case "LEV_GETFIREMENWOUNDS": return Value.I(Units?.Units.Sum(u => u.Wounds) ?? 0);
             case "LEV_GETVEHICLEDAMAGES": return Value.I(0);
             case "LEV_GETNUMFIREMEN": return Value.I(Units?.FiremenCount ?? 0);

@@ -162,7 +162,11 @@ public sealed class Unit
     public float Life = 500, LifeMax = 500, FireDamageCoef = 3;
     public float ScriptHeatCoef = 1;                      // ENT_SetFireDamageCoef sur un pompier (0 : insensible au feu)
     public float SuitHeatCoef = 1;                        // combinaison ignifugée : chaleur × FireDamageCoef / celui d'un pompier (1/5)
-    public bool Destroyed;                                // véhicule détruit : inutilisable jusqu'à la fin de la partie
+    public bool Destroyed;                                // véhicule détruit : inutilisable jusqu'à la fin de la partie ; pompier mort (réglage EnableDeath)
+    /// <summary>Seconde barre de vie, pendant qu'il est inconscient (1 → 0 : mort ; réglage EnableDeath, Death.cs).</summary>
+    public float UnconsciousLife = 1;
+    /// <summary>Heure de sa mort (réglage EnableDeath), -1 sinon : son corps s'efface, la silhouette reste.</summary>
+    public float DiedAt = -1;
     public bool HealsUnits;                               // ambulance : soigne les pompiers venus à elle
     public string? Icon;                                  // [UNIT] Icon : image de l'unité (Data\Overlay\Textures)
     public float Reversing, ManeuverLeft;                 // véhicule : marche arrière restante ; longueur de la manœuvre en cours

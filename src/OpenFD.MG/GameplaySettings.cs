@@ -24,5 +24,10 @@ public sealed class GameplaySettings
     public float FlameSpeedVariation { get; set; } = 4f;   // écart d'une flamme à l'autre (images par seconde en plus, au hasard)
     public float ObjectiveTimeFactor { get; set; } = 2f;   // objectifs « vie d'un objet » (Mriya : générateur, 2 min en facile dans le jeu d'origine) : durée × ce facteur
     public bool OnlyOneOnLadder { get; set; }              // une seule personne à la fois sur l'échelle d'un camion : les autres attendent leur tour devant
-    public float FireSpreadRadiusFactor { get; set; } = 1f; // rayon où un feu peut en allumer un autre : portée d'allumage de chaque foyer × ce facteur (1 : comme le jeu d'origine)
+    public float FireSpreadRadiusFactor { get; set; } = 1f;
+    public bool EnableDeath { get; set; }                  // une personne inconsciente (civil, pompier…) finit par mourir (Death.cs)
+    public float ConsciousTime { get; set; } = 300f;       // secondes qu'un civil conscient tient, sans feu autour, avant de s'évanouir
+    public float DeathTime { get; set; } = 300f;           // secondes qu'elle tient inconsciente, sans feu autour, avant de mourir
+    public float DeathFireFactor { get; set; } = 2f;       // feu tout proche : elle meurt ce nombre de fois plus vite
+    public float DeathFireRange { get; set; } = 0f;        // distance (cm) d'un feu « tout proche » ; 0 : celle du jeu pour chaque feu (LifeDamageRange, 1 m le plus souvent) // rayon où un feu peut en allumer un autre : portée d'allumage de chaque foyer × ce facteur (1 : comme le jeu d'origine)
 }

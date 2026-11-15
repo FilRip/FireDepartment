@@ -143,7 +143,8 @@ public sealed partial class OpenFDGame
                 _ui.Rect(p.X - hw - px, p.Y - hh - px, 2 * hw + 2 * px, 2 * hh + 2 * px, new SN.Vector4(1, 1, 1, 1));
             else
                 _ui.Rect(p.X - hw - px, p.Y - hh - px, 2 * hw + 2 * px, 2 * hh + 2 * px, new SN.Vector4(0, 0, 0, 0.8f));
-            SN.Vector4 col = u.Unconscious ? new SN.Vector4(1, 0.2f, 0.2f, 1)                  // pompier, médecin… inconscient : rouge, comme les civils
+            SN.Vector4 col = u.Unconscious && u.Destroyed ? new SN.Vector4(0.4f, 0.4f, 0.4f, 1)   // mort (réglage EnableDeath) : gris
+                : u.Unconscious ? new SN.Vector4(1, 0.2f, 0.2f, 1)                  // pompier, médecin… inconscient : rouge, comme les civils
                 : u.Destroyed ? new SN.Vector4(0.55f, 0.55f, 0.55f, 1)
                 : Busy(u) ? new SN.Vector4(1f, 0.9f, 0.15f, 1) : new SN.Vector4(0.2f, 0.95f, 0.3f, 1);
             _ui.Rect(p.X - hw, p.Y - hh, 2 * hw, 2 * hh, col);

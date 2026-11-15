@@ -14,6 +14,12 @@ public sealed class Civilian
     public Vector3 Position;
     public float Heading;
     public CivilianState State;
+    /// <summary>Seconde barre de vie, pendant qu'il est inconscient (1 → 0 : mort ; réglage EnableDeath, Death.cs).</summary>
+    public float UnconsciousLife = 1;
+    /// <summary>Barre de vie du civil conscient (1 → 0 : il s'évanouit ; réglage EnableDeath, Death.cs).</summary>
+    public float ConsciousLife = 1;
+    /// <summary>Heure de sa mort pendant la partie (réglage EnableDeath), -1 sinon : son corps s'efface, la silhouette reste.</summary>
+    public float DiedAt = -1;
     public Unit? Leader;                                  // pompier ou médecin qu'il suit
     public Unit? Carrier;                                 // pompier qui le porte (inconscient)
     public bool Hidden;                                   // caché au départ par le script de mission

@@ -646,6 +646,55 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 }
             }
         }
+        // essai : FD3_MORT=1 → mort activée ; trois civils côte à côte : conscient (barre à 60 %), inconscient (barre à 40 %),
+        // mort depuis 12 s (silhouette au sol) ; la caméra les regarde
+        if (_frame == 4 && Environment.GetEnvironmentVariable("FD3_MORT") != null && _session != null)
+        {
+            for (int i = 0; i < 300; i++)
+            {
+                _session.Step();
+                SkipCinematic();
+            }
+            UnitManager um = _session.Units;
+            UnitManager.EnableDeath = true;
+            List<Civilian> cs = um.Civilians.Where(c => !c.Hidden && !c.ScriptWalk && (c.State == CivilianState.Conscious || c.State == CivilianState.Unconscious)).Take(3).ToList();
+            if (cs.Count == 3)
+            {
+                SN.Vector3 o = cs[0].Position;
+                cs[0].State = CivilianState.Conscious;
+                cs[0].ConsciousLife = 0.6f;
+                cs[1].State = CivilianState.Unconscious;
+                // deux places libres à côté de lui (même hauteur de sol)
+                List<SN.Vector3> spots = new List<SN.Vector3>();
+                for (int k = 0; k < 16 && spots.Count < 2; k++)
+                {
+                    float ang = k * MathF.PI / 8;
+                    SN.Vector2 q = new SN.Vector2(o.X + 170 * MathF.Cos(ang), o.Y + 170 * MathF.Sin(ang));
+                    float z = um.GroundZ(q);
+                    if (MathF.Abs(z - o.Z) < 20 && spots.All(sp => SN.Vector2.Distance(new SN.Vector2(sp.X, sp.Y), q) > 150))
+                        spots.Add(new SN.Vector3(q, z));
+                }
+                while (spots.Count < 2)
+                    spots.Add(o);
+                cs[1].Position = spots[0];
+                cs[1].UnconsciousLife = 0.4f;
+                cs[2].State = CivilianState.Unconscious;
+                cs[2].Position = spots[1];
+                cs[2].UnconsciousLife = 0.0001f;
+                for (int i = 0; i < (int)(12 / Session.Dt); i++)
+                {
+                    cs[0].ConsciousLife = 0.6f;
+                    cs[1].UnconsciousLife = 0.4f;
+                    _session.Step();
+                }
+                SnapshotPoses();
+                _target = (o + spots[0] + spots[1]) / 3 + new SN.Vector3(0, 0, 60);
+                _dist = 600;
+                _pitch = 0.9f;
+                _paused = Environment.GetEnvironmentVariable("FD3_MORT") != "anim";
+                Console.WriteLine($"mort : {cs[0].Name} {cs[0].State}, {cs[1].Name} {cs[1].State}, {cs[2].Name} {cs[2].State} (mort à {cs[2].DiedAt:0.0} s, maintenant {_session.Time:0.0} s)");
+            }
+        }
         // essai : FD3_LANCE=1 → un pompier arrose le feu le plus proche ; la caméra le regarde de près
         if (_frame == 4 && Environment.GetEnvironmentVariable("FD3_LANCE") != null && _session != null)
         {
@@ -2845,6 +2894,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _uiClock += 1f / 60f;
         _ui.Begin();
         RenderFireBars();
+        RenderCivilianBars();
         RenderClickMarks();
         _ui.End();
         RenderHudPanels();

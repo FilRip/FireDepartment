@@ -319,6 +319,11 @@ public sealed partial class OpenFDGame
             foreach (Unit u in _sel)
             {
                 u.Stamina = u.StaminaMax;
+                if (!u.IsVehicle)
+                {
+                    u.Destroyed = false;
+                    u.DiedAt = -1;
+                }
                 u.Unconscious = false;
                 u.CriticalWarned = false;
                 if (u.IsVehicle && !u.Destroyed)
@@ -614,7 +619,7 @@ public sealed partial class OpenFDGame
         if (_sel.Count == 0)
             return;
         // collègue inconscient (backdraft) : le pompier choisi le plus proche va le ranimer
-        if (UnitAt(x, y) is { Unconscious: true } victim)
+        if (UnitAt(x, y) is { Unconscious: true, Destroyed: false } victim)
         {
             Unit? who = _sel.Where(u => !u.IsVehicle && !u.Unconscious && u != victim).OrderBy(u => SN.Vector3.Distance(u.Position, victim.Position)).FirstOrDefault();
             if (who != null)
@@ -1241,7 +1246,7 @@ public sealed partial class OpenFDGame
             want = UnitAt(x, y) != null ? Cur.Unit : Cur.Normal;
         else if (GrappleAt(x, y) != null)
             want = walkers.Any(u => u.CanGrapple) ? Cur.Grapple : Cur.Forbidden;
-        else if (UnitAt(x, y) is { Unconscious: true })
+        else if (UnitAt(x, y) is { Unconscious: true, Destroyed: false })
             want = Cur.Heal;   // pompier ou médecin inconscient : le ranimer
         else if (CivilianAt(x, y) is { } civ)
             want = civ.State == CivilianState.Unconscious && walkers.Any(u => u.CanHeal) ? Cur.Heal : Cur.Rescue;   // inconscient : le médecin le soigne, un pompier le porte

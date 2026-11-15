@@ -235,6 +235,32 @@ public sealed partial class OpenFDGame
         }
     }
 
+    // ---- barre de vie des civils (réglage EnableDeath) : au-dessus de leur tête ----
+    // conscient : de vert à rouge (ConsciousTime) ; inconscient : rouge foncé sur cadre blanc (DeathTime, puis la mort) ;
+    // porté par un pompier : au-dessus du pompier, et elle ne descend plus
+    private void RenderCivilianBars()
+    {
+        if (_map || _session == null || !UnitManager.EnableDeath)
+            return;
+        foreach (Civilian c in _session.Units.Civilians)
+        {
+            if (c.Hidden || (c.State != CivilianState.Conscious && c.State != CivilianState.Unconscious))
+                continue;
+            bool awake = c.State == CivilianState.Conscious;
+            SN.Vector3 at = c.Carrier is { } carrier ? carrier.Position + new SN.Vector3(0, 0, 230)
+                : c.Position + new SN.Vector3(0, 0, awake ? 210 : 70);
+            if (Project(at) is not { } p || p.X < 0 || p.Y < 0 || p.X > _fbW || p.Y > _fbH)
+                continue;
+            float k = Math.Clamp(awake ? c.ConsciousLife : c.UnconsciousLife, 0, 1);
+            float bw = 36 * _scale, bh = 5 * _scale;
+            SN.Vector4 frame = awake ? new SN.Vector4(0, 0, 0, 0.7f) : new SN.Vector4(1, 1, 1, 0.85f);
+            SN.Vector4 fill = awake ? new SN.Vector4(MathF.Min(1, 2 * (1 - k)), MathF.Min(1, 2 * k), 0.1f, 1) : new SN.Vector4(0.75f, 0.05f, 0.05f, 1);
+            _ui.Rect(p.X - bw / 2 - _scale, p.Y - _scale, bw + 2 * _scale, bh + 2 * _scale, frame);
+            _ui.Rect(p.X - bw / 2, p.Y, bw, bh, new SN.Vector4(0, 0, 0, 0.8f));
+            _ui.Rect(p.X - bw / 2, p.Y, bw * k, bh, fill);
+        }
+    }
+
     // ---- panneau des unités : une ligne par équipe (« H7 », puis les renforts au-dessus), toutes les unités ----
     // devant chaque ligne, le cadre de l'équipe (StationSymbol.png : vert quand elle est là, gris tant qu'elle n'est pas
     // arrivée) ; les unités choisies sont entourées de vert ; sur l'image d'une unité clignote (WID_UNIT_SYMBOLS.png) une

@@ -1,6 +1,7 @@
 using OpenFD.Formats;
 using OpenFD.Game;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using SN = System.Numerics;
 
 namespace OpenFD.MG;
@@ -377,6 +378,99 @@ public sealed partial class OpenFDGame
         gd.RasterizerState = oldRast;
     }
 
+    /// <summary>
+    /// Enfoncement du corps d'une personne morte pendant la partie (réglage EnableDeath) : 0 pendant DeadDecaySeconds,
+    /// puis de plus en plus pendant DeadVanishSeconds ; null ensuite (le corps n'est plus dessiné).
+    /// </summary>
+    private static float? DeadSink(float diedAt, float now)
+    {
+        if (diedAt < 0)
+            return 0;
+        float age = now - diedAt - UnitManager.DeadDecaySeconds;
+        if (age <= 0)
+            return 0;
+        if (age >= UnitManager.DeadVanishSeconds)
+            return null;
+        return 60f * age / UnitManager.DeadVanishSeconds;
+    }
+
+    /// <summary>
+    /// Silhouette à la craie au sol (DeadModel des classes : trace_victim) là où une personne est morte pendant la partie.
+    /// Son image (Gfx\Textures\…\« @ 255 255 255 255trace_victim_opa ») : blanc, détouré par l'alpha, posée à plat
+    /// (1 m × 2 m, la tête vers où elle regardait).
+    /// </summary>
+    private void RenderDeathTraces(float now)
+    {
+        List<(SN.Vector3 p, float h)> traces = new List<(SN.Vector3 p, float h)>();
+        foreach (Civilian c in _session.Units.Civilians.Where(c => c.DiedAt >= 0 && !c.Hidden && now >= c.DiedAt + UnitManager.DeadDecaySeconds))
+            traces.Add((c.Position, c.Heading));
+        foreach (Unit u in _session.Units.Units.Where(u => !u.IsVehicle && u.DiedAt >= 0 && !u.Hidden && !u.OnBoard && now >= u.DiedAt + UnitManager.DeadDecaySeconds))
+            traces.Add((u.Position, u.Heading));
+        if (traces.Count == 0 || DeathTraceTexture() is not { } tex)
+            return;
+        List<VertexPositionColorTexture> v = new List<VertexPositionColorTexture>();
+        Color white = new Color(255, 255, 255, 230);
+        foreach ((SN.Vector3 p, float h) in traces)
+        {
+            SN.Vector3 at = new SN.Vector3(p.X, p.Y, _session.Units.GroundZ(new SN.Vector2(p.X, p.Y)) + 3);
+            SN.Vector3 fwd = new SN.Vector3(MathF.Cos(h), MathF.Sin(h), 0) * 100f;    // vers la tête
+            SN.Vector3 side = new SN.Vector3(-MathF.Sin(h), MathF.Cos(h), 0) * 50f;
+            VertexPositionColorTexture headL = new VertexPositionColorTexture((at + fwd - side).X(), white, new Vector2(0, 0));
+            VertexPositionColorTexture headR = new VertexPositionColorTexture((at + fwd + side).X(), white, new Vector2(1, 0));
+            VertexPositionColorTexture footL = new VertexPositionColorTexture((at - fwd - side).X(), white, new Vector2(0, 1));
+            VertexPositionColorTexture footR = new VertexPositionColorTexture((at - fwd + side).X(), white, new Vector2(1, 1));
+            v.Add(headL);
+            v.Add(headR);
+            v.Add(footR);
+            v.Add(headL);
+            v.Add(footR);
+            v.Add(footL);
+        }
+        GraphicsDevice gd = GraphicsDevice;
+        DepthStencilState oldDepth = gd.DepthStencilState;
+        BlendState oldBlend = gd.BlendState;
+        RasterizerState oldRast = gd.RasterizerState;
+        gd.DepthStencilState = DepthStencilState.DepthRead;
+        gd.BlendState = BlendState.NonPremultiplied;
+        gd.RasterizerState = RasterizerState.CullNone;
+        gd.SamplerStates[0] = SamplerState.LinearClamp;
+        _part.World = Matrix.Identity;
+        _part.Texture = tex;
+        VertexPositionColorTexture[] arr = v.ToArray();
+        foreach (EffectPass pass in _part.CurrentTechnique.Passes)
+        {
+            pass.Apply();
+            gd.DrawUserPrimitives(PrimitiveType.TriangleList, arr, 0, arr.Length / 3);
+        }
+        _part.Texture = Tex.Soft;
+        gd.DepthStencilState = oldDepth;
+        gd.BlendState = oldBlend;
+        gd.RasterizerState = oldRast;
+    }
+
+    private Texture2D? _deathTrace;
+    private bool _deathTraceTried;
+
+    // image de la silhouette : dans les banques de textures (_cache, Jail, London…), sous le nom « @ 255 255 255 255trace_victim_opa »
+    private Texture2D? DeathTraceTexture()
+    {
+        if (_deathTraceTried)
+            return _deathTrace;
+        _deathTraceTried = true;
+        try
+        {
+            string? path = _files.List("Gfx\\Textures\\").FirstOrDefault(f => f.EndsWith("trace_victim_opa.dds", StringComparison.OrdinalIgnoreCase))
+                ?? _files.List("Gfx\\Textures\\").FirstOrDefault(f => f.EndsWith("trace_victim_opa", StringComparison.OrdinalIgnoreCase));
+            if (path != null && _files.TryRead(path) is { } d)
+                _deathTrace = Tex.Dds(GraphicsDevice, d);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("Silhouette (trace_victim) : " + e.Message);
+        }
+        return _deathTrace;
+    }
+
     private void RenderUnits()
     {
         // temps continu (entre deux pas de simulation aussi) : l'animation avance à chaque image, pas par bonds de 0,1 s
@@ -385,6 +479,8 @@ public sealed partial class OpenFDGame
         if (_paused)
             dt = 0;
         _lastAnimTime = now;
+        if (!_shadowPass)
+            RenderDeathTraces(now);
         List<Civilian> still = new List<Civilian>();
         foreach (Civilian c in _session.Units.Civilians.Where(c => !c.Hidden && c.State != CivilianState.Rescued))
         {
@@ -404,7 +500,10 @@ public sealed partial class OpenFDGame
                     still.Add(c);
                 continue;
             }
-            if (!DrawCharacter(a, CivTag(c, a.MovingFor > 0), PoseOf(c, c.Position, c.Heading).p, SmoothHeading(c, PoseOf(c, c.Position, c.Heading).h, dt), dt, false, 280f / WalkAnimSpeed))
+            // mort pendant la partie : le corps s'enfonce et disparaît, la silhouette reste (RenderDeathTraces)
+            if (DeadSink(c.DiedAt, now) is not { } csink)
+                continue;
+            if (!DrawCharacter(a, CivTag(c, a.MovingFor > 0), PoseOf(c, c.Position, c.Heading).p - new SN.Vector3(0, 0, csink), SmoothHeading(c, PoseOf(c, c.Position, c.Heading).h, dt), dt, false, 280f / WalkAnimSpeed))
                 still.Add(c);
         }
         List<Unit> stillUnits = new List<Unit>();
@@ -417,6 +516,13 @@ public sealed partial class OpenFDGame
             if (u.Carry == CarryPhase.Walking)
                 rate = u.ShownMoving ? Math.Clamp(u.Speed * UnitManager.CarrySpeed / WalkAnimSpeed, 0.5f, 1.6f) : 0f;   // arrêté avec le corps : figé
             string tag = UnitTag(u, u.ShownMoving);
+            if (DeadSink(u.DiedAt, now) is not { } usink)
+                continue;
+            if (usink > 0)
+            {
+                DrawCharacter(a, tag, PoseOf(u, u.Position, u.Heading).p - new SN.Vector3(0, 0, usink), SmoothHeading(u, PoseOf(u, u.Position, u.Heading).h, dt), dt, false, 1f, false);
+                continue;
+            }
             if (u.IsCanon)
             {
                 tag = CanonTag(u, a);

@@ -155,7 +155,7 @@ public sealed partial class UnitManager
             u.ReviveTarget = null;
             u.UseTarget = null;
             if (u.Unconscious)
-                u.Status = "inconscient : un collègue doit le ranimer";
+                u.Status = u.Destroyed ? "mort" : "inconscient : un collègue doit le ranimer";
             if (u.InVehicle is { } veh)
             {
                 u.Position = veh.Position;
@@ -173,6 +173,7 @@ public sealed partial class UnitManager
             u.Status = u.InjuredTimer > 0 ? "blessé, au sol" : "attend les ordres";
         }
         UpdateHealth(dt);
+        UpdateDeath(dt);   // voir Death.cs
         UpdateLadders(dt);
         UpdateHelicopters();   // voir Helicopters.cs
         UpdateWaterTowers(dt);
@@ -1047,7 +1048,7 @@ public sealed partial class UnitManager
     /// <summary>Clic droit d'un pompier sur un collègue inconscient : il va le ranimer.</summary>
     public void ReviveColleague(Unit u, Unit victim)
     {
-        if (u.IsVehicle || u == victim || !victim.Unconscious || u.Unconscious || u.OnBoard)
+        if (u.IsVehicle || u == victim || !victim.Unconscious || victim.Destroyed || u.Unconscious || u.OnBoard)
             return;
         if (!Order(u, new(victim.Position.X, victim.Position.Y)))
             return;
@@ -1059,7 +1060,7 @@ public sealed partial class UnitManager
     {
         if (u.ReviveTarget is not { } v || u.Moving)
             return;
-        if (!v.Unconscious)
+        if (!v.Unconscious || v.Destroyed)
         {
             u.ReviveTarget = null;
             u.HealTimer = 0;
