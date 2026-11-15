@@ -6,7 +6,9 @@ namespace OpenFD.Game;
 // endurance des pompiers et vie des véhicules :
 //  - chaque feu dans son rayon de chaleur ([HOTPOINT_PROPS] HeatRangeMax) retire de l'endurance à un pompier :
 //    UnitHeatDamage × (intensité / intensité max) × (1 − distance / rayon) × HeatStaminaCoef, par seconde ; plus on est
-//    près, plus elle baisse vite ; la fumée épaisse aussi (SmokeStaminaCoef) ; loin du feu, elle remonte (StaminaRegen) ;
+//    près, plus elle baisse vite ; la fumée épaisse aussi (SmokeStaminaCoef : la plus épaisse autour de lui, les points de
+//    fumée qui se chevauchent ne s'additionnent pas) ; la difficulté de la mission ([DIFFICULTY_*] HeatStamina et
+//    SmokeStamina : 0,5 en facile) les réduit ; loin du feu, elle remonte (StaminaRegen) ;
 //    à 0, le pompier s'évanouit (un collègue doit le ranimer) ;
 //  - près d'une ambulance, elle remonte vite (soin), sans être rendue d'un coup ;
 //  - un véhicule perd de la vie au contact des flammes (UnitLifeDamage × FireDamageCoef) et des explosions ; à 0, il est
@@ -88,8 +90,10 @@ public sealed partial class UnitManager
             float smoke = 0;
             foreach (Fire.SmokePoint sp in _s.Smoke.Points)
                 if (sp.Intensity > 1 && Vector3.DistanceSquared(sp.Position, u.Position) < sp.Class.InfluenceRange * sp.Class.InfluenceRange)
-                    smoke += Math.Min(1, sp.Intensity / Math.Max(1, sp.Max));
-            float loss = (heat * u.HeatCoef * u.ScriptHeatCoef * u.SuitHeatCoef * HeatFactor + smoke * u.SmokeCoef * SmokeFactor * 10) * dt * StaminaLoss;
+                    smoke = MathF.Max(smoke, Math.Min(1, sp.Intensity / Math.Max(1, sp.Max)));
+            float heatLoss = heat * u.HeatCoef * u.ScriptHeatCoef * u.SuitHeatCoef * HeatFactor * _s.Fire.Settings.HeatStamina;
+            float smokeLoss = smoke * u.SmokeCoef * SmokeFactor * 10 * _s.Fire.Settings.SmokeStamina;
+            float loss = (heatLoss + smokeLoss) * dt * StaminaLoss;
             // près d'une ambulance (ou de l'hélicoptère posé), ou sur un poste de soins du niveau : toutes les unités à pied
             // (pompiers, médecin, chien, désincarcérateur…), arrêtées ou non ; la distance se compte depuis le centre du
             // véhicule, d'où une zone plus large que sa longueur
