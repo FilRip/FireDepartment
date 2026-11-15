@@ -11,7 +11,7 @@ namespace OpenFD.MG;
 public sealed partial class OpenFDGame
 {
     /// <summary>Numéro de la livraison (openfdN) : mention du menu principal et titre de l'éditeur.</summary>
-    internal const string BuildNumber = "191";
+    internal const string BuildNumber = "197";
 
     private Settings _settings = new();
     private int _screen;          // 0 menu principal, 1 choix de la mission, 2 options, 3 pause, 4 sauvegardes, 9 choix du jeu
@@ -217,6 +217,11 @@ public sealed partial class OpenFDGame
         string t = _loc.Get(key);
         if (string.IsNullOrWhiteSpace(t) || t.Equals(key.TrimStart('&'), StringComparison.Ordinal))
         {
+            // absent des fichiers du jeu (ou égal à sa clé : « &Credits » = « Credits » en anglais) : le texte de
+            // languages\<langue>.ini, sous le nom de la clé sans « & » (« Credits = Générique »), sinon le texte prévu
+            string lang = string.IsNullOrEmpty(_settings.Language) ? _loc.Language : _settings.Language;
+            if (IniTexts(lang).TryGetValue(key.TrimStart('&'), out string? own) || IniTexts(DefaultLanguage).TryGetValue(key.TrimStart('&'), out own))
+                return own;
             if (_missingTexts.Add(fallback))
                 Console.WriteLine($"Texte sans traduction du jeu : « {fallback} »");
             return fallback;
@@ -248,6 +253,10 @@ public sealed partial class OpenFDGame
         ["HelpMain"] = "Haut / Bas · Entrée · Échap", ["HelpPause"] = "Haut / Bas · Entrée · Échap / Espace : reprendre",
         ["HelpOptions"] = "Haut / Bas · < > · Échap : retour",
         ["HelpEnd"] = "Entrée : rejouer · Échap : menu des missions",
+        ["OtherMissions"] = "Autres missions",
+        ["Credits"] = "Générique",
+        ["DiffEasy"] = "Facile", ["DiffNormal"] = "Normal", ["DiffHard"] = "Difficile", ["Difficulty"] = "Difficulté : {0}",
+        ["HelpMissions"] = "Haut / Bas ou souris : mission · < > : difficulté · Entrée ou clic : jouer · Échap : retour",
         ["OptionsNote"] = "Textures, langue des textes et nationalité : à la prochaine mission chargée.",
     };
     public const string DefaultLanguage = "FRA";
@@ -410,7 +419,7 @@ public sealed partial class OpenFDGame
     private List<Row> MainRows() => new()
     {
         new(L("&Campaign", "Campagne"), null, true, _ => OpenGameFor(1)),
-        new("Autres missions", null, true, _ => OpenGameFor(5)),
+        new(O("OtherMissions"), null, true, _ => OpenGameFor(5)),
         new(L("&Multiplayer", "Multijoueur"), null, true, _ => OpenMultiplayer()),
         new(L("&LoadSavedGame", "Charger une sauvegarde"), null, true, _ => OpenLoadScreen(0)),
         new(L("&Options", "Options"), null, true, _ =>

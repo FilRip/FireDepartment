@@ -17,10 +17,16 @@ public static class Program
             return 0;
         }
         CrashLog.Start();
-        // dossier du jeu : en argument (le jeu ou son dossier Data), sinon FD3_DATA ; Fire Department 3 de préférence
+        // dossier du jeu : en argument (le jeu ou son dossier Data), sinon FD3_DATA, sinon le sous-dossier « demo » ; Fire Department 3 de préférence
         List<string> given = args.Where(a => !a.StartsWith("--") && Directory.Exists(a)).ToList();
-        if (given.Count == 0 && Environment.GetEnvironmentVariable("FD3_DATA") is { } env)
+        if (given.Count == 0 && Environment.GetEnvironmentVariable("FD3_DATA") is { Length: > 0 } env)
             given.Add(env);
+        // aucun dossier de jeu donné : la version de démonstration fournie avec OpenFD (sous-dossier « demo »)
+        if (given.Count == 0 && DemoFolder.Find() is { } demo)
+        {
+            given.Add(demo);
+            DemoFolder.Announce(!args.Contains("--capture"));
+        }
         List<(string License, string DataDir)> games = new List<(string License, string DataDir)>();
         foreach (string g in given)
         {

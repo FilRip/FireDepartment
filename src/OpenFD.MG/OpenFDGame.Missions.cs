@@ -25,7 +25,8 @@ public sealed partial class OpenFDGame
     private Texture2D? _iconExit;
     private bool _endSoundPlayed;
     private static readonly string[] Diffs = { "EASY", "NORMAL", "HARD" };
-    private static readonly string[] DiffNames = { "Facile", "Normal", "Difficile" };
+    /// <summary>Facile, Normal, Difficile : dans la langue choisie (languages\&lt;langue&gt;.ini).</summary>
+    private string[] DiffNames => new[] { O("DiffEasy"), O("DiffNormal"), O("DiffHard") };
 
     // ---------------------------------------------------------------- menu
     private void OpenMenu()
@@ -183,7 +184,7 @@ public sealed partial class OpenFDGame
         SN.Vector4 accent = new SN.Vector4(1f, 0.48f, 0.18f, 1);
         SN.Vector4 txt = new SN.Vector4(0.93f, 0.92f, 0.9f, 1);
         SN.Vector4 muted = new SN.Vector4(0.6f, 0.6f, 0.6f, 1);
-        string title = _fd1Menu ? "Fire Department" : "Autres missions";
+        string title = _fd1Menu ? "Fire Department" : O("OtherMissions");
         float ts = _scale * 1.6f;
         _ui.Rect(0, ly - lh * 3.5f, _fbW, _font.LineHeight * ts + 16 * _scale, new SN.Vector4(0, 0, 0, 0.55f));
         _ui.Text((_fbW - _font.Measure(title) * ts) / 2, ly - lh * 3.5f + 8 * _scale, title, accent, ts);
@@ -209,7 +210,7 @@ public sealed partial class OpenFDGame
                 _ui.Text(lx + lw - _ui.Measure(na) - 14 * _scale, y + (lh - _ui.LineHeight) / 2 - 2 * _scale, na, muted);
             }
         }
-        string help = _menuNote ?? "Flèches haut/bas ou souris : mission · < > : difficulté · Entrée ou clic : jouer · Échap : retour";
+        string help = _menuNote ?? O("HelpMissions");
         _ui.Text((_fbW - _ui.Measure(help)) / 2, ly + _missions.Count * lh + 24 * _scale, help, _menuNote != null ? accent : muted);
         _ui.End();
     }

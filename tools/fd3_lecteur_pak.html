@@ -356,11 +356,24 @@ function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 30000);
 }
 const baseName = p => p.slice(p.lastIndexOf("\\") + 1);
+
+// Nom de fichier ou de dossier accepté par Windows et par le navigateur : certaines archives du jeu ont des noms
+// interdits (« ***Image_30 » dans les banques de textures, « fi_vagon_nnah. » qui finit par un point).
+// Caractères interdits → « _ », point ou espace final → « _ », noms réservés (CON, NUL, COM1…) et extensions
+// refusées par Chrome (.lnk, .local, .scf, .url) → « _ » ajouté.
+function safeName(n) {
+  let s = n.replace(/[<>:"\/\\|?*\x00-\x1f]/g, "_").replace(/[. ]+$/, m => "_".repeat(m.length));
+  if (s === "" || s === "." || s === "..") s = "_" + s;
+  if (/^(con|prn|aux|nul|com\d|lpt\d)(\..*)?$/i.test(s)) s = "_" + s;
+  if (/\.(lnk|local|scf|url)$/i.test(s)) s += "_";
+  return s;
+}
+const safePath = p => p.split("\\").filter(Boolean).map(safeName).join("\\");
 function status(t) { $("status").textContent = t; }
 function progress(v, max) { const p = $("prog"); if (max == null) { p.classList.add("hidden"); return; } p.classList.remove("hidden"); p.max = max; p.value = v; }
 
 async function extractOne(e) {
-  try { status("Extraction de " + baseName(e.path) + "…"); download(new Blob([await fileData(e)]), baseName(e.path)); status(""); }
+  try { status("Extraction de " + baseName(e.path) + "…"); download(new Blob([await fileData(e)]), safeName(baseName(e.path))); status(""); }
   catch (err) { status("Erreur : " + err.message); }
 }
 
@@ -377,7 +390,7 @@ $("extract").onclick = async () => {
       const e = list[k];
       progress(k, list.length); status(`Archive zip : ${k + 1} / ${list.length}`);
       const raw = await rawData(e);
-      const name = enc.encode((list.length > 1 && archives.length > 1 ? archives[e.pak].name.replace(/\.[^.]+$/, "") + "/" : "") + e.path.replace(/\\/g, "/"));
+      const name = enc.encode((list.length > 1 && archives.length > 1 ? archives[e.pak].name.replace(/\.[^.]+$/, "") + "/" : "") + safePath(e.path).replace(/\\/g, "/"));
       const lh = new DataView(new ArrayBuffer(30));
       lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x800, true); lh.setUint16(8, e.method, true);
       lh.setUint16(10, e.time, true); lh.setUint16(12, e.date, true); lh.setUint32(14, e.crc, true);
@@ -406,19 +419,26 @@ $("extractDir").onclick = async () => {
   const list = selection();
   let root;
   try { root = await window.showDirectoryPicker({ mode: "readwrite" }); } catch { return; }
-  try {
-    for (let k = 0; k < list.length; k++) {
-      const e = list[k];
-      progress(k, list.length); status(`${k + 1} / ${list.length} : ${baseName(e.path)}`);
-      const parts = e.path.split("\\").filter(Boolean);
+  // un fichier qui échoue n'arrête plus les suivants : la liste des échecs est donnée à la fin (et dans la console)
+  const failed = [];
+  let renamed = 0;
+  for (let k = 0; k < list.length; k++) {
+    const e = list[k];
+    progress(k, list.length); status(`${k + 1} / ${list.length} : ${baseName(e.path)}`);
+    try {
+      const parts = safePath(e.path).split("\\");
+      if (parts.join("\\") !== e.path.split("\\").filter(Boolean).join("\\")) renamed++;
       let dir = root;
       for (const p of parts.slice(0, -1)) dir = await dir.getDirectoryHandle(p, { create: true });
       const fh = await dir.getFileHandle(parts[parts.length - 1], { create: true });
       const w = await fh.createWritable();
       await w.write(await fileData(e)); await w.close();
-    }
-    status(`${list.length} fichier(s) extrait(s) dans « ${root.name} »`);
-  } catch (err) { status("Erreur : " + err.message); }
+    } catch (err) { failed.push(e.path + " : " + err.message); }
+  }
+  let msg = `${list.length - failed.length} fichier(s) extrait(s) dans « ${root.name} »`;
+  if (renamed > 0) msg += ` · ${renamed} renommé(s) (caractères interdits remplacés par « _ »)`;
+  if (failed.length > 0) { msg += ` · ${failed.length} échec(s), voir la console (F12)`; console.warn("Fichiers non extraits :\n" + failed.join("\n")); }
+  status(msg);
   progress(0, null);
 };
 

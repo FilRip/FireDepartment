@@ -17,6 +17,17 @@ public sealed class SceneAssets
     private readonly Dictionary<string, ClassFile> _classCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, Dictionary<string, string>> _texIndex = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, MeshAsset> _meshes = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, byte> _missing = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Fichier du jeu introuvable (classe, modèle, matériau, texture…) : écrit une fois dans le journal (OpenFD.log),
+    /// avec ce qui le demandait. Pratique pour une mission copiée à la main à qui il manque un dossier.
+    /// </summary>
+    public void ReportMissing(string what, string path, string? forWhat = null)
+    {
+        if (_missing.TryAdd(what + "|" + path, 0))
+            Console.WriteLine($"Fichier manquant ({what}) : Data\\{path}" + (forWhat != null ? $"  — pour {forWhat}" : ""));
+    }
 
     public SceneAssets(GameFiles files) => _files = files;
     public GameFiles Files => _files;
@@ -57,8 +68,13 @@ public sealed class SceneAssets
 
     private ClassFile? Class(LevelObject o)
     {
-        try { lock (_classCache) return ClassFile.Load(_files, "Design\\" + o.ClassPath["design\\".Length..] + ".class", _classCache); }
-        catch { return null; }
+        string path = "Design\\" + (o.ClassPath.StartsWith("design\\", StringComparison.OrdinalIgnoreCase) ? o.ClassPath["design\\".Length..] : o.ClassPath) + ".class";
+        try { lock (_classCache) return ClassFile.Load(_files, path, _classCache); }
+        catch
+        {
+            ReportMissing("classe", path, o.Name);
+            return null;
+        }
     }
 
     /// <summary>Décor de la mission : bâtiments (&lt;mission&gt;.sg) et sol (FGD_&lt;mission&gt;.sg).</summary>
@@ -93,6 +109,8 @@ public sealed class SceneAssets
                 list.Add(new Node(k, Rooms.World(nodes, k)));
             }
         }
+        if (!onlyMasks && list.Count == 0)
+            ReportMissing("décor", prefix + mission + ".sg", "la mission " + mission);
         return list;
     }
 
@@ -123,7 +141,10 @@ public sealed class SceneAssets
                 model = string.IsNullOrEmpty(m) || m.Equals("noitem", StringComparison.OrdinalIgnoreCase) ? null
                     : GfxPath(o.Kind == EntityKind.Civilian ? "Unit\\Civilian" : "Placeable", m);
                 if (model != null && _files.TryRead("Gfx\\" + model + ".sg") == null)
+                {
+                    ReportMissing("modèle 3D", "Gfx\\" + model + ".sg", o.ClassPath);
                     model = null;
+                }
                 models[o.ClassPath] = model;
             }
             if (model != null)
@@ -143,6 +164,8 @@ public sealed class SceneAssets
             if (c == null || string.IsNullOrEmpty(model))
                 continue;
             byte[]? spt = _files.TryRead("Gfx\\Speedtree\\" + model + ".spt");
+            if (spt == null)
+                ReportMissing("arbre", "Gfx\\Speedtree\\" + model + ".spt", o.ClassPath);
             List<string> tex = new List<string>();
             if (spt != null)
                 foreach (Match mt in Regex.Matches(System.Text.Encoding.Latin1.GetString(spt), @"([A-Za-z0-9_]+)\.tga"))
@@ -261,11 +284,22 @@ public sealed class SceneAssets
             }
             else
                 prefix = src == "placeable" ? "Gfx\\Placeable\\" : $"Gfx\\Mission\\{GfxDir(mission)}\\";
-            Mesh m = Mesh.Load(_files.Read(prefix + baseName + ".mesh"), _files.Read(prefix + baseName + ".meshdata"), baseName);
+            byte[]? meshBytes = _files.TryRead(prefix + baseName + ".mesh");
+            byte[]? dataBytes = _files.TryRead(prefix + baseName + ".meshdata");
+            if (meshBytes == null || dataBytes == null)
+            {
+                ReportMissing("modèle 3D", prefix + baseName + (meshBytes == null ? ".mesh" : ".meshdata"));
+                throw new FileNotFoundException(prefix + baseName + (meshBytes == null ? ".mesh" : ".meshdata"));
+            }
+            Mesh m = Mesh.Load(meshBytes, dataBytes, baseName);
             List<Group> groups = m.Groups.Select(gr =>
             {
                 byte[]? matBytes = _files.TryRead(prefix + "Shaders\\" + gr.material);
                 Material? mat = matBytes != null ? Material.Load(matBytes, gr.material) : null;
+                if (matBytes == null && !string.IsNullOrEmpty(gr.material))
+                    ReportMissing("matériau", prefix + "Shaders\\" + gr.material, prefix + baseName + ".mesh");
+                else if (mat?.Diffuse is { Length: > 0 } diffuse && !diffuse.Contains("dummy", StringComparison.OrdinalIgnoreCase) && ResolveTex(mission, diffuse) == null)
+                    ReportMissing("texture", "Gfx\\Textures\\…\\" + diffuse, prefix + "Shaders\\" + gr.material);
                 // saleté : première texture après la couleur qui n'est ni brûlure, ni éclairage, ni reflet, ni brillance
                 string? dirt = mat?.Textures.Skip(1).FirstOrDefault(t => !Regex.IsMatch(t, "burn|light|refl|_spe|_opa|dummy", RegexOptions.IgnoreCase));
                 (string? env, string? cube) = Reflection(mission, mat);

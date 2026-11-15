@@ -17,6 +17,8 @@ public sealed partial class OpenFDGame
         string? Background, string? StoryTitleKey, string? StoryKey, string? Briefing);
 
     private readonly List<CampaignPage> _campaign = new();
+    /// <summary>Toutes les missions nommées par campaign.ini, même absentes (démo) : jamais dans « Autres missions ».</summary>
+    private readonly HashSet<string> _campaignDirs = new(StringComparer.OrdinalIgnoreCase);
     private int _campaignIndex;
     private float _storyScroll;
 
@@ -59,6 +61,13 @@ public sealed partial class OpenFDGame
                 if (at < 0 || at + 1 >= parts.Length)
                     continue;
                 string dir = parts[at + 1];
+                _campaignDirs.Add(dir);
+                // décor absent (démo : seul « mall.pak » est dans Data\Gfx\Mission) : mission non proposée
+                if (!_files.List("Gfx\\Mission\\" + dir + "\\").Any())
+                {
+                    Console.WriteLine($"Campagne : {dir} absente (pas de Gfx\\Mission\\{dir}.pak)");
+                    continue;
+                }
                 // image de la mission : son entrée dans GameGraphicDB2.Ini (fichier et taille)
                 string? imageKey = Clean(ini.Get(section, "Image"));
                 string? imageFile = null;
@@ -99,7 +108,7 @@ public sealed partial class OpenFDGame
         }
     }
 
-    private bool InCampaign(string dir) => _campaign.Any(p => p.Dir.Equals(dir, StringComparison.OrdinalIgnoreCase));
+    private bool InCampaign(string dir) => _campaignDirs.Contains(dir);
 
     /// <summary>Mission à lancer tout de suite (« -test=Mission », bouton « Tester » de l'éditeur de missions).</summary>
     public string? TestMission { get; init; }

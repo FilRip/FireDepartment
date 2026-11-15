@@ -2062,6 +2062,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         {
             Dictionary<string, (string parent, SN.Matrix4x4 m)>? nodes = null;
             try { nodes = _files.TryRead("Gfx\\" + model + ".sg") is { } sg ? Rooms.SceneNodes(sg) : null; } catch { nodes = null; }
+            if (nodes == null)
+                _assets.ReportMissing("modèle 3D", "Gfx\\" + model + ".sg");
             foreach (SceneAssets.Node part in _assets.ModelParts(model))
             {
                 l.Add((Upload(_assets.LoadMesh(_mission, part.Mesh, "gfx")), part.World));

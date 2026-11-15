@@ -17,7 +17,7 @@ public static class Program
             return i >= 0 && i + 1 < argList.Count ? argList[i + 1] : null;
         }
         // dossiers de jeu : un ou deux en arguments (Fire Department 3 et Fire Department 2, dans n'importe quel ordre ;
-        // ou --fd3 <dossier> --fd2 <dossier>), sinon FD3_DATA. L'édition est lue dans Data\Config\Start.Ini (« License »).
+        // ou --fd3 <dossier> --fd2 <dossier>), sinon FD3_DATA, sinon le sous-dossier « demo » (version de démonstration). L'édition est lue dans Data\Config\Start.Ini (« License »).
         string[] valued = { "--capture", "--mission", "--difficulte", "--images", "--avance", "--camera", "--portes", "--fd2", "--fd3", "--jeu", "--ecran-depart" };
         List<string> given = new List<string>();
         for (int i = 0; i < args.Length; i++)
@@ -34,8 +34,14 @@ public static class Program
         foreach (string o in new[] { "--fd3", "--fd2" })
             if (Opt(o) is { } od && Directory.Exists(od))
                 given.Add(od);
-        if (given.Count == 0 && Environment.GetEnvironmentVariable("FD3_DATA") is { } env)
+        if (given.Count == 0 && Environment.GetEnvironmentVariable("FD3_DATA") is { Length: > 0 } env)
             given.Add(env);
+        // aucun dossier de jeu donné : la version de démonstration fournie avec OpenFD (sous-dossier « demo »)
+        if (given.Count == 0 && DemoFolder.Find() is { } demo)
+        {
+            given.Add(demo);
+            DemoFolder.Announce(!args.Contains("--capture"));
+        }
         List<(string License, string DataDir)> games = new List<(string License, string DataDir)>();
         foreach (string g in given)
         {

@@ -906,7 +906,7 @@ public sealed partial class OpenFDGame
         _ui.Text((_fbW - _font.Measure(mission) * ms) / 2, cy, mission, accent, ms);
         cy += _font.LineHeight * ms + 8 * _scale;
         int di = Math.Max(0, Array.IndexOf(Diffs, n.Difficulty));
-        string diff = "Difficulté : " + DiffNames[di];
+        string diff = string.Format(O("Difficulty"), DiffNames[di]);
         _ui.Text((_fbW - _ui.Measure(diff)) / 2, cy, diff, muted);
         cy += _ui.LineHeight + 30 * _scale;
         // les autres joueurs
