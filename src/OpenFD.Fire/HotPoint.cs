@@ -34,6 +34,13 @@ public sealed class HotPoint
 
     public bool IsBurning => Lit && Intensity > 0;
 
+    /// <summary>
+    /// Flammes à découvert : il brûle et ne couve pas dans une pièce fermée (backdraft). Un foyer qui couve ne montre pas
+    /// de flammes et ne blesse rien tant qu'on n'a pas ouvert la porte (Eurotunnel : la radio dans la pièce de House_04).
+    /// Il compte toujours comme un foyer en feu (scripts, objectifs « éteignez tous les feux »).
+    /// </summary>
+    public bool OpenFlames => IsBurning && !Sleeping;
+
     /// <summary>Portée des dégâts (§ 3.5).</summary>
     public float DamageRange => Intensity > 0
         ? Class.LifeDamageRange + Intensity / Class.IntensityMax * (Class.HeatRangeMax - Class.LifeDamageRange)

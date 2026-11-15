@@ -38,7 +38,7 @@ public sealed class ExplosionSystem
     // part du souffle (LP_Explode_Power) reçue par les autres objets explosifs : limite les réactions en chaîne
     public static float BlastOnItems = float.TryParse(Environment.GetEnvironmentVariable("FD3_SOUFFLE"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float b) ? b : 0.5f;   // taille d'une voiture autour de son centre
 
-    public static ExplosionSystem Load(Level level, GameFiles files, FireWorld fire, IReadOnlySet<uint>? watched = null)
+    public static ExplosionSystem Load(Level level, GameFiles files, FireWorld fire, IReadOnlySet<uint>? watched = null, IReadOnlySet<uint>? objectives = null)
     {
         ExplosionSystem sys = new ExplosionSystem();
         Dictionary<string, ClassFile> cache = new Dictionary<string, ClassFile>(StringComparer.OrdinalIgnoreCase);
@@ -68,6 +68,7 @@ public sealed class ExplosionSystem
                 Sound = c.Get("SOUND_EXPLOSION", "Label")?.Trim('"', ' '),
                 CanExplode = can,
                 OnDestroy = can ? null : onDestroy,
+                LifeIsObjective = objectives != null && objectives.Contains(o.Id),
             };
             int n = c.GetInt("DAMAGE", "NbDamageSteps", 0);
             it.Thresholds = Enumerable.Range(0, Math.Max(n, 0)).Select(i => c.GetFloat("DAMAGE", $"DamageTresholdStep{i}", 0)).ToArray();
@@ -155,14 +156,19 @@ public sealed class ExplosionSystem
             // le foyer le plus fort compte en entier, les autres un peu (sinon un objet au milieu d'un grand feu fond en 2 s)
             float sum = 0, max = 0;
             foreach (HotPoint h in it.NearFires)
-                if (h.IsBurning && Vector3.Distance(h.Position, it.Position) <= h.Class.LifeDamageRange + ItemRadius)
+                if (h.OpenFlames && Vector3.Distance(h.Position, it.Position) <= h.Class.LifeDamageRange + ItemRadius)
                 {
                     float d = h.Class.UnitLifeDamage * Math.Min(1, h.Intensity / Math.Max(1, h.Class.IntensityMax));
                     sum += d;
                     max = MathF.Max(max, d);
                 }
             // (objet qui ne fait que s'abîmer, suivi par un script : voir WatchedDamageFactor et ObjectiveTimeFactor)
-            float dmg = (max + OtherFiresShare * (sum - max)) * (it.CanExplode ? FireDamageFactor : it.OnDestroy != null ? DestroyScriptDamageFactor : WatchedDamageFactor / MathF.Max(0.1f, ObjectiveTimeFactor));
+            // (sa vie est la barre d'un objectif : comme le générateur de Mriya, même s'il a aussi une fonction de destruction
+            // — Eurotunnel : la radio, à atteindre à travers les tunnels)
+            float factor = it.CanExplode ? FireDamageFactor
+                : it.OnDestroy != null && !it.LifeIsObjective ? DestroyScriptDamageFactor
+                : WatchedDamageFactor / MathF.Max(0.1f, ObjectiveTimeFactor);
+            float dmg = (max + OtherFiresShare * (sum - max)) * factor;
             if (dmg > 0)
                 it.Life -= dmg * it.FireDamageCoef * dt;
             if (!it.CanExplode)

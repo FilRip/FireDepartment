@@ -2404,7 +2404,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         foreach (HotPoint h in _session.Fire.HotPoints)
         {
             hpIndex++;
-            if (!h.IsBurning)
+            if (!h.OpenFlames)   // (feu qui couve dans une pièce fermée : pas de flammes avant le backdraft)
                 continue;
             float k = Math.Min(1, h.Intensity / h.Class.IntensityMax);
             (float clr0, _) = FireRoom(h);
@@ -2676,7 +2676,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         foreach (HotPoint h in _session.Fire.HotPoints)
         {
             index++;
-            if (!h.IsBurning)
+            if (!h.OpenFlames)
                 continue;
             float k = Math.Min(1, h.Intensity / h.Class.IntensityMax);
             if (k < 0.45f || h.Class.Fire1 == null)

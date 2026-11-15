@@ -61,7 +61,7 @@ public sealed class Session
         Smoke = SmokeSystem.Load(Level, files, Fire, rooms);
         Smoke.Walls = Grid;
         Units = new UnitManager(this, files, mis);
-        Explosions = ExplosionSystem.Load(Level, files, Fire, ScriptDamageIds(files, mission));
+        Explosions = ExplosionSystem.Load(Level, files, Fire, ScriptDamageIds(files, mission), ObjectiveLifeIds(files, mission));
         Explosions.Walls = Grid;
 
         if (!runScripts)
@@ -107,6 +107,22 @@ public sealed class Session
             return ids;
         foreach (string f in Directory.EnumerateFiles(dir, "*.scp"))
             foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(f, System.Text.Encoding.Latin1), @"ENT_(?:GetDamage|SetFireDamageCoef)\s*\(\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                ids.Add(uint.Parse(m.Groups[1].Value));
+        return ids;
+    }
+
+    /// <summary>
+    /// Objets dont la vie est la barre d'un objectif (LEV_UpdateObjective(…, ENT_GetDamage(numéro)) : Mriya, le
+    /// générateur ; Eurotunnel, la radio ; Jail, l'objectif 1).
+    /// </summary>
+    private static HashSet<uint> ObjectiveLifeIds(GameFiles files, string mission)
+    {
+        HashSet<uint> ids = new HashSet<uint>();
+        string dir = Path.Combine(files.DataDir, "Script", "Mission", mission);
+        if (!Directory.Exists(dir))
+            return ids;
+        foreach (string f in Directory.EnumerateFiles(dir, "*.scp"))
+            foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(f, System.Text.Encoding.Latin1), @"LEV_UpdateObjective\s*\([^;]*?ENT_GetDamage\s*\(\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
                 ids.Add(uint.Parse(m.Groups[1].Value));
         return ids;
     }

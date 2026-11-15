@@ -88,7 +88,7 @@ public sealed partial class UnitManager
     {
         foreach (HotPoint h in _s.Fire.HotPoints)
         {
-            if (!h.IsBurning)
+            if (!h.OpenFlames)
                 continue;
             float r = DeathFireRange > 0 ? DeathFireRange : h.Class.LifeDamageRange;
             if (MathF.Abs(h.Position.Z - p.Z) > 350)

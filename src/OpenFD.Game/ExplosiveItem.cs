@@ -28,6 +28,8 @@ public sealed class ExplosiveItem
     /// </summary>
     public string? OnDestroy;
     public bool DestroyRun;
+    /// <summary>Sa vie est la barre d'un objectif (LEV_UpdateObjective(…, ENT_GetDamage(numéro))) : dégâts du feu réglés par ObjectiveTimeFactor.</summary>
+    public bool LifeIsObjective;
     /// <summary>Réparé par un technicien : comme neuf tant que le feu ne l'a pas de nouveau entamé d'un point de vie.</summary>
     public bool Repaired;
 

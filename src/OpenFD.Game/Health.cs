@@ -63,7 +63,7 @@ public sealed partial class UnitManager
             float heat = 0, burn = 0;
             foreach (Fire.HotPoint h in _s.Fire.HotPoints)
             {
-                if (!h.IsBurning)
+                if (!h.OpenFlames)
                     continue;
                 float r = MathF.Max(h.Class.HeatRangeMax, 100) + (u.IsVehicle ? 150 : 0);
                 float dx = h.Position.X - u.Position.X, dy = h.Position.Y - u.Position.Y;
