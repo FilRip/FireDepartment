@@ -168,9 +168,7 @@ public sealed partial class UnitManager
         {
             if (!t.Enabled || string.IsNullOrEmpty(t.Script))
                 return;
-            Vector3 l = Vector3.Transform(pos, t.Inverse);
-            bool inside = MathF.Abs(l.X) <= t.Half.X && MathF.Abs(l.Y) <= t.Half.Y && MathF.Abs(l.Z) <= t.Half.Z;
-            if (!inside)
+            if (!InsideTrigger(t, pos))
             {
                 // il en sort : ON_LEAVE (Street : le tram repart quand le camion a quitté sa voie)
                 if (t.Inside.Remove(id) && t.OnLeave.Length > 0)
@@ -183,6 +181,13 @@ public sealed partial class UnitManager
             LastTriggerTime = _s.Time;
             scripts.TryRun(t.Script, Value.I(id), Value.I(t.Id));
         }
+    }
+
+    /// <summary>Ce point est-il dans la zone du déclencheur ?</summary>
+    private static bool InsideTrigger(TriggerZone t, Vector3 pos)
+    {
+        Vector3 l = Vector3.Transform(pos, t.Inverse);
+        return MathF.Abs(l.X) <= t.Half.X && MathF.Abs(l.Y) <= t.Half.Y && MathF.Abs(l.Z) <= t.Half.Z;
     }
 
     /// <summary>Civil mis à l'abri : le script de la mission est prévenu ([COMMAND_CALLBACKS] CmdSaveCivilian).</summary>

@@ -62,6 +62,7 @@ public sealed partial class UnitManager
         LoadTeleports(s.Level);
         LoadOccupations(s.Level);
         LoadLevelVehicles(s.Level);
+        LoadDropZones(s.Level);
         FindWater();
         LockBuriedRubble();   // voir Dog.cs
         AssignLevers(s.Level);

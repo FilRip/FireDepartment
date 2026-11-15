@@ -158,12 +158,14 @@ public sealed partial class UnitManager
 
     /// <summary>
     /// Où mettre un civil à l'abri : les ambulances (et l'hélicoptère posé), à VehicleReach ; les postes de soins du niveau
-    /// (Ch_Plant : « un poste médical dans lequel nous pouvons emmener les victimes secourues »), sur leur flèche.
+    /// (Ch_Plant : « un poste médical dans lequel nous pouvons emmener les victimes secourues »), sur leur flèche ; les
+    /// salles de secours (croix rouge seule, Eurotunnel), où la victime est seulement posée (<c>drop</c>).
     /// </summary>
-    private List<(Vector3 pos, float reach, Unit? vehicle)> Shelters()
+    private List<(Vector3 pos, float reach, Unit? vehicle, bool drop)> Shelters()
     {
-        List<(Vector3 pos, float reach, Unit? vehicle)> list = Units.Where(v => v.IsAmbulance && !v.Destroyed && !v.Hidden).Select(v => (v.Position, VehicleReach, (Unit?)v)).ToList();
-        list.AddRange(HealPoints.Where(HealPointActive).Select(p => (p.Position, HealPointReach, (Unit?)null)));
+        List<(Vector3 pos, float reach, Unit? vehicle, bool drop)> list = Units.Where(v => v.IsAmbulance && !v.Destroyed && !v.Hidden).Select(v => (v.Position, VehicleReach, (Unit?)v, false)).ToList();
+        list.AddRange(HealPoints.Where(HealPointActive).Select(p => (p.Position, HealPointReach, (Unit?)null, false)));
+        list.AddRange(DropZones.Where(DropZoneActive).Select(z => (z.Position, DropZoneReach, (Unit?)null, true)));
         return list;
     }
 
@@ -171,7 +173,7 @@ public sealed partial class UnitManager
     private bool GoToNearestAmbulance(Unit u)
     {
         Vector2 me = new Vector2(u.Position.X, u.Position.Y);
-        foreach ((Vector3 pos, float reach, Unit? vehicle) in Shelters().OrderBy(s => Vector2.Distance(me, new(s.pos.X, s.pos.Y))))
+        foreach ((Vector3 pos, float reach, Unit? vehicle, bool drop) in Shelters().OrderBy(s => Vector2.Distance(me, new(s.pos.X, s.pos.Y))))
         {
             Vector2 ap = new Vector2(pos.X, pos.Y);
             Vector2 spot = Walkable(ap + Vector2.Normalize(me - ap + new Vector2(0.01f, 0)) * reach * 0.8f);
@@ -183,7 +185,7 @@ public sealed partial class UnitManager
                     u.GoToVehicle = vehicle;
                     u.GoToVehicleAim = VehicleAim(vehicle);
                 }
-                u.Status = $"porte {CarriedName(u)} vers l'ambulance";
+                u.Status = drop ? $"porte {CarriedName(u)} vers la salle de secours" : $"porte {CarriedName(u)} vers l'ambulance";
                 return true;
             }
         }
@@ -248,13 +250,16 @@ public sealed partial class UnitManager
                 }
                 if (u.Moving)
                     break;
-                (Vector3 pos, float reach, Unit? vehicle)? amb = Shelters().OrderBy(s => Vector3.Distance(s.pos, u.Position)).Select(s => ((Vector3 pos, float reach, Unit? vehicle)?)s).FirstOrDefault();
+                (Vector3 pos, float reach, Unit? vehicle, bool drop)? amb = Shelters().OrderBy(s => Vector3.Distance(s.pos, u.Position)).Select(s => ((Vector3 pos, float reach, Unit? vehicle, bool drop)?)s).FirstOrDefault();
                 if (amb is { } sh && Vector3.Distance(sh.pos, u.Position) < sh.reach * 1.5f)
                 {
                     u.Carry = CarryPhase.Dropping;
                     u.CarryTimer = 0;
                     u.Heading = MathF.Atan2(sh.pos.Y - u.Position.Y, sh.pos.X - u.Position.X);
-                    u.Status = $"dépose {name} à l'ambulance";
+                    // salle de secours : la victime y est posée au sol (le script la compte là)
+                    if (sh.drop)
+                        u.DropHere = true;
+                    u.Status = sh.drop ? $"pose {name} dans la salle de secours" : $"dépose {name} à l'ambulance";
                 }
                 else if (!u.Status.Contains("pas de chemin"))
                     u.Status = $"porte {name}";
@@ -270,6 +275,13 @@ public sealed partial class UnitManager
                     // posé au sol, toujours inconscient : un autre pompier pourra le reprendre (ou le médecin le soigner)
                     DropVictimHere(u);
                     u.Status = "attend les ordres";
+                    // dans une salle de secours : le script recompte les victimes qui s'y trouvent
+                    if (DropZoneAt(u.Position) is { } room)
+                    {
+                        RefireDropZoneTriggers(u, room);
+                        Log.Add($"{_s.Time,6:0} s : {name} posé dans la salle de secours");
+                        break;
+                    }
                     Log.Add($"{_s.Time,6:0} s : {name} posé au sol");
                     break;
                 }
@@ -332,10 +344,20 @@ public sealed partial class UnitManager
         }
         if (c.Leader is not { } l || c.State != CivilianState.Conscious)
             return;
-        // arrivé à une ambulance (ou un poste de soins) avec son guide : il est mis à l'abri
-        foreach ((Vector3 pos, float reach, _) in Shelters())
+        // arrivé à une ambulance (ou un poste de soins) avec son guide : il est mis à l'abri ; dans une salle de secours, il
+        // y reste (son guide repart sans lui) et le script le compte
+        foreach ((Vector3 pos, float reach, _, bool drop) in Shelters())
             if (Vector3.Distance(l.Position, pos) < reach * 1.5f && Vector3.Distance(c.Position, pos) < reach * 1.5f)
             {
+                if (drop)
+                {
+                    c.Leader = null;
+                    c.FollowPath.Clear();
+                    if (DropZoneAt(c.Position) is { } room)
+                        RefireDropZoneTriggers(l, room);
+                    Log.Add($"{_s.Time,6:0} s : {c.Name} attend dans la salle de secours");
+                    return;
+                }
                 Save(c);
                 Log.Add($"{_s.Time,6:0} s : {c.Name} mis à l'abri dans l'ambulance ({Rescued} sauvé(s))");
                 Sounds.Add(("VOCAL_CIVILIAN_SAVED", null));
