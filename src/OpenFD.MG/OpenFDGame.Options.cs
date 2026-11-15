@@ -11,7 +11,7 @@ namespace OpenFD.MG;
 public sealed partial class OpenFDGame
 {
     /// <summary>Numéro de la livraison (openfdN) : mention du menu principal et titre de l'éditeur.</summary>
-    internal const string BuildNumber = "197";
+    internal const string BuildNumber = "203";
 
     private Settings _settings = new();
     private int _screen;          // 0 menu principal, 1 choix de la mission, 2 options, 3 pause, 4 sauvegardes, 9 choix du jeu
@@ -196,6 +196,7 @@ public sealed partial class OpenFDGame
         UnitManager.CarrySpeed = Math.Clamp(gp.CarrySpeed, 0.2f, 1f);
         UnitManager.OnlyOneOnLadder = gp.OnlyOneOnLadder;
         OpenFD.Fire.FireWorld.SpreadRadiusFactor = Math.Clamp(gp.FireSpreadRadiusFactor, 0.1f, 5f);
+        UnitManager.ReanimateFirefighter = gp.ReanimateFirefighter;
         UnitManager.EnableDeath = gp.EnableDeath;
         UnitManager.DeathTime = Math.Clamp(gp.DeathTime, 5f, 7200f);
         UnitManager.ConsciousTime = Math.Clamp(gp.ConsciousTime, 5f, 7200f);

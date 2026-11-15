@@ -154,6 +154,8 @@ public sealed partial class UnitManager
             u.GoToVehicle = null;
             u.ReviveTarget = null;
             u.UseTarget = null;
+            u.CareUnit = null;
+            u.CareCivilian = null;
             if (u.Unconscious)
                 u.Status = u.Destroyed ? "mort" : "inconscient : un collègue doit le ranimer";
             if (u.InVehicle is { } veh)
@@ -200,6 +202,10 @@ public sealed partial class UnitManager
             CarryVictim(u, dt);   // voir CivilianAI.cs
         foreach (Unit u in Units)
             Revive(u, dt);
+        foreach (Unit u in Units)
+            u.BeingHealed = false;
+        foreach (Unit u in Units)
+            Treat(u, dt);   // voir Care.cs
         foreach (Unit u in Units)
             Resupply(u, dt);
         foreach (Unit v in Units.Where(v => v.IsVehicle))
@@ -669,6 +675,8 @@ public sealed partial class UnitManager
         u.Path.Clear();
         u.GoTo = null;
         u.GoToVehicle = null;
+        u.CareUnit = null;      // soins du médecin (Care.cs) : un nouvel ordre les remplace
+        u.CareCivilian = null;
         u.HealTimer = 0;
         u.Opening = null;
         Paths.PathingVehicle = u.IsVehicle && !drive;
@@ -766,9 +774,9 @@ public sealed partial class UnitManager
             CanonAttack(u, h);
             return;
         }
-        if (u.Carrying != null)
+        if (u.IsCarrying)
         {
-            u.Status = "porte un civil : ne peut pas arroser";
+            u.Status = "porte quelqu'un : ne peut pas arroser";
             return;
         }
         Vector2 me = new Vector2(u.Position.X, u.Position.Y);
@@ -1048,13 +1056,24 @@ public sealed partial class UnitManager
     /// <summary>Clic droit d'un pompier sur un collègue inconscient : il va le ranimer.</summary>
     public void ReviveColleague(Unit u, Unit victim)
     {
-        if (u.IsVehicle || u == victim || !victim.Unconscious || victim.Destroyed || u.Unconscious || u.OnBoard)
+        if (u.IsVehicle || u == victim || !victim.Unconscious || victim.Destroyed || u.Unconscious || u.OnBoard || victim.CarriedBy != null)
             return;
+        if (u.IsCarrying)
+        {
+            u.Status = $"porte déjà {CarriedName(u)}";
+            return;
+        }
         if (!Order(u, new(victim.Position.X, victim.Position.Y)))
             return;
         u.ReviveTarget = victim;
-        u.Status = "va ranimer son collègue";
+        u.Status = ReviveInPlace(u) ? "va ranimer son collègue" : "va chercher son collègue";
     }
+
+    /// <summary>Réglage caché « ReanimateFirefighter » : un pompier ranime sur place son collègue inconscient (au lieu de le porter).</summary>
+    public static bool ReanimateFirefighter;
+
+    // ranimer sur place (médecin, ou le réglage) plutôt que porter à l'ambulance
+    private static bool ReviveInPlace(Unit u) => u.CanHeal || ReanimateFirefighter;
 
     private void Revive(Unit u, float dt)
     {
@@ -1072,7 +1091,17 @@ public sealed partial class UnitManager
             u.Status = "collègue hors d'atteinte";
             return;
         }
-        u.HealTimer += dt * (u.CanHeal ? 2 : 1);
+        // jeu d'origine : il le soulève et l'emmène à l'ambulance ; le médecin (ou le réglage ReanimateFirefighter) le ranime sur place
+        if (!ReviveInPlace(u))
+        {
+            u.ReviveTarget = null;
+            u.HealTimer = 0;
+            if (v.CarriedBy == null && !u.IsCarrying)
+                StartCarryUnit(u, v);
+            return;
+        }
+        // le médecin : le temps de son animation (sc_heal_unconscious, HealSeconds) ; un pompier (réglage ReanimateFirefighter) : ReviveSeconds
+        u.HealTimer += dt * (u.CanHeal ? ReviveSeconds / HealSeconds : 1);
         u.Status = $"ranime son collègue ({u.HealTimer / ReviveSeconds:P0})";
         u.Heading = MathF.Atan2(v.Position.Y - u.Position.Y, v.Position.X - u.Position.X);
         if (u.HealTimer < ReviveSeconds)

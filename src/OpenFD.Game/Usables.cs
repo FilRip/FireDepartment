@@ -12,6 +12,7 @@ public sealed partial class UnitManager
     private void LoadUsables(Level level)
     {
         HashSet<(uint id, string cap)> enabledLater = ScriptEnabledLater();
+        HashSet<string> selfDisabling = ScriptSelfDisabling();
         foreach (LevelObject o in level.Objects.Where(o => o.Kind == EntityKind.Placeable && o.HasTransform))
         {
             ClassFile? c = Class("Design\\" + o.ClassPath["design\\".Length..] + ".class");
@@ -34,6 +35,11 @@ public sealed partial class UnitManager
             ComputeBox(u, o, c);
             if (o.GetComponent(0xA027) is { } comp)
                 u.Actions.AddRange(ParseActions(o.ComponentBytes(comp).ToArray()));
+            // sauf si sa propre fonction de script le rend inutilisable une fois utilisé : il l'est donc dès le départ, et le
+            // script le réactive pour une utilisation suivante (Eurotunnel : le poste de communication « conector », dont
+            // EstConect valide le premier objectif puis fait ENT_SetCapacityTarget(Armoire, « CouldBeUse », 0))
+            if (!use && enabledLater.Contains((o.Id, "COULDBEUSE")) && c.GetBool("CAPACITIES_ACTIONS", "CouldBeUse") && u.Actions.Any(a => selfDisabling.Contains(a.script)))
+                u.CanBeUsed = use = true;
             // objets sans action de script mais utilisables (les scripts peuvent les activer : ENT_SetCapacityTarget)
             if (!use && !repair && u.Actions.Count == 0)
                 continue;
@@ -56,6 +62,48 @@ public sealed partial class UnitManager
                 foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(code, @"ENT_SetCapacityTarget\s*\(\s*(\d+)\s*,\s*""(\w+)""\s*,\s*1\s*\)", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
                     res.Add((uint.Parse(m.Groups[1].Value), m.Groups[2].Value.ToUpperInvariant()));
             }
+        return res;
+    }
+
+    /// <summary>
+    /// Fonctions des scripts de la mission appelées par un objet (utilisateur, objet, état) qui servent plusieurs fois :
+    /// selon l'étape de la mission, plusieurs branches rendent cet objet inutilisable (ENT_SetCapacityTarget(objet,
+    /// « CouldBeUse », 0) sur leur deuxième paramètre, au moins deux fois). Une seule fois (Fireworks : VagonUse, Paris :
+    /// OnGasUse), l'objet attend que le script l'active.
+    /// </summary>
+    private HashSet<string> ScriptSelfDisabling()
+    {
+        HashSet<string> res = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        string dir = Path.Combine(_files.DataDir, "Script", "Mission", _s.Mission);
+        if (!Directory.Exists(dir))
+            return res;
+        System.Text.RegularExpressions.Regex head = new System.Text.RegularExpressions.Regex(@"^\s*void\s+(\w+)\s*\(\s*EntityID\s+\w+\s*,\s*EntityID\s+(\w+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        foreach (string f in Directory.EnumerateFiles(dir, "*.scp"))
+        {
+            string? function = null;
+            string? param = null;
+            int disables = 0;
+            foreach (string line in File.ReadLines(f, System.Text.Encoding.Latin1))
+            {
+                string code = line.Contains("//") ? line[..line.IndexOf("//", StringComparison.Ordinal)] : line;
+                System.Text.RegularExpressions.Match h = head.Match(code);
+                if (h.Success)
+                {
+                    function = h.Groups[1].Value;
+                    param = h.Groups[2].Value;
+                    disables = 0;
+                    continue;
+                }
+                if (System.Text.RegularExpressions.Regex.IsMatch(code, @"^\s*void\s+\w+\s*\("))
+                {
+                    function = null;
+                    continue;
+                }
+                if (function != null && param != null && System.Text.RegularExpressions.Regex.IsMatch(code, @"ENT_SetCapacityTarget\s*\(\s*" + param + @"\s*,\s*""CouldBeUse""\s*,\s*0\s*\)", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                    if (++disables >= 2)
+                        res.Add(function);
+            }
+        }
         return res;
     }
 
@@ -219,6 +267,12 @@ public sealed partial class UnitManager
     public void SetCapacity(uint id, string capacity, bool on)
     {
         string cap = capacity.ToUpperInvariant();
+        // à dégager au bulldozer (ou au camion bélier) : porte, débris, ou tout objet du décor (Ch_Plant : le camion en panne)
+        if (cap == "COULDBEDEMOLISH")
+        {
+            MakeDemolishable(id, on);
+            return;
+        }
         if (Openings.FirstOrDefault(d => d.Id == id) is { } d)
         {
             if (cap == "COULDBEBREAK")

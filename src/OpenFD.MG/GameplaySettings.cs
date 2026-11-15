@@ -25,6 +25,7 @@ public sealed class GameplaySettings
     public float ObjectiveTimeFactor { get; set; } = 2f;   // objectifs « vie d'un objet » (Mriya : générateur, 2 min en facile dans le jeu d'origine) : durée × ce facteur
     public bool OnlyOneOnLadder { get; set; }              // une seule personne à la fois sur l'échelle d'un camion : les autres attendent leur tour devant
     public float FireSpreadRadiusFactor { get; set; } = 1f;
+    public bool ReanimateFirefighter { get; set; }         // un pompier ranime sur place son collègue inconscient (sinon il le porte à l'ambulance ; le médecin ranime toujours sur place)
     public bool EnableDeath { get; set; }                  // une personne inconsciente (civil, pompier…) finit par mourir (Death.cs)
     public float ConsciousTime { get; set; } = 300f;       // secondes qu'un civil conscient tient, sans feu autour, avant de s'évanouir
     public float DeathTime { get; set; } = 300f;           // secondes qu'elle tient inconsciente, sans feu autour, avant de mourir

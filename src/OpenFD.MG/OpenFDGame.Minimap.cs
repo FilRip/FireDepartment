@@ -177,7 +177,7 @@ public sealed partial class OpenFDGame
 
     /// <summary>L'unité fait-elle quelque chose (déplacement, arrosage, porte, civil, objet, réanimation, recharge…) ?</summary>
     private static bool Busy(Unit u) => u.Moving || u.Target != null || u.Opening != null || u.GoTo != null || u.GoToVehicle != null
-        || u.UseTarget != null || u.ReviveTarget != null || u.Carrying != null || u.Boarding || u.HealTimer > 0 || u.InjuredTimer > 0;
+        || u.UseTarget != null || u.ReviveTarget != null || u.IsCarrying || u.Boarding || u.HealTimer > 0 || u.InjuredTimer > 0;
 
     // ---- bouton « i » au-dessus de la mini-carte (WID_MAP_BUT_AREA.png) : affiche ou cache le panneau des objectifs ----
     private bool _showObjectives = true;

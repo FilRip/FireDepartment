@@ -138,6 +138,8 @@ public sealed partial class OpenFDGame
         : u.Vertical == VerticalPhase.On ? "@SingleChar\\sc_vertical_ladder_get_on_top"
         : u.Vertical == VerticalPhase.Descend ? "~SingleChar\\sc_vertical_ladder_descend"
         : u.Stairs is { Walk: true } ? "~SingleChar\\sc_walk_generic_stair"   // escalier extérieur : il monte ou descend les marches
+        // porté sur le dos d'un collègue (comme un civil : CARRIEDWALK)
+        : u.CarriedBy is { } carrier ? carrier.Carry switch { CarryPhase.Lifting => "@CharChar\\cc_lift_body_lifted", CarryPhase.Dropping => "@CharChar\\cc_drop_body_droped", _ => "CARRIEDWALK" }
         : u.InjuredTimer > 0 || u.Unconscious ? "FAINT"
         : u.SenseTimer > 0 && !moving ? "SENSE_VICTIM"   // chien : aboie (sc_bark)
         // grappin : lancer, grimper (en boucle), passer le haut du mur, redescendre (en boucle), toucher le sol
@@ -154,6 +156,11 @@ public sealed partial class OpenFDGame
         : u.Carry == CarryPhase.Lifting ? "@CharChar\\cc_lift_body"
         : u.Carry == CarryPhase.Dropping ? "@CharChar\\cc_drop_body"
         : u.Carry == CarryPhase.Walking ? "CARRYWALK"
+        // soins (animations du jeu, 5 s chacune, jouées une fois comme la durée des soins) : il s'agenouille près de quelqu'un
+        // au sol, fait son geste et se relève ; debout face à quelqu'un debout ; celui qu'on soigne debout attend
+        : !moving && HealsSomeoneDown(u) ? "@SingleChar\\sc_heal_unconscious"
+        : !moving && u.HealTimer > 0 && (u.CareUnit != null || u.CareCivilian != null) ? "@SingleChar\\sc_heal_standing"
+        : !moving && u.BeingHealed ? "@SingleChar\\sc_being_healed"
         : moving ? "RUN"
         // désincarcérateur : il met sa pince en place (sc_extricate_init) puis coupe en boucle (EXTRICATE)
         : u.Opening is { Extricate: true } && u.OpeningBreak ? (u.ActionTimer < UnitManager.ExtricateStart ? "@SingleChar\\sc_extricate_init" : "EXTRICATE")
@@ -180,6 +187,13 @@ public sealed partial class OpenFDGame
             _ => "WAIT1",
         };
     }
+
+    // en train de ranimer quelqu'un au sol : un collègue (ReviveTarget), un civil inconscient (médecin), ou soins Ctrl + clic droit
+    private static bool HealsSomeoneDown(Unit u) =>
+        u.HealTimer > 0 && (u.ReviveTarget != null
+            || u.GoTo is { State: CivilianState.Unconscious }
+            || u.CareUnit is { Unconscious: true }
+            || u.CareCivilian is { State: CivilianState.Unconscious });
 
     private static string CivTag(Civilian c, bool moving) =>
         c.OnLadder is { } ol ? LadderStepTag(c.LadderStep, ol, false)
@@ -516,6 +530,19 @@ public sealed partial class OpenFDGame
             if (u.Carry == CarryPhase.Walking)
                 rate = u.ShownMoving ? Math.Clamp(u.Speed * UnitManager.CarrySpeed / WalkAnimSpeed, 0.5f, 1.6f) : 0f;   // arrêté avec le corps : figé
             string tag = UnitTag(u, u.ShownMoving);
+            // porté par un collègue : à la place du porteur, avec son cap et sa cadence (comme un civil porté) ; caché
+            // avec lui dans un escalier
+            if (u.CarriedBy is { } cu)
+            {
+                if (InStairs(cu))
+                    continue;
+                (SN.Vector3 p, float h) cp = PoseOf(cu, cu.Position, cu.Heading);
+                float ch = _shownHeading.TryGetValue(cu, out float sh) ? sh : cp.h;
+                float cr = cu.Carry == CarryPhase.Walking ? (cu.Moving ? Math.Clamp(cu.Speed * UnitManager.CarrySpeed / WalkAnimSpeed, 0.5f, 1.6f) : 0f) : 1f;
+                if (!DrawCharacter(a, tag, cp.p, ch, dt, false, cr))
+                    stillUnits.Add(u);
+                continue;
+            }
             if (DeadSink(u.DiedAt, now) is not { } usink)
                 continue;
             if (usink > 0)

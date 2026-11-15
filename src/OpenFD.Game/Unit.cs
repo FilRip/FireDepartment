@@ -54,7 +54,11 @@ public sealed class Unit
     public bool HeliAmbulance, HeliHeals;
     public Civilian? GoTo;                                // civil vers lequel l'unité se dirige
     public Civilian? Carrying;                            // civil inconscient porté sur le dos
+    public Unit? CarryingUnit;                            // collègue inconscient porté sur le dos (vers l'ambulance)
+    public Unit? CarriedBy;                               // pompier inconscient : le collègue qui le porte
+    public bool IsCarrying => Carrying != null || CarryingUnit != null;
     public CarryPhase Carry;
+    public bool DropHere;                                 // double-clic : poser le civil porté là où il est (après l'échelle)
     public float CarryTimer;
     public Unit? GoToVehicle;                             // véhicule vers lequel l'unité se dirige (remplir, déposer des civils)
     public Vector2 GoToVehicleAim;                        // où était (ou allait) ce véhicule quand le chemin a été tracé
@@ -141,6 +145,9 @@ public sealed class Unit
     public bool Unconscious;
     public bool CriticalWarned;                           // alerte « à bout de forces » (20 % d'endurance) déjà donnée
     public Unit? ReviveTarget;                            // collègue inconscient que l'unité va ranimer
+    public Unit? CareUnit;                                // médecin : pompier qu'il va soigner (lui-même compris ; Care.cs)
+    public Civilian? CareCivilian;                        // médecin : civil qu'il va soigner (Care.cs)
+    public bool BeingHealed;                              // un médecin le soigne en ce moment, debout (animation sc_being_healed)
     /// <summary>Véhicule : places ([CAPACITIES_PROPS] EmbarkCapacity) et passagers à bord.</summary>
     public int Seats;
     public readonly List<Unit> Passengers = new();

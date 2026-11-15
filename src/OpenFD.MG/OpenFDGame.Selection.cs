@@ -281,13 +281,28 @@ public sealed partial class OpenFDGame
     private static Rectangle WheelMark => new Rectangle(96, 0, 32, 32);
 
     /// <summary>Lignes du panneau, de bas en haut : (nom de l'équipe, unités). Les unités sans équipe connue vont à la fin.</summary>
+    /// <summary>
+    /// Ordre dans la barre des casernes : les véhicules, puis les pompiers ; dans chaque groupe, rangés par agent (eau, mousse,
+    /// halon, poudre, métal ; sans lance à la fin : médecins, haches…), puis par type d'unité, puis dans l'ordre d'arrivée.
+    /// </summary>
+    private static IEnumerable<Unit> PanelOrder(IEnumerable<Unit> units) =>
+        units.OrderBy(u => u.IsVehicle ? 0 : 1).ThenBy(PanelAgentRank).ThenBy(u => u.ClassPath, StringComparer.OrdinalIgnoreCase).ThenBy(u => u.Id);
+
+    // rang de l'agent d'une unité : sa lance (pompier) ou ce qu'il fournit (véhicule)
+    private static int PanelAgentRank(Unit u)
+    {
+        string? agent = u.IsVehicle ? (u.Nozzle?.Agent ?? u.SupplyAgent) : u.Nozzle?.Agent;
+        int k = agent == null ? -1 : Array.IndexOf(OpenFD.Fire.Extinguisher.Agents, agent.ToUpperInvariant());
+        return k < 0 ? 99 : k;
+    }
+
     private List<(string team, List<Unit> units)> PanelRows()
     {
         List<(string team, List<Unit> units)> rows = new List<(string team, List<Unit> units)>();
         List<Unit> all = _session.Units.Units.Where(u => !u.Hidden && !u.IsCivilianCar).ToList();   // (voitures civiles prises : pas dans la barre)
         foreach (string t in _session.Units.Teams)
-            rows.Add((t, all.Where(u => u.TeamName == t).OrderBy(u => u.IsVehicle ? 0 : 1).ThenBy(u => u.Id).Take(PanelMax).ToList()));
-        List<Unit> others = all.Where(u => u.TeamName == null || !_session.Units.Teams.Contains(u.TeamName)).OrderBy(u => u.IsVehicle ? 0 : 1).ThenBy(u => u.Id).Take(PanelMax).ToList();
+            rows.Add((t, PanelOrder(all.Where(u => u.TeamName == t)).Take(PanelMax).ToList()));
+        List<Unit> others = PanelOrder(all.Where(u => u.TeamName == null || !_session.Units.Teams.Contains(u.TeamName))).Take(PanelMax).ToList();
         if (others.Count > 0)
             rows.Add(("", others));
         return rows;

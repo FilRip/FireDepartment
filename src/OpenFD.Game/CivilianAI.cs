@@ -18,9 +18,9 @@ public sealed partial class UnitManager
     {
         if (u.IsVehicle)
             return;
-        if (u.Carrying != null)
+        if (u.IsCarrying)
         {
-            u.Status = "porte déjà un civil";
+            u.Status = $"porte déjà {CarriedName(u)}";
             return;
         }
         if (c.Carrier != null)
@@ -63,7 +63,7 @@ public sealed partial class UnitManager
                 if (!u.CanHeal)
                 {
                     u.GoTo = null;
-                    if (c.Carrier == null && u.Carrying == null)
+                    if (c.Carrier == null && !u.IsCarrying)
                         StartCarry(u, c);
                     return;
                 }
@@ -94,28 +94,66 @@ public sealed partial class UnitManager
 
     private void StartCarry(Unit u, Civilian c)
     {
-        u.Path.Clear();
-        u.Target = null;
+        BeginLift(u, c.Position);
         u.Carrying = c;
-        u.Carry = CarryPhase.Lifting;
-        u.CarryTimer = 0;
         c.Carrier = u;
         c.Leader = null;
-        u.Heading = MathF.Atan2(c.Position.Y - u.Position.Y, c.Position.X - u.Position.X);
         u.Status = $"soulève {c.Name}";
     }
 
-    /// <summary>Le pompier pose le civil là où il est (il tombe inconscient, monte dans un véhicule…).</summary>
+    /// <summary>
+    /// Pompier (ou médecin) inconscient : un collègue le soulève et l'emmène à l'ambulance ou au poste de soins, comme un
+    /// civil (jeu d'origine) ; il s'y relève. Réglage caché ReanimateFirefighter : le ranimer sur place à la place.
+    /// </summary>
+    private void StartCarryUnit(Unit u, Unit victim)
+    {
+        BeginLift(u, victim.Position);
+        u.CarryingUnit = victim;
+        victim.CarriedBy = u;
+        u.Status = $"soulève {UnitName(victim)}";
+    }
+
+    private static void BeginLift(Unit u, Vector3 victim)
+    {
+        u.Path.Clear();
+        u.Target = null;
+        u.Carry = CarryPhase.Lifting;
+        u.CarryTimer = 0;
+        u.DropHere = false;
+        u.Heading = MathF.Atan2(victim.Y - u.Position.Y, victim.X - u.Position.X);
+    }
+
+    // nom de ce que l'unité porte (civil ou collègue)
+    private string CarriedName(Unit u) => u.Carrying?.Name ?? (u.CarryingUnit is { } v ? UnitName(v) : "");
+
+    /// <summary>Double-clic sur une unité qui porte quelqu'un (civil ou collègue) : elle le pose au sol là où elle est (après l'échelle).</summary>
+    public void PutDownCivilian(Unit u)
+    {
+        if (!u.IsCarrying || u.Carry == CarryPhase.Dropping)
+            return;
+        u.DropHere = true;
+        u.Status = u.OnLadder != null || u.Stairs != null || u.Climb != ClimbPhase.None ? $"posera {CarriedName(u)} en bas" : $"pose {CarriedName(u)} au sol";
+    }
+
+    /// <summary>Le pompier pose ce qu'il porte là où il est (il tombe inconscient, monte dans un véhicule, double-clic…).</summary>
     private void DropVictimHere(Unit u)
     {
+        Vector3 ground = new Vector3(u.Position.X, u.Position.Y, Ground(new(u.Position.X, u.Position.Y)));
         if (u.Carrying is { } c)
         {
             c.Carrier = null;
-            c.Position = new Vector3(u.Position.X, u.Position.Y, Ground(new(u.Position.X, u.Position.Y)));
+            c.Position = ground;
+        }
+        if (u.CarryingUnit is { } v)
+        {
+            v.CarriedBy = null;
+            v.Position = ground;
         }
         u.Carrying = null;
+        u.CarryingUnit = null;
         u.Carry = CarryPhase.None;
         u.CarryTimer = 0;
+        u.DropHere = false;
     }
 
     /// <summary>
@@ -145,22 +183,41 @@ public sealed partial class UnitManager
                     u.GoToVehicle = vehicle;
                     u.GoToVehicleAim = VehicleAim(vehicle);
                 }
-                u.Status = $"porte {u.Carrying?.Name} vers l'ambulance";
+                u.Status = $"porte {CarriedName(u)} vers l'ambulance";
                 return true;
             }
         }
-        u.Status = $"porte {u.Carrying?.Name} : pas de chemin vers une ambulance";
+        u.Status = $"porte {CarriedName(u)} : pas de chemin vers une ambulance";
         return false;
     }
 
     private void CarryVictim(Unit u, float dt)
     {
-        if (u.Carrying is not { } c)
+        Civilian? c = u.Carrying;
+        Unit? v = u.CarryingUnit;
+        if (c == null && v == null)
             return;
-        if (u.Unconscious || u.OnBoard || u.Destroyed || c.State != CivilianState.Unconscious)
+        // le porteur ne peut plus porter, ou celui qu'il porte n'est plus à porter (réveillé, mort…)
+        bool lost = c != null ? c.State != CivilianState.Unconscious : !v!.Unconscious || v.Destroyed;
+        if (u.Unconscious || u.OnBoard || u.Destroyed || lost)
         {
             DropVictimHere(u);
             return;
+        }
+        string name = CarriedName(u);
+        // celui qu'il porte reste sur son dos
+        void Hold()
+        {
+            if (c != null)
+            {
+                c.Position = u.Position;
+                c.Heading = u.Heading;
+            }
+            if (v != null)
+            {
+                v.Position = u.Position;
+                v.Heading = u.Heading;
+            }
         }
         u.Target = null;
         switch (u.Carry)
@@ -168,8 +225,7 @@ public sealed partial class UnitManager
             case CarryPhase.Lifting:
                 u.Path.Clear();
                 u.CarryTimer += dt;
-                c.Position = u.Position;
-                c.Heading = u.Heading;
+                Hold();
                 if (u.CarryTimer >= LiftSeconds)
                 {
                     u.Carry = CarryPhase.Walking;
@@ -178,8 +234,18 @@ public sealed partial class UnitManager
                 }
                 break;
             case CarryPhase.Walking:
-                c.Position = u.Position;
-                c.Heading = u.Heading;
+                Hold();
+                // double-clic sur le porteur : il pose ce qu'il porte là où il est ; sur une échelle ou dans un escalier,
+                // une fois en bas
+                if (u.DropHere && u.OnLadder == null && u.Stairs == null && u.Climb == ClimbPhase.None)
+                {
+                    u.Path.Clear();
+                    u.GoToVehicle = null;
+                    u.Carry = CarryPhase.Dropping;
+                    u.CarryTimer = 0;
+                    u.Status = $"pose {name} au sol";
+                    break;
+                }
                 if (u.Moving)
                     break;
                 (Vector3 pos, float reach, Unit? vehicle)? amb = Shelters().OrderBy(s => Vector3.Distance(s.pos, u.Position)).Select(s => ((Vector3 pos, float reach, Unit? vehicle)?)s).FirstOrDefault();
@@ -188,26 +254,42 @@ public sealed partial class UnitManager
                     u.Carry = CarryPhase.Dropping;
                     u.CarryTimer = 0;
                     u.Heading = MathF.Atan2(sh.pos.Y - u.Position.Y, sh.pos.X - u.Position.X);
-                    u.Status = $"dépose {c.Name} à l'ambulance";
+                    u.Status = $"dépose {name} à l'ambulance";
                 }
                 else if (!u.Status.Contains("pas de chemin"))
-                    u.Status = $"porte {c.Name}";
+                    u.Status = $"porte {name}";
                 break;
             case CarryPhase.Dropping:
                 u.Path.Clear();
                 u.CarryTimer += dt;
-                c.Position = u.Position;
-                c.Heading = u.Heading;
+                Hold();
                 if (u.CarryTimer < DropSeconds)
                     break;
-                c.Carrier = null;
-                u.Carrying = null;
-                u.Carry = CarryPhase.None;
-                u.CarryTimer = 0;
-                Save(c);
-                Log.Add($"{_s.Time,6:0} s : {c.Name} déposé dans l'ambulance ({Rescued} sauvé(s))");
-                Sounds.Add(("VOCAL_CIVILIAN_SAVED", null));
+                if (u.DropHere)
+                {
+                    // posé au sol, toujours inconscient : un autre pompier pourra le reprendre (ou le médecin le soigner)
+                    DropVictimHere(u);
+                    u.Status = "attend les ordres";
+                    Log.Add($"{_s.Time,6:0} s : {name} posé au sol");
+                    break;
+                }
+                DropVictimHere(u);
                 u.Status = "attend les ordres";
+                if (c != null)
+                {
+                    Save(c);
+                    Log.Add($"{_s.Time,6:0} s : {c.Name} déposé dans l'ambulance ({Rescued} sauvé(s))");
+                    Sounds.Add(("VOCAL_CIVILIAN_SAVED", null));
+                }
+                else if (v != null)
+                {
+                    // collègue déposé à l'ambulance : il s'y relève (l'ambulance finit de le soigner)
+                    v.Unconscious = false;
+                    v.UnconsciousLife = 1;
+                    v.Stamina = MathF.Max(v.Stamina, v.StaminaMax * ReviveStamina);
+                    v.Status = "attend les ordres";
+                    Log.Add($"{_s.Time,6:0} s : {name} déposé à l'ambulance, il se relève");
+                }
                 break;
         }
     }

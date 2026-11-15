@@ -251,6 +251,51 @@ public sealed class PathFind
     /// </summary>
     private static HashSet<int> Walkways(Grid g)
     {
+        // au moins 60 % des cases du groupe font partie d'un carré de 2 × 2 cases du groupe
+        bool Wide(List<int> group)
+        {
+            HashSet<int> inside = new HashSet<int>(group);
+            HashSet<int> square = new HashSet<int>();
+            foreach (int i in group)
+            {
+                int x = i % g.Width;
+                if (x + 1 >= g.Width)
+                    continue;
+                int right = i + 1;
+                int up = i + g.Width;
+                int diag = up + 1;
+                if (inside.Contains(right) && inside.Contains(up) && inside.Contains(diag))
+                    square.UnionWith(new[] { i, right, up, diag });
+            }
+            return square.Count >= 0.6f * group.Count;
+        }
+
+        // les voisines praticables du groupe (hors du groupe) sont plus basses que lui (le sol, les marches de son escalier) ou
+        // bien plus hautes (la tour où mène la passerelle : 4,6 m), jamais un peu plus hautes ; au moins une est au sol
+        bool OnGround(List<int> group)
+        {
+            HashSet<int> inside = new HashSet<int>(group);
+            float deck = group.Max(k => g.GroundHeight[k]);
+            bool ground = false;
+            foreach (int i in group)
+            {
+                int x = i % g.Width;
+                int y = i / g.Width;
+                foreach ((int dx, int dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+                {
+                    if (!g.Inside(x + dx, y + dy))
+                        continue;
+                    int j = g.Index(x + dx, y + dy);
+                    if (inside.Contains(j) || g.ZoneA[j] == 0)
+                        continue;
+                    if (g.GroundHeight[j] < 30)
+                        ground = true;
+                    if (g.GroundHeight[j] > deck + 10 && g.GroundHeight[j] < deck + 150)
+                        return false;
+                }
+            }
+            return ground;
+        }
         HashSet<int> res = new HashSet<int>();
         int n = g.Width * g.Height;
         bool Cand(int i) => g.ZoneA[i] != 0 && g.ZoneB[i] == 0 && g.GroundHeight[i] >= 50;
@@ -295,7 +340,14 @@ public sealed class PathFind
             // et un plateau en haut : 2 cases au moins au même niveau (une passerelle, pas le haut d'un muret en pente)
             float top = group.Max(k => g.GroundHeight[k]);
             bool deck = group.Count(k => g.GroundHeight[k] >= 200 && top - g.GroundHeight[k] < 10) >= 2;
-            if (high && linked && deck && levels <= 4 && group.Count <= 60)
+            // passerelle basse (Ch_Plant : les caillebotis à 80 cm entre les réservoirs, où attendent des ouvriers) : un plateau
+            // plat, toutes ses cases à la même hauteur entre 50 cm et 1,5 m, posé sur le sol tout autour (ses voisines
+            // praticables, hors du groupe, sont au sol) ; un mur de pièce, lui, est au niveau du sol
+            float low = group.Min(k => g.GroundHeight[k]);
+            // et assez large pour y marcher : 2 cases au moins (60 % de ses cases dans un carré de 2 × 2 du groupe) ; une ligne
+            // d'une case (Fireworks : 45 m à 1,23 m de haut) est le haut d'un muret ou d'une clôture
+            bool lowDeck = top <= 150 && top - low <= 15 && group.Count >= 4 && group.Count <= 60 && linked && Wide(group) && OnGround(group);
+            if ((high && linked && deck && levels <= 4 && group.Count <= 60) || lowDeck)
             {
                 res.UnionWith(group);
                 if (Environment.GetEnvironmentVariable("FD3_PASSERELLES") != null)

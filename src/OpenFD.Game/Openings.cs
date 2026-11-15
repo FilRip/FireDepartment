@@ -455,46 +455,72 @@ public sealed partial class UnitManager
     private void LoadDemolishable(Level level, SceneAssets assets)
     {
         foreach (LevelObject o in level.Objects.Where(o => o.Kind == EntityKind.Placeable && o.HasTransform))
+            if (CapacityByte(o, CapDemolish))
+                AddDemolishable(o, assets);
+    }
+
+    /// <summary>
+    /// Le script rend un objet démolissable en cours de partie (ENT_SetCapacityTarget(…, "CouldBeDemolish", 1)) : Ch_Plant,
+    /// le camion en panne qui bloque la porte est (« broken_truck »), à pousser avec un camion bélier pour l'objectif 4 ;
+    /// le dégager appelle la fonction du script nommée dans la carte (« Clear_way_for_Reinforcement »).
+    /// </summary>
+    public void MakeDemolishable(uint id, bool on)
+    {
+        if (Openings.FirstOrDefault(x => x.Id == id) is { } existing)
         {
-            if (!CapacityByte(o, CapDemolish))
-                continue;
-            ClassFile? c = Class("Design\\" + o.ClassPath["design\\".Length..] + ".class");
-            if (c == null)
-                continue;
-            float life = c.GetFloat("DAMAGE", "LifePoints", 100), max = c.GetFloat("DAMAGE", "MaxLifePoints", 100);
-            string? onDestroy = null;
-            if (o.GetComponent(0xA024) is { } dc && dc.Size > 13)
-            {
-                byte[] b = o.ComponentBytes(dc).ToArray();
-                if (b[4] == 0x0C)
-                {
-                    life = BitConverter.ToSingle(b, 5);
-                    max = BitConverter.ToSingle(b, 9);
-                }
-                onDestroy = ScriptNameIn(b);
-            }
-            if (Openings.FirstOrDefault(x => x.Id == o.Id) is { } existing)
-            {
-                existing.Demolish = true;
-                existing.OnDestroy ??= onDestroy;
-                continue;
-            }
-            if (life <= 0)
-                continue;
-            Opening d = AddObstacle(o, c, life, assets);
-            d.Breakable = false;
-            d.Demolish = true;
-            d.MaxLife = MathF.Max(max, life);
-            d.OnDestroy = onDestroy;
-            // caché au départ (Petrochemical : les débris des tuyaux tombés, montrés par le script quand le tuyau tombe) :
-            // il ne ferme pas le passage tant que le script ne l'a pas montré
-            if (!o.StartVisible)
-            {
-                d.State = OpeningState.Open;
-                _demolishHidden.Add(d.Id);
-            }
-            Log.Add($"Débris pour bulldozer : {o.Name} ({d.Cells.Count} case(s), {life:0} points de vie{(onDestroy != null ? ", script " + onDestroy : "")})");
+            existing.Demolish = on;
+            return;
         }
+        if (!on || _s.Level.Objects.FirstOrDefault(x => x.Id == id) is not { } o || o.Kind != EntityKind.Placeable || !o.HasTransform)
+            return;
+        if (AddDemolishable(o, _assets ??= new SceneAssets(_files)) is { } d)
+        {
+            Log.Add($"{_s.Time,6:0} s : {o.Name} est à dégager au bulldozer (script)");
+            if (d.State == OpeningState.Closed)
+                RefreshDoorCells();
+        }
+    }
+
+    // un débris pour bulldozer (voir LoadDemolishable) ; null : déjà connu, ou sans classe, ou sans vie
+    private Opening? AddDemolishable(LevelObject o, SceneAssets assets)
+    {
+        ClassFile? c = Class("Design\\" + o.ClassPath["design\\".Length..] + ".class");
+        if (c == null)
+            return null;
+        float life = c.GetFloat("DAMAGE", "LifePoints", 100), max = c.GetFloat("DAMAGE", "MaxLifePoints", 100);
+        string? onDestroy = null;
+        if (o.GetComponent(0xA024) is { } dc && dc.Size > 13)
+        {
+            byte[] b = o.ComponentBytes(dc).ToArray();
+            if (b[4] == 0x0C)
+            {
+                life = BitConverter.ToSingle(b, 5);
+                max = BitConverter.ToSingle(b, 9);
+            }
+            onDestroy = ScriptNameIn(b);
+        }
+        if (Openings.FirstOrDefault(x => x.Id == o.Id) is { } existing)
+        {
+            existing.Demolish = true;
+            existing.OnDestroy ??= onDestroy;
+            return null;
+        }
+        if (life <= 0)
+            return null;
+        Opening d = AddObstacle(o, c, life, assets);
+        d.Breakable = false;
+        d.Demolish = true;
+        d.MaxLife = MathF.Max(max, life);
+        d.OnDestroy = onDestroy;
+        // caché au départ (Petrochemical : les débris des tuyaux tombés, montrés par le script quand le tuyau tombe) :
+        // il ne ferme pas le passage tant que le script ne l'a pas montré
+        if (!o.StartVisible)
+        {
+            d.State = OpeningState.Open;
+            _demolishHidden.Add(d.Id);
+        }
+        Log.Add($"Débris pour bulldozer : {o.Name} ({d.Cells.Count} case(s), {life:0} points de vie{(onDestroy != null ? ", script " + onDestroy : "")})");
+        return d;
     }
 
     /// <summary>

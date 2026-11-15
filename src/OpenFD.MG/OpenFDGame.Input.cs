@@ -232,7 +232,10 @@ public sealed partial class OpenFDGame
             if (_moved)
                 SelectBox(_downX, _downY, m.X, m.Y, shift);
             else if (!AirTargetInput(new KeyboardStateLike(false), true, false, m.X, m.Y))
+            {
+                DoubleClickPutDown(m.X, m.Y);
                 Select(m.X, m.Y, shift);
+            }
             _dragL = false;
         }
         if (_dragR && m.RightButton == ButtonState.Released)
@@ -595,6 +598,24 @@ public sealed partial class OpenFDGame
         return null;
     }
 
+    // double-clic (deux clics sur la même unité en moins de 0,4 s) sur une unité qui porte un civil : elle le pose au sol
+    private Unit? _lastClickUnit;
+    private DateTime _lastClickTime;
+
+    private void DoubleClickPutDown(double x, double y)
+    {
+        Unit? u = UnitAt(x, y);
+        DateTime now = DateTime.UtcNow;
+        bool twice = u != null && u == _lastClickUnit && (now - _lastClickTime).TotalSeconds < 0.4;
+        _lastClickUnit = twice ? null : u;
+        _lastClickTime = now;
+        if (twice && u!.IsCarrying && !u.Unconscious)
+        {
+            DoPutDown(u);
+            Log($"{UnitLabel(u)} : {u.Status}");
+        }
+    }
+
     private void Select(double x, double y, bool add)
     {
         Unit? best = UnitAt(x, y);
@@ -618,6 +639,13 @@ public sealed partial class OpenFDGame
     {
         if (_sel.Count == 0)
             return;
+        // Ctrl + clic droit, médecin choisi : il va soigner le pompier (lui-même compris) ou le civil visé, où qu'il soit
+        if (CareTarget(x, y) is { } care)
+        {
+            DoTreat(care.medic, care.unit, care.civilian);
+            Log($"{UnitLabel(care.medic)} : {care.medic.Status}");
+            return;
+        }
         // collègue inconscient (backdraft) : le pompier choisi le plus proche va le ranimer
         if (UnitAt(x, y) is { Unconscious: true, Destroyed: false } victim)
         {
@@ -653,7 +681,7 @@ public sealed partial class OpenFDGame
         uint? car = carCtrl && veh == null && _sel.Any(u => !u.IsVehicle && !u.Unconscious && !u.OnBoard) ? CivilianCarAt(x, y) : null;
         if (car != null || (carCtrl && veh is { IsCivilianCar: true }))
         {
-            Unit? driver = _sel.Where(u => !u.IsVehicle && !u.Unconscious && !u.OnBoard && u.Carrying == null)
+            Unit? driver = _sel.Where(u => !u.IsVehicle && !u.Unconscious && !u.OnBoard && !u.IsCarrying)
                 .OrderBy(u => SN.Vector3.Distance(u.Position, veh?.Position ?? _session.Explosions.ById[car!.Value].Position)).FirstOrDefault();
             if (driver == null)
             {
@@ -682,10 +710,10 @@ public sealed partial class OpenFDGame
                     return;
                 }
                 // un pompier qui porte un civil sur son dos refuse de monter à bord
-                List<Unit> carriers = walkers.Where(u => u.Carrying != null).ToList();
+                List<Unit> carriers = walkers.Where(u => u.IsCarrying).ToList();
                 if (carriers.Count > 0)
                     RefuseCarrying(carriers);
-                walkers.RemoveAll(u => u.Carrying != null);
+                walkers.RemoveAll(u => u.IsCarrying);
                 if (walkers.Count == 0)
                 {
                     _ignoredOrder = true;   // ni repère, ni « bien reçu » : seule la voix du refus
@@ -764,12 +792,12 @@ public sealed partial class OpenFDGame
             }
             bool wantBreak = door.Breakable && (door.IsWindow || door.State == OpeningState.Closed);
             // casser une porte ou une fenêtre : pas un pompier qui porte un civil sur son dos
-            List<Unit> able = _sel.Where(u => !u.IsVehicle && !(wantBreak && u.Carrying != null)).ToList();
+            List<Unit> able = _sel.Where(u => !u.IsVehicle && !(wantBreak && u.IsCarrying)).ToList();
             Unit? who = able.Where(u => wantBreak && u.CanBreak || door.Usable && u.CanUse)
                 .OrderBy(u => wantBreak && u.CanBreak ? 0 : 1).FirstOrDefault() ?? able.FirstOrDefault();
-            if (who == null && wantBreak && _sel.Any(u => !u.IsVehicle && u.Carrying != null))
+            if (who == null && wantBreak && _sel.Any(u => !u.IsVehicle && u.IsCarrying))
             {
-                RefuseCarrying(_sel.Where(u => !u.IsVehicle && u.Carrying != null).ToList());
+                RefuseCarrying(_sel.Where(u => !u.IsVehicle && u.IsCarrying).ToList());
                 _ignoredOrder = true;   // ni repère, ni « bien reçu » : seule la voix du refus
                 return;
             }
@@ -842,6 +870,28 @@ public sealed partial class OpenFDGame
     }
 
     // civil visé : sur toute sa hauteur (de ses pieds au repère coloré au-dessus de lui), ou au sol tout près
+    /// <summary>
+    /// Ctrl enfoncé, un médecin choisi, la souris sur un pompier à pied (le médecin lui-même compris, inconscient ou non,
+    /// pas un mort) ou sur un civil (conscient ou inconscient, pas porté) : le médecin choisi le plus proche, et sa cible.
+    /// </summary>
+    private (Unit medic, Unit? unit, Civilian? civilian)? CareTarget(double x, double y)
+    {
+        KeyboardState k = Keyboard.GetState();
+        if (!k.IsKeyDown(Keys.LeftControl) && !k.IsKeyDown(Keys.RightControl))
+            return null;
+        List<Unit> medics = _sel.Where(UnitManager.CanTreat).ToList();
+        if (medics.Count == 0)
+            return null;
+        if (UnitAt(x, y) is { IsVehicle: false, Destroyed: false, OnBoard: false } u)
+        {
+            Unit medic = medics.Contains(u) ? u : medics.OrderBy(m => SN.Vector3.Distance(m.Position, u.Position)).First();
+            return (medic, u, null);
+        }
+        if (CivilianAt(x, y) is { Carrier: null } c && c.State is CivilianState.Conscious or CivilianState.Unconscious)
+            return (medics.OrderBy(m => SN.Vector3.Distance(m.Position, c.Position)).First(), null, c);
+        return null;
+    }
+
     private Civilian? CivilianAt(double x, double y)
     {
         (float csx, float csy) = Fb(x, y);
@@ -1147,7 +1197,7 @@ public sealed partial class OpenFDGame
     }
 
     // ---- curseurs du jeu (Gfx\Textures\_cache\MouseCursors.dds, cases de 32 × 32, 8 par ligne) ----
-    private enum Cur { Grapple = 12, Normal = 0, Unit = 1, Use = 2, Heal = 3, Axe = 4, Move = 5, Target = 8, Rescue = 3, Forbidden = 13, Enter = 14, Water = 15, Ladder = 11, Bulldozer = 20, Extricate = 16 }
+    private enum Cur { Syringe = 7, Grapple = 12, Normal = 0, Unit = 1, Use = 2, Heal = 3, Axe = 4, Move = 5, Target = 8, Rescue = 3, Forbidden = 13, Enter = 14, Water = 15, Ladder = 11, Bulldozer = 20, Extricate = 16 }
     private readonly Dictionary<Cur, MouseCursor> _cursors = new();
     private readonly List<Texture2D> _cursorTex = new();
     private Cur _cur = (Cur)(-1);
@@ -1234,6 +1284,8 @@ public sealed partial class OpenFDGame
             want = Cur.Move;     // débogage (F5) : l'endroit où téléporter
         else if (MiniToWorld(x, y) != null)
             want = Cur.Normal;
+        else if (CareTarget(x, y) != null)
+            want = Cur.Syringe;     // Ctrl, médecin choisi : soigner ce pompier (ou lui-même) ou ce civil
         else if (_sel.Any(u => u.CanDemolish && !u.Destroyed) && OpeningAt(x, y) is { Demolish: true })
             want = Cur.Bulldozer;   // débris : le bulldozer les dégage
         else if (_sel.Any(u => u.IsAerial && !u.Destroyed) && OpeningAt(x, y) is { } hw && _session.Units.IsHighWindow(hw))

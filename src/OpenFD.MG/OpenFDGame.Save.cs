@@ -40,6 +40,27 @@ public sealed partial class OpenFDGame
         Rec("revive", who.Id, victim.Id);
         _session.Units.ReviveColleague(who, victim);
     }
+    /// <summary>Soins du médecin (Ctrl + clic droit) : un pompier (lui-même compris) ou un civil.</summary>
+    private void DoTreat(Unit medic, Unit? patient, Civilian? c)
+    {
+        string op = patient != null ? "treat" : "treatciv";
+        long target = patient != null ? patient.Id : c?.Id ?? 0;
+        if (NetSubmit(op, medic.Id, target))
+            return;
+        Rec(op, medic.Id, target);
+        if (patient != null)
+            _session.Units.TreatUnit(medic, patient);
+        else if (c != null)
+            _session.Units.TreatCivilian(medic, c);
+    }
+    /// <summary>Double-clic sur le porteur : il pose le civil au sol là où il est.</summary>
+    private void DoPutDown(Unit u)
+    {
+        if (NetSubmit("putdown", u.Id))
+            return;
+        Rec("putdown", u.Id);
+        _session.Units.PutDownCivilian(u);
+    }
     private void DoFetch(Unit who, Civilian c)
     {
         if (NetSubmit("fetch", who.Id, c.Id))
@@ -184,6 +205,18 @@ public sealed partial class OpenFDGame
             case "revive":
                 if (U(e.A) is { } a1 && U(e.B) is { } b1)
                     um.ReviveColleague(a1, b1);
+                break;
+            case "putdown":
+                if (U(e.A) is { } aP)
+                    um.PutDownCivilian(aP);
+                break;
+            case "treat":
+                if (U(e.A) is { } aT && U(e.B) is { } bT)
+                    um.TreatUnit(aT, bT);
+                break;
+            case "treatciv":
+                if (U(e.A) is { } aTc && um.CivilianById(e.B) is { } cT)
+                    um.TreatCivilian(aTc, cT);
                 break;
             case "fetch":
                 if (U(e.A) is { } a2 && um.CivilianById(e.B) is { } c2)

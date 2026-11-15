@@ -53,8 +53,8 @@ public sealed partial class UnitManager
                 u.UnconsciousLife = 1;
                 continue;
             }
-            if (u.OnBoard || u.Hidden)
-                continue;
+            if (u.OnBoard || u.Hidden || u.CarriedBy != null)
+                continue;   // (porté par un collègue : il ne s'affaiblit plus)
             u.UnconsciousLife -= dt / DeathTime * (FireVeryClose(u.Position) ? DeathFireFactor : 1);
             if (u.UnconsciousLife <= 0)
                 KillUnit(u);

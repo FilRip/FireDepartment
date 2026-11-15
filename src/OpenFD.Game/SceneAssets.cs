@@ -182,7 +182,16 @@ public sealed class SceneAssets
     public byte[]? TreeTexture(string name) =>
         Regex.IsMatch(name, "^[A-Za-z0-9_]+$") ? _files.TryRead("Gfx\\Speedtree\\General\\" + name + ".tga") : null;
 
-    private static readonly Regex StateRx = new(@"_e\d$", RegexOptions.IgnoreCase);
+    // états d'endommagement : « _e1 », « _e2 »… ou « _e01 », « _e02 »… (Pult d'Eurotunnel : Pult_e1 intact, Pult_e02 brûlé)
+    private static readonly Regex StateRx = new(@"_e(\d{1,2})$", RegexOptions.IgnoreCase);
+
+    /// <summary>Numéro de l'état d'endommagement d'une pièce (« _e1 », « _e02 »…), ou -1 si elle n'en a pas.</summary>
+    private static int StateNumber(string node)
+    {
+        Match m = StateRx.Match(node);
+        return m.Success ? int.Parse(m.Groups[1].Value) : -1;
+    }
+
     /// <summary>
     /// Couvercles noirs d'un modèle d'objet (« …_ROOM1_MASK », comme Gfx\Placeable\ROOF\Roof.sg du hangar de Mriya) :
     /// les pièces que <see cref="ModelParts(string)"/> laisse de côté.
@@ -242,7 +251,8 @@ public sealed class SceneAssets
             string m0 = model.Contains('\\') ? model : "Placeable\\" + model;
             Dictionary<string, (string parent, Matrix4x4 m)> nodes0 = Rooms.SceneNodes(_files.Read("Gfx\\" + m0 + ".sg"));
             string suffix = "_" + state;
-            List<string> hit = nodes0.Keys.Where(k => k.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) && _files.TryRead("Gfx\\" + dir0 + "\\" + k + ".mesh") != null).ToList();
+            int wanted = state.Length > 1 && (state[0] == 'e' || state[0] == 'E') && int.TryParse(state[1..], out int n) ? n : -1;
+            List<string> hit = nodes0.Keys.Where(k => (wanted > 0 ? StateNumber(k) == wanted : k.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) && _files.TryRead("Gfx\\" + dir0 + "\\" + k + ".mesh") != null).ToList();
             if (hit.Count > 0)
             {
                 // pièces de cet état, plus celles qui n'ont pas d'état (roues…)
@@ -258,9 +268,10 @@ public sealed class SceneAssets
             model = "Placeable\\" + model;
         Dictionary<string, (string parent, Matrix4x4 m)> nodes = Rooms.SceneNodes(_files.Read("Gfx\\" + model + ".sg"));
         List<string> withMesh = nodes.Keys.Where(k => _files.TryRead("Gfx\\" + dir + "\\" + k + ".mesh") != null).ToList();
-        bool hasStates = withMesh.Any(k => StateRx.IsMatch(k));
+        // (un modèle sans pièce intacte, comme Mall_Big_shopwindow_2_e02 seul : tout est dessiné)
+        bool hasStates = withMesh.Any(k => StateNumber(k) == 1);
         return withMesh
-            .Where(k => !hasStates || !StateRx.IsMatch(k) || k.EndsWith("_e1", StringComparison.OrdinalIgnoreCase))
+            .Where(k => !hasStates || StateNumber(k) is -1 or 1)
             .Where(k => !k.ToUpperInvariant().Contains("_COLL") && !k.ToUpperInvariant().Contains("MASK") && !SkipRx.IsMatch(k))
             .Select(k => new Node(dir + "\\" + k, PartWorld(nodes, k)))
             // pièces de l'état brûlé (texture « …_brul ») : seulement après destruction
