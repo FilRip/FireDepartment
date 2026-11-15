@@ -9,10 +9,12 @@ A converter is now included to convert missions/files of Fire Department 1, to b
 
 This engine support multiplayers
 
-No game data is included in this repository.
+No game data is included in this repository but demo version is included (3 missions, 1 for each game)
 
 -----------
 ## The game
+
+Lance exe will launch the game with demo version of games
 
 Launch exe with in argument the path where Fire Department 2 or 3 is installed, like that :
 
@@ -41,3 +43,12 @@ Thank you to support me please :
 [![Donate with PayPal](https://raw.githubusercontent.com/stefan-niedermann/paypal-donate-button/master/paypal-donate-button.png)](https://www.paypal.com/donate/?hosted_button_id=ZFAW8GC4FZMXW)
 
 ![Preview](./docs/demo.png)
+
+Fire Department 1 included mission : fuel station
+![Fuel Station](./docs/fuelstation.png)
+
+Fire Department 2 included mission : The mall
+![The Mall](./docs/mall.png)
+
+Fire Department 3 included mission : Dusseldorf Airport
+![Dusseldorf Airport](./docs/dusseldorf.png)
