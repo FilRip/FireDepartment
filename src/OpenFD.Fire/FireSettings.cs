@@ -13,6 +13,7 @@ public sealed class FireSettings
     public float ElectricityStamina = 0.5f;    // [DIFFICULTY_*] ElectricityStamina (électrocution)
     public float HeatStamina = 1f;            // [DIFFICULTY_*] HeatStamina (chaleur des feux sur l'endurance des pompiers)
     public float SmokeStamina = 1f;           // [DIFFICULTY_*] SmokeStamina (fumée sur l'endurance des pompiers)
+    public float FireDamage = 1f;             // [DIFFICULTY_*] FireDamage (le feu abîme les objets et les véhicules)
     public float NaturalEvaporationRate = 1.5f;
     public float FireEvaporationFactor = 0f;
     public Vector3 WindDirection = Vector3.UnitX;
@@ -29,6 +30,7 @@ public sealed class FireSettings
         s.ElectricityStamina = mis.GetFloat(d, "ElectricityStamina", 0.5f);
         s.HeatStamina = mis.GetFloat(d, "HeatStamina", 1f);
         s.SmokeStamina = mis.GetFloat(d, "SmokeStamina", 1f);
+        s.FireDamage = mis.GetFloat(d, "FireDamage", 1f);
         s.NaturalEvaporationRate = mis.GetFloat("WATER", "NaturalEvaporationRate", 1.5f);
         s.FireEvaporationFactor = mis.GetFloat("WATER", "FireEvaporationFactor", 0f);
         return s;

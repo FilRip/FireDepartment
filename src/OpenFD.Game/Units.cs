@@ -676,6 +676,7 @@ public sealed partial class UnitManager
         u.Path.Clear();
         u.GoTo = null;
         u.GoToVehicle = null;
+        u.GoToReel = null;
         u.CareUnit = null;      // soins du médecin (Care.cs) : un nouvel ordre les remplace
         u.CareCivilian = null;
         u.HealTimer = 0;
@@ -1124,8 +1125,11 @@ public sealed partial class UnitManager
     {
         if (u.IsVehicle || u.OnBoard || u.Unconscious || u.Nozzle is not { InfiniteReserve: false } n || u.Moving)
             return;
-        bool asked = u.GoToVehicle is { ResupplyPower: > 0 };
+        bool asked = u.GoToVehicle is { ResupplyPower: > 0 } || u.GoToReel != null;
         if (!asked && (!u.AutoResupply || u.Target != null))
+            return;
+        // enrouleur de tuyau (Eurotunnel) : sur ordre, ou de lui-même s'il n'y a pas de camion demandé
+        if (u.GoToVehicle == null && ReelResupply(u, n, asked, dt))
             return;
         // sur ordre : le camion demandé (il peut fournir un autre agent) ; de lui-même : un camion du même agent
         Unit? truck = asked && u.GoToVehicle is { Moving: false, Destroyed: false } gv && Vector3.Distance(gv.Position, u.Position) < VehicleReach * 1.5f ? gv

@@ -168,7 +168,8 @@ public sealed class ExplosionSystem
             float factor = it.CanExplode ? FireDamageFactor
                 : it.OnDestroy != null && !it.LifeIsObjective ? DestroyScriptDamageFactor
                 : WatchedDamageFactor / MathF.Max(0.1f, ObjectiveTimeFactor);
-            float dmg = (max + OtherFiresShare * (sum - max)) * factor;
+            // (difficulté de la mission : [DIFFICULTY_*] FireDamage, 0,5 en facile)
+            float dmg = (max + OtherFiresShare * (sum - max)) * factor * fire.Settings.FireDamage;
             if (dmg > 0)
                 it.Life -= dmg * it.FireDamageCoef * dt;
             if (!it.CanExplode)

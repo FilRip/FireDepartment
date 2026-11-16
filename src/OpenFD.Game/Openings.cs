@@ -542,8 +542,10 @@ public sealed partial class UnitManager
             if (o.ClassPath.EndsWith("saw_symbol", StringComparison.OrdinalIgnoreCase))
                 continue;
             // déjà une ouverture : seulement une « porte » qui ne s'ouvre ni ne se casse (Stadium : les tuyaux à découper,
-            // « stadium_breakable_pipe », qui barrent le passage comme une porte fermée)
-            if (Openings.FirstOrDefault(d => d.Id == o.Id) is { } od && (od.Extricate || od.IsWindow || od.Usable || od.Breakable || od.ScriptGate || od.IsObstacle))
+            // « stadium_breakable_pipe », qui barrent le passage comme une porte fermée), ou une porte que la carte dit à
+            // découper (Eurotunnel : door532, train_door17 et 18, sous leur icône de scie)
+            bool mapCut = CapacityByte(o, CapExtricate);
+            if (Openings.FirstOrDefault(d => d.Id == o.Id) is { } od && (od.Extricate || od.IsWindow || ((od.Usable || od.Breakable || od.ScriptGate || od.IsObstacle) && !mapCut)))
                 continue;
             ClassFile? c = Class("Design\\" + o.ClassPath["design\\".Length..] + ".class");
             if (c == null)
@@ -588,6 +590,7 @@ public sealed partial class UnitManager
             if (existing != null && !sawOf.ContainsKey(o.Id))
                 continue;   // tuyau du décor sans icône de scie à lui : il reste tel quel
             Opening d = existing ?? AddObstacle(o, c, life, assets, true);
+            d.Usable = false;   // (porte à découper : elle ne s'ouvre plus à la main)
             d.Breakable = false;
             d.Demolish = false;
             d.Extricate = true;

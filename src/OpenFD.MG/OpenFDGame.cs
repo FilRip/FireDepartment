@@ -2167,6 +2167,10 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         foreach (HealPoint hp in _session.Units.HealPoints.Where(h => h.Model.Length > 0 && _session.Units.HealPointActive(h)))
             foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(hp.Model))
                 DrawMesh(mesh, (part * hp.World).X());
+        // enrouleurs de tuyau du niveau (faux véhicules qui ravitaillent : Eurotunnel)
+        foreach (WaterReel wr in _session.Units.WaterReels.Where(r => r.Model.Length > 0 && _session.Units.WaterReelActive(r)))
+            foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(wr.Model))
+                DrawMesh(mesh, (part * wr.World).X());
         foreach ((uint id, string? model, SN.Matrix4x4 world, Opening? ob) in _brokenParts)
             if (Vis(id, ob.State == OpeningState.Broken))
                 foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(model))

@@ -731,6 +731,15 @@ public sealed partial class OpenFDGame
                 : veh.ResupplyPower > 0 ? "Direction le camion pour remplir l'eau" : "Direction le véhicule");
             return;
         }
+        if (WaterReelAt(x, y) is { } reel && _sel.Any(u => !u.IsVehicle && u.Nozzle != null && !u.Unconscious))
+        {
+            // enrouleur de tuyau : les pompiers choisis y vont remplir leur réserve
+            List<Unit> fillers = _sel.Where(u => !u.IsVehicle && u.Nozzle != null && !u.Unconscious).ToList();
+            foreach (Unit u in fillers)
+                DoGoToReel(u, reel);
+            Log("Direction l'enrouleur pour remplir l'eau");
+            return;
+        }
         if (GrappleAt(x, y) is { } gp)
         {
             // flèche jaune du grappin : le scout va au pied du mur et passe de l'autre côté
@@ -949,6 +958,23 @@ public sealed partial class OpenFDGame
                     best = it.Id;
                 }
         return best;
+    }
+
+    /// <summary>Enrouleur de tuyau sous la souris (près de son pied ou de sa hauteur à l'écran), ou null.</summary>
+    private WaterReel? WaterReelAt(double x, double y)
+    {
+        (float sx, float sy) = Fb(x, y);
+        SN.Vector2 m = new SN.Vector2(sx, sy);
+        float best = Tol(40);
+        WaterReel? hit = null;
+        foreach (WaterReel r in _session.Units.WaterReels.Where(_session.Units.WaterReelActive))
+            foreach (float z in new[] { 0f, 60f, 120f })
+                if (Project(r.Position + new SN.Vector3(0, 0, z)) is { } p && SN.Vector2.Distance(p, m) is float d && d < best)
+                {
+                    best = d;
+                    hit = r;
+                }
+        return hit;
     }
 
     private Unit? VehicleAt(double x, double y)
@@ -1306,6 +1332,8 @@ public sealed partial class OpenFDGame
             want = (ms.X >= 0 && (Keyboard.GetState().IsKeyDown(Keys.LeftControl) || Keyboard.GetState().IsKeyDown(Keys.RightControl))) ? (v.Seats > 0 ? Cur.Enter : Cur.Forbidden)
                 : v.IsAmbulance ? Cur.Heal   // ambulance : soins (Ctrl : y monter)
                 : v.ResupplyPower > 0 && walkers.Any(u => u.Nozzle != null) ? Cur.Water : Cur.Move;
+        else if (WaterReelAt(x, y) != null && walkers.Any(u => u.Nozzle != null))
+            want = Cur.Water;   // enrouleur de tuyau : remplir sa réserve
         else if (UsableAt(x, y) is { } uo)
             want = walkers.Any(u => _session.Units.CanWorkOn(u, uo)) ? Cur.Use : Cur.Forbidden;
         else if (OpeningAt(x, y) is { } o)

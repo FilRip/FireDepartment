@@ -82,7 +82,7 @@ public sealed partial class UnitManager
             if (u.IsVehicle)
             {
                 if (burn > 0)
-                    Damage(u, burn * u.FireDamageCoef * VehicleFireFactor * dt);
+                    Damage(u, burn * u.FireDamageCoef * VehicleFireFactor * _s.Fire.Settings.FireDamage * dt);
                 continue;
             }
             if (u.Unconscious)

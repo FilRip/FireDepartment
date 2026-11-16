@@ -28,6 +28,7 @@ public sealed partial class UnitManager
             if (classRel.Contains("factice", StringComparison.OrdinalIgnoreCase))
             {
                 LoadHealPoint(o, classRel);
+                LoadWaterReel(o, classRel);
                 continue;
             }
             bool renamed = !o.Name.StartsWith(o.ClassName, StringComparison.OrdinalIgnoreCase);
