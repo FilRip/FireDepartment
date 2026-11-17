@@ -158,9 +158,10 @@ public sealed partial class UnitManager
             foreach (Unit u in Units.ToList())
                 if (Units.Contains(u) && !u.OnBoard && !u.Hidden)
                     Visit(t, u.Id, u.Position);
-            // civils menés par le script (Port : le conducteur arrive à sa locomotive, le train part)
+            // civils menés par le script (Port : le conducteur arrive à sa locomotive, le train part), ou guidés par un
+            // pompier (Fireworks : le conducteur ramené à la cabine de son train, EnterTrainCabin, « Secourez le conducteur »)
             foreach (Civilian c in Civilians.ToList())
-                if (c.ScriptWalk && !c.Hidden && c.Leader == null && c.Carrier == null && c.State is CivilianState.Conscious or CivilianState.Unconscious)
+                if ((c.ScriptWalk || c.Leader != null) && !c.Hidden && c.Carrier == null && c.State is CivilianState.Conscious or CivilianState.Unconscious)
                     Visit(t, (int)c.Id, c.Position);
         }
 

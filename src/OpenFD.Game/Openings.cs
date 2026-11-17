@@ -335,6 +335,11 @@ public sealed partial class UnitManager
                 continue;
             if (!axes.Any(a => Vector3.Distance(a, o.Position) < 500))
                 continue;
+            // objet accroché bien au-dessus du sol (Fireworks : la lampe petro_light_224, à 3 m au-dessus de la porte de
+            // la cabine du conducteur, sous le repère de hache de la porte) : il ne barre pas le passage
+            if (_s.Grid is { } gg && gg.CellOf(o.Position) is var (ocx, ocy) && gg.Inside(ocx, ocy)
+                && o.Position.Z - gg.GroundHeight[gg.Index(ocx, ocy)] > PathFind.MaxStep)
+                continue;
             ClassFile? c = Class("Design\\" + o.ClassPath["design\\".Length..] + ".class");
             if (c == null || !c.GetBool("DAMAGE", "UseDamage"))
                 continue;
