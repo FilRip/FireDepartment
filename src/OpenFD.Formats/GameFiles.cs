@@ -24,6 +24,7 @@ public sealed class GameFiles
         _paks.Clear();
         _cache = null;
         _banks.Clear();
+        _loose.Clear();
         string dataDir = DataDir;
         void Add(string rel, string prefix)
         {
@@ -145,6 +146,26 @@ public sealed class GameFiles
 
     public byte[] Read(string rel) => TryRead(rel) ?? throw new FileNotFoundException(rel);
 
+    // fichiers à part de chaque dossier (chemins relatifs à Data), lus une seule fois : les missions de Fire Department 1
+    // converties en ajoutent des dizaines de milliers (Gfx\Textures\FD1_…, Gfx\Placeable\FD1_…), et les listes larges
+    // (« Gfx\Textures\ », « Gfx\Mission\ ») revenaient plusieurs fois au début du chargement d'une mission. Vidé par Rescan.
+    private readonly Dictionary<string, string[]> _loose = new(StringComparer.OrdinalIgnoreCase);
+
+    private string[] LooseFiles(string dir)
+    {
+        lock (_loose)
+        {
+            if (_loose.TryGetValue(dir, out string[]? known))
+                return known;
+            string[] files = Directory.Exists(dir)
+                ? Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
+                    .Select(f => System.IO.Path.GetRelativePath(DataDir, f).Replace(System.IO.Path.DirectorySeparatorChar, '\\')).ToArray()
+                : Array.Empty<string>();
+            _loose[dir] = files;
+            return files;
+        }
+    }
+
     public IEnumerable<string> List(string prefixRel)
     {
         prefixRel = Pak.Normalize(prefixRel);
@@ -153,13 +174,10 @@ public sealed class GameFiles
         int cut = prefixRel.LastIndexOf('\\');
         string dirRel = cut >= 0 ? prefixRel[..cut] : "";
         string dir = System.IO.Path.Combine(DataDir, dirRel.Replace('\\', System.IO.Path.DirectorySeparatorChar));
-        if (dirRel.Length > 0 && Directory.Exists(dir))
-            foreach (string f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
-            {
-                string rel = System.IO.Path.GetRelativePath(DataDir, f).Replace(System.IO.Path.DirectorySeparatorChar, '\\');
+        if (dirRel.Length > 0)
+            foreach (string rel in LooseFiles(dir))
                 if (rel.StartsWith(prefixRel, StringComparison.OrdinalIgnoreCase) && seen.Add(rel))
                     yield return rel;
-            }
         foreach ((string? prefix, Pak? pak) in _paks)
             foreach (Pak.Entry e in pak.Entries)
             {
