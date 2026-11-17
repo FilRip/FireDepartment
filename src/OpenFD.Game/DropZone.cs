@@ -13,4 +13,6 @@ public sealed class DropZone
     public string Name = "";
     public Vector3 Position;
     public bool StartVisible;
+    /// <summary>La salle elle-même : le déclencheur qui couvre la croix (Eurotunnel : base_trigger16), ou null (un rayon).</summary>
+    public TriggerZone? Area;
 }

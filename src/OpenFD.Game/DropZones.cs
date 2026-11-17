@@ -14,9 +14,10 @@ public sealed partial class UnitManager
     /// <summary>Salles de secours du niveau.</summary>
     public List<DropZone> DropZones { get; } = new();
 
-    /// <summary>Le porteur pose la victime à cette distance de la croix (au plus × 1,5).</summary>
-    public const float DropZoneReach = 400f;
+    /// <summary>Le porteur va à cette distance de la croix (× 0,8) ; sans déclencheur autour de la croix, la salle est ce rayon × 1,5.</summary>
+    public const float DropZoneReach = 250f;
 
+    // après les déclencheurs : la salle est celui (le plus petit) qui couvre la croix
     private void LoadDropZones(Level level)
     {
         foreach (LevelObject o in level.Objects.Where(o => o.Kind == EntityKind.Placeable && o.HasTransform && o.ClassPath.EndsWith("\\cross_symbol", StringComparison.OrdinalIgnoreCase)))
@@ -24,7 +25,8 @@ public sealed partial class UnitManager
             // croix au-dessus d'un poste de soins (Ch_Plant, Duseldorf) : c'est le poste de soins qui compte
             if (HealPoints.Any(p => Vector2.Distance(new(p.Position.X, p.Position.Y), new(o.Position.X, o.Position.Y)) < 400))
                 continue;
-            DropZones.Add(new DropZone { Id = o.Id, Name = o.Name, Position = o.Position, StartVisible = o.StartVisible });
+            TriggerZone? area = Triggers.Where(t => InsideTrigger(t, o.Position)).OrderBy(t => t.Half.X * t.Half.Y).FirstOrDefault();
+            DropZones.Add(new DropZone { Id = o.Id, Name = o.Name, Position = o.Position, StartVisible = o.StartVisible, Area = area });
             Log.Add($"Salle de secours : {o.Name} ({o.Position.X:0},{o.Position.Y:0}){(o.StartVisible ? "" : ", cachée au départ")}");
         }
     }
@@ -44,8 +46,12 @@ public sealed partial class UnitManager
                 t.Inside.Remove(u.Id);
     }
 
-    /// <summary>Salle de secours active la plus proche de ce point, à sa portée (× 1,5), ou null.</summary>
+    /// <summary>
+    /// Salle de secours active où se trouve ce point (dans son déclencheur : pas de l'autre côté du mur, devant la porte),
+    /// ou null.
+    /// </summary>
     private DropZone? DropZoneAt(Vector3 p) =>
-        DropZones.Where(z => DropZoneActive(z) && Vector3.Distance(z.Position, p) < DropZoneReach * 1.5f && MathF.Abs(z.Position.Z - p.Z) < 300)
+        DropZones.Where(z => DropZoneActive(z) && (z.Area is { } a ? InsideTrigger(a, p)
+                : Vector3.Distance(z.Position, p) < DropZoneReach * 1.5f && MathF.Abs(z.Position.Z - p.Z) < 300))
             .OrderBy(z => Vector3.Distance(z.Position, p)).FirstOrDefault();
 }

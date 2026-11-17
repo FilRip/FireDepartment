@@ -62,13 +62,13 @@ public sealed partial class UnitManager
         LoadTeleports(s.Level);
         LoadOccupations(s.Level);
         LoadLevelVehicles(s.Level);
-        LoadDropZones(s.Level);
         FindWater();
         LockBuriedRubble();   // voir Dog.cs
         AssignLevers(s.Level);
         Paths.BlockThinWalls(Openings, KeepPoints());
         LoadSupplies(s.Level);
         LoadTriggers(s.Level);
+        LoadDropZones(s.Level);
         LoadUsables(s.Level);
         LoadGrapples(s.Level);   // voir Grapple.cs
         _saveCivilianScript = mission.Get("COMMAND_CALLBACKS", "CmdSaveCivilian")?.Trim('"', ' ');

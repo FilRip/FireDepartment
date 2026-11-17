@@ -251,7 +251,8 @@ public sealed partial class UnitManager
                 if (u.Moving)
                     break;
                 (Vector3 pos, float reach, Unit? vehicle, bool drop)? amb = Shelters().OrderBy(s => Vector3.Distance(s.pos, u.Position)).Select(s => ((Vector3 pos, float reach, Unit? vehicle, bool drop)?)s).FirstOrDefault();
-                if (amb is { } sh && Vector3.Distance(sh.pos, u.Position) < sh.reach * 1.5f)
+                // (salle de secours : seulement une fois dans la salle, pas devant sa porte)
+                if (amb is { } sh && (sh.drop ? DropZoneAt(u.Position) != null : Vector3.Distance(sh.pos, u.Position) < sh.reach * 1.5f))
                 {
                     u.Carry = CarryPhase.Dropping;
                     u.CarryTimer = 0;
@@ -260,6 +261,15 @@ public sealed partial class UnitManager
                     if (sh.drop)
                         u.DropHere = true;
                     u.Status = sh.drop ? $"pose {name} dans la salle de secours" : $"dépose {name} à l'ambulance";
+                }
+                else if (DropZones.Any(z => z.Area is { } room && InsideTrigger(room, u.Position)))
+                {
+                    // arrivé dans une salle de secours que le script vient de fermer (objectif rempli avec cette victime) :
+                    // il la pose là quand même
+                    u.Carry = CarryPhase.Dropping;
+                    u.CarryTimer = 0;
+                    u.DropHere = true;
+                    u.Status = $"pose {name} dans la salle de secours";
                 }
                 else if (!u.Status.Contains("pas de chemin"))
                     u.Status = $"porte {name}";
@@ -346,18 +356,20 @@ public sealed partial class UnitManager
             return;
         // arrivé à une ambulance (ou un poste de soins) avec son guide : il est mis à l'abri ; dans une salle de secours, il
         // y reste (son guide repart sans lui) et le script le compte
+        // salle de secours : le civil y reste quand il est dans la salle et que son guide s'y est arrêté (un guide qui
+        // repart l'emmène de nouveau, pour le sortir de là si le joueur le veut)
+        if (!l.Moving && DropZoneAt(c.Position) is { } room && DropZoneAt(l.Position) == room)
+        {
+            c.Leader = null;
+            c.FollowPath.Clear();
+            c.Path.Clear();
+            RefireDropZoneTriggers(l, room);
+            Log.Add($"{_s.Time,6:0} s : {c.Name} attend dans la salle de secours");
+            return;
+        }
         foreach ((Vector3 pos, float reach, _, bool drop) in Shelters())
-            if (Vector3.Distance(l.Position, pos) < reach * 1.5f && Vector3.Distance(c.Position, pos) < reach * 1.5f)
+            if (!drop && Vector3.Distance(l.Position, pos) < reach * 1.5f && Vector3.Distance(c.Position, pos) < reach * 1.5f)
             {
-                if (drop)
-                {
-                    c.Leader = null;
-                    c.FollowPath.Clear();
-                    if (DropZoneAt(c.Position) is { } room)
-                        RefireDropZoneTriggers(l, room);
-                    Log.Add($"{_s.Time,6:0} s : {c.Name} attend dans la salle de secours");
-                    return;
-                }
                 Save(c);
                 Log.Add($"{_s.Time,6:0} s : {c.Name} mis à l'abri dans l'ambulance ({Rescued} sauvé(s))");
                 Sounds.Add(("VOCAL_CIVILIAN_SAVED", null));
