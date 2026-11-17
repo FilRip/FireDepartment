@@ -359,8 +359,9 @@ public sealed partial class OpenFDGame
                     _ui.Rect(bx, by, bw, bh, new SN.Vector4(0, 0, 0, 0.8f));
                 _ui.Rect(bx, by, bw * inc, bh, new SN.Vector4(0.35f, 0.95f, 0.35f, 1));
             }
-            // souris sur le cadre d'un renfort à choisir (ou en route) : aperçu de ses unités à droite
-            if ((choosable || (incoming != null && !here)) && (MouseOver(x, y, pr.tabW, pr.iconH) || Environment.GetEnvironmentVariable("FD3_APERCU") == team))
+            // souris sur le cadre d'une caserne pas encore là (à choisir, en route ou pas encore accordée) : aperçu de ses
+            // unités à droite
+            if ((choosable || !here) && (MouseOver(x, y, pr.tabW, pr.iconH) || Environment.GetEnvironmentVariable("FD3_APERCU") == team))
                 DrawTeamPreview(team, x + pr.tabW + gap, y, pr);
             x += pr.tabW + gap;
             if (units.Count > 0)
@@ -465,7 +466,7 @@ public sealed partial class OpenFDGame
         return mx >= x && mx < x + w && my >= y && my < y + h;
     }
 
-    /// <summary>Aperçu des unités d'une caserne (renfort à choisir) : leurs images, un peu transparentes, sur la ligne.</summary>
+    /// <summary>Aperçu des unités d'une caserne pas encore là : leurs images, un peu transparentes, sur la ligne.</summary>
     private void DrawTeamPreview(string team, float x, float y, (float x, float y, float cell, float iconH, float rowH, float tabW) pr)
     {
         List<(string cls, string? icon, bool vehicle, bool ambulance)> comp = _session.Units.TeamComposition(team);
