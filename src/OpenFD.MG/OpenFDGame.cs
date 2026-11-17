@@ -1017,7 +1017,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         return (zmin, zmax);
     }   // partie haute jetée (sol d'un niveau souterrain : le dessus des parois)
 
-    private void AddRoofCut(SceneAssets.MeshAsset a, SN.Matrix4x4 world, float? fixedCut = null, bool noCut = false, bool allRoof = false)
+    // lowCut : sous la coupure, ce qui dépasse lowCut est la tranche de surface du bâtiment (RoofShown(-(bâtiment + 2)))
+    private void AddRoofCut(SceneAssets.MeshAsset a, SN.Matrix4x4 world, float? fixedCut = null, bool noCut = false, bool allRoof = false, float? lowCut = null)
     {
         Mesh m = a.Mesh;
         int mode = ShaderMode(m);
@@ -1061,11 +1062,40 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                     List<CutV> poly = Clip(tri, cut, below);
                     if (!below && _dropRoof)
                         continue;
+                    if (below && lowCut is float low && low < cut && _curBuilding >= 0 && poly.Count >= 3)
+                    {
+                        EmitBand(poly, low, tex, dirt, lm, gr.Alpha, mode);
+                        continue;
+                    }
                     for (int i = 1; i + 1 < poly.Count; i++)
                         EmitTri(poly[0], poly[i], poly[i + 1], tex, dirt, lm, gr.Alpha, !below, mode, true);
                 }
             }
         }
+    }
+
+    /// <summary>Partie sous la coupure : sous <paramref name="low"/> fixe, au-dessus la tranche de surface (toit à part).</summary>
+    private void EmitBand(List<CutV> poly, float low, Texture2D? tex, Texture2D? dirt, Texture2D? lm, bool alpha, int mode)
+    {
+        int building = _curBuilding;
+        foreach (bool under in new[] { true, false })
+        {
+            List<CutV> part = new List<CutV>();
+            for (int i = 1; i + 1 < poly.Count; i++)
+            {
+                List<CutV> piece = Clip(new List<CutV> { poly[0], poly[i], poly[i + 1] }, low, under);
+                for (int j = 1; j + 1 < piece.Count; j++)
+                {
+                    part.Add(piece[0]);
+                    part.Add(piece[j]);
+                    part.Add(piece[j + 1]);
+                }
+            }
+            _curBuilding = under ? building : -(building + 2);
+            for (int k = 0; k + 2 < part.Count; k += 3)
+                EmitTri(part[k], part[k + 1], part[k + 2], tex, dirt, lm, alpha, !under, mode, true);
+        }
+        _curBuilding = building;
     }
 
     // caster : projette une ombre (bâtiments, pièces ; pas le sol)
@@ -1308,10 +1338,11 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                     AddWater(asset, n.World);
                     continue;
                 }
-                if (!ground && n.Mesh.EndsWith("_ROOF", StringComparison.OrdinalIgnoreCase) && _curBuilding >= 0)
+                if (!ground && NamedRoof(n.Mesh) != null && _curBuilding >= 0)
                 {
                     // toit nommé (« M_Parn_12_ROOF » de Maidan : la place au-dessus d'une salle souterraine ; « CompClub_ROOF »…) :
-                    // tout entier un toit, que le script retire (LEV_RoofVisibility) ou qui part quand un pompier passe dessous
+                    // tout entier un toit, que le script retire (LEV_RoofVisibility) ou qui part quand un pompier passe dessous ;
+                    // de même une pièce de ce toit (« M_Parn_01_R_Kupol », la coupole au-dessus de la salle ronde)
                     AddRoofCut(asset, n.World, allRoof: true);
                 }
                 else if (n.Mesh.Contains("_ROOM", StringComparison.OrdinalIgnoreCase))
@@ -1333,6 +1364,12 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                     // vu de dessus, le jeu ne montre pas cette roche : on coupe à 3 m et on jette le haut
                     _dropRoof = true;
                     try { AddRoofCut(asset, n.World, zr.min + 0.75f * (zr.max - zr.min)); } finally { _dropRoof = false; }
+                }
+                else if (!ground && _curBuilding >= 0 && _buildings[_curBuilding].Underground && ZRange(asset, n.World) is (float lo, float hi) && lo >= -20)
+                {
+                    // surface au-dessus d'une salle souterraine (place de la statue de Maidan au-dessus de « Room6 ») : coupée
+                    // comme d'habitude, et ce qui dépasse du sol sous la coupure part quand un pompier est dans la salle
+                    AddRoofCut(asset, n.World, lowCut: 20);
                 }
                 else
                     AddStatic(asset, n.World, !ground, 0);

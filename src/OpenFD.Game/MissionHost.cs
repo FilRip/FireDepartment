@@ -282,6 +282,14 @@ public sealed class MissionHost : IScriptHost
     private Objective? Obj(long id) => Objectives.FirstOrDefault(o => o.Id == id);
     private string NameOf(long id) => _byId.TryGetValue((uint)id, out LevelObject? o) ? o.Name : id.ToString();
 
+    /// <summary>L'entité fait partie du groupe (groupe du niveau, ou créé par ENT_GroupCreate) ; faux si ce n'est pas un groupe.</summary>
+    private bool InGroup(long group, long entity)
+    {
+        if (_groups.TryGetValue(group, out List<long>? created))
+            return created.Contains(entity);
+        return _byId.TryGetValue((uint)group, out LevelObject? g) && g.Kind == EntityKind.Group && g.Members.Contains((uint)entity);
+    }
+
     public Value? Call(string name, IReadOnlyList<Arg> a)
     {
         Value V(int i) => i < a.Count ? a[i].Value : Value.Zero;
@@ -305,9 +313,9 @@ public sealed class MissionHost : IScriptHost
                     return Value.I(V(1).AsInt >= 0 && V(1).AsInt < cg2.Count ? cg2[(int)V(1).AsInt] : 0);
                 return Value.I(_byId.TryGetValue((uint)V(0).AsInt, out LevelObject? g2) && V(1).AsInt >= 0 && V(1).AsInt < g2.Members.Length ? g2.Members[V(1).AsInt] : 0);
             case "ENT_ISENTITYINGROUP":
-                if (_groups.TryGetValue(V(1).AsInt, out List<long>? cg3))
-                    return Value.I(cg3.Contains(V(0).AsInt) ? 1 : 0);
-                return Value.I(_byId.TryGetValue((uint)V(1).AsInt, out LevelObject? g3) && g3.Members.Contains((uint)V(0).AsInt) ? 1 : 0);
+                // les scripts du jeu écrivent presque tous (groupe, entité) (Maidan : ENT_IsEntityInGroup(pub_civil, Civilian)),
+                // un seul (entité, groupe) : le groupe est celui des deux qui en est un
+                return Value.I(InGroup(V(0).AsInt, V(1).AsInt) || InGroup(V(1).AsInt, V(0).AsInt) ? 1 : 0);
             case "ENT_GETPOSITION":
                 if (a.Count >= 3 && PositionOf(V(0).AsInt) is { } p)
                 {

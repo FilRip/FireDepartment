@@ -16,13 +16,23 @@ public sealed partial class OpenFDGame
         public float MinZ = float.MaxValue;
         public readonly List<string> Nodes = new();
         public bool Open;
-        public bool HasRooms; }
+        public bool HasRooms;
+        /// <summary>
+        /// Salle souterraine avec, au-dessus, ce qui est en surface (Maidan : « Room6 » sous la place de la statue) : en plus
+        /// du toit habituel, la tranche entre le sol et la hauteur d'étage (le dallage de la place) part quand un pompier est
+        /// dessous, sous terre (SurfaceOpen) ; pas quand il marche dessus.
+        /// </summary>
+        public bool Underground;
+        public bool SurfaceOpen; }
     private readonly List<Building> _buildings = new();
     private readonly Dictionary<string, int> _nodeBuilding = new(StringComparer.OrdinalIgnoreCase);
     private int _curBuilding = -1;
     private float _roofCheck;
 
-    private bool RoofShown(int bld) => _roofs && !(bld >= 0 && bld < _buildings.Count && _buildings[bld].Open);
+    // bld : bâtiment du toit ; -(bld + 2) : tranche de surface au-dessus d'une salle souterraine (voir Building.Underground)
+    private bool RoofShown(int bld) => _roofs && (bld <= -2
+        ? !(-bld - 2 < _buildings.Count && _buildings[-bld - 2].SurfaceOpen)
+        : !(bld >= 0 && bld < _buildings.Count && _buildings[bld].Open));
 
     /// <summary>Bâtiment dont le toit s'efface pièce par pièce (carte des pièces) plutôt que d'un coup.</summary>
     private bool RoofByRoom(int bld) => false;   // (ancien essai : toit effacé pièce par pièce ; remplacé par les couvercles noirs)
@@ -88,7 +98,7 @@ public sealed partial class OpenFDGame
             bool border = comp.Any(c => c % w == 0 || c / w == 0 || c % w == w - 1 || c / w == h - 1);
             SN.Vector2 centre = new SN.Vector2((float)comp.Average(c => c % w + 0.5) * Cell, (float)comp.Average(c => c / w + 0.5) * Cell);
             Building? b = border || comp.Count > n / 20 ? null
-                : _buildings.Where(b => b.Nodes.Count > 1 && Inside(centre, b.Min, b.Max, 0)).OrderBy(b => (b.Max.X - b.Min.X) * (b.Max.Y - b.Min.Y)).FirstOrDefault();
+                : _buildings.Where(b => !RoofOnly(b) && Inside(centre, b.Min, b.Max, 0)).OrderBy(b => (b.Max.X - b.Min.X) * (b.Max.Y - b.Min.Y)).FirstOrDefault();
             if (b == null)
             {
                 foreach (int c in comp)
@@ -232,8 +242,8 @@ public sealed partial class OpenFDGame
             // qui couvre tout), et le bâtiment de plusieurs maillages qui la contient (pas un groupe géant)
             float Area(Building b) => (b.Max.X - b.Min.X) * (b.Max.Y - b.Min.Y);
             List<Building> around = _buildings.Where(b => Inside(c, b.Min, b.Max, 150)).ToList();
-            Building? roof = around.Where(b => b.Nodes.Count == 1).OrderBy(Area).FirstOrDefault(b => b.Nodes[0].Contains("ROOF", StringComparison.OrdinalIgnoreCase) || b.MinZ > o.Center.Z + 150);
-            Building? group = around.Where(b => b.Nodes.Count > 1 && Area(b) <= 0.25f * _gridW * _gridH).OrderBy(Area).FirstOrDefault();
+            Building? roof = around.Where(RoofOnly).OrderBy(Area).FirstOrDefault(b => b.Nodes.Any(n => n.Contains("ROOF", StringComparison.OrdinalIgnoreCase)) || b.MinZ > o.Center.Z + 150);
+            Building? group = around.Where(b => !RoofOnly(b) && Area(b) <= 0.25f * _gridW * _gridH).OrderBy(Area).FirstOrDefault();
             foreach (Building? b in new[] { roof, group })
             {
                 if (b == null || b.Open)
@@ -404,12 +414,35 @@ public sealed partial class OpenFDGame
         }
     }
 
+    /// <summary>
+    /// Toit nommé de la pièce : « …_ROOF » lui-même, ou une pièce « &lt;salle&gt;_R_&lt;nom&gt; » quand « &lt;salle&gt;_ROOF » existe
+    /// (Maidan : la coupole « M_Parn_01_R_Kupol » au-dessus de la salle ronde, avec « M_Parn_01_ROOF »). Null sinon.
+    /// </summary>
+    private string? NamedRoof(string mesh)
+    {
+        if (mesh.EndsWith("_ROOF", StringComparison.OrdinalIgnoreCase))
+            return mesh;
+        System.Text.RegularExpressions.Match m = System.Text.RegularExpressions.Regex.Match(mesh, @"^(.+)_R_[^_]+$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (!m.Success)
+            return null;
+        string roof = m.Groups[1].Value + "_ROOF";
+        return _roofNames.Contains(roof) ? roof : null;
+    }
+
+    /// <summary>Noms des toits « …_ROOF » du décor de la mission (pour NamedRoof).</summary>
+    private readonly HashSet<string> _roofNames = new(StringComparer.OrdinalIgnoreCase);
+
     private void FindBuildings(string mission, IReadOnlyList<SceneAssets.Node> scenery)
     {
+        _roofNames.Clear();
+        foreach (SceneAssets.Node n in scenery)
+            if (n.Mesh.EndsWith("_ROOF", StringComparison.OrdinalIgnoreCase))
+                _roofNames.Add(n.Mesh);
         _buildings.Clear();
         _nodeBuilding.Clear();
         List<(string name, SN.Vector2 min, SN.Vector2 max)> boxes = new List<(string name, SN.Vector2 min, SN.Vector2 max)>();
         Dictionary<string, float> zmin = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, float> zmax = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         foreach (SceneAssets.Node n in scenery)
         {
             if (System.Text.RegularExpressions.Regex.IsMatch(n.Mesh, @"^(FGD_|GROUND|Tile_ground)", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
@@ -424,6 +457,7 @@ public sealed partial class OpenFDGame
                     mn = SN.Vector2.Min(mn, new(v.X, v.Y));
                     mx = SN.Vector2.Max(mx, new(v.X, v.Y));
                     zmin[n.Mesh] = MathF.Min(zmin.TryGetValue(n.Mesh, out float z0) ? z0 : float.MaxValue, v.Z);
+                    zmax[n.Mesh] = MathF.Max(zmax.TryGetValue(n.Mesh, out float z1) ? z1 : float.MinValue, v.Z);
                 }
                 if (mn.X < mx.X)
                     boxes.Add((n.Mesh, mn, mx));
@@ -447,7 +481,7 @@ public sealed partial class OpenFDGame
                 (string name, SN.Vector2 min, SN.Vector2 max) b = boxes[j];
                 // un toit nommé « …_ROOF » reste seul : il ne part que quand un pompier est dessous (pas dès qu'il est dans
                 // l'emprise de tout un groupe : la place de Maidan couvre presque toute la carte)
-                if (a.name.EndsWith("_ROOF", StringComparison.OrdinalIgnoreCase) || b.name.EndsWith("_ROOF", StringComparison.OrdinalIgnoreCase))
+                if (NamedRoof(a.name) != null || NamedRoof(b.name) != null)
                     continue;
                 // maillage géant (couloirs et escalators de Maidan sur toute la carte) : il n'avale pas les autres
                 if (MathF.Max(Area(a.min, a.max), Area(b.min, b.max)) > 0.25f * mapArea)
@@ -457,6 +491,16 @@ public sealed partial class OpenFDGame
                 if (small > 0 && inter >= 0.6f * small)
                     parent[Find(i)] = Find(j);
             }
+        // pièce d'un toit nommé (coupole de Maidan) : avec son toit, elle part en même temps que lui
+        for (int i = 0; i < boxes.Count; i++)
+        {
+            string? roof = NamedRoof(boxes[i].name);
+            if (roof == null || roof.Equals(boxes[i].name, StringComparison.OrdinalIgnoreCase))
+                continue;
+            int r = boxes.FindIndex(x => x.name.Equals(roof, StringComparison.OrdinalIgnoreCase));
+            if (r >= 0)
+                parent[Find(i)] = Find(r);
+        }
         Dictionary<int, int> ids = new Dictionary<int, int>();
         for (int i = 0; i < boxes.Count; i++)
         {
@@ -474,8 +518,15 @@ public sealed partial class OpenFDGame
                 b.MinZ = MathF.Min(b.MinZ, bz);
             _nodeBuilding[boxes[i].name] = id;
         }
+        // salle souterraine et sa surface (pas un groupe géant : les couloirs de Maidan sous toute la carte)
+        foreach (Building b in _buildings.Where(b => !RoofOnly(b) && (b.Max.X - b.Min.X) * (b.Max.Y - b.Min.Y) <= 0.25f * mapArea))
+        {
+            bool below = b.Nodes.Any(n => zmax.TryGetValue(n, out float hi) && hi <= 20 && zmin.TryGetValue(n, out float lo) && lo < -150);
+            bool above = b.Nodes.Any(n => zmin.TryGetValue(n, out float lo) && lo >= -20 && zmax.TryGetValue(n, out float hi) && hi > 50);
+            b.Underground = below && above;
+        }
         foreach (Building b in _buildings.Where(b => b.Nodes.Count > 1))
-            Console.WriteLine($"Bâtiment : {string.Join(", ", b.Nodes.Take(6))}{(b.Nodes.Count > 6 ? "…" : "")} ({b.Min.X:0},{b.Min.Y:0})-({b.Max.X:0},{b.Max.Y:0})");
+            Console.WriteLine($"Bâtiment : {string.Join(", ", b.Nodes.Take(6))}{(b.Nodes.Count > 6 ? "…" : "")} ({b.Min.X:0},{b.Min.Y:0})-({b.Max.X:0},{b.Max.Y:0}){(b.Underground ? " · souterrain : la surface part quand un pompier est dessous" : "")}");
     }
 
     /// <summary>Emprise d'un objet posé en hauteur (2,2 m au moins au-dessus du sol, 4 m² au moins vu de dessus), sinon null.</summary>
@@ -499,6 +550,9 @@ public sealed partial class OpenFDGame
             return null;
         return (mn, mx, zmin);
     }
+
+    /// <summary>Toit seul : une seule pièce, ou seulement un toit nommé et ses pièces (NamedRoof).</summary>
+    private bool RoofOnly(Building b) => b.Nodes.Count == 1 || b.Nodes.All(n => NamedRoof(n) != null);
 
     private static bool Inside(SN.Vector2 p, SN.Vector2 min, SN.Vector2 max, float margin) =>
         p.X >= min.X - margin && p.Y >= min.Y - margin && p.X <= max.X + margin && p.Y <= max.Y + margin;
@@ -538,18 +592,27 @@ public sealed partial class OpenFDGame
         // toit seul (place au-dessus d'un souterrain à Maidan, verrière…) : il part quand un pompier passe dessous
         List<SN.Vector3> men3 = _session.Units.Active.Where(u => !u.IsVehicle).Select(u => u.Position).ToList();
         // (de même pour tout maillage seul suspendu au-dessus d'un pompier : verrière, auvent, dalle…)
-        foreach (Building b in _buildings.Where(b => !b.Open && b.Nodes.Count == 1))
+        // (un toit nommé avec ses pièces, comme la coupole de Maidan, compte comme un toit seul)
+        foreach (Building b in _buildings.Where(b => !b.Open && RoofOnly(b)))
             if (men3.Any(p => Inside(new(p.X, p.Y), b.Min, b.Max, 0) && p.Z < b.MinZ - 120))
             {
                 b.Open = true;
                 Log($"Toit retiré : {b.Nodes[0]}");
+            }
+        // salle souterraine : un pompier dessous, sous terre (pas celui qui marche sur la place), retire aussi la surface
+        foreach (Building b in _buildings.Where(b => b.Underground && !b.SurfaceOpen))
+            if (men3.Any(p => Inside(new(p.X, p.Y), b.Min, b.Max, 0) && p.Z < -120))
+            {
+                b.SurfaceOpen = true;
+                b.Open = true;
+                Log($"Surface retirée au-dessus d'une salle souterraine : {b.Nodes.First()}");
             }
         List<SN.Vector2> doors = _session.Units.Openings.Where(o => o.OnGround && o.State != OpeningState.Closed)
             .Select(o => new SN.Vector2(o.Center.X, o.Center.Y)).ToList();
         for (int i = 0; i < _buildings.Count; i++)
         {
             Building b = _buildings[i];
-            if (b.Open || b.Nodes.Count < 2)
+            if (b.Open || RoofOnly(b))
                 continue;
             // groupe qui couvre une grande partie de la carte (souterrains de Maidan) : être dans son emprise ne veut rien dire
             if ((b.Max.X - b.Min.X) * (b.Max.Y - b.Min.Y) > 0.25f * _gridW * _gridH)
