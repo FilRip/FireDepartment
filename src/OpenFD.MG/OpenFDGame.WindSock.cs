@@ -17,6 +17,28 @@ public sealed partial class OpenFDGame
     private bool _windSockHidden;   // touche V
     private float _windDroop = 1.2f;
 
+    /// <summary>
+    /// Le vent compte dans la mission : elle a un repère de vent (« winddirection ») et son script règle sa force
+    /// (ENT_SetWindPower, hors commentaire : Forest, Fire Department 2). Sinon la force reste 1, sans effet sur le feu
+    /// (Mriya a un repère, mais pas de force) : la manche à air est alors cachée au départ.
+    /// </summary>
+    private bool WindMatters(string mission)
+    {
+        if (Host?.HasWind != true)
+            return false;
+        string dir = Path.Combine(_files.DataDir, "Script", "Mission", mission);
+        if (!Directory.Exists(dir))
+            return false;
+        foreach (string f in Directory.EnumerateFiles(dir, "*.scp"))
+            foreach (string line in File.ReadLines(f, System.Text.Encoding.Latin1))
+            {
+                string code = line.Contains("//") ? line[..line.IndexOf("//", StringComparison.Ordinal)] : line;
+                if (code.Contains("ENT_SetWindPower", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+        return false;
+    }
+
     private void RenderWindSock(float panelLeft, float top)
     {
         if (_windSockHidden)

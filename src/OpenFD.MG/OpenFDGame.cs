@@ -1246,6 +1246,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _journal = new();
         _session = new Session(_files, mission, difficulty, !EditorMode);   // éditeur : sans les scripts
         LoadSun();
+        // manche à air (touche V) : cachée au départ quand le vent ne compte pas dans la mission
+        _windSockHidden = !WindMatters(mission);
         // les missions commencent tout de suite (cinématique d'introduction des scripts) ; sans script : en pause
         _paused = false;
         _speed = 1;
@@ -2351,6 +2353,38 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _pv.Add(new(d, col, new Vector2(0, 0)));
     }
 
+    /// <summary>Durée (secondes) de la pluie du bombardier d'eau sur la zone arrosée, à partir du largage.</summary>
+    private const float AirRainSeconds = 2f;
+
+    // largage du bombardier d'eau : pendant AirRainSeconds, une averse (comme les sprinklers, en plus dense) tombe de 8 m
+    // sur tout le disque arrosé ([AIRSTRIKE] RADIUS), puis s'arrête
+    private void AirDropRain(float time, SN.Vector3 right, SN.Vector3 up)
+    {
+        UnitManager um = _session.Units;
+        if (um.Strike is not { Dropped: true } st)
+            return;
+        float since = _session.Time - st.Pass;
+        if (since < 0 || since > AirRainSeconds)
+            return;
+        float fade = since < 0.2f ? since / 0.2f : MathF.Min(1, (AirRainSeconds - since) / 0.5f);
+        float radius = MathF.Min(um.AirRadius, 2500f);
+        int count = Math.Clamp((int)(radius * radius / 9000f), 150, 700);
+        for (int q = 0; q < count; q++)
+        {
+            float ph = Frac(q * 0.618034f), a = q * 2.39996f, r = radius * MathF.Sqrt(Frac(q * 0.7548777f));
+            float t = Frac(time * 1.6f + ph);
+            SN.Vector2 xy = st.Drop + new SN.Vector2(MathF.Cos(a) * r, MathF.Sin(a) * r);
+            float ground = um.GroundZ(xy);
+            SN.Vector3 dp = new SN.Vector3(xy, ground + 800 - 790 * t);
+            // une goutte qui tombe vite : un trait vertical (petits points serrés, plus pâles vers le haut)
+            for (int k = 0; k < 5; k++)
+                P(dp + new SN.Vector3(0, 0, k * 22), 20, new SN.Vector4(0.80f, 0.92f, 1f, 0.55f * fade * (1 - k * 0.17f)), right, up);
+            // éclaboussure au sol, en fin de chute
+            if (t > 0.85f && (q & 3) == 0)
+                P(new SN.Vector3(xy, ground + 20), 110, new SN.Vector4(0.88f, 0.95f, 1f, 0.5f * fade), right, up);
+        }
+    }
+
     private void RenderParticles(float time)
     {
         _pv.Clear();
@@ -2411,6 +2445,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 P(dp, 35 + 45 * t, new SN.Vector4(0.82f, 0.93f, 1f, 0.7f * (1 - 0.5f * t)), right, up);
             }
         }
+        AirDropRain(time, right, up);
         ExplosionSmoke(right, up);
         if (_smokeOn)
             SmokeColumns(time, right, up);
