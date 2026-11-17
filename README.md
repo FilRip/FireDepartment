@@ -37,6 +37,10 @@ Command line :
 
 OpenFD.ConvFD1 <Path root of Fire Department 1> <Path of "Data" of Fire Department 3/OpenFD> NameOfMissionToConvert
 
+----------------
+Go to wiki https://github.com/FilRip/FireDepartment/wiki
+To know more
+
 -------------------------
 Thank you to support me please :
 
