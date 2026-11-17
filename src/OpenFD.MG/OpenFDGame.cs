@@ -1395,9 +1395,14 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 }
             // objets que le script cache et montre : cachés au départ si le niveau le dit (Mriya : le camion de la
             // cinématique 3, la porte animée du hangar), tant que le script n'a rien dit d'autre
-            if (Host is { } host0)
-                foreach (LevelObject lo0 in _session.Level.Objects.Where(o => hiddenIds.Contains(o.Id) && o.Kind == EntityKind.Placeable && !o.StartVisible))
-                    host0.Visibility.TryAdd(lo0.Id, false);
+            // (retenus aussi à part : l'hôte du script peut ne pas encore exister ici ; Eurotunnel : le repère de hache
+            // axe_symbol6, que le script ne montre qu'à l'objectif 7)
+            _scriptHiddenAtStart.Clear();
+            foreach (LevelObject lo0 in _session.Level.Objects.Where(o => hiddenIds.Contains(o.Id) && o.Kind == EntityKind.Placeable && !o.StartVisible))
+            {
+                _scriptHiddenAtStart.Add(lo0.Id);
+                Host?.Visibility.TryAdd(lo0.Id, false);
+            }
             foreach (SceneAssets.Placed p in allPlaced)
             {
                 // (véhicules explosifs : dessinés par RenderExplosives, qui suit aussi le script — sinon en double)
@@ -1428,7 +1433,12 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             if (near == null)
                 continue;
             if (lo.ClassPath.EndsWith("axe_symbol", StringComparison.OrdinalIgnoreCase))
+            {
                 _axeMarks.Add((lo.Id, p.Model, p.World, near));
+                // repère caché dans la carte (Eurotunnel : axe_symbol6, montré par le script plus tard)
+                if (!lo.StartVisible)
+                    _scriptHiddenAtStart.Add(lo.Id);
+            }
             else if (p.Name.Contains("_break", StringComparison.OrdinalIgnoreCase) || p.Model.Contains("break", StringComparison.OrdinalIgnoreCase))
                 _brokenParts.Add((lo.Id, p.Model, p.World, near));
         }
@@ -1441,13 +1451,30 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         // repère qui tourne sur lui-même et que le script montre ou cache (l'icône de réparation de l'épave de Forest…) :
         // dessiné une seule fois, par les repères animés, qui suivent aussi le script ; pas en plus comme objet fixe
         int twice = _scriptMoved.RemoveAll(x => _animMarks.Any(a => a.id == x.id));
+        // repère de hache d'un obstacle : dessiné par RenderOpenings (qui suit aussi le script), pas en plus ici
+        _scriptMoved.RemoveAll(x => _axeMarks.Any(a => a.id == x.id));
         if (twice > 0)
             Console.WriteLine($"Repères animés que le script montre ou cache : {twice} (dessinés une seule fois, en tournant)");
         HashSet<string> shownNames = _scriptShown.Select(x => byName.Values.First(o => o.Id == x.id).Name)
             .Concat(_animMarks.Select(x => byName.Values.First(o => o.Id == x.id).Name))
             .Concat(_axeMarks.Concat(_brokenParts).Select(x => byName.Values.First(o => o.Id == x.id).Name))
             .Concat(_scriptMoved.Select(x => byName.Values.First(o => o.Id == x.id).Name)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        List<IGrouping<string, SceneAssets.Placed>> placed = allPlaced.Where(p => !explosiveNames.Contains(p.Name) && !shownNames.Contains(p.Name)).GroupBy(p => p.Model, StringComparer.OrdinalIgnoreCase).ToList();
+        // icônes vertes des escaliers (« stair_symbol », Stairs_cliking) cachées dans la carte : elles suivent l'escalier
+        // qu'elles marquent (le bout le plus proche, à moins de 1 m), visibles quand il l'est (Eurotunnel : stair_symbol106,
+        // montrée avec teleport_stair105 quand le ventilateur est cassé ; stair_symbol7, sur teleport_stair6 qui reste caché)
+        _stairMarks.Clear();
+        foreach (SceneAssets.Placed p in allPlaced)
+        {
+            if (!byName.TryGetValue(p.Name, out LevelObject? lo) || lo.StartVisible || !lo.ClassPath.EndsWith("stair_symbol", StringComparison.OrdinalIgnoreCase))
+                continue;
+            SN.Vector2 at = new SN.Vector2(lo.Position.X, lo.Position.Y);
+            Teleport? t = _session.Units.Teleports.Where(t => SN.Vector2.Distance(t.EndA, at) < 100 || SN.Vector2.Distance(t.EndB, at) < 100)
+                .OrderBy(t => MathF.Min(SN.Vector2.Distance(t.EndA, at), SN.Vector2.Distance(t.EndB, at))).FirstOrDefault();
+            if (t != null)
+                _stairMarks.Add((lo.Id, p.Model, p.World, t));
+        }
+        HashSet<string> hiddenStairs = _stairMarks.Select(m => byName.Values.First(o => o.Id == m.id).Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        List<IGrouping<string, SceneAssets.Placed>> placed = allPlaced.Where(p => !explosiveNames.Contains(p.Name) && !shownNames.Contains(p.Name) && !hiddenStairs.Contains(p.Name)).GroupBy(p => p.Model, StringComparer.OrdinalIgnoreCase).ToList();
         k = 0;
         foreach (IGrouping<string, SceneAssets.Placed> grp in placed)
         {
@@ -2139,13 +2166,21 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
 
     // portes : fermées telles quelles, ouvertes pivotées d'un quart de tour, cassées retirées ; fenêtres cassées retirées
     private readonly List<(uint id, string model, SN.Matrix4x4 world, Opening obstacle)> _axeMarks = new(), _brokenParts = new();
+    /// <summary>Icônes d'escalier cachées dans la carte : dessinées quand leur escalier est visible.</summary>
+    private readonly List<(uint id, string model, SN.Matrix4x4 world, Teleport stairs)> _stairMarks = new();
+    /// <summary>Objets cachés au départ dans la carte et que le script montre ou cache : visibles seulement quand il les montre.</summary>
+    private readonly HashSet<uint> _scriptHiddenAtStart = new();
     private readonly List<(uint id, string model, SN.Matrix4x4 world, bool arrow)> _animMarks = new();
 
     private void RenderOpenings()
     {
         bool Vis(uint id, bool def) => Host?.Visibility.TryGetValue(id, out bool v) == true ? v : def;
         foreach ((uint id, string? model, SN.Matrix4x4 world, Opening? ob) in _axeMarks)
-            if (ob.State != OpeningState.Broken && Vis(id, true))
+            if (ob.State != OpeningState.Broken && Vis(id, !_scriptHiddenAtStart.Contains(id)))
+                foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(model))
+                    DrawMesh(mesh, (part * world).X());
+        foreach ((uint id, string? model, SN.Matrix4x4 world, Teleport stairs) in _stairMarks)
+            if (stairs.Active && Vis(stairs.Id, !stairs.StartHidden))
                 foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in UnitModel(model))
                     DrawMesh(mesh, (part * world).X());
         foreach ((uint id, string? model, SN.Matrix4x4 world, bool arrow) in _animMarks)

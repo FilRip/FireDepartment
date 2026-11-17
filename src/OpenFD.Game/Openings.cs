@@ -328,6 +328,7 @@ public sealed partial class UnitManager
         List<Vector3> axes = level.Objects.Where(o => o.Kind == EntityKind.Placeable && o.ClassPath.EndsWith("axe_symbol", StringComparison.OrdinalIgnoreCase)).Select(o => o.Position).ToList();
         if (axes.Count == 0)
             return;
+        HashSet<(uint id, string cap)> enabledLater = ScriptEnabledLater();
         foreach (LevelObject o in level.Objects.Where(o => o.Kind == EntityKind.Placeable && o.HasTransform))
         {
             if (Openings.Any(d => d.Id == o.Id) || o.ClassPath.EndsWith("axe_symbol", StringComparison.OrdinalIgnoreCase))
@@ -338,14 +339,26 @@ public sealed partial class UnitManager
             if (c == null || !c.GetBool("DAMAGE", "UseDamage"))
                 continue;
             float life = c.GetFloat("DAMAGE", "LifePoints", 100);
+            string? onDestroy = null;
             if (o.GetComponent(0xA024) is { } comp && comp.Size > 9)
             {
-                ReadOnlySpan<byte> b = o.ComponentBytes(comp);
-                life = BitConverter.ToSingle(b[5..9]);
+                byte[] b = o.ComponentBytes(comp).ToArray();
+                life = BitConverter.ToSingle(b, 5);
+                // fonction du script appelée quand il est cassé (Eurotunnel : le ventilateur vent1, Show_teleport, qui
+                // ouvre le passage dans le conduit et cache le repère de hache)
+                onDestroy = ScriptNameIn(b);
             }
             if (life <= 0)
                 continue;   // déjà cassé (le morceau « _break » qui le remplace)
             Opening d = AddObstacle(o, c, life, assets);
+            d.OnDestroy = onDestroy;
+            // pas cassable dans sa classe, et le script le rend cassable plus tard (Eurotunnel : les ventilateurs vent1 et
+            // vent3, à l'objectif 7) : pas avant
+            if (!c.GetBool("CAPACITIES_ACTIONS", "CouldBeBreak") && enabledLater.Contains((o.Id, "COULDBEBREAK")))
+            {
+                d.Breakable = false;
+                Log.Add($"  ({o.Name} : cassable seulement quand le script le dira)");
+            }
             Log.Add($"Obstacle à dégager à la hache : {o.Name} ({d.Cells.Count} case(s), {life:0} points de vie)");
         }
     }
@@ -1047,6 +1060,10 @@ public sealed partial class UnitManager
                 if (!string.IsNullOrEmpty(d.SoundLabel))
                     Sounds.Add((d.SoundLabel!, d.Center));
                 RefreshDoorCells();
+                // fonction du script appelée quand l'objet est cassé (composant A024 : Eurotunnel, le ventilateur vent1 et
+                // Show_teleport)
+                if (!string.IsNullOrEmpty(d.OnDestroy))
+                    _s.Scripts?.TryRun(d.OnDestroy!, Script.Value.I(d.Id));
             }
         }
         else

@@ -567,7 +567,7 @@ public sealed partial class OpenFDGame
                     * SN.Matrix4x4.CreateRotationZ(PoseOf(c, c.Position, c.Heading).h + CharYaw) * SN.Matrix4x4.CreateTranslation(PoseOf(c, c.Position, c.Heading).p)).X());
         foreach ((uint id, string? model, SN.Matrix4x4 world, SN.Vector3 origin, float yaw) in _scriptMoved)
         {
-            if (Host?.Visibility.TryGetValue(id, out bool shown) == true && !shown)
+            if (Host?.Visibility.TryGetValue(id, out bool shown) == true ? !shown : _scriptHiddenAtStart.Contains(id))
                 continue;
             SN.Matrix4x4 w = world;
             // tourné par le script (ENT_SetOrientation : la manche à air de Forest suit le vent), autour de son pied
