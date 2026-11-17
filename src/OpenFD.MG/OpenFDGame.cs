@@ -893,6 +893,26 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         return r.cube;
     }
 
+    /// <summary>Maillage à deux textures : couleur (uv0) et éclairage précalculé <paramref name="lm"/> (uv1), sauf les groupes transparents.</summary>
+    private MeshGpu UploadDual(SceneAssets.MeshAsset a, Texture2D lm)
+    {
+        Mesh m = a.Mesh;
+        float[] uv1 = a.Uv1!;
+        VertexDual[] v = new VertexDual[m.VertexCount];
+        for (int i = 0; i < m.VertexCount; i++)
+        {
+            v[i].Position = new Vector3(m.Positions[3 * i], m.Positions[3 * i + 1], m.Positions[3 * i + 2]);
+            v[i].Normal = new Vector3(m.Normals[3 * i], m.Normals[3 * i + 1], m.Normals[3 * i + 2]);
+            v[i].Uv0 = new Vector2(a.Uv0[2 * i], a.Uv0[2 * i + 1]);
+            v[i].Uv1 = new Vector2(uv1[2 * i], uv1[2 * i + 1]);
+        }
+        MeshGpu g = MeshGpu.CreateDual(GraphicsDevice, v, m.Indices.Select(x => (int)x).ToArray());
+        foreach (SceneAssets.Group gr in a.Groups)
+            if (!gr.Alpha)
+                g.Groups.Add((gr.Start, gr.Count, GroupTex(gr), lm, false));
+        return g;
+    }
+
     private MeshGpu Upload(SceneAssets.MeshAsset a, bool dynamic = false)
     {
         MeshGpu g = MeshGpu.Create(GraphicsDevice, a.Mesh.Positions, a.Mesh.Normals, a.Uv0, a.Mesh.Indices, dynamic);
@@ -1501,7 +1521,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                             _curBuilding = -1;
                         }
                         else
-                            AddStatic(a, w, false, 1);
+                            AddStatic(a, w, false, 1, byName.TryGetValue(p.Name, out LevelObject? po) ? ObjectLightmap(mission, part.Mesh, po.Id) : null);
                     }
                 }
             }
@@ -1512,6 +1532,23 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         Status("Envoi à la carte graphique...", 0.97f);
         FlushStatic();
         FinishLoad(mission);
+    }
+
+    /// <summary>
+    /// Éclairage précalculé propre à un objet posé : « FLM_Subway_military_bonbonne_e1_5005397 » (mission, pièce du modèle,
+    /// numéro de l'objet dans le niveau) ; les citernes de Subway en sortent vertes, comme la lumière autour. Null s'il n'y
+    /// en a pas : l'objet reste éclairé comme avant.
+    /// </summary>
+    private string? ObjectLightmap(string mission, string mesh, uint id)
+    {
+        string part = mesh.Contains('\\') ? mesh[(mesh.LastIndexOf('\\') + 1)..] : mesh;
+        foreach (string prefix in new[] { mission, "level_" + mission })
+        {
+            string lm = $"FLM_{prefix}_{part}_{id}";
+            if (_assets.HasTexture(mission, lm))
+                return lm;
+        }
+        return null;
     }
 
     /// <summary>Fin du chargement : cadrage de la caméra, carte vue de dessus, mini-carte.</summary>
@@ -1935,7 +1972,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             e.DirectionalLight0.DiffuseColor = (0.55f * _bright * _tint * _sunColor).X();
             e.DirectionalLight1.DiffuseColor = (0.55f * _bright * _tint).X();
         }
-        _dual.DiffuseColor = (_bright * _tint).X();
+        _dual.DiffuseColor = (_bright * _sceneTint).X();   // à deux textures : l'éclairage précalculé porte déjà la nuit
         _alphaFx.DiffuseColor = (0.95f * _bright * _tint).X();
         foreach (IEffectFog f in new IEffectFog[] { _lit, _plain, _dual, _alphaFx })
         {
@@ -1991,6 +2028,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         RenderOpenings();
         RenderExplosives();
         RenderGhosts();
+        RenderBeacons();                       // gyrophares : lumière ajoutée, après tout ce qui est opaque
         RenderSelectionRings(_viewProj.X());   // après les unités et les véhicules : ce qui passe derrière eux est caché
         RenderAirSupport(_viewProj.X());       // cible du bombardier d'eau, ombre de l'avion
         RenderParticles(time);

@@ -236,6 +236,30 @@ public sealed class SceneAssets
 
     private static readonly Regex SkipRx = new(@"(_LOD[1-9]|_de?br\d+|_deb_\d+|_debris|_dead)$|^gun$|^Phare|Glow|giro", RegexOptions.IgnoreCase);
 
+    private static readonly Regex LightPartRx = new(@"giro|^Phare|Glow", RegexOptions.IgnoreCase);
+    private static readonly Regex BeaconSkipRx = new(@"(_LOD[1-9]|_de?br\d+|_deb_\d+|_debris|_dead)$", RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Gyrophares d'un modèle de véhicule : pièces « giro… » (« vech_P_UA_giro_z_pump01 », « GB_giro_rouge_pumper02 »).
+    /// Chacune est un éventail de rayons lumineux autour de son centre, coloré par sa texture (giro_rouge, giro_bleu,
+    /// giro_blanc), que le jeu fait tourner. Aussi les phares avant (« Phare_GB_pumper » : cône de lumière blanche) et les
+    /// halos (« Gb_pump_Glow_01 »), qui ne tournent pas. Écartées de ModelParts (SkipRx), dessinées à part.
+    /// </summary>
+    public List<Node> BeaconParts(string model)
+    {
+        string dir = model.Contains('\\') ? model[..model.LastIndexOf('\\')] : "Placeable";
+        string path = model.Contains('\\') ? model : "Placeable\\" + model;
+        byte[]? sg = _files.TryRead("Gfx\\" + path + ".sg");
+        if (sg == null)
+            return new List<Node>();
+        Dictionary<string, (string parent, Matrix4x4 m)> nodes = Rooms.SceneNodes(sg);
+        return nodes.Keys
+            .Where(k => LightPartRx.IsMatch(k) && !BeaconSkipRx.IsMatch(k) && StateNumber(k) is -1 or 1
+                        && _files.TryRead("Gfx\\" + dir + "\\" + k + ".mesh") != null)
+            .Select(k => new Node(dir + "\\" + k, PartWorld(nodes, k)))
+            .ToList();
+    }
+
     /// <summary>Pièces d'un modèle (état intact _e1, niveau de détail maximal, sans débris).</summary>
     public List<Node> ModelParts(string model) => ModelParts(model, "e1");
 
@@ -406,7 +430,19 @@ public sealed class SceneAssets
         return p != null ? _files.Read(p) : null;
     }
 
-    public byte[]? Texture(string mission, string name) => ResolveTex(mission, name) is { } p ? _files.Read(p) : null;
+    public byte[]? Texture(string mission, string name) => ResolveTex(mission, name) is { } p ? _files.Read(p) : LooseLightmap(mission, name);
+
+    /// <summary>La texture existe : dans les banques, ou parmi les éclairages précalculés de la mission (voir LooseLightmap).</summary>
+    public bool HasTexture(string mission, string name) => ResolveTex(mission, name) != null || LooseLightmap(mission, name) != null;
+
+    /// <summary>
+    /// Éclairage précalculé rangé seulement dans le dossier de la mission, pas dans les banques de textures
+    /// (Subway : « Gfx\Mission\subway\Lightmaps\FLM_Subway_military_bonbonne_e1_5005397.dds », celui des citernes).
+    /// </summary>
+    private byte[]? LooseLightmap(string mission, string name) =>
+        name.StartsWith("FLM_", StringComparison.OrdinalIgnoreCase)
+            ? _files.TryRead($"Gfx\\Mission\\{GfxDir(mission)}\\Lightmaps\\{name}.dds")
+            : null;
 
     // le masque d'opacité est aussi nommé « opa_<nom> » (fx_trash_6opa_fx_trash_6), « <nom>opa_1 », voire « 0pa_<nom> »
     // avec un zéro (fx_trash_50pa_fx_trash_5)

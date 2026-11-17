@@ -1,5 +1,6 @@
 using OpenFD.Game;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using SN = System.Numerics;
 
 namespace OpenFD.MG;
@@ -9,6 +10,8 @@ public sealed partial class OpenFDGame
 {
     private readonly List<(ExplosiveItem item, string model, SN.Matrix4x4 world)> _explosives = new();
     private readonly Dictionary<(string model, string state), List<(MeshGpu mesh, SN.Matrix4x4 part)>> _stateModels = new();
+    // objet intact qui a son propre éclairage précalculé (citernes de Subway) : ses maillages à lui (null : aucun éclairage)
+    private readonly Dictionary<uint, List<(MeshGpu mesh, SN.Matrix4x4 part)>?> _litExplosives = new();
     private readonly List<(SN.Vector3 pos, float t0, float radius)> _blastFx = new();
     private float _clock;          // temps réel (s) pour les effets
     private float _shake;          // secousse de la caméra (0 → 1)
@@ -24,6 +27,11 @@ public sealed partial class OpenFDGame
             foreach ((MeshGpu? m, _) in l)
                 m.Dispose();
         _stateModels.Clear();
+        foreach (List<(MeshGpu mesh, SN.Matrix4x4 part)>? l in _litExplosives.Values)
+            if (l != null)
+                foreach ((MeshGpu? m, _) in l)
+                    m.Dispose();
+        _litExplosives.Clear();
         _explosives.Clear();
         _blastFx.Clear();
         _shake = 0;
@@ -47,6 +55,48 @@ public sealed partial class OpenFDGame
         return _stateModels[(model, state)] = l;
     }
 
+    /// <summary>
+    /// Objet explosif intact avec son propre éclairage précalculé (« FLM_Subway_military_bonbonne_e1_5005397 ») : ses pièces
+    /// éclairées sont dessinées avec les deux textures (couleur et éclairage) ; ses parties transparentes (vitres) restent
+    /// dessinées comme avant. Null quand aucune pièce n'a d'éclairage : le modèle commun sert.
+    /// </summary>
+    private List<(MeshGpu mesh, SN.Matrix4x4 part)>? LitModel(ExplosiveItem it, string model)
+    {
+        if (_litExplosives.TryGetValue(it.Id, out List<(MeshGpu mesh, SN.Matrix4x4 part)>? done))
+            return done;
+        List<(MeshGpu mesh, SN.Matrix4x4 part)>? l = null;
+        try
+        {
+            List<SceneAssets.Node> nodes = _assets.ModelParts(model);
+            List<(SceneAssets.Node node, SceneAssets.MeshAsset asset, string? lm)> parts = nodes
+                .Select(n => (n, _assets.LoadMesh(_mission, n.Mesh, "gfx"), ObjectLightmap(_mission, n.Mesh, it.Id)))
+                .ToList();
+            if (parts.Any(p => p.lm != null && p.asset.Uv1 != null && TexOf(p.lm) != null))
+            {
+                l = new();
+                foreach ((SceneAssets.Node node, SceneAssets.MeshAsset asset, string? lm) in parts)
+                {
+                    Texture2D? lmTex = lm != null && asset.Uv1 != null ? TexOf(lm) : null;
+                    if (lmTex == null)
+                    {
+                        l.Add((Upload(asset), node.World));
+                        continue;
+                    }
+                    l.Add((UploadDual(asset, lmTex), node.World));
+                    // vitres et feuillages : sans éclairage précalculé (l'effet à deux textures ne les détoure pas)
+                    MeshGpu clear = Upload(asset);
+                    clear.Groups.RemoveAll(g => !g.alpha);
+                    if (clear.Groups.Count > 0)
+                        l.Add((clear, node.World));
+                    else
+                        clear.Dispose();
+                }
+            }
+        }
+        catch (Exception e) { Console.WriteLine($"{model} (éclairage de {it.Name}) : {e.Message}"); }
+        return _litExplosives[it.Id] = l;
+    }
+
     private void RenderExplosives()
     {
         if (!_objects)
@@ -60,7 +110,9 @@ public sealed partial class OpenFDGame
             // déplacé par le script : il suit le relief (Street : les tramways, qui sont des véhicules explosifs)
             if (ScriptPos(it.Id) is { } mv)
                 w = FollowGround(it.Id, world, it.Position, mv);
-            foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in StateModel(model, it.State))
+            string state = it.State;
+            List<(MeshGpu mesh, SN.Matrix4x4 part)> parts = state == "e1" && LitModel(it, model) is { } lit ? lit : StateModel(model, state);
+            foreach ((MeshGpu? mesh, SN.Matrix4x4 part) in parts)
                 DrawMesh(mesh, (part * w).X());
         }
     }
