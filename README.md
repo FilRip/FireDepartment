@@ -9,6 +9,10 @@ A converter is now included to convert missions/files of Fire Department 1, to b
 
 This engine support multiplayers
 
+Support save/load game
+
+Support multi-languages (French, English, German, Italian, Spanish)
+
 No game data is included in this repository but demo version is included (3 missions, 1 for each game)
 
 -----------
@@ -32,7 +36,8 @@ You can make your own missions and share it
 ----------------
 ## The converter
 
-The converter is a tool that convert mission of Fire Department 1 to a format of Fire Department 3 and so, for OpenFD
+The converter is a tool that convert mission of Fire Department 1 to a format of Fire Department 3 and so, for OpenFD.
+
 Command line :
 
 OpenFD.ConvFD1 <Path root of Fire Department 1> <Path of "Data" of Fire Department 3/OpenFD> NameOfMissionToConvert
