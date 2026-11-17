@@ -34,7 +34,8 @@ public sealed class VideoScreen : IDisposable
         _next = new byte[_rgba.Length];
         _audio = new short[16384];
         Texture = new Texture2D(gd, dec.Width, dec.Height, false, SurfaceFormat.Color);
-        if (dec.AudioRate > 0 && volume > 0)
+        // le son est lu même à volume nul : le volume général peut être remonté pendant la vidéo (voir Volume)
+        if (dec.AudioRate > 0)
         {
             try
             {
@@ -48,6 +49,17 @@ public sealed class VideoScreen : IDisposable
             }
         }
         Pump(0);   // première image tout de suite
+    }
+
+    /// <summary>Volume du son de la vidéo (0 à 1), changeable pendant la lecture (option « Volume général », touche S).</summary>
+    public float Volume
+    {
+        set
+        {
+            if (_snd == null)
+                return;
+            try { _snd.Volume = Math.Clamp(value, 0, 1); } catch { }
+        }
     }
 
     /// <summary>Ouvre la vidéo ; null si elle est absente ou si la bibliothèque vidéo manque (le jeu continue sans).</summary>

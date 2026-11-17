@@ -11,7 +11,7 @@ namespace OpenFD.MG;
 public sealed partial class OpenFDGame
 {
     /// <summary>Numéro de la livraison (openfdN) : mention du menu principal et titre de l'éditeur.</summary>
-    internal const string BuildNumber = "237";
+    internal const string BuildNumber = "238";
 
     private Settings _settings = new();
     private int _screen;          // 0 menu principal, 1 choix de la mission, 2 options, 3 pause, 4 sauvegardes, 9 choix du jeu
@@ -185,6 +185,15 @@ public sealed partial class OpenFDGame
             _music.Volume = _muted ? 0 : Math.Clamp(_settings.Volume, 0, 100) / 100f * Math.Clamp(_settings.VolumeMusic, 0, 100) / 100f;
         // son coupé (touche S) : tous les sons de MonoGame (effets, voix, musique, vidéos) à zéro
         try { Microsoft.Xna.Framework.Audio.SoundEffect.MasterVolume = _muted ? 0f : 1f; } catch (Exception) { }
+        // vidéos en cours (fond du menu pendant les options, intro, briefing, cinématique) : le volume général tout de suite
+        if (_intro != null)
+            _intro.Volume = VideoVolume;
+        if (_menuVideo != null)
+            _menuVideo.Volume = VideoVolume * 0.6f;
+        if (_briefing != null)
+            _briefing.Volume = VideoVolume;
+        if (_missionVideo != null)
+            _missionVideo.Volume = VideoVolume;
     }
 
     /// <summary>Son coupé par la touche S (et remis en la pressant de nouveau) ; pas enregistré dans les options.</summary>
