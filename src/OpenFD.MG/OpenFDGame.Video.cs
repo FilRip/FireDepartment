@@ -70,7 +70,7 @@ public sealed partial class OpenFDGame
         return dir == null ? null : Directory.EnumerateFiles(dir).FirstOrDefault(f => Path.GetFileName(f).Equals(name, StringComparison.OrdinalIgnoreCase));
     }
 
-    private float VideoVolume => Math.Clamp(_settings.Volume, 0, 100) / 100f;
+    private float VideoVolume => _muted ? 0 : Math.Clamp(_settings.Volume, 0, 100) / 100f;
 
     // écran d'accueil (Data\Overlay\Textures\Splash.png) : 3 s sur fond noir, avant la vidéo d'intro
     private Texture2D? _splash;

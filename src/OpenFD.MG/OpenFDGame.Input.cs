@@ -272,6 +272,12 @@ public sealed partial class OpenFDGame
         }
         if (NetText(ch))
             return;
+        // S : couper / remettre tout le son, aussi pendant les scènes du jeu
+        if (IsActive && _session != null && char.ToLowerInvariant(ch) == 's')
+        {
+            ToggleMute();
+            return;
+        }
         if (!IsActive || _session == null || _cineOn)
             return;
         switch (char.ToLowerInvariant(ch))

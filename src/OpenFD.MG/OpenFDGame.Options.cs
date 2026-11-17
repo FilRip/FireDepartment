@@ -11,7 +11,7 @@ namespace OpenFD.MG;
 public sealed partial class OpenFDGame
 {
     /// <summary>Numéro de la livraison (openfdN) : mention du menu principal et titre de l'éditeur.</summary>
-    internal const string BuildNumber = "233";
+    internal const string BuildNumber = "234";
 
     private Settings _settings = new();
     private int _screen;          // 0 menu principal, 1 choix de la mission, 2 options, 3 pause, 4 sauvegardes, 9 choix du jeu
@@ -168,6 +168,12 @@ public sealed partial class OpenFDGame
         }
         _bright = Math.Clamp(_settings.Brightness, 40, 200) / 100f;
         ApplyGameplay(_settings.Gameplay ?? new GameplaySettings());
+        ApplyVolumes();
+    }
+
+    /// <summary>Volumes des options, ou zéro partout quand le son est coupé (touche S).</summary>
+    private void ApplyVolumes()
+    {
         if (_audio != null)
         {
             _audio.Master = 0.8f * Math.Clamp(_settings.Volume, 0, 100) / 100f;
@@ -176,7 +182,19 @@ public sealed partial class OpenFDGame
             _audio.MusicVolume = Math.Clamp(_settings.VolumeMusic, 0, 100) / 100f;
         }
         if (_music != null)
-            _music.Volume = Math.Clamp(_settings.Volume, 0, 100) / 100f * Math.Clamp(_settings.VolumeMusic, 0, 100) / 100f;
+            _music.Volume = _muted ? 0 : Math.Clamp(_settings.Volume, 0, 100) / 100f * Math.Clamp(_settings.VolumeMusic, 0, 100) / 100f;
+        // son coupé (touche S) : tous les sons de MonoGame (effets, voix, musique, vidéos) à zéro
+        try { Microsoft.Xna.Framework.Audio.SoundEffect.MasterVolume = _muted ? 0f : 1f; } catch (Exception) { }
+    }
+
+    /// <summary>Son coupé par la touche S (et remis en la pressant de nouveau) ; pas enregistré dans les options.</summary>
+    private bool _muted;
+
+    private void ToggleMute()
+    {
+        _muted = !_muted;
+        ApplyVolumes();
+        Log(_muted ? "Son coupé (S pour le remettre)" : "Son remis");
     }
 
     /// <summary>Réglages de jeu (Gameplay) : ceux du joueur, ou ceux du serveur pendant une partie en réseau.</summary>
