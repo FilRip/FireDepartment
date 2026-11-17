@@ -21,6 +21,10 @@ public sealed partial class UnitManager
             bool use = c.GetBool("CAPACITIES_ACTIONS", "CouldBeUse") || c.GetBool("CAPACITIES_TARGET", "CouldBeUse"), repair = c.GetBool("CAPACITIES_ACTIONS", "CouldBeRepair") || c.GetBool("CAPACITIES_TARGET", "CouldBeRepair");
             if (Openings.Any(d => d.Id == o.Id))
                 continue;   // portes et fenêtres : voir Openings
+            // porte ou débris caché pour tout le jeu (Institute : « remains29 », dont l'emprise couvre les débris du
+            // bulldozer) : absent, il ne doit pas non plus prendre le clic comme objet à utiliser
+            if (HiddenOpenings.Contains(o.Name))
+                continue;
             // réparable par la carte elle-même (composant A026, octet « CouldBeRepair » du bloc des capacités) : Forest,
             // l'épave du bulldozer (« buldozer_areparer ») dont la classe n'est pas réparable
             if (CapacityByte(o, CapRepair))

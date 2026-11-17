@@ -874,7 +874,13 @@ public sealed class PathFind
         }
     }
 
-    public Vector2 Walkable(Vector2 p)
+    public Vector2 Walkable(Vector2 p) => Walkable(p, null);
+
+    /// <summary>
+    /// Case libre la plus proche de p ; <paramref name="level"/> : de préférence une case à cette hauteur de sol (à une
+    /// marche près), même un peu plus loin, plutôt qu'une case d'un autre étage.
+    /// </summary>
+    public Vector2 Walkable(Vector2 p, float? level)
     {
         if (_s.Grid is not { } g)
             return p;
@@ -883,12 +889,18 @@ public sealed class PathFind
         bool Ok(int x, int y) => Free(x, y) && !(g.Inside(x, y) && IsWindowCell(g.Index(x, y)));
         if (Ok(cx, cy))
             return p;
+        Vector2? any = null;
         for (int r = 1; r < 20; r++)
             for (int dx = -r; dx <= r; dx++)
                 for (int dy = -r; dy <= r; dy++)
                     if (Math.Max(Math.Abs(dx), Math.Abs(dy)) == r && Ok(cx + dx, cy + dy))
-                        return new((cx + dx + 0.5f) * Grid.CellSize, (cy + dy + 0.5f) * Grid.CellSize);
-        return p;
+                    {
+                        Vector2 c = new((cx + dx + 0.5f) * Grid.CellSize, (cy + dy + 0.5f) * Grid.CellSize);
+                        if (level is not { } h || MathF.Abs(g.GroundHeight[g.Index(cx + dx, cy + dy)] - h) <= MaxStep)
+                            return c;
+                        any ??= c;
+                    }
+        return any ?? p;
     }
 
     public List<Vector2> FindPath(Vector2 from, Vector2 to) => FindPath(from, to, out _);
@@ -905,9 +917,16 @@ public sealed class PathFind
     private int[] _prev = Array.Empty<int>(), _gen = Array.Empty<int>();
     private int _curGen;
 
+    /// <summary>
+    /// Le dernier chemin trouvé sort d'une petite poche fermée vers un autre niveau (voir FindPath) : ce saut-là est voulu.
+    /// </summary>
+    public bool LastPathDrops;
+
     public List<Vector2> FindPath(Vector2 from, Vector2 to, out bool partial)
     {
         partial = false;
+        if (!_rescuing)
+            LastPathDrops = false;
         Grid? g = _s.Grid;
         if (g == null)
             return new() { to };
@@ -916,7 +935,8 @@ public sealed class PathFind
         if (!g.Inside(tx, ty))
             return new();
         // départ dans un obstacle (un camion s'est garé sur le pompier) : il en sort d'abord par la case libre la plus proche
-        if (!Free(sx, sy) && Walkable(from) is Vector2 exit && exit != from)
+        // (une case de son étage : un pompier poussé sur l'appui d'une fenêtre d'étage ne sort pas dans la rue, en contrebas)
+        if (!Free(sx, sy) && Walkable(from, g.Inside(sx, sy) ? g.GroundHeight[g.Index(sx, sy)] : null) is Vector2 exit && exit != from)
         {
             List<Vector2> rest = FindPath(exit, to, out partial);
             if (rest.Count > 0 || (tx, ty) == g.CellOf(new Vector3(exit, 0)))
@@ -1066,6 +1086,7 @@ public sealed class PathFind
             {
                 partial = restPartial;
                 rest.Insert(0, way);
+                LastPathDrops = true;
                 return rest;
             }
         }

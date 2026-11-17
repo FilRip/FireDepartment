@@ -389,6 +389,18 @@ public sealed partial class UnitManager
             Ladder l = t.Ladder!;
             bool up = me == l.FootCell && (nc == l.InsideCell || next == l.Inside);
             bool down = me == l.InsideCell && nc == l.FootCell;
+            // à l'étage, poussé hors de la case du haut de l'échelle (plusieurs pompiers s'y serrent), le chemin allant au
+            // pied : il revient d'abord en haut de l'échelle, sinon il marcherait tout droit dans le vide (chute « magique »)
+            Vector2 at = new Vector2(u.Position.X, u.Position.Y);
+            if (!down && !up && nc == l.FootCell && SameLevel(at, l.Inside) && !SameLevel(at, l.Foot))
+            {
+                List<Vector2> rest = u.Path.ToList();
+                u.Path.Clear();
+                u.Path.Enqueue(l.Inside);
+                foreach (Vector2 q in rest)
+                    u.Path.Enqueue(q);
+                return false;
+            }
             if (!up && !down)
                 continue;
             return BeginLadder(u, l, up, dt);
@@ -732,6 +744,7 @@ public sealed partial class UnitManager
     // l'échelle disparaît sous lui (camion détruit) : il se retrouve au pied
     private void LadderDrop(Unit u, Ladder l)
     {
+        Log.Add($"{_s.Time,6:0} s : échelle : {u.Name} remis au pied ({(u.Unconscious ? "inconscient" : !l.Placed ? "échelle repliée" : l.Truck.Ladder != l ? "échelle changée" : "camion parti ou détruit")})");
         u.OnLadder = null;
         u.LadderStep = LadderPhase.None;
         u.Position = new Vector3(l.Foot, Ground(l.Foot));
@@ -812,6 +825,7 @@ public sealed partial class UnitManager
                 u.OnLadder = null;
                 u.LadderStep = LadderPhase.None;
                 u.Status = u.Path.Count > 0 ? "en route" : "attend les ordres";
+                Log.Add($"{_s.Time,6:0} s : échelle : {u.Name} entré à l'étage ({u.Position.X:0}, {u.Position.Y:0}, {u.Position.Z:0}) · chemin {u.Path.Count}");
                 break;
             }
             case LadderPhase.Leave:
@@ -853,6 +867,8 @@ public sealed partial class UnitManager
             u.LadderStep = p;
             u.LadderTimer = 0;
             u.Status = status;
+            // diagnostic (chute après la montée) : chaque étape de l'échelle dans le journal
+            Log.Add($"{_s.Time,6:0} s : échelle : {u.Name} {status} ({u.Position.X:0}, {u.Position.Y:0}, {u.Position.Z:0}) · fenêtre {l.Window.Name} {l.Window.State} · chemin {u.Path.Count}");
         }
     }
 

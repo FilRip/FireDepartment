@@ -175,6 +175,9 @@ public sealed partial class UnitManager
             u.GoToVehicle = null;
             u.Status = u.InjuredTimer > 0 ? "blessé, au sol" : "attend les ordres";
         }
+        // diagnostic : un pompier qui tombe d'un coup de plus de 2 m (sans échelle ni escalier) est noté dans le journal
+        List<(Unit u, Vector3 p, LadderPhase step, string status)> before = Units.Where(u => !u.IsVehicle && !u.OnBoard && u.Stairs == null)
+            .Select(u => (u, u.Position, u.LadderStep, u.Status)).ToList();
         UpdateHealth(dt);
         UpdateDeath(dt);   // voir Death.cs
         UpdateLadders(dt);
@@ -212,6 +215,10 @@ public sealed partial class UnitManager
         foreach (Unit v in Units.Where(v => v.IsVehicle))
             VehicleResupply(v, dt);
         CheckTriggers();
+        foreach ((Unit u, Vector3 p, LadderPhase step, string status) in before)
+            if (!u.OnBoard && u.Stairs == null && u.OnLadder == null && p.Z - u.Position.Z > 200)
+                Log.Add($"{_s.Time,6:0} s : CHUTE de {u.Name} de ({p.X:0}, {p.Y:0}, {p.Z:0}) à ({u.Position.X:0}, {u.Position.Y:0}, {u.Position.Z:0})"
+                    + $" · avant : {status}, échelle {step} · après : {u.Status} · chemin {string.Join(" ", u.Path.Take(4).Select(q => $"({q.X:0}, {q.Y:0})"))}");
         foreach (Unit u in Units)
             WorkOpening(u, dt);
         foreach (Unit u in Units)
@@ -732,6 +739,7 @@ public sealed partial class UnitManager
             List<Vector2> path = FindPath(from, Walkable(dest), out partial);
             foreach (Vector2 p in path)
                 u.Path.Enqueue(p);
+            u.PathDrops = Paths.LastPathDrops;
             TeleportAtDestination(u, dest);   // ordre sur une icône d'escalier : il le prend
         }
         finally
@@ -1059,6 +1067,14 @@ public sealed partial class UnitManager
             float len = d.Length();
             if (len > 1e-3f)
                 u.Heading = MathF.Atan2(d.Y, d.X);
+            Vector2 to = len <= step ? t : p + d / len * step;
+            // jamais un pas dans le vide (ni d'un bond à l'étage) : la recherche de chemin ne passe pas une telle marche ;
+            // un chemin qui la franchit est périmé (échelle déplacée, pompier poussé hors de son passage) : il est refait
+            if (!u.PathDrops && StepOffLevel(p, to))
+            {
+                Repath(u, to);
+                break;   // le nouveau chemin part au pas suivant (il peut commencer par une échelle ou un escalier)
+            }
             if (len <= step)
             {
                 p = t;
@@ -1067,13 +1083,70 @@ public sealed partial class UnitManager
             }
             else
             {
-                p += d / len * step;
+                p = to;
                 step = 0;
             }
             u.Position = new Vector3(p, Ground(p));
         }
+        if (u.Path.Count == 0)
+            u.PathDrops = false;
         if (u.Path.Count == 0 && u.Status.StartsWith("en route"))
             u.Status = u.IsVehicle ? "garé" : "attend les ordres";
+    }
+
+    /// <summary>
+    /// Pas de a à b : il passe d'une case à une autre dont le sol diffère de plus d'une marche (hors grappin). Le coin d'un
+    /// obstacle frôlé en diagonale (case non libre, hors fenêtre), en y entrant ou en en sortant, ne compte pas.
+    /// </summary>
+    private bool StepOffLevel(Vector2 a, Vector2 b)
+    {
+        if (_s.Grid is not { } g)
+            return false;
+        (int ax, int ay) = g.CellOf(new Vector3(a, 0));
+        (int bx, int by) = g.CellOf(new Vector3(b, 0));
+        if ((ax, ay) == (bx, by) || !g.Inside(ax, ay) || !g.Inside(bx, by))
+            return false;
+        int ka = g.Index(ax, ay), kb = g.Index(bx, by);
+        if (!Paths.Free(ax, ay) && !Paths.IsWindowCell(ka) || !Paths.Free(bx, by) && !Paths.IsWindowCell(kb))
+            return false;
+        return MathF.Abs(g.GroundHeight[ka] - g.GroundHeight[kb]) > PathFind.MaxStep && !IsGrappleCell(ka) && !IsGrappleCell(kb);
+    }
+
+    /// <summary>
+    /// Chemin refait jusqu'au même but, depuis là où il est ; refait au pas précédent et déjà de nouveau dans le vide, ou
+    /// sans chemin sûr : il s'arrête. false : il s'arrête ici.
+    /// </summary>
+    private bool Repath(Unit u, Vector2 step)
+    {
+        Vector2 goal = u.Path.Last();
+        Vector2 next = u.Path.Peek();
+        Vector2 here = new Vector2(u.Position.X, u.Position.Y);
+        bool again = u.RepathStep >= _s.Steps - 1;
+        u.RepathStep = _s.Steps;
+        u.Path.Clear();
+        if (!again)
+        {
+            Paths.PathingLadder = u.CanLadder;
+            Paths.PathingBreak = u.CanBreak;
+            Paths.PathingUse = u.CanUse;
+            try
+            {
+                List<Vector2> path = FindPath(here, goal, out bool partial);
+                if (!partial && !Paths.LastPathDrops)
+                    foreach (Vector2 q in path)
+                        u.Path.Enqueue(q);
+            }
+            finally
+            {
+                Paths.PathingLadder = false;
+                Paths.PathingBreak = false;
+                Paths.PathingUse = false;
+            }
+        }
+        Log.Add($"{_s.Time,6:0} s : {u.Name} : chemin périmé (marche dans le vide évitée) en ({here.X:0}, {here.Y:0}, {u.Position.Z:0}), sol {Ground(here):0} → {Ground(step):0}, prochain point ({next.X:0}, {next.Y:0}), but ({goal.X:0}, {goal.Y:0}), {(u.Path.Count > 0 ? "chemin refait" : "il s'arrête")}");
+        if (u.Path.Count == 0)
+            u.Status = "attend les ordres";
+        return u.Path.Count > 0;
     }
 
     /// <summary>

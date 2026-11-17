@@ -889,7 +889,12 @@ public sealed partial class OpenFDGame
         foreach (Unit u in _sel.Where(u => !u.IsVehicle))
         {
             float a = i * 2.39996f, r = i == 0 ? 0 : 120 + 40 * MathF.Sqrt(i);
-            if (!DoOrder(u, g + new SN.Vector2(MathF.Cos(a), MathF.Sin(a)) * r))
+            SN.Vector2 spot = g + new SN.Vector2(MathF.Cos(a), MathF.Sin(a)) * r;
+            // à l'étage (ou sur un toit) : chacun reste au niveau du point visé ; un décalage qui tomberait dans la rue, ou
+            // dont la case libre la plus proche y est, est rapproché du point visé (sinon le pompier redescend aussitôt)
+            for (int k = 1; k <= 3 && !SameFloor(g, spot); k++)
+                spot = g + new SN.Vector2(MathF.Cos(a), MathF.Sin(a)) * r * (1 - k / 3f);
+            if (!DoOrder(u, spot))
                 Log($"{UnitLabel(u)} : {u.Status}");
             i++;
         }
@@ -904,6 +909,10 @@ public sealed partial class OpenFDGame
                 Log($"{UnitLabel(v)} : {v.Status}");
         }
     }
+
+    /// <summary>Le point b (et la case libre où l'on irait) est au même étage que le point visé a.</summary>
+    private bool SameFloor(SN.Vector2 a, SN.Vector2 b) =>
+        _session.Units.SameLevel(a, b) && _session.Units.SameLevel(a, _session.Units.Paths.Walkable(b));
 
     // civil visé : sur toute sa hauteur (de ses pieds au repère coloré au-dessus de lui), ou au sol tout près
     /// <summary>

@@ -95,6 +95,8 @@ public sealed class Unit
     public Ladder? OnLadder;                              // pompier sur une échelle
     public LadderPhase LadderStep;
     public float LadderTimer;
+    public bool PathDrops;                                // son chemin sort d'une poche fermée vers un autre niveau (saut voulu)
+    public int RepathStep = -10;                          // pas où son chemin a été refait (voir Move : pas de marche dans le vide)
     public bool LadderEnter;                              // sur l'échelle en montant : il entrera par la fenêtre (sinon il redescend)
     public bool PassingWindow;
     public Teleport? Stairs;                              // dans un escalier (Teleports.cs) : caché, il ressort à StairsTo
