@@ -15,7 +15,7 @@ namespace OpenFD.Game;
 //    hors service jusqu'à la fin de la partie (plus de déplacement ni de lance, ses passagers descendent).
 public sealed partial class UnitManager
 {
-    // réglages (modifiables dans Save\FD3_CSharp_options.json, rubrique « Gameplay », sans apparaître dans le menu)
+    // réglages (modifiables dans Save\OpenFD_options.json, rubrique « Gameplay », sans apparaître dans le menu)
     /// <summary>Chaleur des feux sur l'endurance des pompiers (× UnitHeatDamage des feux).</summary>
     public static float HeatFactor = 4f;
     /// <summary>Vitesse globale de la perte d'endurance des pompiers (chaleur et fumée) : 0,25 = 4 fois moins vite qu'au début.</summary>

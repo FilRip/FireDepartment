@@ -7,7 +7,7 @@ using SN = System.Numerics;
 
 namespace OpenFD.MG;
 
-/// <summary>Réglages du jeu modifiables à la main dans Save\FD3_CSharp_options.json (rubrique « Gameplay »).</summary>
+/// <summary>Réglages du jeu modifiables à la main dans Save\OpenFD_options.json (rubrique « Gameplay »).</summary>
 public sealed class GameplaySettings
 {
     public float HeatFactor { get; set; } = 4f;            // chaleur des feux → endurance des pompiers

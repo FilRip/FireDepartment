@@ -31,9 +31,12 @@ public sealed class Settings
     public string LastDifficulty { get; set; } = "";   // sa difficulté (EASY, NORMAL, HARD) : choisie d'office dans les menus
     public bool Reflections { get; set; } = true;   // reflets des vitres et carrosseries (réglage caché : seulement dans le fichier)
 
-    /// <summary>Dossier « Save » du jeu (à côté de Data) : options.json y est enregistré.</summary>
+    /// <summary>Dossier « Save » du jeu (à côté de Data) : OpenFD_options.json y est enregistré.</summary>
     public static string SaveDir = "";
-    private static string PathOf() => System.IO.Path.Combine(SaveDir, "FD3_CSharp_options.json");
+    public const string FileName = "OpenFD_options.json";
+    /// <summary>Ancien nom du fichier (avant la version 217) : renommé une fois.</summary>
+    private const string OldFileName = "FD3_CSharp_options.json";
+    private static string PathOf() => System.IO.Path.Combine(SaveDir, FileName);
 
     public static Settings Load(string dataDir)
     {
@@ -41,6 +44,14 @@ public sealed class Settings
         SaveDir = Directory.Exists(root) ? Directory.EnumerateDirectories(root).FirstOrDefault(d => System.IO.Path.GetFileName(d).Equals("Save", StringComparison.OrdinalIgnoreCase)) ?? System.IO.Path.Combine(root, "Save") : System.IO.Path.Combine(root, "Save");
         // anciennes options (%APPDATA%\FD3_CSharp\options.json) : reprises une fois
         string old = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FD3_CSharp", "options.json");
+        // ancien nom dans le même dossier (Save\FD3_CSharp_options.json) : renommé, rien n'est perdu
+        string oldName = System.IO.Path.Combine(SaveDir, OldFileName);
+        try
+        {
+            if (!File.Exists(PathOf()) && File.Exists(oldName))
+                File.Move(oldName, PathOf());
+        }
+        catch (Exception e) { Console.WriteLine("Options : " + e.Message); }
         try
         {
             if (!File.Exists(PathOf()) && File.Exists(old))
