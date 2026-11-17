@@ -1470,6 +1470,20 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         foreach (SceneAssets.Placed p in allPlaced)
             if (byName.TryGetValue(p.Name, out LevelObject? lo) && System.Text.RegularExpressions.Regex.IsMatch(lo.ClassPath, @"(mechanism|mechanism_symbol_blue|elec|elec_symbol_off|repair|buldo|arrow|koshka|saw|cross)_symbol$|mechanism_symbol_blue$|elec_symbol_off$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
                 _animMarks.Add((lo.Id, p.Model, p.World, System.Text.RegularExpressions.Regex.IsMatch(lo.ClassPath, @"(arrow|koshka)_symbol$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)));
+        // rouages d'un objet utilisable (armoire électrique, vanne…) : affichés seulement quand il est utilisable, sauf si le
+        // script les montre ou les cache lui-même (Paris : mechanism_symbol24, visible dans la carte, sur l'armoire que le
+        // script rend utilisable plus tard)
+        _mechanismMarks.Clear();
+        foreach ((uint id, _, SN.Matrix4x4 world, bool arrow) in _animMarks)
+        {
+            if (arrow || !byName.Values.Any(o => o.Id == id && o.ClassPath.EndsWith("mechanism_symbol", StringComparison.OrdinalIgnoreCase)))
+                continue;
+            SN.Vector2 at = new SN.Vector2(world.Translation.X, world.Translation.Y);
+            UsableObject? near = _session.Units.Usables.Where(u => SN.Vector2.Distance(new SN.Vector2(u.Position.X, u.Position.Y), at) < 300)
+                .OrderBy(u => SN.Vector2.Distance(new SN.Vector2(u.Position.X, u.Position.Y), at)).FirstOrDefault();
+            if (near != null)
+                _mechanismMarks[id] = near;
+        }
         // repère qui tourne sur lui-même et que le script montre ou cache (l'icône de réparation de l'épave de Forest…) :
         // dessiné une seule fois, par les repères animés, qui suivent aussi le script ; pas en plus comme objet fixe
         int twice = _scriptMoved.RemoveAll(x => _animMarks.Any(a => a.id == x.id));
@@ -2246,6 +2260,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     /// <summary>Objets cachés au départ dans la carte et que le script montre ou cache : visibles seulement quand il les montre.</summary>
     private readonly HashSet<uint> _scriptHiddenAtStart = new();
     private readonly List<(uint id, string model, SN.Matrix4x4 world, bool arrow)> _animMarks = new();
+    /// <summary>Rouages posés sur un objet utilisable : affichés quand il est utilisable (si le script ne décide pas).</summary>
+    private readonly Dictionary<uint, UsableObject> _mechanismMarks = new();
 
     private void RenderOpenings()
     {
@@ -2260,7 +2276,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                     DrawMesh(mesh, (part * world).X());
         foreach ((uint id, string? model, SN.Matrix4x4 world, bool arrow) in _animMarks)
         {
-            if (!Vis(id, true))
+            bool shown = !_mechanismMarks.TryGetValue(id, out UsableObject? mechanism) || mechanism.Enabled;
+            if (!Vis(id, shown))
                 continue;
             // rouages : un tour toutes les 3 s autour de leur axe ; flèche : va et vient d'environ 20 cm
             SN.Vector3 t = world.Translation;
