@@ -329,7 +329,11 @@ public sealed class SceneAssets
                 if (tile.Success)
                     lightmap = $"FLM_{tile.Groups[1].Value}_GROUND";
                 else if (baseName.Equals("GROUND", StringComparison.OrdinalIgnoreCase))
-                    lightmap = $"FLM_{mission}_GROUND";
+                    // Institute : « FLM_level_institute_GROUND » (sans lui, ce sol et les tuiles posées dessus s'éclairent
+                    // différemment et clignotent quand la caméra bouge)
+                    lightmap = ResolveTex(mission, $"FLM_{mission}_GROUND") == null && ResolveTex(mission, $"FLM_level_{mission}_GROUND") != null
+                        ? $"FLM_level_{mission}_GROUND"
+                        : $"FLM_{mission}_GROUND";
             }
             if (lightmap != null && ResolveTex(mission, lightmap) == null)
                 lightmap = null;
