@@ -12,6 +12,16 @@ namespace OpenFD.Game;
 // ===================================================================================================================
 public sealed partial class UnitManager
 {
+    /// <summary>Mode défense (touche D ; A le retire) : l'unité n'arrose plus que les feux à portée de sa lance, d'où elle est,
+    /// sans aller d'elle-même vers les autres ni manœuvrer.</summary>
+    public void SetDefensive(Unit u, bool on)
+    {
+        if (u.Defensive == on)
+            return;
+        u.Defensive = on;
+        Log.Add($"{_s.Time,6:0} s : {u.Name} {(on ? "en mode défense" : "reprend son comportement normal")}");
+    }
+
     /// <summary>À chaque pas : chaque unité inoccupée regarde s'il y a un feu à éteindre (pompier ou véhicule à lance).</summary>
     private void AutoAttack(Unit u)
     {
@@ -43,7 +53,8 @@ public sealed partial class UnitManager
             _autoGiveUp[u.Id] = given = new();
         foreach (uint old in given.Where(kv => kv.Value <= _s.Time).Select(kv => kv.Key).ToList())
             given.Remove(old);
-        if (FindVisibleFire(u, reach * MathF.Max(1, AutoAttackRange), float.MaxValue, nearest: true, skip: given) is not { } best)
+        // (mode défense : seulement à portée de sa lance, il ne se déplace pas)
+        if (FindVisibleFire(u, u.Defensive ? reach : reach * MathF.Max(1, AutoAttackRange), float.MaxValue, nearest: true, skip: given) is not { } best)
             return;
         u.GoToVehicle = null;
         float d = Vector2.Distance(new(u.Position.X, u.Position.Y), new(best.Position.X, best.Position.Y));
@@ -53,6 +64,8 @@ public sealed partial class UnitManager
             u.Status = $"arrose {best.Name}";
             return;
         }
+        if (u.Defensive)
+            return;
         // feu hors d'atteinte (pas de chemin) : il n'insiste pas avant 10 s
         Attack(u, best);
         if (!u.Moving && u.Target == null)

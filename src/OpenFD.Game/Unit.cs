@@ -22,6 +22,7 @@ public sealed class Unit
     public Extinguisher? Nozzle;                          // lance (pompiers, médecin)
     public bool HasHose;                                  // (non utilisé : le jeu n'a pas de tuyaux)
     public bool CanHeal;                                  // médecin : peut réanimer un civil inconscient
+    public bool Defensive;                                // mode défense (touche D) : il n'arrose que les feux à sa portée, sans bouger de lui-même
     public WaterReel? GoToReel;                           // enrouleur de tuyau où il va remplir sa réserve (WaterReels.cs)
     public float ResupplyPower;                           // véhicule : eau rendue par seconde aux pompiers (0 = aucune)
     public string SupplyAgent = "WATER";                  // véhicule : agent qu'il fournit ([CAPACITIES_RESERVE] FireAgent, voir Agents.cs)

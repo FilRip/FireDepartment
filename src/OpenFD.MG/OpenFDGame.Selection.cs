@@ -235,6 +235,55 @@ public sealed partial class OpenFDGame
         }
     }
 
+    // ---- mode défense : le bouclier (BUT_TOGGLE_DEFENSIVE_BEHAVIOR.png) au-dessus de la tête ou du véhicule ----
+    private const string DefenseTexture = "BUT_TOGGLE_DEFENSIVE_BEHAVIOR.png";
+    private static readonly Rectangle DefenseIcon = new(23, 33, 20, 30);
+
+    private Texture2D? _defenseShield;
+    private bool _defenseShieldTried;
+
+    /// <summary>
+    /// Le bouclier découpé dans le bouton du jeu, sans le fond gris clair du bouton (#767B9A, en bas autour de la pointe) :
+    /// ces pixels deviennent transparents. Fait une fois, en mémoire (le fichier du jeu n'est pas modifié).
+    /// </summary>
+    private Texture2D? DefenseShield()
+    {
+        if (_defenseShieldTried)
+            return _defenseShield;
+        _defenseShieldTried = true;
+        if (OverlayTexture(DefenseTexture) is not { } src)
+            return null;
+        try
+        {
+            Rectangle r = DefenseIcon;
+            Color[] px = new Color[r.Width * r.Height];
+            src.GetData(0, r, px, 0, px.Length);
+            for (int i = 0; i < px.Length; i++)
+                if (Math.Abs(px[i].R - 0x76) <= 6 && Math.Abs(px[i].G - 0x7B) <= 6 && Math.Abs(px[i].B - 0x9A) <= 6)
+                    px[i] = Color.Transparent;
+            _defenseShield = new Texture2D(GraphicsDevice, r.Width, r.Height);
+            _defenseShield.SetData(px);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("Bouclier du mode défense : " + e.Message);
+        }
+        return _defenseShield;
+    }
+
+    private void RenderDefenseIcons()
+    {
+        if (_map || _session == null || DefenseShield() is not { } shield)
+            return;
+        foreach (Unit u in _session.Units.Active.Where(u => u.Defensive && !u.OnBoard && !u.Hidden && !u.Destroyed))
+        {
+            if (Project(u.Position + new SN.Vector3(0, 0, u.IsVehicle ? 420 : 250)) is not { } p || p.X < 0 || p.Y < 0 || p.X > _fbW || p.Y > _fbH)
+                continue;
+            float h = 26 * _scale, w = h * shield.Width / shield.Height;
+            _ui.Image(shield, p.X - w / 2, p.Y - h, w, h, SN.Vector4.One);
+        }
+    }
+
     // ---- barre de vie des civils (réglage EnableDeath) : au-dessus de leur tête ----
     // conscient : de vert à rouge (ConsciousTime) ; inconscient : rouge foncé sur cadre blanc (DeathTime, puis la mort) ;
     // porté par un pompier : au-dessus du pompier, et elle ne descend plus
@@ -396,6 +445,12 @@ public sealed partial class OpenFDGame
                         _ui.Image(symbols, x + (iw - mk.Width * ms) / 2, y + (pr.iconH - mk.Height * ms) / 2, mk.Width * ms, mk.Height * ms, mk, SN.Vector4.One);
                     else if (u.Destroyed)
                         _ui.Text(x + 4 * _scale, y + pr.iconH - _ui.LineHeight, "X", new SN.Vector4(1f, 0.3f, 0.3f, 1));
+                }
+                // mode défense : petit bouclier en haut à gauche de l'image
+                if (u.Defensive && DefenseShield() is { } shield)
+                {
+                    float sh = pr.iconH * 0.42f, sw = sh * shield.Width / shield.Height;
+                    _ui.Image(shield, x + 1 * _scale, y + 1 * _scale, sw, sh, SN.Vector4.One);
                 }
                 // vie (véhicule) ou endurance (pompier), puis réserve d'agent
                 float k = u.IsVehicle ? u.Life / Math.Max(1, u.LifeMax) : u.Stamina / Math.Max(1, u.StaminaMax);

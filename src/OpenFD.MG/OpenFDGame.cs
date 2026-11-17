@@ -2971,6 +2971,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _ui.Begin();
         RenderFireBars();
         RenderCivilianBars();
+        RenderDefenseIcons();
         RenderClickMarks();
         _ui.End();
         RenderHudPanels();
@@ -3022,6 +3023,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             lines.Add(("", txt));
             lines.Add(("Espace : pause · 1 2 3 4 : vitesse ×1 ×4 ×16 ×64", muted));
             lines.Add(("Tab : carte / 3D · M : mini-carte · V : manche à air · I : objectifs · B : ombres · Ctrl + D : débogage", muted));
+            lines.Add(("Ctrl + A : choisir tous les pompiers · D : mode défense · A : comportement normal", muted));
             lines.Add(("F5 : sauvegarder · F9 : charger la dernière sauvegarde", muted));
             lines.Add(("H : masquer l'aide · Échap : menu des missions", muted));
         }

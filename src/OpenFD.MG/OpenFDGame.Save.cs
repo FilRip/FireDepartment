@@ -89,6 +89,13 @@ public sealed partial class OpenFDGame
         Rec("goveh", u.Id, veh.Id);
         _session.Units.GoToVehicle(u, veh);
     }
+    private void DoDefense(Unit u, bool on)
+    {
+        if (NetSubmit("defense", u.Id, on ? 1 : 0))
+            return;
+        Rec("defense", u.Id, on ? 1 : 0);
+        _session.Units.SetDefensive(u, on);
+    }
     private void DoGoToReel(Unit u, WaterReel r)
     {
         if (NetSubmit("goreel", u.Id, r.Id))
@@ -236,6 +243,10 @@ public sealed partial class OpenFDGame
             case "goveh":
                 if (U(e.A) is { } a4 && U(e.B) is { } b4)
                     um.GoToVehicle(a4, b4);
+                break;
+            case "defense":
+                if (U(e.A) is { } aD)
+                    um.SetDefensive(aD, e.B != 0);
                 break;
             case "goreel":
                 if (U(e.A) is { } aR && um.WaterReels.FirstOrDefault(r => r.Id == e.B) is { } bR)

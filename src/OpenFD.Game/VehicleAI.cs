@@ -29,7 +29,9 @@ public sealed partial class UnitManager
         if ((u.Id + _autoTick) % 3 != 0)
             return;
         // après un ordre d'attaque (FireFocus) : le feu le plus proche du dernier éteint, même hors de l'angle de la lance
-        HotPoint? next = u.FireFocus != null ? FindVisibleFire(u, u.Nozzle!.RangeMax, float.MaxValue)
+        // (mode défense : seulement dans l'angle de sa lance, sans manœuvrer)
+        HotPoint? next = u.Defensive ? FindVisibleFire(u, u.Nozzle!.RangeMax, CannonAngle)
+            : u.FireFocus != null ? FindVisibleFire(u, u.Nozzle!.RangeMax, float.MaxValue)
             : FindVisibleFire(u, u.Nozzle!.RangeMax, CannonAngle) ?? FindVisibleFire(u, u.Nozzle.RangeMax, float.MaxValue);
         if (next is { } best)
         {
@@ -39,7 +41,7 @@ public sealed partial class UnitManager
             return;
         }
         // feu arrivé trop près (en deçà de la portée minimale de la lance) : il recule pour pouvoir l'arroser
-        if (FindVisibleFire(u, u.Nozzle.RangeMin, float.MaxValue, nearest: true, minRange: 0) is { } close)
+        if (!u.Defensive && FindVisibleFire(u, u.Nozzle.RangeMin, float.MaxValue, nearest: true, minRange: 0) is { } close)
         {
             u.GoToVehicle = null;
             VehicleAttack(u, close);

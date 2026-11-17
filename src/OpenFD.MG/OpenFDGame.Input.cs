@@ -85,6 +85,13 @@ public sealed partial class OpenFDGame
         }
         // Ctrl + D : infos de débogage ; les touches F1 à F6 ne marchent que dans ce mode
         bool ctrlKey = k.IsKeyDown(Keys.LeftControl) || k.IsKeyDown(Keys.RightControl);
+        // Ctrl + A : tous les pompiers sur le terrain sont choisis
+        if (ctrlKey && Pressed(k, Keys.A) && !_cineOn)
+        {
+            _sel.Clear();
+            foreach (Unit u in _session.Units.Active.Where(u => !u.IsVehicle && !u.Unconscious))
+                _sel.Add(u);
+        }
         if (ctrlKey && Pressed(k, Keys.D))
         {
             _debugAi = !_debugAi;
@@ -249,6 +256,12 @@ public sealed partial class OpenFDGame
         _mPrev = m;
     }
 
+    private static bool CtrlDown()
+    {
+        KeyboardState k = Keyboard.GetState();
+        return k.IsKeyDown(Keys.LeftControl) || k.IsKeyDown(Keys.RightControl);
+    }
+
     // lettres : reçues comme caractères tapés, donc justes quel que soit le clavier (AZERTY, QWERTY…)
     private void OnChar(char ch)
     {
@@ -289,11 +302,19 @@ public sealed partial class OpenFDGame
             case 'h':
                 _help = !_help;
                 break;
-            case 'a':
-                _sel.Clear();
-                foreach (Unit u in _session.Units.Active.Where(u => !u.IsVehicle && !u.Unconscious))
-                    _sel.Add(u);
+            // D : mode défense des unités choisies (elles n'arrosent que les feux à leur portée, sans bouger d'elles-mêmes) ;
+            // A : comportement normal (pas avec Ctrl : Ctrl + A choisit tout le monde, Ctrl + D le débogage)
+            case 'd' when !CtrlDown():
+            case 'a' when !CtrlDown():
+            {
+                bool on = char.ToLowerInvariant(ch) == 'd';
+                List<Unit> chosen = _sel.Where(u => !u.Destroyed && (u.Nozzle != null || !u.IsVehicle)).ToList();
+                foreach (Unit u in chosen.Where(u => u.Defensive != on))
+                    DoDefense(u, on);
+                if (chosen.Count > 0)
+                    Log(on ? $"Mode défense : {chosen.Count} unité(s)" : $"Comportement normal : {chosen.Count} unité(s)");
                 break;
+            }
         }
     }
 
