@@ -529,13 +529,8 @@ public sealed partial class OpenFDGame
         float az = Deg(MathF.Atan2(_sunDir.Y, _sunDir.X)), el = Deg(MathF.Asin(Math.Clamp(-_sunDir.Z, -1, 1)));
         EdPropNumber("m.soleilA", Tr("SunDir", "Soleil : direction (°)"), az, v => EdSetSun(Rad(v), Rad(el)), "0");
         EdPropNumber("m.soleilH", Tr("SunHeight", "Soleil : hauteur (°)"), el, v => EdSetSun(Rad(az), Rad(Math.Clamp(v, 5, 90))), "0");
-        // équipe de départ : une des casernes du jeu (Design\Firestation\*.cfg)
-        string team = IniText.Get(_edMisText, "FIRESTATION", "InitialDispatch") ?? "";
-        EdPropChoice(Tr("MisTeam", "Équipe de départ"), team.Length > 0 ? team : "-", () =>
-        {
-            List<string> teams = EdTeams();
-            return (teams, teams.FindIndex(x => x.Equals(team, StringComparison.OrdinalIgnoreCase)));
-        }, i => _edMisText = IniText.Set(_edMisText, "FIRESTATION", "InitialDispatch", EdTeams()[i]));
+        // équipe de départ et renforts : fenêtre « Casernes et renforts » (voir OpenFDGame.EditorStations.cs)
+        EdStationsSummary();
         EdPropScript("m.script1", Tr("MisScript1", "Script principal"), IniText.Get(_edMisText, "SCRIPT", "MissionScript1") ?? "", "", v => _edMisText = IniText.Set(_edMisText, "SCRIPT", "MissionScript1", v.Trim()));
         EdPropScript("m.script2", Tr("MisScript2", "Second script"), IniText.Get(_edMisText, "SCRIPT", "MissionScript2") ?? "", "", v => _edMisText = IniText.Set(_edMisText, "SCRIPT", "MissionScript2", v.Trim()));
         EdPropScript("m.auto", Tr("MisAutoExec", "Script de départ"), IniText.Get(_edMisText, "SCRIPT", "AutoExecScript") ?? "", "", v => _edMisText = IniText.Set(_edMisText, "SCRIPT", "AutoExecScript", v.Trim()));

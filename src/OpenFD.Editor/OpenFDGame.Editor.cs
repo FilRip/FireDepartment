@@ -103,7 +103,7 @@ public sealed partial class OpenFDGame
     /// <summary>
     /// Essais (captures) : FD3_EDITEUR_TEST=ordre;ordre… — « choisir:nom » (objet choisi, vue sur lui), « carte »,
     /// « mini », « onglet:n », « poser:élément » (posé au centre de la vue), « sauver:nom », « feux », « vue:x,y,z,lacet,tangage,dist »,
-    /// « gauche » (liste de gauche), « nouveau:nom,l,h », « nouveaufen » (fenêtre « Nouveau »), « monter:x,y,n » (case relevée n crans), « dialogue », « equipement:clé », « case:x,y » (case choisie), « zonea:x,y,v ».
+    /// « gauche » (liste de gauche), « nouveau:nom,l,h », « nouveaufen » (fenêtre « Nouveau »), « monter:x,y,n » (case relevée n crans), « dialogue », « casernes » (fenêtre des casernes), « choixunite:n » (ajout d'une unité à la ligne n), « ajouteunite:n,classe », « equipement:clé », « case:x,y » (case choisie), « zonea:x,y,v ».
     /// </summary>
     private void EdTestHooks(string orders)
     {
@@ -133,6 +133,25 @@ public sealed partial class OpenFDGame
                     break;
                 case "carte":
                     _map = true;
+                    break;
+                case "casernes":
+                    _edStOpen = true;
+                    break;
+                case "choixunite":
+                    _edStOpen = true;
+                    _edStPick = int.Parse(arg);
+                    break;
+                case "ajouteunite":
+                    // « ajouteunite:ligne,classe » : la classe ajoutée à cette caserne (0 : départ)
+                    string[] au = arg.Split(',', 2);
+                    EdStationsChange(l =>
+                    {
+                        int r = int.Parse(au[0]);
+                        while (l.Count <= r)
+                            l.Add(new EdStation { Code = "R" + l.Count, Changed = true });
+                        l[r].Units.Add(au[1]);
+                        l[r].Changed = true;
+                    });
                     break;
                 case "mini":
                     _miniHidden = false;
@@ -330,7 +349,7 @@ public sealed partial class OpenFDGame
             EdKeys();
         if (!_edLoaded && _edDrag != null && !_edDownL)
             _edDrag = null;
-        if (active && _edLoaded && _edDialog == null)
+        if (active && _edLoaded && _edDialog == null && !_edStOpen)
             EdViewInput(m, dt);
         EdUndoTrack(false);
         _edKeysPrev = k;
@@ -350,6 +369,11 @@ public sealed partial class OpenFDGame
         if (_edDialog != null)
         {
             EdDialogKeys();
+            return;
+        }
+        if (_edStOpen)
+        {
+            EdStationsKeys();
             return;
         }
         if (EdKey(Keys.Escape))
@@ -527,10 +551,10 @@ public sealed partial class OpenFDGame
     /// <summary>Barre de menu, listes, propriétés, fenêtres par-dessus.</summary>
     private void EdInterface()
     {
-        // une fenêtre de question ouverte : le reste de l'interface ne reçoit rien
+        // une fenêtre de question (ou celle des casernes) ouverte : le reste de l'interface ne reçoit rien
         bool press = _edPressL;
         int wheel = _edWheel;
-        if (_edDialog != null)
+        if (_edDialog != null || _edStOpen)
         {
             _edPressL = false;
             _edPressR = false;
@@ -544,6 +568,19 @@ public sealed partial class OpenFDGame
         EdDrawMenu();
         EdDrawDragGhost();
         EdDrawPopup();
+        if (_edStOpen && _edDialog == null)
+        {
+            _edPressL = press;
+            _edWheel = wheel;
+            // liste ouverte depuis la fenêtre (choix d'une caserne du jeu) : elle reçoit les clics et passe par-dessus
+            bool popup = _edPopup != null;
+            if (popup)
+                EdPopupInput();
+            if (popup)
+                _edPressL = false;
+            EdDrawStations();
+            EdDrawPopup();
+        }
         if (_edDialog != null)
         {
             _edPressL = press;

@@ -109,6 +109,11 @@ public sealed partial class OpenFDGame
             EdMessage(Tr("MisError", "Fichier .mis : {0}", e.Message), true);
         }
         EdCopyScriptsToWork(mission);
+        // casernes : celles de l'éditeur sont propres à la mission ouverte
+        _edStationCfgs.Clear();
+        _edStChoices = null;
+        _edStOpen = false;
+        _edStPick = -1;
         EdUndoReset();
         Window.Title = EdWindowTitle + " - " + mission;
         EdMessage(Tr("Opened", "{0} : {1} objets ({2} feux au départ)", mission, _edObjects.Count, _edObjects.Count(o => o.Kind == EditorItemKind.Fire && o.Lit)));

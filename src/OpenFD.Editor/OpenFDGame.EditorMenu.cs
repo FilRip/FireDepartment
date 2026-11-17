@@ -225,6 +225,8 @@ public sealed partial class OpenFDGame
             else if (_edNewClasses.TryGetValue(rel, out string? text))
                 classes[rel] = text;
         }
+        // casernes changées dans la fenêtre « Casernes et renforts » (Design\Firestation\openfd_<mission>_<n>.cfg)
+        EdStationFiles(classes);
         // textures des objets posés (pour les recopier si elles viennent d'une autre mission)
         HashSet<string> textures = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (string model in _edObjects.Where(o => o.Model != null && o.Added).Select(o => o.Model!).Distinct(StringComparer.OrdinalIgnoreCase))
