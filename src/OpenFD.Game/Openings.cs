@@ -271,7 +271,34 @@ public sealed partial class UnitManager
         LoadObstacles(level, assets);
         LoadDemolishable(level, assets);
         LoadExtricable(level, assets);
+        RemoveDoorFrames(level);
         RefreshDoorCells();
+    }
+
+    /// <summary>
+    /// Cadres de porte (Netting_AroundDoor : « ind_grillag3_cadre », sans occupation au sol, ni ouvrable ni cassable) :
+    /// comptés comme portes toujours fermées, ils fermaient pour toujours les cases de la porte qu'ils entourent (Subway,
+    /// FD2 : netting_arounddoor9 sur netting_door8, même découpée à la scie). Ils lâchent les cases qu'une autre ouverture
+    /// tient déjà (la porte, ou le grillage de part et d'autre) : c'est elle qui dit si l'on passe ; leurs autres cases
+    /// (les montants) restent fermées, comme avant.
+    /// </summary>
+    private void RemoveDoorFrames(Level level)
+    {
+        Dictionary<uint, LevelObject> byId = level.Objects.GroupBy(o => o.Id).ToDictionary(g => g.Key, g => g.First());
+        int freed = 0;
+        foreach (Opening d in Openings.ToList())
+        {
+            if (d.Usable || d.Breakable || d.Extricate || d.ScriptGate || d.IsObstacle || d.IsWindow || !byId.TryGetValue(d.Id, out LevelObject? o))
+                continue;
+            ClassFile? c = Class("Design\\" + o.ClassPath["design\\".Length..] + ".class");
+            if (c == null || c.Get("OCCUPATION", "Activated")?.Trim() != "0")
+                continue;
+            freed += d.Cells.RemoveAll(i => Openings.Any(x => x != d && x.Cells.Contains(i)));
+            if (d.Cells.Count == 0)
+                Openings.Remove(d);
+        }
+        if (freed > 0)
+            Log.Add($"Cadres de porte : {freed} case(s) laissée(s) à la porte qu'ils entourent");
     }
 
     /// <summary>

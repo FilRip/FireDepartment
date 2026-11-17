@@ -190,6 +190,8 @@ public sealed class MissionHost : IScriptHost
                     todo.Push(mo);
                 else if (mo.Kind == EntityKind.Placeable)
                     all.Add(m);   // seulement les objets du décor : les unités et les civils d'un groupe restent comme avant
+                else if (mo.Kind == EntityKind.FireVehicle && Units?.ById(m) == null)
+                    all.Add(m);   // véhicule factice (poste de soins, dévidoir) : Subway, groupes « Ravit_3 », « Ravit_4 »
             }
         return all;
     }

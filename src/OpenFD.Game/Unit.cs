@@ -71,6 +71,7 @@ public sealed class Unit
     public float ExtricatePower = 20;                     // [CAPACITIES_PROPS] ExtricatePower : points de vie enlevés par seconde
     public float Shove;                                   // coup de pelle en cours : avancée du bulldozer (0 à 1, dessin)
     public bool CanGrapple;                               // grappin ([CAPACITIES_ACTIONS] CanGrapplin : le « scout »)
+    public bool CanRescue = true;                         // sauve les civils et porte un collègue ([CAPACITIES_ACTIONS] CanRescue : pas le pompier canon, l'éclaireur…)
     public bool CanLadder;                                // pompier : monte à l'échelle d'un camion échelle ([CAPACITIES_ACTIONS] CanLadder)
     public bool IsBoat;                                   // bateau-pompe ([UNIT] Type=FIREBOAT) : seulement sur l'eau
     public bool IsAerial;                                 // camion échelle ([CAPACITIES_ACTIONS] action LADDER)

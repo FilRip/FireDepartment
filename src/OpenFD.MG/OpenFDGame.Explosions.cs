@@ -76,6 +76,15 @@ public sealed partial class OpenFDGame
         ExplosionSystem ex = _session.Explosions;
         foreach (Explosion e in ex.Happened)
         {
+            // secousse du script (explosif invisible) : toute la vue tremble, sans boule de feu ni éclair
+            if (e.Quake)
+            {
+                _shake = 1;
+                if (e.Sound is { Length: > 0 } qs)
+                    _audio?.Play(qs, e.Position);
+                Log($"Secousse : {e.Name}");
+                continue;
+            }
             _blastFx.Add((e.Position, _clock, e.Radius));
             if (e.Sound is { Length: > 0 } s)
                 _audio?.Play(s, e.Position);

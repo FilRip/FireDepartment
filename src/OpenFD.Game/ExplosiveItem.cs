@@ -32,6 +32,12 @@ public sealed class ExplosiveItem
     public bool LifeIsObjective;
     /// <summary>Réparé par un technicien : comme neuf tant que le feu ne l'a pas de nouveau entamé d'un point de vie.</summary>
     public bool Repaired;
+    /// <summary>
+    /// Explosif invisible ([DISPLAY] Model = invisible_item, « grenade ») : le script s'en sert pour faire trembler la terre
+    /// (Subway, FD2 : la fonction « Secousses » de la cinématique le fait sauter puis le remet en état, plusieurs fois).
+    /// Toute la vue tremble, où qu'il soit ; remis en état par le script, il peut sauter de nouveau.
+    /// </summary>
+    public bool Quake;
 
     /// <summary>État d'affichage : « e1 » intact, « e2 », « e3 » de plus en plus abîmé, « dead » après l'explosion.</summary>
     public string State

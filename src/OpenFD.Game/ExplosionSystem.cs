@@ -69,6 +69,7 @@ public sealed class ExplosionSystem
                 CanExplode = can,
                 OnDestroy = can ? null : onDestroy,
                 LifeIsObjective = objectives != null && objectives.Contains(o.Id),
+                Quake = (c.Get("DISPLAY", "Model") ?? "").Trim('"', ' ').EndsWith("invisible_item", StringComparison.OrdinalIgnoreCase),
             };
             int n = c.GetInt("DAMAGE", "NbDamageSteps", 0);
             it.Thresholds = Enumerable.Range(0, Math.Max(n, 0)).Select(i => c.GetFloat("DAMAGE", $"DamageTresholdStep{i}", 0)).ToArray();
@@ -187,7 +188,7 @@ public sealed class ExplosionSystem
             return;
         it.Exploded = true;
         it.Life = 0;
-        Happened.Add(new Explosion(it.Position, time, Math.Clamp(it.HpRadius * 0.9f, 500, 1200), it.Sound, it.Name));
+        Happened.Add(new Explosion(it.Position, time, Math.Clamp(it.HpRadius * 0.9f, 500, 1200), it.Sound, it.Name, it.Quake));
         Log.Add($"{time,6:0} s : explosion de {it.Name}");
         int lit = 0;
         foreach (HotPoint h in fire.HotPoints)
@@ -269,6 +270,9 @@ public sealed class ExplosionSystem
         if (!ById.TryGetValue(id, out ExplosiveItem? it))
             return false;
         it.Life = MathF.Max(0, life);
+        // secousse remise en état par le script (SecoussesUpdate) : prête à sauter de nouveau
+        if (life > 0 && it.Quake && it.Exploded)
+            it.Exploded = false;
         if (life <= 0 && it.CanExplode)
             Explode(it, fire, time);
         return true;

@@ -292,13 +292,12 @@ public sealed partial class UnitManager
             Log.Add($"{_s.Time,6:0} s : l'équipe {team} est en route ({list.Count} unités)");
             return;
         }
-        Vector2 basePos = Wp($"locend{spawn}_1") ?? Center();
+        Vector2 basePos = Walkable(Wp($"locend{spawn}_1") ?? Center());
+        List<Vector2> spots = FootSpots(basePos, crew.Count);
         int n = 0;
         foreach (string c in crew)
         {
-            float a = n * 0.9f;
-            Vector2 pos = basePos + new Vector2(MathF.Cos(a), MathF.Sin(a)) * (250 + 60 * n);
-            Unit? u = Create(c, false, Walkable(pos));
+            Unit? u = Create(c, false, n < spots.Count ? spots[n] : basePos);
             n++;
             if (u != null)
             {
@@ -309,6 +308,37 @@ public sealed partial class UnitManager
         if (_s.Time > 1)
             Sounds.Add(("VOCAL_REINFORCEMENT_ARRIVED", null));
         Log.Add($"{_s.Time,6:0} s : arrivée de l'équipe {team} ({list.Count} unités)");
+    }
+
+    /// <summary>
+    /// Places d'arrivée d'une équipe à pied (sans véhicule) autour de son point d'arrivée : des cases libres, au même
+    /// niveau et reliées à lui à pied (Subway, FD2 : l'équipe M2 arrive dans la station souterraine ; posés en cercle de
+    /// plus en plus grand, deux pompiers tombaient sur le terrain au-dessus, sans pouvoir en sortir).
+    /// </summary>
+    private List<Vector2> FootSpots(Vector2 basePos, int count)
+    {
+        List<Vector2> res = new List<Vector2>();
+        if (_s.Grid is not { } g || count == 0)
+            return res;
+        float baseZ = Ground(basePos);
+        HashSet<int> used = new HashSet<int>(Units.Where(u => !u.IsVehicle && !u.OnBoard)
+            .Select(u => g.CellOf(u.Position)).Where(c => g.Inside(c.cx, c.cy)).Select(c => g.Index(c.cx, c.cy)));
+        for (float r = 150; r <= 900 && res.Count < count; r += 100)
+            for (int k = 0; k < 16 && res.Count < count; k++)
+            {
+                float a = k * MathF.PI / 8 + r * 0.01f;
+                Vector2 p = basePos + new Vector2(MathF.Cos(a), MathF.Sin(a)) * r;
+                (int cx, int cy) = g.CellOf(new Vector3(p, 0));
+                if (!g.Inside(cx, cy) || !FreeCell(cx, cy) || !used.Add(g.Index(cx, cy)))
+                    continue;
+                Vector2 at = new Vector2((cx + 0.5f) * Grid.CellSize, (cy + 0.5f) * Grid.CellSize);
+                if (MathF.Abs(Ground(at) - baseZ) > 100)
+                    continue;
+                Paths.FindPath(basePos, at, out bool partial);
+                if (!partial)
+                    res.Add(at);
+            }
+        return res;
     }
 
     /// <summary>
@@ -442,6 +472,8 @@ public sealed partial class UnitManager
         u.CanRepair = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanRepair");
         u.CanGrapple = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanGrapplin");
         u.CanLadder = !vehicle && c.GetBool("CAPACITIES_ACTIONS", "CanLadder");
+        // (classe sans cette ligne, comme les missions converties de Fire Department 1 : il sauve)
+        u.CanRescue = !vehicle && (c.Get("CAPACITIES_ACTIONS", "CanRescue") == null || c.GetBool("CAPACITIES_ACTIONS", "CanRescue"));
         u.IsBoat = vehicle && (string.Equals(c.Get("UNIT", "Type")?.Trim('"', ' '), "FIREBOAT", StringComparison.OrdinalIgnoreCase) || c.GetBool("MOVING", "NoGroundContact"));
         u.IsAerial = vehicle && Enumerable.Range(1, 9).Any(i => string.Equals(c.Get("CAPACITIES_ACTIONS", $"Action{i}")?.Trim('"', ' '), "LADDER", StringComparison.OrdinalIgnoreCase));
         if (u.IsAerial)
@@ -1063,6 +1095,12 @@ public sealed partial class UnitManager
         if (u.IsCarrying)
         {
             u.Status = $"porte déjà {CarriedName(u)}";
+            return;
+        }
+        // il faudrait le porter, et cette unité ne secourt personne ([CAPACITIES_ACTIONS] CanRescue = 0)
+        if (!u.CanRescue && !ReviveInPlace(u))
+        {
+            NotARescuer(u);
             return;
         }
         if (!Order(u, new(victim.Position.X, victim.Position.Y)))

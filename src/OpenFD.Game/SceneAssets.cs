@@ -321,6 +321,16 @@ public sealed class SceneAssets
             if (uvB == uvA)
                 uvB = -1;
             string? lightmap = src != null ? null : $"FLM_{mission}_{baseName}_0";
+            // sol : maillage « GROUND » ou tuiles « FGD_Subway_tile_1_2 », un seul éclairage précalculé pour tout le sol,
+            // « FLM_Subway_GROUND » (lampadaires, ombres des bâtiments ; la nuit de Subway en dépend)
+            Match tile = GroundTileRx.Match(baseName);
+            if (src == null && GroundLightmaps && ResolveTex(mission, lightmap!) == null)
+            {
+                if (tile.Success)
+                    lightmap = $"FLM_{tile.Groups[1].Value}_GROUND";
+                else if (baseName.Equals("GROUND", StringComparison.OrdinalIgnoreCase))
+                    lightmap = $"FLM_{mission}_GROUND";
+            }
             if (lightmap != null && ResolveTex(mission, lightmap) == null)
                 lightmap = null;
             return new MeshAsset
@@ -331,6 +341,16 @@ public sealed class SceneAssets
                 Lightmap = uvB >= 0 ? lightmap : null,
             };
         });
+
+    /// <summary>
+    /// Sol éclairé par « FLM_&lt;mission&gt;_GROUND » : seulement quand la nuit est dans l'éclairage précalculé (soleil noir,
+    /// Subway). De jour (London), le sol est déjà bien éclairé autrement, et cet éclairage le rendrait presque blanc.
+    /// À régler avant de charger le décor de la mission.
+    /// </summary>
+    public bool GroundLightmaps;
+
+    /// <summary>Tuile du sol : « FGD_&lt;nom&gt;_tile_&lt;x&gt;_&lt;y&gt; ».</summary>
+    private static readonly Regex GroundTileRx = new Regex(@"^FGD_(.+)_tile_\d+_\d+$", RegexOptions.IgnoreCase);
 
     /// <summary>Chemin de la texture (DDS) dans les banques ; cherche aussi dans celles des autres missions.</summary>
     public string? ResolveTex(string mission, string name, bool fallback = true)

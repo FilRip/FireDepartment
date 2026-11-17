@@ -18,6 +18,12 @@ public sealed partial class UnitManager
     {
         if (u.IsVehicle)
             return;
+        // pompier canon, éclaireur, désincarcérateur… : [CAPACITIES_ACTIONS] CanRescue = 0, il ne secourt pas les civils
+        if (!u.CanRescue)
+        {
+            NotARescuer(u);
+            return;
+        }
         if (u.IsCarrying)
         {
             u.Status = $"porte déjà {CarriedName(u)}";
@@ -39,6 +45,14 @@ public sealed partial class UnitManager
             return;
         u.GoTo = c;
         u.Status = $"va chercher {c.Name}";
+    }
+
+    /// <summary>Ordre refusé : cette unité ne secourt personne (voix « impossible », comme le jeu d'origine).</summary>
+    private void NotARescuer(Unit u)
+    {
+        u.Status = "ne peut pas secourir";
+        if (PlayerCommand)
+            Sounds.Add(("VOCAL_IMPOSSIBLE_TO_ACCESS", null));
     }
 
     /// <summary>Unité arrivée près du civil qu'elle venait chercher : le médecin le réanime s'il est inconscient ; conscient,

@@ -1703,6 +1703,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     private float _shadowOpacity = 0.5f;
     private float _lmScale = 2f;    // multiplicateur de l'éclairage précalculé (2 le jour, 1,1 pour la nuit de Fireworks)
     private SN.Vector3 _tint = SN.Vector3.One;   // teinte d'ensemble : blanc le jour, plus sombre et bleutée la nuit
+    private SN.Vector3 _sceneTint = SN.Vector3.One;   // teinte du décor (shader de la scène) : _tint, sauf si l'éclairage précalculé fait déjà la nuit
     private SN.Vector3 _sunColor = SN.Vector3.One;
     private bool _shadowPass, _shadowsOn = true;
     private RenderTarget2D? _shadowMap;
@@ -1745,14 +1746,48 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         // nuit : le soleil de la mission a un éclairage précalculé faible (Fireworks : 1,1 au lieu de 2). Le jeu d'origine garde
         // pourtant le facteur 2 dans ses shaders (ses textures d'éclairage sont déjà sombres) ; ici on assombrit tout un peu,
         // avec une pointe de bleu, en restant assez clair pour bien voir.
-        _tint = _lmScale < 1.5f ? new SN.Vector3(0.6f, 0.63f, 0.74f) : SN.Vector3.One;
+        // Autre forme de nuit (FD2, Subway) : un soleil dont la lumière diffuse est noire (il ne fait que l'ambiance).
+        float sunMax = MathF.Max(_sunColor.X, MathF.Max(_sunColor.Y, _sunColor.Z));
+        // nuit dans l'éclairage précalculé du sol (Subway, Fireworks, Factory…) : sa texture « FLM_<mission>_GROUND » est
+        // sombre (moyenne sous 95 sur 255 ; le jour, London : 111, Street : 155). Le sol l'utilise alors (flaques des
+        // lampadaires) ; le décor n'est pas teinté en plus (il serait deux fois trop sombre). Les unités et les véhicules
+        // gardent leur teinte d'avant (de nuit seulement pour les deux cas ci-dessus).
+        float ground = GroundLightLevel(_mission);
+        bool bakedNight = ground >= 0 && ground < 95;
+        bool night = _lmScale < 1.5f || sunMax < 0.1f;
+        _tint = night ? new SN.Vector3(0.6f, 0.63f, 0.74f) : SN.Vector3.One;
+        _sceneTint = bakedNight ? SN.Vector3.One : _tint;
+        _assets.GroundLightmaps = bakedNight;
         _lmScale = 2f;
-        Console.WriteLine($"Soleil : direction {_sunDir}, teinte {_tint}, ombres {_shadowOpacity:0.##}");
+        Console.WriteLine($"Soleil : direction {_sunDir}, teinte {_tint}, ombres {_shadowOpacity:0.##}{(ground >= 0 ? $", éclairage du sol {ground:0}" : "")}{(bakedNight ? " (nuit précalculée)" : "")}");
         foreach (BasicEffect e in new[] { _lit, _plain })
         {
             e.DirectionalLight0.Direction = _sunDir.X();
             e.DirectionalLight1.Direction = -_sunDir.X();
         }
+    }
+
+    /// <summary>
+    /// Luminosité moyenne (0 à 255) de l'éclairage précalculé du sol de la mission (« FLM_London_GROUND »,
+    /// « FLM_level_institute_GROUND »), ou -1 s'il n'y en a pas.
+    /// </summary>
+    private float GroundLightLevel(string mission)
+    {
+        foreach (string name in new[] { $"FLM_{mission}_GROUND", $"FLM_level_{mission}_GROUND" })
+        {
+            byte[]? b = _assets.Texture(mission, name);
+            if (b == null)
+                continue;
+            (int w, int h, Color[] px)? img = null;
+            try { img = Tex.DecodeColors(b); } catch { }
+            if (img is not { } im || im.px.Length == 0)
+                continue;
+            double sum = 0;
+            for (int i = 0; i < im.px.Length; i++)
+                sum += im.px[i].R + im.px[i].G + im.px[i].B;
+            return (float)(sum / (3.0 * im.px.Length));
+        }
+        return -1;
     }
 
     /// <summary>
@@ -1910,7 +1945,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         }
 
         // décor : effet « sol / bâtiment » d'après les shaders du jeu
-        _scene.SetFrame((_viewProj).X(), _eye.X(), 30000, 90000, Sky.X(), _tint.X());
+        _scene.SetFrame((_viewProj).X(), _eye.X(), 30000, 90000, Sky.X(), _sceneTint.X());
         _refl.SetFrame(_view.X(), _viewProj.X(), _eye.X());
         _scene.SetShadow(_shadowsOn && _shadowOpacity > 0 ? _shadowMap : null, _lightVp, _shadowOpacity, 0.0008f, _sunDir.X());
         // cinématique : comme le moteur d'origine, les faces vues de dos ne sont pas dessinées ; une caméra placée
