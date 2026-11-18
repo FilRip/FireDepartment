@@ -249,6 +249,77 @@ public sealed partial class OpenFDGame
         return r;
     }
 
+    private const string UseSignature = "EntityID User, EntityID Object, mcString State";
+    private const string DestroySignature = "EntityID Thing";
+
+    /// <summary>
+    /// Évènements de l'objet qui appellent une fonction du script : ses actions (« use », « use2 », « Open »… : une
+    /// ligne chacune ; « use » vide sur un objet du décor qui n'en a pas) et sa destruction. Champ : le nom de la
+    /// fonction ; « ... » : la fonction dans le script.
+    /// </summary>
+    private void EdScriptEvents(EditorObject e, string id)
+    {
+        bool decor = e.Kind is EditorItemKind.Object or EditorItemKind.Dynamic;
+        List<(string action, string script)>? actions = LevelEdit.Actions(e.Source);
+        if (actions != null && (decor || actions.Any(a => a.action.Length > 0)))
+        {
+            bool named = false;
+            for (int i = 0; i < actions.Count; i++)
+            {
+                if (actions[i].action.Length == 0)
+                    continue;
+                named = true;
+                int index = i;
+                string action = actions[i].action;
+                EdPropScript(id + "act" + i, Tr("ScriptAction", "Action « {0} »", action), actions[i].script, UseSignature,
+                    v => EdUpdate(e, LevelEdit.WithAction(e.Source, index, action, v.Trim())));
+            }
+            // pas encore d'action : « use », sur le premier état (il devient l'état courant, comme sur la bombe d'Institute)
+            if (!named && actions.Count > 0)
+                EdPropScript(id + "act0", Tr("ScriptAction", "Action « {0} »", "use"), "", UseSignature, v =>
+                {
+                    if (v.Trim().Length > 0)
+                        EdUpdate(e, LevelEdit.WithAction(e.Source, 0, "use", v.Trim()));
+                });
+            // une action ne sert que si les pompiers peuvent utiliser l'objet : sa classe le permet, ou la carte (case)
+            ClassFile? c = EdClass(e.Source.ClassPath);
+            bool classUse = c != null && (c.GetBool("CAPACITIES_ACTIONS", "CouldBeUse") || c.GetBool("CAPACITIES_TARGET", "CouldBeUse"));
+            if (decor && !classUse && LevelEdit.MapCanUse(e.Source) is { } mapUse)
+                EdPropCheck(Tr("CanUse", "Utilisable par les pompiers"), mapUse, v => EdUpdate(e, LevelEdit.WithMapCanUse(e.Source, v)));
+        }
+        else
+            foreach ((string label, string function, string signature) in EdScriptRefs(e).Where(r => r.signature == UseSignature))
+                EdPropScript(id + "scr" + label, label, function, signature, null);
+        string? destroyed = LevelEdit.DestroyScript(e.Source);
+        if (destroyed != null)
+            EdPropScript(id + "mort", Tr("ScriptDestroyed", "À sa destruction"), destroyed, DestroySignature,
+                v => EdUpdate(e, LevelEdit.WithDestroyScript(e.Source, v.Trim())));
+        else
+            foreach ((string label, string function, string signature) in EdScriptRefs(e).Where(r => r.signature == DestroySignature))
+                EdPropScript(id + "scr" + label, label, function, signature, null);
+    }
+
+    /// <summary>Nom de fonction libre, « function_1234 » (numéro tiré au hasard, absent des scripts de la mission).</summary>
+    private string EdNewFunctionName()
+    {
+        string all = "";
+        try
+        {
+            if (Directory.Exists(EdWork))
+                all = string.Concat(Directory.EnumerateFiles(EdWork, "*.scp").Select(f => File.ReadAllText(f, System.Text.Encoding.Latin1)));
+        }
+        catch (Exception)
+        {
+        }
+        for (int i = 0; i < 1000; i++)
+        {
+            string name = "function_" + Random.Shared.Next(1000, 10000).ToString(CultureInfo.InvariantCulture);
+            if (!all.Contains(name, StringComparison.OrdinalIgnoreCase))
+                return name;
+        }
+        return "function_" + Environment.TickCount64.ToString(CultureInfo.InvariantCulture);
+    }
+
     /// <summary>Fonction d'un script : son nom (ou un champ pour le changer) et « ... » qui ouvre le script à cette fonction.</summary>
     private void EdPropScript(string id, string label, string function, string signature, Action<string>? change)
     {
@@ -267,6 +338,14 @@ public sealed partial class OpenFDGame
         {
             if (function.Length > 0)
                 EdGotoScript(function, signature);
+            else if (change != null && signature.Length > 0)
+            {
+                // pas encore de fonction : un nom tiré au hasard, écrit sur l'objet, puis la fonction créée dans le script
+                string name = EdNewFunctionName();
+                change(name);
+                EdGotoScript(name, signature);
+                EdMessage(Tr("FunctionCreated", "Fonction {0} créée", name));
+            }
             else
                 EdMessage(Tr("NoFunction", "Écrivez d'abord le nom de la fonction"), true);
         }
@@ -292,6 +371,8 @@ public sealed partial class OpenFDGame
             EdUpdate(e, LevelEdit.WithName(e.Source, v));
         });
         EdPropText(Tr("Class", "Classe"), e.Source.ClassPath);
+        // numéro de l'objet : celui que les scripts emploient (ENT_SetVisibility(5010506, 0)…)
+        EdPropText(Tr("ScriptId", "Numéro (scripts)"), e.Source.Id.ToString());
         EdPropVector(id + "pos", Tr("Position", "Position (cm)"), e.Position, v =>
         {
             e.Position = v;
@@ -350,10 +431,10 @@ public sealed partial class OpenFDGame
                 EdPropText(Tr("TreeHeight", "Hauteur"), e.TreeHeight.ToString("0", CultureInfo.InvariantCulture) + " cm");
                 break;
         }
-        // fonctions de script appelées par l'objet (actions, destruction) ; « ... » ouvre le script à la fonction
+        // fonctions de script appelées par l'objet (actions, destruction) : toujours montrées, même sans fonction ;
+        // « ... » ouvre le script à la fonction (et la crée si elle manque, avec un nom tiré au hasard si le champ est vide)
         if (e.Kind != EditorItemKind.Zone)
-            foreach ((string label, string function, string signature) in EdScriptRefs(e))
-                EdPropScript(id + "scr" + label, label, function, signature, null);
+            EdScriptEvents(e, id);
         _edPropY += 4 * _scale;
         EdPropButton(Tr("Remove", "Enlever l'objet (Suppr)"), () => EdDelete(e));
     }

@@ -36,6 +36,9 @@ public sealed class ScriptEditorGame : Microsoft.Xna.Framework.Game
     private string? _goto;              // « fonction|paramètres » à montrer dès que les scripts sont chargés
     private string? _newName;           // fenêtre « Nouveau fichier » ouverte : le nom tapé
     private int _confirmDelete = -1;    // onglet dont on demande la suppression
+    private string? _find;              // barre de recherche ouverte (Ctrl+F) : le texte cherché
+    private bool _findFocus;            // les touches vont à la barre de recherche (pas au script)
+    private bool _findFailed;           // dernier texte cherché introuvable
     private string _lastControl = "";
     private double _controlCheck, _ownerCheck;
     private int _owner;
@@ -204,7 +207,13 @@ public sealed class ScriptEditorGame : Microsoft.Xna.Framework.Game
         _m = Mouse.GetState();
         (_mx, _my) = Fb(_m.X, _m.Y);
         if (IsActive && _m.LeftButton == ButtonState.Pressed && _mPrev.LeftButton == ButtonState.Released)
+        {
             _press = true;
+            // clic dans le script : les touches y retournent (la barre de recherche reste ouverte, F3 continue)
+            (float cx, float cy, float cw, float ch) = CodeRect;
+            if (Hit(cx, cy, cw, ch))
+                _findFocus = false;
+        }
         if (IsActive)
             _wheel += _m.ScrollWheelValue - _mPrev.ScrollWheelValue;
         if (IsActive)
@@ -312,6 +321,24 @@ public sealed class ScriptEditorGame : Microsoft.Xna.Framework.Game
                 _newName += ch;
             return;
         }
+        if (_find != null && _findFocus)
+        {
+            if (Ctrl)
+                return;
+            if (ch == '\b')
+                _find = _find.Length > 0 ? _find[..^1] : "";
+            else if (ch is '\r' or '\n')
+            {
+                FindNext(!Shift, false);
+                return;
+            }
+            else if (ch >= ' ' && ch != 127)
+                _find += ch;
+            else
+                return;
+            FindNext(true, true);   // recherche au fil de la frappe, depuis le début du résultat montré
+            return;
+        }
         if (Doc is not { } d || Ctrl)
             return;
         switch (ch)
@@ -351,6 +378,20 @@ public sealed class ScriptEditorGame : Microsoft.Xna.Framework.Game
         }
         if (Key(Keys.F7) || (Ctrl && Key(Keys.B)))
             Compile();
+        // recherche : Ctrl+F ouvre la barre (avec le texte choisi), Entrée / F3 suivant, Maj+Entrée / Maj+F3 précédent,
+        // Échap ferme
+        if (Ctrl && Key(Keys.F))
+            OpenFind();
+        if (Key(Keys.F3) && !string.IsNullOrEmpty(_find))
+            FindNext(!Shift, false);
+        if (_find != null && Key(Keys.Escape))
+        {
+            _find = null;
+            _findFocus = false;
+            return;
+        }
+        if (_find != null && _findFocus)
+            return;   // les autres touches vont à la barre de recherche
         if (Ctrl && Key(Keys.N))
             _newName = "";
         if (Ctrl && Key(Keys.Tab) && _docs.Count > 0)
@@ -566,6 +607,85 @@ public sealed class ScriptEditorGame : Microsoft.Xna.Framework.Game
     }
 
     /// <summary>Onglet choisi, ligne en haut de la vue (avec deux lignes avant), curseur au début.</summary>
+    /// <summary>Ouvre la barre de recherche (ou y revient) ; un texte choisi sur une seule ligne devient le texte cherché.</summary>
+    private void OpenFind()
+    {
+        if (Doc is { HasSelection: true } d && !d.SelectedText.Contains('\n'))
+            _find = d.SelectedText;
+        _find ??= "";
+        _findFocus = true;
+        _findFailed = false;
+    }
+
+    /// <summary>
+    /// Occurrence suivante (ou précédente) du texte cherché, sans tenir compte des majuscules, dans tous les onglets : à
+    /// partir du curseur de l'onglet ouvert, puis les onglets suivants, en revenant au début. Trouvée : choisie (en
+    /// surbrillance) et montrée. fromStart : depuis le début du texte choisi (recherche au fil de la frappe).
+    /// </summary>
+    private void FindNext(bool forward, bool fromStart)
+    {
+        if (string.IsNullOrEmpty(_find) || _docs.Count == 0 || Doc is not { } cur)
+        {
+            _findFailed = false;
+            return;
+        }
+        // liste de toutes les occurrences (onglet, ligne, colonne), dans l'ordre
+        List<(int doc, int line, int col)> hits = FindAll();
+        _findFailed = hits.Count == 0;
+        if (hits.Count == 0)
+            return;
+        (int line, int col) caret = (cur.Line, cur.Col);
+        if (cur.HasSelection && (fromStart || !forward))
+            caret = cur.Selection.a;
+        (int doc, int line, int col) at = (_cur, caret.line, caret.col);
+        int Compare((int doc, int line, int col) a, (int doc, int line, int col) b) =>
+            a.doc != b.doc ? a.doc.CompareTo(b.doc) : a.line != b.line ? a.line.CompareTo(b.line) : a.col.CompareTo(b.col);
+        (int doc, int line, int col) found;
+        if (forward)
+        {
+            int i = hits.FindIndex(h => Compare(h, at) >= 0);
+            found = i >= 0 ? hits[i] : hits[0];
+        }
+        else
+        {
+            int i = hits.FindLastIndex(h => Compare(h, at) < 0);
+            found = i >= 0 ? hits[i] : hits[^1];
+        }
+        _cur = found.doc;
+        ScriptDoc d = _docs[found.doc];
+        d.MoveTo(found.line, found.col, false);
+        d.MoveTo(found.line, found.col + _find.Length, true);
+        int rows = Math.Max(1, (int)(CodeRect.h / CodeLineH) - 1);
+        if (found.line < d.Scroll || found.line > d.Scroll + rows - 1)
+            d.Scroll = Math.Max(0, found.line - rows / 3);
+        ShowCaret(d);
+    }
+
+    private List<(int doc, int line, int col)> FindAll()
+    {
+        List<(int doc, int line, int col)> hits = new List<(int doc, int line, int col)>();
+        if (string.IsNullOrEmpty(_find))
+            return hits;
+        for (int k = 0; k < _docs.Count; k++)
+            for (int l = 0; l < _docs[k].Lines.Count; l++)
+            {
+                string line = _docs[k].Lines[l];
+                for (int c = line.IndexOf(_find, StringComparison.OrdinalIgnoreCase); c >= 0; c = line.IndexOf(_find, c + 1, StringComparison.OrdinalIgnoreCase))
+                    hits.Add((k, l, c));
+            }
+        return hits;
+    }
+
+    /// <summary>« 3 / 12 » : rang du résultat choisi parmi toutes les occurrences.</summary>
+    private string FindCount()
+    {
+        List<(int doc, int line, int col)> hits = FindAll();
+        if (hits.Count == 0)
+            return string.IsNullOrEmpty(_find) ? "" : Tr("FindNone", "introuvable");
+        int i = Doc is { HasSelection: true } d ? hits.IndexOf((_cur, d.Selection.a.line, d.Selection.a.col)) : -1;
+        return i >= 0 ? $"{i + 1} / {hits.Count}" : $"{hits.Count}";
+    }
+
     private void ShowLine(int doc, int line)
     {
         _cur = doc;
@@ -595,6 +715,14 @@ public sealed class ScriptEditorGame : Microsoft.Xna.Framework.Game
         _wheel = 0;
         base.Draw(gameTime);
         // essai : FD3_SCRIPT_CAPTURE=image.png (après une compilation si FD3_SCRIPT_COMPILER est là)
+        if (Environment.GetEnvironmentVariable("FD3_SCRIPT_CAPTURE") is { Length: > 0 } && _frames == 10 && Environment.GetEnvironmentVariable("FD3_SCRIPT_FIND") is { Length: > 0 } findTest)
+        {
+            // essai : FD3_SCRIPT_FIND=texte (barre de recherche ouverte, deuxième occurrence choisie)
+            _find = findTest;
+            _findFocus = true;
+            FindNext(true, false);
+            FindNext(true, false);
+        }
         if (Environment.GetEnvironmentVariable("FD3_SCRIPT_CAPTURE") is { Length: > 0 } cap && ++_frames == 20)
         {
             if (Environment.GetEnvironmentVariable("FD3_SCRIPT_COMPILER") != null)
@@ -648,8 +776,37 @@ public sealed class ScriptEditorGame : Microsoft.Xna.Framework.Game
             _newName = "";
         if (Button(W - bw - pad, pad, bw, h - 2 * pad, Tr("Compile", "Compiler")))
             Compile();
+        float right = W - bw - 2 * pad;
+        if (Button(right - bw, pad, bw, h - 2 * pad, Tr("Find", "Rechercher")))
+            OpenFind();
+        right -= bw + pad;
+        // barre de recherche : le texte cherché (clic : y taper), le rang du résultat, ◄ ►
+        if (_find != null)
+        {
+            float fw = MathF.Min(420 * s, W * 0.4f), fx = right - fw, fh = h - 2 * pad;
+            float aw = fh;
+            float tx = fx, tw = fw - 2 * aw - 2 * pad;
+            _ui.Rect(tx, pad, tw, fh, new SN.Vector4(0.05f, 0.05f, 0.07f, 1));
+            _ui.Frame(tx, pad, tw, fh, _findFocus ? Accent : LineCol, MathF.Max(1, s));
+            string count = FindCount();
+            float cw = _ui.Measure(count);
+            float written = _ui.Text(tx + 6 * s, (h - _ui.LineHeight) / 2, Fit(_find, tw - cw - 20 * s), _findFailed ? Red : TextCol);
+            if (_findFocus && (int)(_clock * 2) % 2 == 0)
+                _ui.Rect(tx + 6 * s + written + 1, pad + 3 * s, 2 * s, fh - 6 * s, TextCol);
+            _ui.Text(tx + tw - cw - 6 * s, (h - _ui.LineHeight) / 2, count, _findFailed ? Red : Muted);
+            if (_press && Hit(tx, pad, tw, fh))
+            {
+                _findFocus = true;
+                _press = false;
+            }
+            if (Button(tx + tw + pad, pad, aw, fh, "<"))
+                FindNext(false, false);
+            if (Button(tx + tw + aw + 2 * pad, pad, aw, fh, ">"))
+                FindNext(true, false);
+            right = fx - pad;
+        }
         float x = pad + bw + 3 * pad;
-        _ui.Text(x, (h - _ui.LineHeight) / 2, Fit(_status, W - x - bw - 4 * pad), _statusError ? Red : TextCol);
+        _ui.Text(x, (h - _ui.LineHeight) / 2, Fit(_status, Math.Max(0, right - x - 2 * pad)), _statusError ? Red : TextCol);
         _ui.End();
     }
 
@@ -927,7 +1084,7 @@ public sealed class ScriptEditorGame : Microsoft.Xna.Framework.Game
         w -= sbW + 4 * s;
         _ui.BeginClipped(new Rectangle((int)x, (int)(y + pad), (int)w, (int)(h - 2 * pad)));
         if (_problems.Count == 0)
-            _ui.Text(x + 8 * s, y + pad, Tr("CompileHelp", "Compiler (F7) : vérifie les scripts (syntaxe, commandes inconnues du jeu). Ctrl+S : enregistrer. Ctrl+N : nouveau fichier."), Muted);
+            _ui.Text(x + 8 * s, y + pad, Tr("CompileHelp", "Compiler (F7) : vérifie les scripts (syntaxe, commandes inconnues du jeu). Ctrl+S : enregistrer. Ctrl+N : nouveau fichier. Ctrl+F : rechercher (F3 : suivant)."), Muted);
         for (int i = 0; i < _problems.Count; i++)
         {
             ScriptCheck.Problem p = _problems[i];

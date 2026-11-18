@@ -29,6 +29,9 @@ public sealed partial class UnitManager
             // l'épave du bulldozer (« buldozer_areparer ») dont la classe n'est pas réparable
             if (CapacityByte(o, CapRepair))
                 repair = true;
+            // utilisable par la carte (même bloc, octet « CouldBeUse » : posé par l'éditeur de missions, avec une action)
+            if (CapacityByte(o, CapUse))
+                use = true;
             // objet que le script rend utilisable (ou réparable) plus tard : il ne l'est pas encore au départ
             // (Mriya : le calendrier bonus collé au transformateur, rendu utilisable pendant la cinématique de G2_CanUse)
             if (enabledLater.Contains((o.Id, "COULDBEUSE")))

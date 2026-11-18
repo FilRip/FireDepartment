@@ -343,6 +343,161 @@ public static class LevelEdit
         return Reparse(o, raw, o.NodeLength);
     }
 
+    // ---- fonctions de script d'un objet ----
+
+    /// <summary>Texte du composant (longueur sur 4 octets, fin 0 comprise, puis le texte) : début, fin, texte ; null s'il n'y en a pas là.</summary>
+    private static (int start, int end, string text)? StringAt(byte[] b, int at)
+    {
+        if (at < 0 || at + 4 > b.Length)
+            return null;
+        int len = BitConverter.ToInt32(b, at);
+        if (len < 0 || len > 256 || at + 4 + len > b.Length || (len > 0 && b[at + 4 + len - 1] != 0))
+            return null;
+        for (int i = 0; i < len - 1; i++)
+            if (b[at + 4 + i] < 32 || b[at + 4 + i] > 126)
+                return null;
+        return (at, at + 4 + len, len > 1 ? Encoding.Latin1.GetString(b, at + 4, len - 1) : "");
+    }
+
+    private static byte[] StringBytes(string s)
+    {
+        byte[] t = Encoding.Latin1.GetBytes(s);
+        byte[] r = new byte[4 + t.Length + 1];
+        BitConverter.GetBytes(t.Length + 1).CopyTo(r, 0);
+        t.CopyTo(r, 4);
+        return r;
+    }
+
+    /// <summary>Le composant avec ces morceaux remplacés (début, fin, nouveaux octets ; dans l'ordre, sans chevauchement).</summary>
+    private static LevelObject WithParts(LevelObject o, Component c, byte[] b, List<(int start, int end, byte[] data)> parts)
+    {
+        if (parts.Count == 0)
+            return o;
+        using MemoryStream ms = new MemoryStream();
+        int at = 0;
+        foreach ((int start, int end, byte[] data) in parts.OrderBy(x => x.start))
+        {
+            ms.Write(b, at, start - at);
+            ms.Write(data);
+            at = end;
+        }
+        ms.Write(b, at, b.Length - at);
+        return WithComponent(o, c, ms.ToArray());
+    }
+
+    /// <summary>
+    /// États logiques de l'objet (composant A027) : après l'en-tête, l'état courant (-1 : aucun) et son nom, un octet, le
+    /// nombre d'états, puis par état six textes : deux inconnus (vides), l'animation de l'objet, la fonction du script,
+    /// le nom de l'action (« use », « use2 », « Open »…) et l'animation du pompier. Lu sur tous les objets du jeu.
+    /// </summary>
+    private static (int curAt, int cur, (int start, int end, string text) curName, List<(int start, int end, string text)[]> states)? StateParts(LevelObject o)
+    {
+        if (o.GetComponent(0xA027) is not { } c)
+            return null;
+        byte[] b = o.ComponentBytes(c).ToArray();
+        int k = b.AsSpan().IndexOf(new byte[] { 0xCC, 0xCC, 0xBB, 0xBB });
+        if (k < 0 || k + 8 > b.Length)
+            return null;
+        int p = k + 4;
+        int curAt = p;
+        int cur = BitConverter.ToInt32(b, p);
+        p += 4;
+        if (StringAt(b, p) is not { } curName)
+            return null;
+        p = curName.end + 1;
+        if (p + 4 > b.Length)
+            return null;
+        int n = BitConverter.ToInt32(b, p);
+        p += 4;
+        if (n < 0 || n > 32)
+            return null;
+        List<(int start, int end, string text)[]> states = new List<(int start, int end, string text)[]>();
+        for (int i = 0; i < n; i++)
+        {
+            (int start, int end, string text)[] e = new (int start, int end, string text)[6];
+            for (int j = 0; j < 6; j++)
+            {
+                if (StringAt(b, p) is not { } s)
+                    return null;
+                e[j] = s;
+                p = s.end;
+            }
+            states.Add(e);
+        }
+        if (!Chunks.IsEnd(b, p))
+            return null;
+        return (curAt, cur, curName, states);
+    }
+
+    /// <summary>Actions de l'objet (nom de l'état, fonction du script) dans l'ordre des états ; null : pas de composant lisible.</summary>
+    public static List<(string action, string script)>? Actions(LevelObject o) =>
+        StateParts(o) is { } sp ? sp.states.Select(e => (e[4].text, e[3].text)).ToList() : null;
+
+    /// <summary>
+    /// Action numéro <paramref name="index"/> : son nom et sa fonction. Sur un objet sans état (courant -1), le premier
+    /// devient l'état courant (comme la bombe d'Institute : « use » courant), sinon le jeu ne lit pas l'action.
+    /// </summary>
+    public static LevelObject WithAction(LevelObject o, int index, string action, string script)
+    {
+        if (StateParts(o) is not { } sp || index < 0 || index >= sp.states.Count || o.GetComponent(0xA027) is not { } c)
+            return o;
+        byte[] b = o.ComponentBytes(c).ToArray();
+        List<(int start, int end, byte[] data)> parts = new List<(int start, int end, byte[] data)>();
+        bool makeCurrent = sp.cur < 0 && index == 0 && action.Length > 0;
+        if (makeCurrent)
+            parts.Add((sp.curAt, sp.curAt + 4, BitConverter.GetBytes(0)));
+        if (makeCurrent || (sp.cur == index && sp.curName.text != action))
+            parts.Add((sp.curName.start, sp.curName.end, StringBytes(action)));
+        (int start, int end, string text)[] e = sp.states[index];
+        if (e[3].text != script)
+            parts.Add((e[3].start, e[3].end, StringBytes(script)));
+        if (e[4].text != action)
+            parts.Add((e[4].start, e[4].end, StringBytes(action)));
+        return WithParts(o, c, b, parts);
+    }
+
+    /// <summary>
+    /// Fonction appelée à la destruction (composant A024) : le texte placé juste après l'octet 46, suivi de 8 octets, d'un
+    /// second texte, d'un nombre et de la fin du composant (lu ainsi sur tous les objets du décor du jeu). null : pas
+    /// de composant, ou rangé autrement (personnages…).
+    /// </summary>
+    private static (int start, int end, string text)? DestroyPart(LevelObject o)
+    {
+        if (o.GetComponent(0xA024) is not { } c)
+            return null;
+        byte[] b = o.ComponentBytes(c).ToArray();
+        if (StringAt(b, 47) is not { } s || StringAt(b, s.end + 8) is not { } s2 || s2.end + 4 + 4 != b.Length || !Chunks.IsEnd(b, b.Length - 4))
+            return null;
+        return s;
+    }
+
+    /// <summary>Fonction appelée à la destruction ; null si elle ne peut pas être lue ni écrite ici.</summary>
+    public static string? DestroyScript(LevelObject o) => DestroyPart(o)?.text;
+
+    public static LevelObject WithDestroyScript(LevelObject o, string script)
+    {
+        if (DestroyPart(o) is not { } s || o.GetComponent(0xA024) is not { } c || s.text == script)
+            return o;
+        byte[] b = o.ComponentBytes(c).ToArray();
+        return WithParts(o, c, b, new List<(int start, int end, byte[] data)> { (s.start, s.end, StringBytes(script)) });
+    }
+
+    /// <summary>
+    /// Capacité « utilisable » donnée par la carte (composant A026, bloc des capacités, octet 36) ; null : bloc absent.
+    /// </summary>
+    public static bool? MapCanUse(LevelObject o)
+    {
+        if (o.GetComponent(0xA026) is not { } c || c.Size <= 40)
+            return null;
+        ReadOnlySpan<byte> b = o.ComponentBytes(c);
+        if (b[22] != 0xAA || b[26] != 0x09)
+            return null;
+        return b[36] == 1;
+    }
+
+    public static LevelObject WithMapCanUse(LevelObject o, bool use) =>
+        MapCanUse(o) == null ? o : WithComponentByte(o, 0xA026, 36, (byte)(use ? 1 : 0));
+
     /// <summary>Numéro libre pour un nouvel objet.</summary>
     public static uint NewId(Level level)
     {

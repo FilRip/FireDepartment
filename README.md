@@ -56,6 +56,9 @@ Thank you to support me please :
 Missions Editor :
 ![Missions Editor](./docs/editor.png)
 
+Scripts Editor :
+![Scripts Editor](./docs/script.png)
+
 Fire Department 1 included mission : Fuel station
 ![Fuel Station](./docs/fuelstation.png)
 

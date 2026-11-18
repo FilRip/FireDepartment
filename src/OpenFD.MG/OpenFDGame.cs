@@ -1281,6 +1281,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _cubeCache.Clear();
         _log.Clear();
         _unitModels.Clear();
+        ClearBeacons();
         _sel.Clear();
         _unitLogSeen = 0;
         _scriptLogSeen = 0;

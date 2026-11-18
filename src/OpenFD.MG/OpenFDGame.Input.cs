@@ -1079,6 +1079,12 @@ public sealed partial class OpenFDGame
 
     // porte ou fenêtre visée : sur la hauteur du battant, ou au sol tout près (portes du rez-de-chaussée)
     // objet utilisable sous la souris : près de son pied ou de sa hauteur d'homme à l'écran
+    /// <summary>
+    /// Objet utilisable visible : un objet que le script a caché (ENT_SetVisibility(…, 0)) ne se propose plus à la souris
+    /// (Institute : bomb84, la bombe de démonstration qui saute dans la cinématique ; la vraie est bomb19).
+    /// </summary>
+    private bool UsableShown(UsableObject o) => Host?.Visibility.TryGetValue(o.Id, out bool shown) != true || shown;
+
     private UsableObject? UsableAt(double x, double y)
     {
         (float sx, float sy) = Fb(x, y);
@@ -1087,7 +1093,7 @@ public sealed partial class OpenFDGame
         // à un bout de l'objet : générateur de Mriya) ; rang : 0 près du pivot, puis la taille de l'emprise
         List<(UsableObject o, float rank)> hits = new List<(UsableObject o, float rank)>();
         float tol = Tol(30);
-        foreach (UsableObject o in _session.Units.Usables.Where(o => o.Enabled))
+        foreach (UsableObject o in _session.Units.Usables.Where(o => o.Enabled && UsableShown(o)))
         {
             if (Project(o.Position) is not { } a || Project(o.Position + new SN.Vector3(0, 0, 160)) is not { } b)
                 continue;
@@ -1101,7 +1107,7 @@ public sealed partial class OpenFDGame
         if (hits.Count == 0 && FireAt(x, y) != null)
             return null;
         if (Ground(x, y) is { } gp)
-            foreach (UsableObject o in _session.Units.Usables.Where(o => o.Enabled && Inside(gp, o.BoxMin, o.BoxMax, 40) && o.BoxMax.X - o.BoxMin.X < 3000 && o.BoxMax.Y - o.BoxMin.Y < 3000))
+            foreach (UsableObject o in _session.Units.Usables.Where(o => o.Enabled && UsableShown(o) && Inside(gp, o.BoxMin, o.BoxMax, 40) && o.BoxMax.X - o.BoxMin.X < 3000 && o.BoxMax.Y - o.BoxMin.Y < 3000))
                 if (!hits.Any(h => h.o == o))
                     hits.Add((o, 1 + (o.BoxMax.X - o.BoxMin.X) * (o.BoxMax.Y - o.BoxMin.Y) / 1e7f));
         if (hits.Count <= 1)

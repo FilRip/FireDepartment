@@ -430,7 +430,13 @@ public sealed partial class OpenFDGame
     private static List<(string label, string function, string signature)> EdScriptRefs(EditorObject e)
     {
         List<(string, string, string)> res = new List<(string, string, string)>();
-        if (e.Source.GetComponent(0xA027) is { } ac)
+        // (états lus un par un ; sinon, lecture des textes comme le jeu, qui voit deux fois l'action courante)
+        if (LevelEdit.Actions(e.Source) is { } actions)
+        {
+            foreach ((string action, string script) in actions.Where(a => a.action.Length > 0 && a.script.Length > 0))
+                res.Add((Tr("ScriptAction", "Action « {0} »", action), script, "EntityID User, EntityID Object, mcString State"));
+        }
+        else if (e.Source.GetComponent(0xA027) is { } ac)
             foreach ((string action, string script) in ActionsIn(e.Source.ComponentBytes(ac).ToArray()))
                 res.Add((Tr("ScriptAction", "Action « {0} »", action), script, "EntityID User, EntityID Object, mcString State"));
         if (e.Source.GetComponent(0xA024) is { } dc && dc.Size > 13 && ScriptNameIn(e.Source.ComponentBytes(dc).ToArray()) is { } destroyed)

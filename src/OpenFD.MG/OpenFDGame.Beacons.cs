@@ -16,6 +16,18 @@ public sealed partial class OpenFDGame
     /// <summary>Tours par seconde d'un gyrophare.</summary>
     private const float BeaconTurnsPerSecond = 1.2f;
 
+    /// <summary>
+    /// Mission quittée : les gyrophares chargés sont oubliés (leurs textures sont libérées avec la mission ; gardés, ils
+    /// ne s'afficheraient plus en relançant une mission).
+    /// </summary>
+    private void ClearBeacons()
+    {
+        foreach (List<(MeshGpu mesh, SN.Matrix4x4 part, bool spin)> l in _beaconModels.Values)
+            foreach ((MeshGpu mesh, _, _) in l)
+                mesh.Dispose();
+        _beaconModels.Clear();
+    }
+
     private List<(MeshGpu mesh, SN.Matrix4x4 part, bool spin)> BeaconModel(string model)
     {
         if (_beaconModels.TryGetValue(model, out List<(MeshGpu mesh, SN.Matrix4x4 part, bool spin)>? l))
