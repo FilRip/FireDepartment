@@ -11,7 +11,7 @@ namespace OpenFD.MG;
 public sealed partial class OpenFDGame
 {
     /// <summary>Numéro de la livraison (openfdN) : mention du menu principal et titre de l'éditeur.</summary>
-    internal const string BuildNumber = "247";
+    internal const string BuildNumber = "248";
 
     private Settings _settings = new();
     private int _screen;          // 0 menu principal, 1 choix de la mission, 2 options, 3 pause, 4 sauvegardes, 9 choix du jeu
@@ -690,6 +690,20 @@ public sealed partial class OpenFDGame
         SN.Vector4 muted = new SN.Vector4(0.5f, 0.5f, 0.5f, 1);
         string title = _screen == 0 ? "Open Fire Department" : _screen == 3 ? L("&GameInPause", "Jeu en pause") : L("&Options", "Options");
         float ts = _scale * 2f;
+        if (_screen == 0 && OpenFdLogo() is { } logo)
+        {
+            // logo d'Open Fire Department, en haut et centré, au-dessus des boutons
+            float top = 24 * _scale, room = ly - 8 * _scale - 24 * _scale - top;
+            float h = MathF.Min(room, _fbH * 0.24f);
+            float w = h * logo.Width / logo.Height;
+            if (w > _fbW * 0.7f)
+            {
+                w = _fbW * 0.7f;
+                h = w * logo.Height / logo.Width;
+            }
+            if (h > 24 * _scale)
+                _ui.Image(logo, (_fbW - w) / 2, top + (room - h) / 2, w, h, new SN.Vector4(1, 1, 1, 1));
+        }
         if (_screen != 0)   // le titre du jeu est déjà sur l'image de fond
         {
             float tyTop = _screen == 2 ? ly - TitleGap - TitleBlock : ly - lh * 2.4f;   // options : juste au-dessus de la liste
@@ -733,6 +747,31 @@ public sealed partial class OpenFDGame
             _ui.Text((_fbW - _ui.Measure(note)) / 2, ly + rows.Count * lh + 24 * _scale + _ui.LineHeight * 1.5f, note, new SN.Vector4(0.62f, 0.62f, 0.62f, 1));
         }
         _ui.End();
+    }
+
+    private Texture2D? _openFdLogo;
+    private bool _openFdLogoTried;
+
+    /// <summary>Logo d'Open Fire Department (Assets\OpenFD_LOGO.png) ; null s'il manque.</summary>
+    private Texture2D? OpenFdLogo()
+    {
+        if (_openFdLogoTried)
+            return _openFdLogo;
+        _openFdLogoTried = true;
+        try
+        {
+            string path = Path.Combine(AppContext.BaseDirectory, "Assets", "OpenFD_LOGO.png");
+            if (File.Exists(path))
+            {
+                using FileStream fs = File.OpenRead(path);
+                _openFdLogo = Texture2D.FromStream(GraphicsDevice, fs);
+            }
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("Logo Open Fire Department : " + e.Message);
+        }
+        return _openFdLogo;
     }
 
     private void DrawMenuBack()
