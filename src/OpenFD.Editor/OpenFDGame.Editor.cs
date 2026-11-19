@@ -87,6 +87,13 @@ public sealed partial class OpenFDGame
         _miniHidden = true;   // mini-carte cachée au départ (touche M)
         _paused = true;
         Window.Title = EdWindowTitle;
+        // le chargement (liste des objets, mission d'essai) se fait sous l'écran de démarrage : voir EditorSplash.cs
+        EdSplashBegin();
+    }
+
+    /// <summary>Chargement de l'éditeur : la liste des objets à poser, puis les essais (mission, actions).</summary>
+    private void EdBoot()
+    {
         try
         {
             _edCatalog = EditorCatalog.Build(_files);
@@ -330,6 +337,8 @@ public sealed partial class OpenFDGame
     partial void EditorUpdate(float dt)
     {
         _edClock += dt;
+        if (EdSplashUpdate())
+            return;   // écran de démarrage : chargement en cours, ou logo montré moins de 2 s
         EdLayout();
         if (_edPendingLoad is { } pending)
         {
@@ -481,6 +490,8 @@ public sealed partial class OpenFDGame
 
     partial void EditorDraw(float time)
     {
+        if (EdSplashDraw())
+            return;
         EdLayout();
         GraphicsDevice gd = GraphicsDevice;
         if (_edTreesDirty)
