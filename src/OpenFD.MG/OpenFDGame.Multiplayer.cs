@@ -31,8 +31,11 @@ public sealed partial class OpenFDGame
     private double _lastHashStep = -1;
     private int _netLastProgress;
 
-    /// <summary>Serveurs connus (la liste viendra plus tard d'un serveur Internet).</summary>
-    private readonly List<(string name, string address, string mission, int players)> _serverList = new();
+    /// <summary>Serveurs de la liste Internet qui ont répondu sur le port UDP du jeu (voir ServerDirectory).</summary>
+    private readonly List<ServerInfo> _serverList = new();
+    private Task<(List<ServerInfo> servers, string? error)>? _serverTask;   // liste en cours de lecture
+    private bool _serverListFailed;                                           // la page de la liste n'a pas pu être lue
+    private bool _serverRegistered;                                           // ce serveur s'est inscrit sur la liste (une fois)
 
     private string PlayerName
     {
@@ -382,6 +385,56 @@ public sealed partial class OpenFDGame
         _ipDialog = false;
         _textFocus = 0;
         _netNote = null;
+        RefreshServers();
+    }
+
+    /// <summary>Redemande la liste des serveurs (page web, puis chaque adresse interrogée sur le port UDP du jeu).</summary>
+    private void RefreshServers()
+    {
+        if (_serverTask is { IsCompleted: false })
+            return;
+        _serverList.Clear();
+        _serverIndex = -1;
+        _serverListFailed = false;
+        _serverTask = ServerDirectory.ListAsync();
+    }
+
+    /// <summary>Liste arrivée : les serveurs qui ont répondu ; page illisible : noté dans le journal (son texte).</summary>
+    private void ServerListArrived()
+    {
+        if (_serverTask is not { IsCompleted: true } t)
+            return;
+        _serverTask = null;
+        if (t.IsFaulted)
+        {
+            _serverListFailed = true;
+            Console.WriteLine("Liste des serveurs : " + t.Exception?.GetBaseException().Message);
+            return;
+        }
+        (List<ServerInfo> servers, string? error) = t.Result;
+        if (error != null)
+        {
+            _serverListFailed = true;
+            Console.WriteLine("Liste des serveurs impossible à obtenir : " + error);
+            return;
+        }
+        _serverList.Clear();
+        _serverList.AddRange(servers);
+        _serverIndex = -1;
+    }
+
+    /// <summary>Inscrit ce serveur sur la liste Internet (son adresse WAN) ; un échec est seulement noté dans le journal.</summary>
+    private void RegisterServer(string wan)
+    {
+        if (_serverRegistered)
+            return;
+        _serverRegistered = true;
+        _ = Task.Run(async () =>
+        {
+            string? answer = await ServerDirectory.RegisterAsync(wan);
+            if (answer != null)
+                Console.WriteLine($"Inscription du serveur {wan} sur la liste impossible : {answer}");
+        });
     }
 
     private string MissionTitle(string dir)
@@ -422,6 +475,7 @@ public sealed partial class OpenFDGame
         _lanIp = NetAddresses.Lan();
         _wanIp = "…";
         _wanTask = NetAddresses.WanAsync();
+        _serverRegistered = false;
         _netNote = null;
         _screen = 7;
     }
@@ -646,10 +700,13 @@ public sealed partial class OpenFDGame
             _textFocus = 2;
             _netNote = null;
         }
-        if (Clicked(m, BottomRight(1, bw)) && _serverIndex >= 0 && _serverIndex < _serverList.Count)
-            JoinServer(_serverList[_serverIndex].address);
+        // partie déjà en cours : on ne la rejoint plus (le salon est fermé)
+        if (Clicked(m, BottomRight(1, bw)) && _serverIndex >= 0 && _serverIndex < _serverList.Count && !_serverList[_serverIndex].Playing)
+            JoinServer(_serverList[_serverIndex].Address);
         if (Clicked(m, BottomRight(0, bw)))
             HostServer();
+        if (Clicked(m, BottomRight(3, bw)) && _serverTask == null)
+            RefreshServers();
     }
 
     private void RenderNetHome()
@@ -665,31 +722,41 @@ public sealed partial class OpenFDGame
         _ui.Rect(lx, ly, lw, lh, new SN.Vector4(0.06f, 0.06f, 0.08f, 0.88f));
         float rowH = _ui.LineHeight + 12 * _scale;
         SN.Vector4 head = new SN.Vector4(0.6f, 0.6f, 0.62f, 1), txt = new SN.Vector4(0.93f, 0.92f, 0.9f, 1);
-        float[] cols = { 0, 0.4f, 0.75f, 0.88f };
-        string[] heads = { L("&GameDesc", "Partie"), L("&MissionName", "Mission"), L("&NumPlayers", "Joueurs"), L("&Ping", "Ping") };
-        for (int c = 0; c < 4; c++)
+        // colonnes : partie, mission, état (salon ouvert ou partie en cours), joueurs, ping
+        float[] cols = { 0, 0.36f, 0.62f, 0.8f, 0.9f };
+        string[] heads = { L("&GameDesc", "Partie"), L("&MissionName", "Mission"), L("&ServerState", "État"), L("&NumPlayers", "Joueurs"), L("&Ping", "Ping") };
+        for (int c = 0; c < 5; c++)
             _ui.Text(lx + 14 * _scale + cols[c] * lw, ly + 6 * _scale, heads[c], head);
         _ui.Rect(lx, ly + rowH, lw, MathF.Max(1, _scale), new SN.Vector4(1, 1, 1, 0.15f));
+        ServerListArrived();
         if (_serverList.Count == 0)
         {
-            const string none = "Aucun serveur pour l'instant (la liste viendra plus tard d'Internet) : utilisez « Rejoindre IP ».";
-            _ui.Text(lx + (lw - _ui.Measure(none)) / 2, ly + lh / 2 - _ui.LineHeight / 2, none, head);
+            // au milieu de la liste : recherche en cours, erreur (page illisible), ou aucun serveur en ligne
+            string none = _serverTask != null ? L("&ServerSearching", "Recherche des serveurs…")
+                : _serverListFailed ? L("&ServerListError", "ERREUR : Impossible d'obtenir la liste des serveurs")
+                : L("&ServerNone", "Aucun serveur en ligne : utilisez « Rejoindre IP ».");
+            SN.Vector4 col = _serverListFailed && _serverTask == null ? new SN.Vector4(1f, 0.35f, 0.3f, 1) : head;
+            _ui.Text(lx + (lw - _ui.Measure(none)) / 2, ly + lh / 2 - _ui.LineHeight / 2, none, col);
         }
         for (int i = 0; i < _serverList.Count; i++)
         {
             float y = ly + rowH * (i + 1);
             if (i == _serverIndex)
                 _ui.Rect(lx, y, lw, rowH, new SN.Vector4(0.85f, 0.35f, 0.1f, 0.5f));
-            (string name, string address, string mission, int players) s = _serverList[i];
-            string[] cells = { s.name, MissionTitle(s.mission), s.players.ToString(), "" };
-            for (int c = 0; c < 4; c++)
-                _ui.Text(lx + 14 * _scale + cols[c] * lw, y + 6 * _scale, cells[c], txt);
+            ServerInfo s = _serverList[i];
+            string state = s.Playing ? L("&ServerPlaying", "Partie en cours") : L("&ServerLobby", "Salon ouvert");
+            string[] cells = { s.Name + "  (" + s.Address + ")", MissionTitle(s.Mission), state, s.Players.ToString(), s.Ping + " ms" };
+            // état : vert salon ouvert, orange partie en cours
+            SN.Vector4 stateCol = s.Playing ? new SN.Vector4(1f, 0.6f, 0.25f, 1) : new SN.Vector4(0.45f, 0.9f, 0.45f, 1);
+            for (int c = 0; c < 5; c++)
+                _ui.Text(lx + 14 * _scale + cols[c] * lw, y + 6 * _scale, cells[c], c == 2 ? stateCol : txt);
         }
         float bw = 210 * _scale;
         Button(BottomLeft(bw), L("&Back", "Retour"));
         Button(BottomRight(2, bw), L("&JoinIP", "Rejoindre IP"));
-        Button(BottomRight(1, bw), L("&Join", "Rejoindre"), _serverIndex >= 0 && _serverIndex < _serverList.Count);
+        Button(BottomRight(1, bw), L("&Join", "Rejoindre"), _serverIndex >= 0 && _serverIndex < _serverList.Count && !_serverList[_serverIndex].Playing);
         Button(BottomRight(0, bw), L("&Create", "Créer"), true, true);
+        Button(BottomRight(3, bw), L("&ServerRefresh", "Rafraîchir"), _serverTask == null);
         if (_ipDialog)
         {
             _ui.Rect(0, 0, _fbW, _fbH, new SN.Vector4(0, 0, 0, 0.5f));
@@ -790,6 +857,9 @@ public sealed partial class OpenFDGame
         {
             _wanIp = _wanTask.Result ?? "inconnue";
             _wanTask = null;
+            // serveur créé : inscrit sur la liste Internet avec son adresse WAN
+            if (System.Net.IPAddress.TryParse(_wanIp, out _))
+                RegisterServer(_wanIp);
         }
         SN.Vector4 accent = new SN.Vector4(1f, 0.48f, 0.18f, 1), txt = new SN.Vector4(0.93f, 0.92f, 0.9f, 1), muted = new SN.Vector4(0.62f, 0.62f, 0.64f, 1);
         float ts = _scale * 1.5f;

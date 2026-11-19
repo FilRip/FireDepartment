@@ -7,11 +7,12 @@ namespace OpenFD.Multiplayer;
 
 /// <summary>
 /// Point d'échange UDP : une prise, un fil qui reçoit les paquets, et les liaisons avec les autres joueurs.
-/// Paquet : « OF », type (1 message fiable, 2 accusé seul, 3 présence), numéro, accusé (prochain numéro attendu), message.
+/// Paquet : « OF », type (1 message fiable, 2 accusé seul, 3 présence, 4 question « qui es-tu ? » de la liste des
+/// serveurs, 5 réponse du serveur), numéro, accusé (prochain numéro attendu), message.
 /// </summary>
 public sealed class NetTransport : IDisposable
 {
-    private const byte KindData = 1, KindAck = 2, KindPing = 3;
+    private const byte KindData = 1, KindAck = 2, KindPing = 3, KindQuery = 4, KindInfo = 5;
     private const int Header = 11, Window = 128;
     private const double Resend = 0.2, Timeout = 15, PingEvery = 1;
 
@@ -24,6 +25,9 @@ public sealed class NetTransport : IDisposable
 
     /// <summary>Accepter les paquets d'inconnus (serveur) ou seulement ceux des liaisons ouvertes (client).</summary>
     public bool AcceptNew;
+
+    /// <summary>Serveur : sa partie, renvoyée à qui la demande (liste des serveurs) ; null : pas de réponse.</summary>
+    public Func<byte[]>? Info;
     public double Now => _clock.Elapsed.TotalSeconds;
     public IReadOnlyCollection<Connection> Links => _links.Values;
     public int LocalPort => ((IPEndPoint)_socket.LocalEndPoint!).Port;
@@ -123,6 +127,51 @@ public sealed class NetTransport : IDisposable
         }
     }
 
+    private void SendRaw(IPEndPoint to, byte kind, byte[] body)
+    {
+        byte[] p = new byte[Header + body.Length];
+        p[0] = (byte)'O';
+        p[1] = (byte)'F';
+        p[2] = kind;
+        Buffer.BlockCopy(body, 0, p, Header, body.Length);
+        try
+        {
+            _socket.SendTo(p, to);
+        }
+        catch (SocketException)
+        {
+        }
+    }
+
+    /// <summary>Question « qui es-tu ? » envoyée à un serveur de la liste.</summary>
+    public static byte[] QueryPacket()
+    {
+        byte[] p = new byte[Header];
+        p[0] = (byte)'O';
+        p[1] = (byte)'F';
+        p[2] = KindQuery;
+        return p;
+    }
+
+    /// <summary>Réponse d'un serveur à la question (version, nom, mission, joueurs, partie lancée) ; null si ce n'en est pas une.</summary>
+    public static ServerInfo? ReadInfo(byte[] p)
+    {
+        if (p.Length <= Header || p[0] != (byte)'O' || p[1] != (byte)'F' || p[2] != KindInfo)
+            return null;
+        try
+        {
+            using BinaryReader r = new BinaryReader(new MemoryStream(p, Header, p.Length - Header), System.Text.Encoding.UTF8);
+            int version = r.ReadInt32();
+            if (version != NetProtocol.Version)
+                return null;
+            return new ServerInfo { Name = r.ReadString(), Mission = r.ReadString(), Players = r.ReadInt32(), Playing = r.ReadBoolean() };
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     private void SendControl(Connection c, byte kind)
     {
         byte[] p = new byte[Header];
@@ -143,6 +192,13 @@ public sealed class NetTransport : IDisposable
         double now = Now;
         while (_inbox.TryDequeue(out (IPEndPoint from, byte[] data) item))
         {
+            if (item.data[2] == KindQuery)
+            {
+                // liste des serveurs : réponse directe, sans liaison
+                if (Info != null)
+                    SendRaw(item.from, KindInfo, Info());
+                continue;
+            }
             if (!_links.TryGetValue(item.from, out Connection? c))
             {
                 // inconnu : seulement un premier message (numéro 0) vers un serveur

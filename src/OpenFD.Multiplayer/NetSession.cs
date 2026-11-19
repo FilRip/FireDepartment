@@ -56,6 +56,21 @@ public sealed class NetSession : IDisposable
         IsServer = server;
         MyName = name;
         _net = new NetTransport(port) { AcceptNew = server };
+        // serveur : répond à la liste des serveurs (nom, mission, joueurs, partie lancée)
+        if (server)
+            _net.Info = () =>
+            {
+                using MemoryStream ms = new MemoryStream();
+                using (BinaryWriter w = new BinaryWriter(ms, System.Text.Encoding.UTF8, true))
+                {
+                    w.Write(NetProtocol.Version);
+                    w.Write(ServerName);
+                    w.Write(Mission);
+                    w.Write(Players.Count + 1);
+                    w.Write(State != NetState.Lobby);
+                }
+                return ms.ToArray();
+            };
     }
 
     /// <summary>Crée le serveur : ouvre le port UDP 27999 et attend les joueurs.</summary>
