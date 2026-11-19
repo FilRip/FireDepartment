@@ -20,7 +20,7 @@ No game data is included in this repository but demo version is included (3 miss
 -----------
 ## The game
 
-Lance exe will launch the game with demo version of games
+Simply launch exe, without command lines, will launch the game with demo version of games
 
 Launch exe with in argument the path where Fire Department 2 or 3 is installed, like that :
 
