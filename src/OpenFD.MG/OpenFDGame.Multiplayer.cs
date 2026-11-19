@@ -222,8 +222,14 @@ public sealed partial class OpenFDGame
                 break;
             case NetEventKind.PlayerJoined:
             {
-                string joined = L("&PlayerJoin", "a rejoint la partie");
-                _netNote = joined.Contains("%s") ? joined.Replace("%s", e.Text) : e.Text + " : " + joined;
+                // texte du jeu : « @@PLAYER_NAME a rejoint la partie » (le nom du joueur à la place de @@PLAYER_NAME)
+                string joined = L("&PlayerJoin", "@@PLAYER_NAME a rejoint la partie");
+                if (joined.Contains("@@PLAYER_NAME", StringComparison.OrdinalIgnoreCase))
+                    _netNote = joined.Replace("@@PLAYER_NAME", e.Text, StringComparison.OrdinalIgnoreCase);
+                else if (joined.Contains("%s"))
+                    _netNote = joined.Replace("%s", e.Text);
+                else
+                    _netNote = e.Text + " " + joined;
             }
                 break;
             case NetEventKind.PlayerLeft:
@@ -414,9 +420,9 @@ public sealed partial class OpenFDGame
         (List<ServerInfo> servers, string? error) = t.Result;
         if (error != null)
         {
+            // les serveurs du réseau local trouvés restent montrés
             _serverListFailed = true;
             Console.WriteLine("Liste des serveurs impossible à obtenir : " + error);
-            return;
         }
         _serverList.Clear();
         _serverList.AddRange(servers);
@@ -745,11 +751,17 @@ public sealed partial class OpenFDGame
                 _ui.Rect(lx, y, lw, rowH, new SN.Vector4(0.85f, 0.35f, 0.1f, 0.5f));
             ServerInfo s = _serverList[i];
             string state = s.Playing ? L("&ServerPlaying", "Partie en cours") : L("&ServerLobby", "Salon ouvert");
-            string[] cells = { s.Name + "  (" + s.Address + ")", MissionTitle(s.Mission), state, s.Players.ToString(), s.Ping + " ms" };
+            string[] cells = { s.Name + "  (" + s.Address + ")" + (s.Lan ? "  (LAN)" : ""), MissionTitle(s.Mission), state, s.Players.ToString(), s.Ping + " ms" };
             // état : vert salon ouvert, orange partie en cours
             SN.Vector4 stateCol = s.Playing ? new SN.Vector4(1f, 0.6f, 0.25f, 1) : new SN.Vector4(0.45f, 0.9f, 0.45f, 1);
             for (int c = 0; c < 5; c++)
                 _ui.Text(lx + 14 * _scale + cols[c] * lw, y + 6 * _scale, cells[c], c == 2 ? stateCol : txt);
+        }
+        // liste Internet illisible mais serveurs du réseau local trouvés : l'erreur en bas de la liste
+        if (_serverList.Count > 0 && _serverListFailed && _serverTask == null)
+        {
+            string err = L("&ServerListError", "ERREUR : Impossible d'obtenir la liste des serveurs");
+            _ui.Text(lx + (lw - _ui.Measure(err)) / 2, ly + lh - _ui.LineHeight - 8 * _scale, err, new SN.Vector4(1f, 0.35f, 0.3f, 1));
         }
         float bw = 210 * _scale;
         Button(BottomLeft(bw), L("&Back", "Retour"));

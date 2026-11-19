@@ -11,4 +11,6 @@ public sealed class ServerInfo
     public bool Playing;
     /// <summary>Temps de réponse (ms).</summary>
     public int Ping;
+    /// <summary>Trouvé sur le réseau local (diffusion UDP), pas par la liste Internet.</summary>
+    public bool Lan;
 }

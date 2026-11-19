@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -110,14 +111,132 @@ public static class ServerDirectory
         return null;
     }
 
-    /// <summary>Adresses de la liste qui répondent (interrogées toutes en même temps), dans l'ordre de la liste.</summary>
+    /// <summary>
+    /// Serveurs du réseau local et de la liste Internet, cherchés en même temps : ceux du réseau local d'abord
+    /// (diffusion), puis ceux de la liste qui répondent, dans son ordre ; un serveur trouvé des deux façons n'est
+    /// gardé qu'une fois (celui du réseau local). error : la page de la liste n'a pas pu être lue.
+    /// </summary>
     public static async Task<(List<ServerInfo> servers, string? error)> ListAsync()
     {
+        Task<List<ServerInfo>> lan = LanAsync();
         (List<string> addresses, string? error) = await FetchAsync();
-        if (error != null)
-            return (new List<ServerInfo>(), error);
-        ServerInfo?[] found = await Task.WhenAll(addresses.Select(a => QueryAsync(a)));
-        return (found.Where(s => s != null).Select(s => s!).ToList(), null);
+        ServerInfo?[] found = error != null ? Array.Empty<ServerInfo?>() : await Task.WhenAll(addresses.Select(a => QueryAsync(a)));
+        List<ServerInfo> res = await lan;
+        foreach (ServerInfo s in found.Where(s => s != null).Select(s => s!))
+        {
+            // même serveur vu du réseau local (adresse locale) et d'Internet (adresse WAN) : même nom, mission, joueurs
+            bool twice = res.Any(l => l.Address == s.Address
+                || (l.Name == s.Name && l.Mission == s.Mission && l.Players == s.Players && l.Playing == s.Playing));
+            if (!twice)
+                res.Add(s);
+        }
+        return (res, error);
+    }
+
+    /// <summary>
+    /// Serveurs du réseau local : une seule question envoyée en diffusion (adresse de diffusion de chaque carte réseau,
+    /// et 255.255.255.255) sur le port UDP du jeu ; tous les serveurs qui l'entendent répondent.
+    /// </summary>
+    public static async Task<List<ServerInfo>> LanAsync(int timeoutMs = 1000)
+    {
+        List<ServerInfo> res = new List<ServerInfo>();
+        try
+        {
+            using UdpClient udp = new UdpClient(AddressFamily.InterNetwork) { EnableBroadcast = true };
+            if (OperatingSystem.IsWindows())
+                try
+                {
+                    udp.Client.IOControl(-1744830452, new byte[] { 0, 0, 0, 0 }, null);
+                }
+                catch
+                {
+                }
+            byte[] query = NetTransport.QueryPacket();
+            List<IPAddress> targets = BroadcastAddresses();
+            Stopwatch sw = Stopwatch.StartNew();
+            async Task SendAll()
+            {
+                foreach (IPAddress b in targets)
+                    try
+                    {
+                        await udp.SendAsync(query, query.Length, new IPEndPoint(b, NetProtocol.Port));
+                    }
+                    catch
+                    {
+                    }
+            }
+            await SendAll();
+            bool resent = false;
+            using CancellationTokenSource cts = new CancellationTokenSource(timeoutMs);
+            while (!cts.IsCancellationRequested)
+            {
+                UdpReceiveResult r;
+                try
+                {
+                    // au tiers du délai : la question est renvoyée une fois (un paquet UDP peut se perdre)
+                    using CancellationTokenSource first = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+                    if (!resent)
+                        first.CancelAfter(timeoutMs / 3);
+                    r = await udp.ReceiveAsync(first.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    if (cts.IsCancellationRequested)
+                        break;
+                    resent = true;
+                    await SendAll();
+                    continue;
+                }
+                catch (SocketException)
+                {
+                    continue;
+                }
+                if (NetTransport.ReadInfo(r.Buffer) is not { } info)
+                    continue;
+                string address = r.RemoteEndPoint.Address.ToString();
+                if (res.Any(s => s.Address == address))
+                    continue;
+                info.Address = address;
+                info.Ping = (int)sw.ElapsedMilliseconds;
+                info.Lan = true;
+                res.Add(info);
+            }
+        }
+        catch
+        {
+        }
+        return res;
+    }
+
+    /// <summary>Adresses de diffusion des cartes réseau en service (IPv4), puis 255.255.255.255.</summary>
+    private static List<IPAddress> BroadcastAddresses()
+    {
+        List<IPAddress> res = new List<IPAddress>();
+        try
+        {
+            foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (nic.OperationalStatus != OperationalStatus.Up || nic.NetworkInterfaceType == NetworkInterfaceType.Loopback)
+                    continue;
+                foreach (UnicastIPAddressInformation u in nic.GetIPProperties().UnicastAddresses)
+                {
+                    if (u.Address.AddressFamily != AddressFamily.InterNetwork || u.IPv4Mask == null)
+                        continue;
+                    byte[] ip = u.Address.GetAddressBytes(), mask = u.IPv4Mask.GetAddressBytes();
+                    byte[] b = new byte[4];
+                    for (int i = 0; i < 4; i++)
+                        b[i] = (byte)(ip[i] | ~mask[i]);
+                    IPAddress ba = new IPAddress(b);
+                    if (!res.Contains(ba))
+                        res.Add(ba);
+                }
+            }
+        }
+        catch
+        {
+        }
+        res.Add(IPAddress.Broadcast);
+        return res;
     }
 
     /// <summary>Inscrit ce serveur sur la liste ; renvoie null si la page répond « OK », sinon ce qu'elle a répondu.</summary>
