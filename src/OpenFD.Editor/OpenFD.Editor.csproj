@@ -25,6 +25,7 @@
     <RollForward>Major</RollForward>
     <AssemblyName>OpenFD.Editor</AssemblyName>
     <ApplicationManifest>..\OpenFD.MG\app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\OpenFD.MG\openfd.ico</ApplicationIcon>
     <TieredPGO>true</TieredPGO>
   </PropertyGroup>
   <ItemGroup>
@@ -39,6 +40,8 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\OpenFD.MG\Assets\**" Link="Assets\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- icône de la fenêtre et de la barre des tâches (la même que le jeu : voir OpenFD.MG.csproj) -->
+    <EmbeddedResource Include="..\OpenFD.MG\Icon.bmp" LogicalName="Icon.bmp" />
     <None Include="..\..\languages\*.ini" Link="languages\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

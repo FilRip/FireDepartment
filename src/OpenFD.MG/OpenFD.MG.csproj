@@ -24,6 +24,7 @@
     <AssemblyName>OpenFD</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <TieredPGO>true</TieredPGO>
+    <ApplicationIcon>openfd.ico</ApplicationIcon>
   </PropertyGroup>
   <!-- normal : paquet NuGet ; MonoGameLocal=chemin\MonoGame.Framework.dll : version compilée à la main (essais hors ligne) -->
   <ItemGroup Condition="'$(MonoGameLocal)' == ''">
@@ -34,6 +35,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- icône de la fenêtre et de la barre des tâches : MonoGame (SDL) lit la ressource « Icon.bmp » de l'exe
+         (l'icône du fichier .exe, elle, vient d'ApplicationIcon) ; Icon.bmp = openfd.ico en BMP 32 bits avec transparence -->
+    <EmbeddedResource Include="Icon.bmp" LogicalName="Icon.bmp" />
     <None Include="..\..\languages\*.ini" Link="languages\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
