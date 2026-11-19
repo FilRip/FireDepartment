@@ -340,9 +340,22 @@ public sealed class MissionHost : IScriptHost
                 {
                     // objet du décor à états (London : les gravats qui s'éboulent derrière le pompier, cinématique cat_3) :
                     // état suivant, et son animation jouée une fois (elle reste sur sa dernière image)
-                    int next = ((ObjectStates.TryGetValue(so.Id, out int cur) ? cur : UnitManager.InitialState(so)) + 1) % states.Count;
+                    int prev = ObjectStates.TryGetValue(so.Id, out int cur) ? cur : UnitManager.InitialState(so);
+                    int next = (prev + 1) % states.Count;
                     ObjectStates[so.Id] = next;
-                    if (states[next] is { } sa)
+                    // véhicule du décor dont les deux états ont la même animation (Duseldorf : l'avion du hangar,
+                    // Start_Propelers) : le moteur tourne ; l'animation (les hélices) joue en boucle, et s'arrête au
+                    // changement d'état suivant
+                    bool engine = so.ClassPath.Contains("\\vehicles\\", StringComparison.OrdinalIgnoreCase)
+                        && states[next] is { } ea && ea == states[prev % states.Count];
+                    if (engine)
+                    {
+                        if (PlayedAnims.TryGetValue(so.Id, out (string anim, float start, bool loop) on) && on.loop)
+                            PlayedAnims.Remove(so.Id);
+                        else
+                            PlayedAnims[so.Id] = (states[next]!, (float)GameTime, true);
+                    }
+                    else if (states[next] is { } sa)
                     {
                         PlayedAnims[so.Id] = (sa, (float)GameTime, false);
                         Units?.SettleStateObject(so, sa);
