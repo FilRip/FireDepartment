@@ -6,8 +6,8 @@
 #                    publish/linux-x64/OpenFD.Editor "/chemin/vers/Fire Department 3"
 set -e
 cd "$(dirname "$0")"
-OUT=publish/linux-x64
-dotnet publish src/OpenFD.MG -c Release -r linux-x64 --self-contained false -o "$OUT" "$@"
-dotnet publish src/OpenFD.Editor -c Release -r linux-x64 --self-contained false -o "$OUT" "$@"
+OUT=../publish/linux-x64
+dotnet publish ../src/OpenFD.MG -c Release -r linux-x64 --self-contained false -o "$OUT" "$@"
+dotnet publish ../src/OpenFD.Editor -c Release -r linux-x64 --self-contained false -o "$OUT" "$@"
 chmod +x "$OUT/OpenFD" "$OUT/OpenFD.Editor" 2>/dev/null || true
 echo "Version Linux prête dans $OUT"

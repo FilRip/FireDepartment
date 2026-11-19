@@ -357,6 +357,43 @@ public sealed class PathFind
         return res;
     }
 
+    /// <summary>
+    /// Devant et derrière une porte, un petit objet du décor (caisse, fût : une ou deux cases) ne ferme pas le passage
+    /// (Duseldorf : derrière door513, en haut de l'escalier, un carton posé sur la passerelle de l'entrepôt) ; un gros
+    /// objet (citerne, véhicule) le ferme toujours.
+    /// </summary>
+    public void KeepDoorsClear(IReadOnlyList<Opening> openings)
+    {
+        if (_s.Grid is not { } g || Blocked.Length != g.Width * g.Height)
+            return;
+        HashSet<int> small = new HashSet<int>(ObjectCells.Values.Where(cells => cells.Count <= 2).SelectMany(cells => cells));
+        int n = 0;
+        foreach (Opening d in openings.Where(d => !d.IsWindow))
+            foreach (int c in d.Cells)
+            {
+                int x = c % g.Width;
+                int y = c / g.Width;
+                foreach ((int dx, int dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+                {
+                    if (!g.Inside(x + dx, y + dy))
+                        continue;
+                    int j = g.Index(x + dx, y + dy);
+                    if (!Blocked[j] || !small.Contains(j) || g.ZoneA[j] == 0 || MathF.Abs(g.GroundHeight[j] - g.GroundHeight[c]) > MaxStep)
+                        continue;
+                    if (BlockedBy.TryGetValue(j, out string? by) && by is "mur" or "mur de pièce" or "cloison")
+                        continue;
+                    Blocked[j] = false;
+                    BlockedBy.Remove(j);
+                    n++;
+                }
+            }
+        if (n > 0)
+        {
+            _log.Add($"Passage des portes : {n} case(s) rouverte(s) (petit objet devant une porte)");
+            Console.WriteLine(_log[^1]);
+        }
+    }
+
     public void BlockThinWalls(IReadOnlyList<Opening> openings, IEnumerable<Vector2> keep)
     {
         if (_s.Grid is not { } g)

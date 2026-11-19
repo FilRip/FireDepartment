@@ -40,8 +40,7 @@ public sealed partial class UnitManager
                 repair = false;
             UsableObject u = new UsableObject { Id = o.Id, Name = o.Name, Position = o.Position, CanBeUsed = use, CanBeRepaired = repair };
             ComputeBox(u, o, c);
-            if (o.GetComponent(0xA027) is { } comp)
-                u.Actions.AddRange(ParseActions(o.ComponentBytes(comp).ToArray()));
+            u.Actions.AddRange(ActionsOf(o));
             // sauf si sa propre fonction de script le rend inutilisable une fois utilisé : il l'est donc dès le départ, et le
             // script le réactive pour une utilisation suivante (Eurotunnel : le poste de communication « conector », dont
             // EstConect valide le premier objectif puis fait ENT_SetCapacityTarget(Armoire, « CouldBeUse », 0))
@@ -139,6 +138,20 @@ public sealed partial class UnitManager
     }
 
     // chaînes du composant A027 (longueur sur 4 octets, puis le texte terminé par 0) : nom de l'action, animation, fonction
+    /// <summary>
+    /// Actions de l'objet (A027). Des noms d'action connus (use, repair, open, close) ; sinon, les états lus un par un
+    /// (Duseldorf : l'avion du hangar, « start_propeler » → Fly_Use, qui le fait décoller).
+    /// </summary>
+    private static List<(string action, string script)> ActionsOf(LevelObject o)
+    {
+        if (o.GetComponent(0xA027) is not { } comp)
+            return new List<(string action, string script)>();
+        List<(string action, string script)> res = ParseActions(o.ComponentBytes(comp).ToArray());
+        if (res.Count == 0 && LevelEdit.Actions(o) is { } states)
+            res = states.Where(a => a.action.Length > 0 && a.script.Length > 0).ToList();
+        return res;
+    }
+
     private static List<(string action, string script)> ParseActions(byte[] b)
     {
         List<string> strings = new List<string>();
@@ -296,8 +309,7 @@ public sealed partial class UnitManager
                 return;
             o = new UsableObject { Id = lo.Id, Name = lo.Name, Position = lo.Position };
             ComputeBox(o, lo, lo.ClassPath.StartsWith("design\\", StringComparison.OrdinalIgnoreCase) ? Class("Design\\" + lo.ClassPath["design\\".Length..] + ".class") : null);
-            if (lo.GetComponent(0xA027) is { } comp)
-                o.Actions.AddRange(ParseActions(lo.ComponentBytes(comp).ToArray()));
+            o.Actions.AddRange(ActionsOf(lo));
             Usables.Add(o);
         }
         if (cap == "COULDBEUSE")

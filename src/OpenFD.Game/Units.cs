@@ -66,6 +66,7 @@ public sealed partial class UnitManager
         LockBuriedRubble();   // voir Dog.cs
         AssignLevers(s.Level);
         Paths.BlockThinWalls(Openings, KeepPoints());
+        Paths.KeepDoorsClear(Openings);
         LoadSupplies(s.Level);
         LoadTriggers(s.Level);
         LoadDropZones(s.Level);
