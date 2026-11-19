@@ -161,13 +161,21 @@ public sealed class ScriptEditorGame : Microsoft.Xna.Framework.Game
     private int H => GraphicsDevice.PresentationParameters.BackBufferHeight;
     private float BarH => 36 * _scale;
     private float TabH => _ui.LineHeight + 12 * _scale;
-    private float ListW => MathF.Min(380 * _scale, W * 0.34f);
+    // largeur de la liste des fonctions : réglée par la barre de séparation (0 : largeur par défaut)
+    private float _listW;
+    private bool _splitDrag, _splitHover, _splitLoaded;
+    private MouseCursor? _cursorShown;
+    private float ListW => _listW > 0 ? Math.Clamp(_listW, 120 * _scale, W * 0.7f) : MathF.Min(380 * _scale, W * 0.34f);
+
+    /// <summary>Épaisseur de la barre entre le script et la liste : 5 pixels de l'écran.</summary>
+    private float SplitW => MathF.Round(5f * W / Math.Max(1, Window.ClientBounds.Width));
+    private (float x, float y, float w, float h) SplitRect => (W - ListW - SplitW, BarH + TabH, SplitW, H - BarH - TabH - ProblemsH);
     private float ProblemsH => (_ui.LineHeight + 4 * _scale) * 5 + 10 * _scale;
     private float CodeScale => _scale;
     private float CharW => (_mono.Glyphs.TryGetValue('M', out Font.Glyph g) ? g.Adv : _mono.LineHeight * 0.6f) * CodeScale;
     private float CodeLineH => (_mono.LineHeight + 3) * CodeScale;
     private float GutterW => CharW * 5 + 10 * _scale;
-    private (float x, float y, float w, float h) CodeRect => (0, BarH + TabH, W - ListW, H - BarH - TabH - ProblemsH);
+    private (float x, float y, float w, float h) CodeRect => (0, BarH + TabH, W - ListW - SplitW, H - BarH - TabH - ProblemsH);
     private (float x, float y, float w, float h) ListRect => (W - ListW, BarH + TabH, ListW, H - BarH - TabH - ProblemsH);
     private (float x, float y, float w, float h) ProblemsRect => (0, H - ProblemsH, W, ProblemsH);
 
@@ -206,7 +214,40 @@ public sealed class ScriptEditorGame : Microsoft.Xna.Framework.Game
         _k = Keyboard.GetState();
         _m = Mouse.GetState();
         (_mx, _my) = Fb(_m.X, _m.Y);
-        if (IsActive && _m.LeftButton == ButtonState.Pressed && _mPrev.LeftButton == ButtonState.Released)
+        // barre entre le script et la liste des fonctions : tirée au bouton gauche, curseur ↔ dessus
+        (float sx, float sy, float sw, float sh) = SplitRect;
+        _splitHover = IsActive && _mx >= sx - 1 && _mx < sx + sw + 1 && _my >= sy && _my < sy + sh;
+        // largeur gardée d'une session à l'autre (OpenFD.Editor.ini : part de la fenêtre)
+        if (!_splitLoaded && W > 0)
+        {
+            _splitLoaded = true;
+            float frac = EditorSettings.Get("ScriptFunctions", 0);
+            if (frac > 0)
+                _listW = frac * W;
+        }
+        if (_m.LeftButton != ButtonState.Pressed && _splitDrag)
+        {
+            _splitDrag = false;
+            EditorSettings.Set(("ScriptFunctions", ListW / Math.Max(1, W)));
+        }
+        bool splitPress = IsActive && _splitHover && _m.LeftButton == ButtonState.Pressed && _mPrev.LeftButton == ButtonState.Released;
+        if (splitPress)
+            _splitDrag = true;
+        if (_splitDrag)
+            _listW = Math.Clamp(W - _mx - SplitW / 2, 120 * _scale, W * 0.7f);
+        MouseCursor wantCursor = _splitDrag || _splitHover ? MouseCursor.SizeWE : MouseCursor.Arrow;
+        if (IsActive && wantCursor != _cursorShown)
+        {
+            try
+            {
+                Mouse.SetCursor(wantCursor);
+            }
+            catch (Exception)
+            {
+            }
+            _cursorShown = wantCursor;
+        }
+        if (!splitPress && IsActive && _m.LeftButton == ButtonState.Pressed && _mPrev.LeftButton == ButtonState.Released)
         {
             _press = true;
             // clic dans le script : les touches y retournent (la barre de recherche reste ouverte, F3 continue)
@@ -686,6 +727,15 @@ public sealed class ScriptEditorGame : Microsoft.Xna.Framework.Game
         return i >= 0 ? $"{i + 1} / {hits.Count}" : $"{hits.Count}";
     }
 
+    /// <summary>La barre entre le script et la liste (plus claire survolée ou tirée).</summary>
+    private void DrawSplit()
+    {
+        (float x, float y, float w, float h) = SplitRect;
+        _ui.Begin();
+        _ui.Rect(x, y, w, h, _splitDrag || _splitHover ? new SN.Vector4(0.85f, 0.35f, 0.1f, 1) : new SN.Vector4(0.30f, 0.30f, 0.36f, 1));
+        _ui.End();
+    }
+
     private void ShowLine(int doc, int line)
     {
         _cur = doc;
@@ -705,6 +755,7 @@ public sealed class ScriptEditorGame : Microsoft.Xna.Framework.Game
         else
             DrawCode(true);
         DrawList();
+        DrawSplit();
         DrawProblems();
         DrawTabs();
         DrawBar();

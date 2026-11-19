@@ -47,18 +47,20 @@ public sealed partial class OpenFDGame
     // ---- mise en page (pixels de l'image) ----
     private float EdMenuH => 34 * _scale;
     private float EdScrollW => 16 * _scale;
-    private float EdLeftW => _edLeftOpen ? MathF.Round(_fbW * 0.17f) : 0;
+    // largeurs et hauteurs réglées par les barres de séparation (voir EditorSplit.cs)
+    private float EdLeftW => _edLeftOpen ? MathF.Round(_fbW * _edLeftFrac) : 0;
 
     private (float x, float y, float w, float h) EdListRect()
     {
-        float y = EdMenuH, x = MathF.Round(_fbW * 0.75f);
-        return (x, y, _fbW - x, (_fbH - y) * 0.75f);
+        float y = EdMenuH, x = EdRightX;
+        return (x, y, _fbW - x, MathF.Round((_fbH - y) * _edListFrac));
     }
 
     private (float x, float y, float w, float h) EdPropsRect()
     {
         (float x, float y, float w, float h) l = EdListRect();
-        return (l.x, l.y + l.h, l.w, _fbH - (l.y + l.h));
+        float top = l.y + l.h + EdSplitW;
+        return (l.x, top, l.w, _fbH - top);
     }
 
     private bool EdInView(float x, float y) => x >= _edViewX && x < _edViewX + _edViewW && y >= EdMenuH && y < _fbH;
@@ -103,7 +105,7 @@ public sealed partial class OpenFDGame
     /// <summary>
     /// Essais (captures) : FD3_EDITEUR_TEST=ordre;ordre… — « choisir:nom » (objet choisi, vue sur lui), « carte »,
     /// « mini », « onglet:n », « poser:élément » (posé au centre de la vue), « sauver:nom », « feux », « vue:x,y,z,lacet,tangage,dist »,
-    /// « gauche » (liste de gauche), « nouveau:nom,l,h », « nouveaufen » (fenêtre « Nouveau »), « monter:x,y,n » (case relevée n crans), « dialogue », « casernes » (fenêtre des casernes), « choixunite:n » (ajout d'une unité à la ligne n), « ajouteunite:n,classe », « equipement:clé », « case:x,y » (case choisie), « zonea:x,y,v ».
+    /// « gauche » (liste de gauche), « nouveau:nom,l,h », « nouveaufen » (fenêtre « Nouveau »), « monter:x,y,n » (case relevée n crans), « dialogue », « casernes » (fenêtre des casernes), « choixunite:n » (ajout d'une unité à la ligne n), « ajouteunite:n,classe », « equipement:clé », « case:x,y » (case choisie), « zonea:x,y,v », « decoupe:gauche,droite,liste » (barres de séparation).
     /// </summary>
     private void EdTestHooks(string orders)
     {
@@ -207,6 +209,13 @@ public sealed partial class OpenFDGame
                         EdLoadMission(created);
                     }
                     break;
+                case "decoupe":
+                    // essai : parts de la liste de gauche, du bord de la partie de droite, de la liste à poser
+                    string[] fr = arg.Split(',');
+                    _edLeftFrac = float.Parse(fr[0], System.Globalization.CultureInfo.InvariantCulture);
+                    _edRightFrac = float.Parse(fr[1], System.Globalization.CultureInfo.InvariantCulture);
+                    _edListFrac = float.Parse(fr[2], System.Globalization.CultureInfo.InvariantCulture);
+                    break;
                 case "proprietes":
                     _edPropBar.Value = float.Parse(arg, System.Globalization.CultureInfo.InvariantCulture);
                     _edPropUsed = 100000;   // (la vraie hauteur n'est connue qu'au premier dessin)
@@ -260,8 +269,9 @@ public sealed partial class OpenFDGame
         _fbH = GraphicsDevice.PresentationParameters.BackBufferHeight;
         _winW = Math.Max(1, Window.ClientBounds.Width);
         _winH = Math.Max(1, Window.ClientBounds.Height);
-        _edViewX = (int)EdLeftW;
-        _edViewW = Math.Max(64, (int)MathF.Round(_fbW * 0.75f) - _edViewX);
+        // la vue : entre la barre de gauche (liste ouverte) et celle de droite
+        _edViewX = (int)(EdLeftW + (_edLeftOpen && _edLoaded ? EdSplitW : 0));
+        _edViewW = Math.Max(64, (int)(EdRightX - EdSplitW) - _edViewX);
     }
 
     // la vue 3D : largeur réduite et origine décalée le temps de calculer la caméra, viser le sol ou dessiner
@@ -349,7 +359,9 @@ public sealed partial class OpenFDGame
             EdKeys();
         if (!_edLoaded && _edDrag != null && !_edDownL)
             _edDrag = null;
-        if (active && _edLoaded && _edDialog == null && !_edStOpen)
+        EdLayout();
+        EdSplitInput(active && _edLoaded);
+        if (active && _edLoaded && _edDialog == null && !_edStOpen && _edSplitDrag == 0)
             EdViewInput(m, dt);
         EdUndoTrack(false);
         _edKeysPrev = k;
@@ -565,6 +577,7 @@ public sealed partial class OpenFDGame
         EdDrawLeftList();
         EdDrawPanel();
         EdDrawProperties();
+        EdDrawSplitters();
         EdDrawMenu();
         EdDrawDragGhost();
         EdDrawPopup();
