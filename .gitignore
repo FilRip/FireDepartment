@@ -426,8 +426,4 @@ FodyWeavers.xsd
 
 # Official VS Code C# Dev Kit Extension exclusion
 #*.lscache
-/OpenFD 2.lnk
-/OpenFD 3.lnk
-/OpenFD.lnk
-/OpenFD Editeur.lnk
-/OpenFD Demo.lnk
+/*.lnk
