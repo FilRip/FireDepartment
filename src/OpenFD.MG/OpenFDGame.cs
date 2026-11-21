@@ -1579,6 +1579,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             }
             catch (Exception e) { Console.WriteLine($"{grp.Key} : {e.Message}"); }
         }
+        // modèles des objets explosifs (Mriya : le parking) : préparés ici plutôt qu'à la première image de la partie
+        PreloadExplosives(0.90f, 0.92f);
         Status("Croissance des arbres...", 0.92f);
         LoadTrees();
         Status("Envoi à la carte graphique...", 0.97f);

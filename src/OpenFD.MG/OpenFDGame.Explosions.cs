@@ -97,6 +97,22 @@ public sealed partial class OpenFDGame
         return _litExplosives[it.Id] = l;
     }
 
+    /// <summary>
+    /// Pendant le chargement : prépare le modèle de chaque objet explosif dans son état de départ (pièces envoyées à la carte
+    /// graphique, éclairage précalculé), comme RenderExplosives le ferait à la première image.
+    /// </summary>
+    private void PreloadExplosives(float from, float to)
+    {
+        for (int k = 0; k < _explosives.Count; k++)
+        {
+            if (k % 20 == 0)
+                Status($"Préparation des objets... {k} / {_explosives.Count}", from + (to - from) * k / Math.Max(1, _explosives.Count));
+            (ExplosiveItem it, string model, SN.Matrix4x4 _) = _explosives[k];
+            if (it.State != "e1" || LitModel(it, model) == null)
+                StateModel(model, it.State);
+        }
+    }
+
     private void RenderExplosives()
     {
         if (!_objects)
