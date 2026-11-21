@@ -18,6 +18,12 @@ public sealed partial class OpenFDGame
         public SN.Vector3 LastPos;
         public float MovingFor;
         public bool Deployed;   // pompier « canon » : lance posée (animation DEPLOY jouée), il attend accroupi
+        // attente : pose calme, gestes joués de temps en temps (OpenFDGame.IdleAnim.cs)
+        public bool IdleReady;
+        public string? IdleBase;
+        public List<string> Fidgets = new();
+        public string? Fidget;
+        public float IdleFor;
         public Dictionary<CharacterRig.Part, (MeshGpu mesh, float[] pos, float[] nrm)> Skinned = new();
         public SN.Matrix4x4[] World = Array.Empty<SN.Matrix4x4>();
     }
@@ -517,7 +523,13 @@ public sealed partial class OpenFDGame
             // mort pendant la partie : le corps s'enfonce et disparaît, la silhouette reste (RenderDeathTraces)
             if (DeadSink(c.DiedAt, now) is not { } csink)
                 continue;
-            if (!DrawCharacter(a, CivTag(c, a.MovingFor > 0), PoseOf(c, c.Position, c.Heading).p - new SN.Vector3(0, 0, csink), SmoothHeading(c, PoseOf(c, c.Position, c.Heading).h, dt), dt, false, 280f / WalkAnimSpeed))
+            // il attend près de son guide : pose calme et gestes de temps en temps, comme les pompiers
+            string civTag = CivTag(c, a.MovingFor > 0);
+            if (civTag == "WAIT1")
+                civTag = IdleTag(a, dt);
+            else
+                IdleReset(a);
+            if (!DrawCharacter(a, civTag, PoseOf(c, c.Position, c.Heading).p - new SN.Vector3(0, 0, csink), SmoothHeading(c, PoseOf(c, c.Position, c.Heading).h, dt), dt, false, 280f / WalkAnimSpeed))
                 still.Add(c);
         }
         List<Unit> stillUnits = new List<Unit>();
@@ -556,6 +568,10 @@ public sealed partial class OpenFDGame
                 if (u.ShownMoving)
                     rate = Math.Clamp(u.Speed / WalkAnimSpeed, 0.5f, 1.6f);
             }
+            if (tag == "WAIT1")
+                tag = IdleTag(a, dt);
+            else
+                IdleReset(a);
             if (!DrawCharacter(a, tag, PoseOf(u, u.Position, u.Heading).p, SmoothHeading(u, PoseOf(u, u.Position, u.Heading).h, dt), dt, axe, rate, u.IsCanon))
                 stillUnits.Add(u);
         }
