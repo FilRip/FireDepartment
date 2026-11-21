@@ -114,6 +114,21 @@ public sealed partial class OpenFDGame
             e.Projection = proj.X();
         }
         _refl.SetFrame(view.X(), (view * proj).X(), eye.X());
+        // éclairage de jour, blanc, sans brouillard : l'aperçu ne dépend pas de la mission (aucune mission ouverte au
+        // démarrage : sinon les objets sortaient noirs ; mission de nuit : sombres)
+        foreach (BasicEffect e in new[] { _lit, _plain })
+        {
+            e.AmbientLightColor = new Vector3(0.62f);
+            e.DirectionalLight0.DiffuseColor = new Vector3(0.55f);
+            e.DirectionalLight1.DiffuseColor = new Vector3(0.55f);
+        }
+        _dual.DiffuseColor = Vector3.One;
+        _alphaFx.DiffuseColor = new Vector3(0.95f);
+        foreach (IEffectFog f in new IEffectFog[] { _lit, _plain, _dual, _alphaFx })
+        {
+            f.FogStart = r * 1000;
+            f.FogEnd = r * 2000;
+        }
         gd.DepthStencilState = DepthStencilState.Default;
         gd.BlendState = BlendState.Opaque;
         gd.RasterizerState = RasterizerState.CullNone;
