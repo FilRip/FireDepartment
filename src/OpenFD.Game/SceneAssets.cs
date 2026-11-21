@@ -192,6 +192,53 @@ public sealed class SceneAssets
         return m.Success ? int.Parse(m.Groups[1].Value) : -1;
     }
 
+    private static readonly Regex WreckRootRx = new(@"(_e0?2|_dead(_e0?2)?)$", RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Épave d'un véhicule : le nœud « …_e2 » (ou « …_dead ») du modèle et toutes les pièces accrochées dessous
+    /// (Veh_P_FR_pumper.sg : Veh_P_FR_pumper_e2 porte Veh_P_FR_pumper_dead et les débris Veh_P_FR_pumper_Debr00…),
+    /// avec leur propre texture d'épave (veh_p_fr_pumper_dead.tga). Liste vide : le modèle n'a pas d'épave.
+    /// </summary>
+    public List<Node> WreckParts(string model)
+    {
+        string dir = model.Contains('\\') ? model[..model.LastIndexOf('\\')] : "Placeable";
+        if (!model.Contains('\\'))
+            model = "Placeable\\" + model;
+        if (_files.TryRead("Gfx\\" + model + ".sg") is not { } sg)
+            return new List<Node>();
+        Dictionary<string, (string parent, Matrix4x4 m)> nodes = Rooms.SceneNodes(sg);
+        HashSet<string> roots = nodes.Keys.Where(k => WreckRootRx.IsMatch(k)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        List<Node> parts = new List<Node>();
+        foreach (string k in nodes.Keys)
+        {
+            if (!UnderAny(nodes, k, roots))
+                continue;
+            if (k.ToUpperInvariant().Contains("_COLL") || k.ToUpperInvariant().Contains("MASK") || LightPartRx.IsMatch(k) || LodRx.IsMatch(k))
+                continue;
+            if (_files.TryRead("Gfx\\" + dir + "\\" + k + ".mesh") == null)
+                continue;
+            parts.Add(new Node(dir + "\\" + k, PartWorld(nodes, k)));
+        }
+        return parts;
+    }
+
+    private static readonly Regex LodRx = new(@"_LOD[1-9]$", RegexOptions.IgnoreCase);
+
+    // le nœud lui-même ou l'un de ses parents fait partie de « roots »
+    private static bool UnderAny(Dictionary<string, (string parent, Matrix4x4 m)> nodes, string k, HashSet<string> roots)
+    {
+        string cur = k;
+        for (int depth = 0; depth < 64; depth++)
+        {
+            if (roots.Contains(cur))
+                return true;
+            if (!nodes.TryGetValue(cur, out (string parent, Matrix4x4 m) e))
+                return false;
+            cur = e.parent;
+        }
+        return false;
+    }
+
     /// <summary>
     /// Couvercles noirs d'un modèle d'objet (« …_ROOM1_MASK », comme Gfx\Placeable\ROOF\Roof.sg du hangar de Mriya) :
     /// les pièces que <see cref="ModelParts(string)"/> laisse de côté.

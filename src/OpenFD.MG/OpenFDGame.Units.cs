@@ -616,6 +616,14 @@ public sealed partial class OpenFDGame
                 _charred = false;
                 continue;
             }
+            // véhicule détruit : son épave, avec sa propre texture, à la place du véhicule assombri
+            if (u.Destroyed && u.IsVehicle && WreckModel(u.Model) is { Count: > 0 } wreck)
+            {
+                _charred = false;
+                foreach ((MeshGpu? wm, SN.Matrix4x4 wp) in wreck)
+                    DrawMesh(wm, (wp * place).X());
+                continue;
+            }
             for (int i = 0; i < parts.Count; i++)
             {
                 SN.Matrix4x4 pose = u.IsVehicle && i < names.Count ? VehiclePartPose(u, names[i]) : SN.Matrix4x4.Identity;

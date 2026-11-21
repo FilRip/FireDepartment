@@ -1267,6 +1267,9 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         foreach (List<(MeshGpu mesh, SN.Matrix4x4 part)> l in _unitModels.Values)
             foreach ((MeshGpu? m, _) in l)
                 m.Dispose();
+        foreach (List<(MeshGpu mesh, SN.Matrix4x4 part)> l in _wreckModels.Values)
+            foreach ((MeshGpu? m, _) in l)
+                m.Dispose();
         foreach (MeshGpu? m in _partMeshes.Values)
             m?.Dispose();
         foreach (CharAnim c in _chars.Values)
@@ -1281,6 +1284,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _cubeCache.Clear();
         _log.Clear();
         _unitModels.Clear();
+        _wreckModels.Clear();
         ClearBeacons();
         _sel.Clear();
         _unitLogSeen = 0;
@@ -2220,7 +2224,9 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             try { nodes = _files.TryRead("Gfx\\" + model + ".sg") is { } sg ? Rooms.SceneNodes(sg) : null; } catch { nodes = null; }
             if (nodes == null)
                 _assets.ReportMissing("modèle 3D", "Gfx\\" + model + ".sg");
-            foreach (SceneAssets.Node part in _assets.ModelParts(model))
+            // les pièces de l'épave (sous le nœud « …_e2 ») ne sont dessinées qu'une fois le véhicule détruit (WreckModel)
+            HashSet<string> wreck = _assets.WreckParts(model).Select(n => n.Mesh).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (SceneAssets.Node part in _assets.ModelParts(model).Where(n => !wreck.Contains(n.Mesh)))
             {
                 l.Add((Upload(_assets.LoadMesh(_mission, part.Mesh, "gfx")), part.World));
                 names.Add(JointName(part.Mesh, nodes).ToUpperInvariant());
@@ -2231,6 +2237,26 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _unitPartNames[model] = names;
         return l;
     }
+
+    /// <summary>
+    /// Épave d'un véhicule détruit : les pièces du modèle sous son nœud « …_e2 », avec leur texture d'épave
+    /// (veh_p_fr_pumper_dead.tga…). Vide : pas d'épave dans le modèle (le véhicule intact est alors dessiné assombri).
+    /// </summary>
+    private List<(MeshGpu mesh, SN.Matrix4x4 part)> WreckModel(string model)
+    {
+        if (_wreckModels.TryGetValue(model, out List<(MeshGpu mesh, SN.Matrix4x4 part)>? l))
+            return l;
+        l = new();
+        try
+        {
+            foreach (SceneAssets.Node part in _assets.WreckParts(model))
+                l.Add((Upload(_assets.LoadMesh(_mission, part.Mesh, "gfx")), part.World));
+        }
+        catch (Exception e) { Console.WriteLine($"{model} (épave) : {e.Message}"); }
+        return _wreckModels[model] = l;
+    }
+
+    private readonly Dictionary<string, List<(MeshGpu mesh, SN.Matrix4x4 part)>> _wreckModels = new(StringComparer.OrdinalIgnoreCase);
 
     // noms des pièces des modèles (en majuscules), dans l'ordre de UnitModel : échelle et tourelle, pelle du bulldozer
     private readonly Dictionary<string, List<string>> _unitPartNames = new();
