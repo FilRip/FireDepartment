@@ -41,6 +41,8 @@ public sealed class SceneAssets
         _meshes.Clear();
         _missions = null;
         _cubes = null;
+        lock (_sceneNames)
+            _sceneNames.Clear();
     }
 
     public sealed record Node(string Mesh, Matrix4x4 World);
@@ -63,6 +65,31 @@ public sealed class SceneAssets
     /// (mission créée par l'éditeur : pas de décor, le sol est tiré de la grille).</summary>
     public string GfxDir(string mission) =>
         _files.List("Gfx\\Mission\\").Select(p => p.Split('\\')[2]).FirstOrDefault(m => m.Equals(mission, StringComparison.OrdinalIgnoreCase)) ?? mission;
+
+    /// <summary>
+    /// Noms du décor d'une mission : « &lt;nom&gt;.sg » (bâtiments) et « FGD_&lt;nom&gt;.sg » (sol), et le préfixe de son éclairage
+    /// précalculé (« FLM_&lt;nom&gt;_… »). D'habitude le nom de la mission (London) ou « level_&lt;mission&gt; » (Institute) ;
+    /// sinon celui que porte le sol du dossier (MonteCristo : « Circus » ; Residental : « GROUND »).
+    /// </summary>
+    public IReadOnlyList<string> SceneNames(string mission)
+    {
+        lock (_sceneNames)
+            if (_sceneNames.TryGetValue(mission, out List<string>? known))
+                return known;
+        List<string> names = new List<string> { mission, "level_" + mission };
+        string prefix = $"Gfx\\Mission\\{GfxDir(mission)}\\";
+        List<string> files = _files.List(prefix).Select(p => p[(p.LastIndexOf('\\') + 1)..]).ToList();
+        bool found = names.Any(n => files.Any(f => f.Equals(n + ".sg", StringComparison.OrdinalIgnoreCase) || f.Equals("FGD_" + n + ".sg", StringComparison.OrdinalIgnoreCase)));
+        if (!found)
+            foreach (string f in files)
+                if (f.StartsWith("FGD_", StringComparison.OrdinalIgnoreCase) && f.EndsWith(".sg", StringComparison.OrdinalIgnoreCase))
+                    names.Add(f[4..^3]);
+        lock (_sceneNames)
+            _sceneNames[mission] = names;
+        return names;
+    }
+
+    private readonly Dictionary<string, List<string>> _sceneNames = new(StringComparer.OrdinalIgnoreCase);
 
     public bool HasGfx(string mission) => _files.List("Gfx\\Mission\\" + mission + "\\").Any();
 
@@ -90,7 +117,7 @@ public sealed class SceneAssets
                  {
                      // décor « London.sg » et sol « FGD_London.sg » ; certaines missions (Institute) : « level_institute.sg »
                      string f = p[(p.LastIndexOf('\\') + 1)..];
-                     foreach (string n in new[] { mission, "level_" + mission })
+                     foreach (string n in SceneNames(mission))
                          if (f.Equals(n + ".sg", StringComparison.OrdinalIgnoreCase) || f.Equals("FGD_" + n + ".sg", StringComparison.OrdinalIgnoreCase))
                              return true;
                      return false;
@@ -407,7 +434,7 @@ public sealed class SceneAssets
             int uvA = Array.FindIndex(m.Uv, u => u != null), uvB = Array.FindLastIndex(m.Uv, u => u != null);
             if (uvB == uvA)
                 uvB = -1;
-            string? lightmap = src != null ? null : $"FLM_{mission}_{baseName}_0";
+            string? lightmap = src != null ? null : SceneNames(mission).Select(n => $"FLM_{n}_{baseName}_0").FirstOrDefault(l => ResolveTex(mission, l) != null) ?? $"FLM_{mission}_{baseName}_0";
             // sol : maillage « GROUND » ou tuiles « FGD_Subway_tile_1_2 », un seul éclairage précalculé pour tout le sol,
             // « FLM_Subway_GROUND » (lampadaires, ombres des bâtiments ; la nuit de Subway en dépend)
             Match tile = GroundTileRx.Match(baseName);
@@ -418,9 +445,7 @@ public sealed class SceneAssets
                 else if (baseName.Equals("GROUND", StringComparison.OrdinalIgnoreCase))
                     // Institute : « FLM_level_institute_GROUND » (sans lui, ce sol et les tuiles posées dessus s'éclairent
                     // différemment et clignotent quand la caméra bouge)
-                    lightmap = ResolveTex(mission, $"FLM_{mission}_GROUND") == null && ResolveTex(mission, $"FLM_level_{mission}_GROUND") != null
-                        ? $"FLM_level_{mission}_GROUND"
-                        : $"FLM_{mission}_GROUND";
+                    lightmap = SceneNames(mission).Select(n => $"FLM_{n}_GROUND").FirstOrDefault(l => ResolveTex(mission, l) != null) ?? $"FLM_{mission}_GROUND";
             }
             if (lightmap != null && ResolveTex(mission, lightmap) == null)
                 lightmap = null;

@@ -1600,7 +1600,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     private string? ObjectLightmap(string mission, string mesh, uint id)
     {
         string part = mesh.Contains('\\') ? mesh[(mesh.LastIndexOf('\\') + 1)..] : mesh;
-        foreach (string prefix in new[] { mission, "level_" + mission })
+        foreach (string prefix in _assets.SceneNames(mission))
         {
             string lm = $"FLM_{prefix}_{part}_{id}";
             if (_assets.HasTexture(mission, lm))
