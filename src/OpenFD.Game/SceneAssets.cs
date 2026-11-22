@@ -192,6 +192,22 @@ public sealed class SceneAssets
         return m.Success ? int.Parse(m.Groups[1].Value) : -1;
     }
 
+    /// <summary>
+    /// Toutes les pièces d'un modèle qui ont un maillage, sans rien écarter (collisions, couvercles, épave, lumières…) :
+    /// pour l'export vers un logiciel 3D, où chaque pièce garde son nom.
+    /// </summary>
+    public List<Node> AllParts(string model)
+    {
+        string dir = model.Contains('\\') ? model[..model.LastIndexOf('\\')] : "Placeable";
+        if (!model.Contains('\\'))
+            model = "Placeable\\" + model;
+        if (_files.TryRead("Gfx\\" + model + ".sg") is not { } sg)
+            return new List<Node>();
+        Dictionary<string, (string parent, Matrix4x4 m)> nodes = Rooms.SceneNodes(sg);
+        return nodes.Keys.Where(k => _files.TryRead("Gfx\\" + dir + "\\" + k + ".mesh") != null)
+            .Select(k => new Node(dir + "\\" + k, PartWorld(nodes, k))).ToList();
+    }
+
     private static readonly Regex WreckRootRx = new(@"(_e0?2|_dead(_e0?2)?)$", RegexOptions.IgnoreCase);
 
     /// <summary>

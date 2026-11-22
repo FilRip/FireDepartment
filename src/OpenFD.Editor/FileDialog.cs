@@ -40,6 +40,11 @@ internal static class FileDialog
     [DllImport("comdlg32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool GetSaveFileNameW(ref OpenFileName ofn);
 
+    [DllImport("comdlg32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool GetOpenFileNameW(ref OpenFileName ofn);
+
+    private const int OfnFileMustExist = 0x1000;
+
     private const int OfnOverwritePrompt = 0x2;
     private const int OfnNoChangeDir = 0x8;
     private const int OfnPathMustExist = 0x800;
@@ -47,14 +52,44 @@ internal static class FileDialog
     private const int MaxPath = 1024;
 
     /// <summary>Nom du zip à écrire : la fenêtre s'ouvre sur <paramref name="folder"/>, avec <paramref name="name"/> proposé.</summary>
-    public static string? SaveZip(string title, string folder, string name)
+    public static string? SaveZip(string title, string folder, string name) => SaveFile(title, folder, name, "zip", "Zip");
+
+    /// <summary>Nom d'un fichier « .<paramref name="ext"/> » à écrire (<paramref name="kind"/> : nom du type, dans le filtre).</summary>
+    public static string? SaveFile(string title, string folder, string name, string ext, string kind)
     {
         if (OperatingSystem.IsWindows())
-            return SaveWindows(title, folder, name);
-        return SaveZenity(title, Path.Combine(folder, name));
+            return SaveWindows(title, folder, name, ext, kind);
+        return SaveZenity(title, Path.Combine(folder, name), ext);
     }
 
-    private static string? SaveWindows(string title, string folder, string name)
+    /// <summary>Fenêtre « Ouvrir » : un fichier « .<paramref name="ext"/> » existant à lire (null : annulé).</summary>
+    public static string? OpenFile(string title, string folder, string ext, string kind)
+    {
+        if (OperatingSystem.IsWindows())
+            return SaveWindows(title, folder, "", ext, kind, true);
+        try
+        {
+            ProcessStartInfo psi = new ProcessStartInfo("zenity")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+            };
+            foreach (string a in new[] { "--file-selection", "--title=" + title, "--filename=" + folder + Path.DirectorySeparatorChar, "--file-filter=*." + ext })
+                psi.ArgumentList.Add(a);
+            using Process? p = Process.Start(psi);
+            if (p == null)
+                return null;
+            string res = p.StandardOutput.ReadToEnd().Trim();
+            p.WaitForExit();
+            return p.ExitCode != 0 || res.Length == 0 ? null : res;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static string? SaveWindows(string title, string folder, string name, string ext, string kind, bool open = false)
     {
         string? result = null;
         Thread t = new Thread(() =>
@@ -68,16 +103,16 @@ internal static class FileDialog
                 OpenFileName ofn = new OpenFileName
                 {
                     lStructSize = Marshal.SizeOf<OpenFileName>(),
-                    lpstrFilter = "Zip (*.zip)\0*.zip\0\0",
+                    lpstrFilter = $"{kind} (*.{ext})\0*.{ext}\0\0",
                     nFilterIndex = 1,
                     lpstrFile = buf,
                     nMaxFile = MaxPath,
                     lpstrInitialDir = Directory.Exists(folder) ? folder : null,
                     lpstrTitle = title,
-                    Flags = OfnOverwritePrompt | OfnNoChangeDir | OfnPathMustExist | OfnExplorer,
-                    lpstrDefExt = "zip",
+                    Flags = (open ? OfnFileMustExist : OfnOverwritePrompt) | OfnNoChangeDir | OfnPathMustExist | OfnExplorer,
+                    lpstrDefExt = ext,
                 };
-                if (GetSaveFileNameW(ref ofn))
+                if (open ? GetOpenFileNameW(ref ofn) : GetSaveFileNameW(ref ofn))
                     result = Marshal.PtrToStringUni(buf);
             }
             catch (Exception e)
@@ -96,7 +131,7 @@ internal static class FileDialog
         return string.IsNullOrWhiteSpace(result) ? null : result;
     }
 
-    private static string? SaveZenity(string title, string path)
+    private static string? SaveZenity(string title, string path, string ext)
     {
         try
         {
@@ -105,7 +140,7 @@ internal static class FileDialog
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
             };
-            foreach (string a in new[] { "--file-selection", "--save", "--confirm-overwrite", "--title=" + title, "--filename=" + path, "--file-filter=*.zip" })
+            foreach (string a in new[] { "--file-selection", "--save", "--confirm-overwrite", "--title=" + title, "--filename=" + path, "--file-filter=*." + ext })
                 psi.ArgumentList.Add(a);
             using Process? p = Process.Start(psi);
             if (p == null)
@@ -114,11 +149,11 @@ internal static class FileDialog
             p.WaitForExit();
             if (p.ExitCode != 0 || res.Length == 0)
                 return null;
-            return res.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ? res : res + ".zip";
+            return res.EndsWith("." + ext, StringComparison.OrdinalIgnoreCase) ? res : res + "." + ext;
         }
         catch (Exception)
         {
-            // pas de zenity : le zip va dans le dossier proposé
+            // pas de zenity : le fichier va dans le dossier proposé
             return path;
         }
     }

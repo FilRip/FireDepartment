@@ -6,7 +6,7 @@ using SN = System.Numerics;
 
 namespace OpenFD.MG;
 
-// éditeur : la barre de menu (Nouveau, Charger, Sauver, Tester, Script, Exporter) et ce que font ses boutons
+// éditeur : la barre de menu (Nouveau, Charger, Sauver, Tester, Script, Exporter, Importer) et ce que font ses boutons
 public sealed partial class OpenFDGame
 {
     private Process? _edScriptProc;
@@ -42,6 +42,10 @@ public sealed partial class OpenFDGame
         x += bw + pad;
         if (EdButton(x, pad, bw, h - 2 * pad, Tr("Export", "Exporter"), false, _edLoaded))
             EdExport();
+        x += bw + pad;
+        // un objet 3D (OBJ, Blender) à ajouter à la liste des objets : OpenFDGame.EditorImport.cs
+        if (EdButton(x, pad, bw, h - 2 * pad, Tr("Import", "Importer")))
+            EdImport();
         x += bw + 3 * pad;
         // message du moment (en rouge : une erreur), il pâlit au bout de quelques secondes
         float age = (float)(_edClock - _edStatusAt);

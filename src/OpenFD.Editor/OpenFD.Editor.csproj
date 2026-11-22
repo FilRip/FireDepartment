@@ -30,6 +30,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\OpenFD.MG\*.cs" Exclude="..\OpenFD.MG\Program.cs" Link="Jeu\%(Filename)%(Extension)" />
+    <!-- import d'objets 3D (bouton « Importer ») : écriture des fichiers du moteur et lecture des images, partagées avec le convertisseur FD1 -->
+    <Compile Include="..\OpenFD.ConvFD1\Fd3Writer.cs;..\OpenFD.ConvFD1\Fd3Mesh.cs;..\OpenFD.ConvFD1\ImageCodec.cs;..\OpenFD.ConvFD1\JpegDecoder.cs" Link="ConvFD1\%(Filename)%(Extension)" />
   </ItemGroup>
   <!-- normal : paquet NuGet ; MonoGameLocal=chemin\MonoGame.Framework.dll : version compilée à la main (essais hors ligne) -->
   <ItemGroup Condition="'$(MonoGameLocal)' == ''">

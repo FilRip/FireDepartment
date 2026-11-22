@@ -279,6 +279,13 @@ public sealed partial class OpenFDGame
                     else
                         EdMessage(Tr("OpenFirst", "Ouvrez d'abord une mission (« Charger » ou « Nouveau »)"), true);
                 }
+                else if (over && _edPressR)
+                {
+                    // clic droit : menu de l'objet (export OBJ… : OpenFDGame.EditorExport.cs)
+                    _edPressR = false;
+                    EdCommitFocus();
+                    EdItemMenu(it);
+                }
             }
         _ui.End();
         _edHoverItem = hover;
