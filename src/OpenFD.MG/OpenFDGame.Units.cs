@@ -35,8 +35,9 @@ public sealed partial class OpenFDGame
     private readonly HashSet<uint> _slideFlat = new();
 
     // objets déplacés par le script (ENT_SetPosition : l'avion et le camion de Mriya avancent de 80 unités à chaque tour
-    // de la boucle principale) : on les fait glisser d'une position à la suivante pendant un tour, au lieu de sauter
-    private readonly Dictionary<uint, (SN.Vector2 from, SN.Vector2 to, float t0)> _glide = new();
+    // de la boucle principale) : on les fait glisser d'une position à la suivante, au lieu de sauter, pendant le temps qui
+    // a séparé les deux derniers déplacements (un tour de boucle ; Fireworks : le train qui part avance à chaque pas)
+    private readonly Dictionary<uint, (SN.Vector2 from, SN.Vector2 to, float t0, float dur)> _glide = new();
 
     /// <summary>Position du moment (glissée) d'un objet que le script a déplacé ; null s'il n'a pas bougé.</summary>
     private SN.Vector2? ScriptPos(uint id)
@@ -44,15 +45,16 @@ public sealed partial class OpenFDGame
         if (Host?.MovedObjects.TryGetValue(id, out SN.Vector2 target) != true)
             return null;
         float now = (float)(_session.Time + (_paused ? 0 : _owed * Session.Dt));
-        static SN.Vector2 At((SN.Vector2 from, SN.Vector2 to, float t0) g, float t) =>
-            SN.Vector2.Lerp(g.from, g.to, Math.Clamp((t - g.t0) / Session.MainLoopPeriod, 0, 1));
-        if (!_glide.TryGetValue(id, out (SN.Vector2 from, SN.Vector2 to, float t0) g))
-            _glide[id] = g = (target, target, now);
+        static SN.Vector2 At((SN.Vector2 from, SN.Vector2 to, float t0, float dur) g, float t) =>
+            SN.Vector2.Lerp(g.from, g.to, Math.Clamp((t - g.t0) / g.dur, 0, 1));
+        if (!_glide.TryGetValue(id, out (SN.Vector2 from, SN.Vector2 to, float t0, float dur) g))
+            _glide[id] = g = (target, target, now, Session.MainLoopPeriod);
         else if (g.to != target)
         {
             SN.Vector2 cur = At(g, now);
+            float dur = Math.Clamp(now - g.t0, Session.Dt, Session.MainLoopPeriod);
             // grand saut (téléportation par le script) : pas de glissade
-            _glide[id] = g = (SN.Vector2.Distance(cur, target) > 1500 ? target : cur, target, now);
+            _glide[id] = g = (SN.Vector2.Distance(cur, target) > 1500 ? target : cur, target, now, dur);
         }
         return At(g, now);
     }
@@ -66,7 +68,7 @@ public sealed partial class OpenFDGame
         SN.Vector2 o2 = new SN.Vector2(origin.X, origin.Y);
         SN.Vector3 to = new SN.Vector3(at, origin.Z + GridZ(at) - GridZ(o2));
         SN.Matrix4x4 tilt = SN.Matrix4x4.Identity;
-        if (_glide.TryGetValue(id, out (SN.Vector2 from, SN.Vector2 to, float t0) g) && SN.Vector2.Distance(g.from, g.to) > 1)
+        if (_glide.TryGetValue(id, out (SN.Vector2 from, SN.Vector2 to, float t0, float dur) g) && SN.Vector2.Distance(g.from, g.to) > 1)
         {
             SN.Vector2 dir = SN.Vector2.Normalize(g.to - g.from);
             float rise = GridZ(at + dir * SlopeReach) - GridZ(at - dir * SlopeReach);

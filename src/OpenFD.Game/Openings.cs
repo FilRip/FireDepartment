@@ -133,6 +133,10 @@ public sealed partial class UnitManager
                 d.Life = 0;
                 d.State = OpeningState.Broken;
             }
+            // fonction du script appelée quand la porte est cassée (composant A024 ; Fireworks : door_heavy_blind39 →
+            // OnCRDoorBreak, le conducteur enfermé court seul vers son train)
+            if (LevelEdit.DestroyScript(o) is { Length: > 0 } onBreak)
+                d.OnDestroy = onBreak;
             // fonctions du script appelées à l'ouverture et à la fermeture (portails de Jail : First_Gates_Open / _Close)
             if (o.GetComponent(0xA027) is { } ac)
             {

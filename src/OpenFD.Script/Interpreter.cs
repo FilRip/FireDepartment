@@ -34,7 +34,10 @@ public sealed class Interpreter
     public void Update()
     {
         int guard = 0;
-        while (_queue.TryPeek(out (string fn, Value[] args) item, out (double t, long seq) when) && when.t <= Host.GameTime + 1e-9 && guard++ < 10_000)
+        // un appel redemandé pendant ce passage, même sans délai, attend le pas suivant : une fonction qui se relance
+        // (Fireworks, MoveTrain : le train avance un peu à chaque fois) avance pas à pas au lieu de tout faire d'un coup
+        long limit = _seq;
+        while (_queue.TryPeek(out (string fn, Value[] args) item, out (double t, long seq) when) && when.t <= Host.GameTime + 1e-9 && when.seq < limit && guard++ < 10_000)
         {
             _queue.Dequeue();
             TryRun(item.fn, item.args);
