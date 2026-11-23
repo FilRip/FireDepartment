@@ -1137,6 +1137,7 @@ public sealed partial class MissionConverter
         AddStory(level, fd1);
         AddLevelUnits(level, fd1);
         AddScriptObjects(level);
+        AddFlameJets(level);
         if (waypoint != null)
             AddCinematics(level, waypoint);
         if (waypoint != null)

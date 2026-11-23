@@ -230,6 +230,12 @@ public sealed partial class OpenFDGame
                 foreach ((string path, byte[] bytes) in MaskModel.Files(mw, mh))
                     files[path] = bytes;
             }
+            else if (e.Kind == EditorItemKind.FlameJet)
+            {
+                // jet de flammes : sa classe (une par longueur)
+                int len = (int)e.Size.X;
+                classes[FlameJetClass.File(len)] = FlameJetClass.Text(len);
+            }
             else if (_edNewClasses.TryGetValue(rel, out string? text))
                 classes[rel] = text;
         }

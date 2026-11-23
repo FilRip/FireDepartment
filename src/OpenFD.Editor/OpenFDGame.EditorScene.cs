@@ -158,6 +158,11 @@ public sealed partial class OpenFDGame
                     e = new EditorObject { Source = o, Kind = EditorItemKind.RoofMask, Size = SizeOfClass(leaf, new(400, 400)) };
                     break;
                 }
+                if (FlameJetClass.LengthOf(o.ClassPath) is { } jetLength)
+                {
+                    e = new EditorObject { Source = o, Kind = EditorItemKind.FlameJet, Size = new SN.Vector2(jetLength, FlameJetClass.Width) };
+                    break;
+                }
                 if (EdClass(o.ClassPath) is { } c && c.Get("SPEEDTREE", "TreeModel")?.Trim('"', ' ') is { Length: > 0 } tree)
                 {
                     e = new EditorObject
@@ -275,6 +280,8 @@ public sealed partial class OpenFDGame
                 return (new(-s.X / 2, -s.Y / 2, 0), new(s.X / 2, s.Y / 2, MathF.Max(50, s.Z)));
             case EditorItemKind.RoofMask:
                 return (new(-e.Size.X / 2, -e.Size.Y / 2, -10), new(e.Size.X / 2, e.Size.Y / 2, 10));
+            case EditorItemKind.FlameJet:
+                return (new(0, -e.Size.Y / 2, 0), new(e.Size.X, e.Size.Y / 2, FlameJetClass.Height + 40));
             case EditorItemKind.Tree:
                 float tr = e.TreeHeight * 0.3f;
                 return (new(-tr, -tr, 0), new(tr, tr, e.TreeHeight));
@@ -421,6 +428,20 @@ public sealed partial class OpenFDGame
                     EdQuad3(SN.Vector3.Transform(new(e.BoxMin.X, e.BoxMin.Y, 3), w), SN.Vector3.Transform(new(e.BoxMax.X, e.BoxMin.Y, 3), w),
                         SN.Vector3.Transform(new(e.BoxMax.X, e.BoxMax.Y, 3), w), SN.Vector3.Transform(new(e.BoxMin.X, e.BoxMax.Y, 3), w), new Color(80, 230, 110, 60));
                     break;
+                case EditorItemKind.FlameJet:
+                {
+                    // le jet : un trait orange de la sortie (à HEIGHT au-dessus de l'objet) jusqu'au bout, avec une pointe
+                    Color orange = new Color(255, 130, 30);
+                    float h = FlameJetClass.Height, len = e.Size.X, half = e.Size.Y / 2;
+                    SN.Vector3 P(float x, float y, float z) => SN.Vector3.Transform(new SN.Vector3(x, y, z), w);
+                    EdLine3(P(0, 0, 0), P(0, 0, h), orange);
+                    EdLine3(P(0, 0, h), P(len, 0, h), orange);
+                    EdLine3(P(0, -half / 3, h), P(len, -half, h), orange);
+                    EdLine3(P(0, half / 3, h), P(len, half, h), orange);
+                    EdLine3(P(len, 0, h), P(len - 60, -40, h), orange);
+                    EdLine3(P(len, 0, h), P(len - 60, 40, h), orange);
+                    break;
+                }
                 case EditorItemKind.RoofMask:
                     EdQuad3(SN.Vector3.Transform(new(e.BoxMin.X, e.BoxMin.Y, 0), w), SN.Vector3.Transform(new(e.BoxMax.X, e.BoxMin.Y, 0), w),
                         SN.Vector3.Transform(new(e.BoxMax.X, e.BoxMax.Y, 0), w), SN.Vector3.Transform(new(e.BoxMin.X, e.BoxMax.Y, 0), w), new Color(0, 0, 0, 235));

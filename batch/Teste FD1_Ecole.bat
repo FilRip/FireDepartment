@@ -1,5 +1,5 @@
 @echo off
-dotnet build src\OpenFD.ConvFD1
+dotnet build ..\src\OpenFD.ConvFD1
 rmdir ..\..\Data\Gfx\Mission\FD1_Ecole /s /q
 rmdir ..\..\Data\Gfx\Textures\FD1_Ecole /s /q
 rmdir ..\..\Data\Design\Mission\FD1_Ecole /s /q

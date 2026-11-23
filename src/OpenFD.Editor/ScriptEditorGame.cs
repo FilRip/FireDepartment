@@ -239,6 +239,9 @@ public sealed class ScriptEditorGame : Microsoft.Xna.Framework.Game
         _k = Keyboard.GetState();
         _m = Mouse.GetState();
         (_mx, _my) = Fb(_m.X, _m.Y);
+        // essai : FD3_SCRIPT_MOUSE=x,y (souris posée là, pour voir la bulle d'aide sur une capture)
+        if (Environment.GetEnvironmentVariable("FD3_SCRIPT_MOUSE") is { Length: > 0 } mouseTest && mouseTest.Split(',') is { Length: 2 } mp)
+            (_mx, _my) = (float.Parse(mp[0], System.Globalization.CultureInfo.InvariantCulture), float.Parse(mp[1], System.Globalization.CultureInfo.InvariantCulture));
         // barre entre le script et la liste des fonctions : tirée au bouton gauche, curseur ↔ dessus
         (float sx, float sy, float sw, float sh) = SplitRect;
         _splitHover = IsActive && _mx >= sx - 1 && _mx < sx + sw + 1 && _my >= sy && _my < sy + sh;
@@ -785,6 +788,7 @@ public sealed class ScriptEditorGame : Microsoft.Xna.Framework.Game
         DrawTabs();
         DrawBar();
         DrawDialogs();
+        DrawTip();
         if (_m.LeftButton == ButtonState.Released)
             _selecting = false;
         _press = false;
@@ -990,6 +994,12 @@ public sealed class ScriptEditorGame : Microsoft.Xna.Framework.Game
             d.Line = l;
             d.Col = c;
         }
+        // bulle d'aide : commande du moteur sous la souris
+        if (interactive && !_selecting && Hit(x + gutter, y, w - sbW - gutter, h))
+        {
+            (int tl, int tc) = CharAt(d, first, yOff);
+            _tipWord = WordAt(d.Lines[tl], tc);
+        }
         Rectangle clip = new Rectangle((int)x, (int)y, (int)(w - sbW), (int)h);
         _ui.BeginClipped(clip);
         _ui.Font = _mono;
@@ -1021,6 +1031,65 @@ public sealed class ScriptEditorGame : Microsoft.Xna.Framework.Game
         _ui.Begin();
         string pos = Tr("ScriptPos", "ligne {0}, colonne {1}", d.Line + 1, d.Col + 1);
         _ui.Text(x + w - sbW - _ui.Measure(pos) * 0.8f - 8 * s, y + h - _ui.LineHeight * 0.8f - 4 * s, pos, Muted, _scale * 0.8f);
+        _ui.End();
+    }
+
+    // ---- bulle d'aide : forme d'appel et description (ScriptHelp) d'une commande survolée, dans le code ou la liste ----
+    private string? _tipWord;          // commande sous la souris à cette image
+    private string? _tipShown;         // commande dont la bulle attend ou est montrée
+    private double _tipSince;
+
+    /// <summary>Commande du moteur sous la souris dans le code (mot entier) ; null sinon.</summary>
+    private static string? WordAt(string line, int col)
+    {
+        int c = Math.Clamp(col, 0, line.Length);
+        if (c >= line.Length || !WordChar(line[c]))
+            return null;
+        int a = c, b = c;
+        while (a > 0 && WordChar(line[a - 1]))
+            a--;
+        while (b < line.Length && WordChar(line[b]))
+            b++;
+        return line[a..b];
+    }
+
+    /// <summary>La bulle, après un court arrêt de la souris sur la même commande, près d'elle et dans la fenêtre.</summary>
+    private void DrawTip()
+    {
+        string? word = _tipWord;
+        _tipWord = null;
+        if (word == null || _newName != null || _confirmDelete >= 0 || _m.LeftButton == ButtonState.Pressed || ScriptHelp.Of(word) is not { } help)
+        {
+            _tipShown = null;
+            return;
+        }
+        if (!word.Equals(_tipShown, StringComparison.OrdinalIgnoreCase))
+        {
+            _tipShown = word;
+            _tipSince = _clock;
+        }
+        if (_clock - _tipSince < 0.35)
+            return;
+        float s = _scale, pad = 8 * s, maxW = MathF.Min(520 * s, W - 20 * s);
+        List<string> lines = new List<string>();
+        foreach (string part in help.description.Split(' '))
+        {
+            if (lines.Count > 0 && _ui.Measure(lines[^1] + " " + part) <= maxW - 2 * pad)
+                lines[^1] += " " + part;
+            else
+                lines.Add(part);
+        }
+        float w = MathF.Min(maxW, MathF.Max(_ui.Measure(help.signature), lines.Max(l => _ui.Measure(l))) + 2 * pad);
+        float h = (lines.Count + 1) * _ui.LineHeight + 2 * pad + 4 * s;
+        float x = Math.Clamp(_mx + 14 * s, 4 * s, W - w - 4 * s), y = _my + 20 * s;
+        if (y + h > H - 4 * s)
+            y = MathF.Max(4 * s, _my - h - 8 * s);
+        _ui.Begin();
+        _ui.Rect(x, y, w, h, new SN.Vector4(0.13f, 0.13f, 0.16f, 0.97f));
+        _ui.Frame(x, y, w, h, new SN.Vector4(0.95f, 0.85f, 0.45f, 0.8f), MathF.Max(1, s));
+        _ui.Text(x + pad, y + pad, help.signature, new SN.Vector4(0.95f, 0.85f, 0.45f, 1));
+        for (int i = 0; i < lines.Count; i++)
+            _ui.Text(x + pad, y + pad + 4 * s + (i + 1) * _ui.LineHeight, lines[i], new SN.Vector4(0.9f, 0.9f, 0.92f, 1));
         _ui.End();
     }
 
@@ -1133,9 +1202,12 @@ public sealed class ScriptEditorGame : Microsoft.Xna.Framework.Game
                 continue;
             string c = ScriptCommands.All[i];
             bool hover = !modal && Hit(x, ry, w - sbW - 4 * s, rowH) && _my >= top && _my < top + area;
-            if (hover)
-                _ui.Rect(x + 2 * s, ry, w - sbW - 6 * s, rowH, Hover);
             int par = c.IndexOf('(');
+            if (hover)
+            {
+                _ui.Rect(x + 2 * s, ry, w - sbW - 6 * s, rowH, Hover);
+                _tipWord = c[..par];
+            }
             float tx = x + pad;
             tx += _ui.Text(tx, ry + 2 * s, c[..par], new SN.Vector4(0.95f, 0.85f, 0.45f, 1));
             _ui.Text(tx, ry + 2 * s, Fit(c[par..], x + w - sbW - pad - tx), Muted);

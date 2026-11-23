@@ -106,6 +106,8 @@ public sealed partial class UnitManager
             Occupations.Add(oc);
             Log.Add($"Zone d'occupation : {o.Name} ({oc.Cells.Count} case(s), {(o.StartVisible ? "posée" : "levée")} au départ)");
         }
+        // jets de flammes (FlameJets.cs) : leurs cases ferment le passage tant qu'ils brûlent
+        LoadFlameJets(level, g);
         UpdateOccupations();
     }
 

@@ -86,6 +86,7 @@ public sealed partial class OpenFDGame
         EditorItemKind.Fire => new SN.Vector4(1, 0.5f, 0.12f, 1),
         EditorItemKind.Zone => new SN.Vector4(0.3f, 0.9f, 0.45f, 1),
         EditorItemKind.RoofMask => new SN.Vector4(0.05f, 0.05f, 0.05f, 1),
+        EditorItemKind.FlameJet => new SN.Vector4(1, 0.55f, 0.1f, 1),
         EditorItemKind.Camera or EditorItemKind.Waypoint => new SN.Vector4(0.4f, 0.7f, 1, 1),
         EditorItemKind.Vehicle or EditorItemKind.Fireman => new SN.Vector4(0.9f, 0.2f, 0.2f, 1),
         EditorItemKind.Civilian => new SN.Vector4(0.35f, 0.95f, 0.45f, 1),

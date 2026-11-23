@@ -1,5 +1,7 @@
 using System.Numerics;
 using System.Text;
+using OpenFD.Formats;
+using OpenFD.MG;
 
 namespace OpenFD.ConvFD1;
 
@@ -27,6 +29,15 @@ public sealed partial class MissionConverter
 
     /// <summary>Le tuyau de la fuite de propane (« JetFlammes », cm) : les foyers à moins de 5 m sont ceux de la fuite.</summary>
     private static readonly Vector2 StationPipe = new Vector2(12126, 12873);
+
+    /// <summary>
+    /// Gerbe de feu de la fuite de propane (FD1 : les particules « jet_flamme » du tuyau JetFlammes, et la « porte » qu'il
+    /// ferme au passage jusqu'à ValveCoupe) : jet de flammes du moteur (FlameJetClass), de la case (119, 130) au bout du
+    /// tuyau jusqu'à la case (113, 143) contre le mur d'en face (cm, centres des cases), à 1,83 m du sol comme dans FD1.
+    /// </summary>
+    private static readonly Vector3 StationJetStart = new Vector3(11950, 13050, 183);
+    private static readonly Vector2 StationJetEnd = new Vector2(11350, 14350);
+    private const string StationJetName = "jet_propane";
 
     /// <summary>Les pompes (cm ; la première : celle que la voiture de police a arrachée) : leurs foyers à moins de 3,5 m.</summary>
     private static readonly Vector2[] StationPumps =
@@ -313,6 +324,7 @@ public sealed partial class MissionConverter
         L("\tSCR_SetVarS32(\"ValveDone\", 1);");
         L("\tEteint(SCR_GetVarS32(\"G_1\"));");
         L($"\tEteint(SCR_GetVarS32(\"G_{StationLeak}\"));");
+        L($"\tENT_SetVisibility(ENT_FindByName(\"{StationJetName}\"), 0);   // la gerbe s'éteint, le passage se rouvre (FD1 : ValveCoupe)");
         Cin("\t", "VALVE");
         L("}");
         L("// la fuite de propane se rallume toutes les 10 s tant que la vanne est ouverte (FD1 : JetFlamme)");
@@ -332,6 +344,7 @@ public sealed partial class MissionConverter
         L("\tLEV_ValidateObjective(SCR_GetVarS32(\"Obj_Acte1\"), 1);");
         Show("\t", "Caissiere", "Patron", "Client");
         L("\tAllume(SCR_GetVarS32(\"G_2\"), SCR_GetVarS32(\"A_2\"));");
+        L($"\tENT_SetVisibility(ENT_FindByName(\"{StationJetName}\"), 1);   // la gerbe de feu coupe le magasin en deux");
         L("\tJetFlamme();");
         Cin("\t", "SUPERETTE");
         Roof("\t", "Scenar_Toit2");
@@ -591,5 +604,32 @@ public sealed partial class MissionConverter
         L("}");
         L("");
         return (f.ToString(), "\tStation_Init();\r\n", "\tStation_Main();\r\n");
+    }
+    /// <summary>
+    /// Jets de flammes de la mission (Station-service : la fuite de propane de la supérette, éteint au départ ; le script
+    /// l'allume à l'acte 2 et l'éteint quand la vanne est fermée). Classe du moteur écrite dans Design\Placeable\Levels.
+    /// </summary>
+    private void AddFlameJets(Level level)
+    {
+        if (!Mission.Equals("station_service", StringComparison.OrdinalIgnoreCase))
+            return;
+        LevelObject? template = TemplateWhere(o => o.Kind == EntityKind.Placeable && o.ClassPath.Contains("\\levels\\", StringComparison.OrdinalIgnoreCase));
+        if (template == null)
+        {
+            Report.Add("jet de flammes : objet modèle introuvable dans les missions du jeu");
+            return;
+        }
+        Vector2 d = StationJetEnd - new Vector2(StationJetStart.X, StationJetStart.Y);
+        int length = (int)MathF.Round(d.Length() / 10) * 10;
+        string file = Path.Combine(Data, FlameJetClass.File(length).Replace('\\', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, FlameJetClass.Text(length), System.Text.Encoding.Latin1);
+        // l'objet est à la sortie du tuyau, sous le jet (le jet part à HEIGHT au-dessus de lui), tourné vers le bout du jet
+        Vector3 at = StationJetStart - new Vector3(0, 0, FlameJetClass.Height);
+        LevelObject jet = LevelEdit.Clone(template, LevelEdit.NewId(level), StationJetName, FlameJetClass.ClassPath(length));
+        jet = LevelEdit.WithTransform(jet, at, new Vector3(0, 0, MathF.Atan2(d.Y, d.X)));
+        jet = LevelEdit.WithStartVisible(jet, false);
+        level.Objects.Add(jet);
+        Report.Add($"jet de flammes : {StationJetName} ({length} cm, éteint au départ)");
     }
 }

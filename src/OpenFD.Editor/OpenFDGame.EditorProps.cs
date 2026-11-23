@@ -82,6 +82,7 @@ public sealed partial class OpenFDGame
         EditorItemKind.Fire => Tr("KindFire", "Feu"),
         EditorItemKind.Zone => Tr("KindZone", "Zone"),
         EditorItemKind.RoofMask => Tr("KindMask", "Masque de toit"),
+        EditorItemKind.FlameJet => Tr("KindFlameJet", "Jet de flammes"),
         EditorItemKind.Camera => Tr("KindCamera", "Caméra de départ"),
         EditorItemKind.Tree => Tr("KindTree", "Arbre"),
         _ => Tr("KindWaypoint", "Point de passage"),
@@ -417,6 +418,16 @@ public sealed partial class OpenFDGame
                 EdPropVector(id + "taille", Tr("MaskSize", "Taille (cm)"), new SN.Vector3(e.Size.X, e.Size.Y, 0),
                     v => EdResize(e, new SN.Vector2(Math.Clamp(MathF.Round(v.X / 10) * 10, 50, 20000), Math.Clamp(MathF.Round(v.Y / 10) * 10, 50, 20000))), "0", 2);
                 EdPropNote(Tr("MaskNote", "Masque de toit : plaque noire (hauteur fixe) posée au-dessus d'une pièce. Le jeu la cache quand un pompier peut atteindre la pièce dessous ; un script peut la cacher ou la remontrer (ENT_SetVisibility)."));
+                break;
+            case EditorItemKind.FlameJet:
+                EdPropNumber(id + "longueur", Tr("FlameJetLength", "Longueur (cm)"), e.Size.X, v =>
+                {
+                    int len = (int)Math.Clamp(MathF.Round(v / 10) * 10, 100, 10000);
+                    e.Size = new SN.Vector2(len, FlameJetClass.Width);
+                    EdUpdate(e, LevelEdit.WithClass(e.Source, FlameJetClass.ClassPath(len)));
+                    EdPlace(e);
+                }, "0");
+                EdPropNote(Tr("FlameJetNote", "Jet de flammes : gerbe de feu en ligne droite, de l'objet vers sa flèche (Ctrl + flèches pour la tourner), à 1,5 m de haut. Tant qu'il est visible, les cases qu'il traverse sont fermées (pompiers, civils, véhicules). Le script l'allume ou l'éteint avec ENT_SetVisibility."));
                 break;
             case EditorItemKind.Camera:
                 EdPropButton(Tr("CamTakeView", "Prendre la vue actuelle"), () =>

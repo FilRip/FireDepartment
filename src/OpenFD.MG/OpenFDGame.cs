@@ -2633,6 +2633,10 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                     FlamesAt(vp + off, (1000f, SN.Vector2.Zero), 7919 + v.Id * 7 + k + 1, 0.18f + 0.25f * grow, time, right, up, 'A', 140, VehicleFireVolume, null);
                 }
             }
+        // jets de flammes (FlameJet.cs : la canalisation de propane de la station-service FD1) : une gerbe en ligne droite
+        if (flames != null)
+            foreach (FlameJet jet in _session.Units.FlameJets.Where(j => j.Zone.Active))
+                FlameJetFlames(jet, time, right, up);
         foreach (HotPoint h in _session.Fire.HotPoints)
         {
             hpIndex++;
@@ -2766,6 +2770,30 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             Console.WriteLine(tex != null ? $"Flammes {model} : images du jeu {tex.Width}×{tex.Height}" : $"Flammes {model} : images du jeu absentes");
         _flameTex[model] = tex;
         return tex;
+    }
+
+    private static readonly FireVolume JetVolume = new FireVolume(1, 0, 1, 0, "cylinder", 0.75f);
+
+    /// <summary>
+    /// Gerbe d'un jet de flammes : des flammes posées tout le long, petites à la sortie du tuyau et de plus en plus grosses
+    /// jusqu'au bout ; elles avancent le long du jet (le propane qui sort), avec une lueur orange.
+    /// </summary>
+    private void FlameJetFlames(FlameJet jet, float time, SN.Vector3 right, SN.Vector3 up)
+    {
+        float len = SN.Vector3.Distance(jet.Start, jet.End);
+        int n = Math.Clamp((int)(len / 55), 2, 60);
+        float flow = Frac(time * 1.6f);
+        for (int i = 0; i < n; i++)
+        {
+            float t = (i + flow) / n;
+            SN.Vector3 pos = SN.Vector3.Lerp(jet.Start, jet.End, t);
+            pos.Z += 12 * MathF.Sin(time * 9 + i * 1.7f) * t;
+            float r = Lerp(22, MathF.Max(40, jet.Width / 2), MathF.Sqrt(t));
+            FireLook look = new FireLook(DefaultFlameModel, 60, r * 0.7f, r, 0, true);
+            FlamesAt(pos, (1000f, SN.Vector2.Zero), (int)(jet.Id * 131 + i), 0.85f, time, right, up, 'A', r * 0.4f, JetVolume, look);
+            if (i % 3 == 0)
+                P(pos, 160 + 260 * t, new SN.Vector4(0.95f, 0.45f, 0.1f, 0.05f), right, up);
+        }
     }
 
     private void Flames(HotPoint h, int seed, float k, float time, SN.Vector3 right, SN.Vector3 camUp) =>

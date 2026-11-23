@@ -322,6 +322,16 @@ public sealed partial class OpenFDGame
             case EditorItemKind.RoofMask:
                 _ui.Rect(l, t, r - l, b - t, new SN.Vector4(0, 0, 0, 1));
                 break;
+            case EditorItemKind.FlameJet:
+            {
+                // une gerbe : traits orange de plus en plus écartés, de gauche à droite
+                SN.Vector4 o1 = new SN.Vector4(1f, 0.55f, 0.1f, 1), o2 = new SN.Vector4(1f, 0.85f, 0.3f, 1);
+                float cy = (t + b) / 2, jw = r - l, hh = (b - t) * 0.3f;
+                _ui.Line(l + jw * 0.1f, cy, r - jw * 0.1f, cy, o2, 3 * s);
+                _ui.Line(l + jw * 0.1f, cy, r - jw * 0.1f, cy - hh, o1, 3 * s);
+                _ui.Line(l + jw * 0.1f, cy, r - jw * 0.1f, cy + hh, o1, 3 * s);
+                break;
+            }
             case EditorItemKind.Camera:
             {
                 SN.Vector4 c = new SN.Vector4(0.4f, 0.7f, 1, 1);

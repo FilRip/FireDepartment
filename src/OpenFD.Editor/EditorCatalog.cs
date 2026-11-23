@@ -35,6 +35,7 @@ public sealed class EditorCatalog
         cat.Dynamic.Add(new EditorItem { Name = EditorText.T("ItemFire", "Foyer (feu)"), Kind = EditorItemKind.Fire, Entity = EntityKind.HotPoint });
         cat.Dynamic.Add(new EditorItem { Name = EditorText.T("ItemZone", "Zone"), Kind = EditorItemKind.Zone, Entity = EntityKind.Trigger, ClassPath = "design\\trigger\\base_trigger" });
         cat.Dynamic.Add(new EditorItem { Name = EditorText.T("ItemMask", "Masque de toit"), Kind = EditorItemKind.RoofMask, ClassPath = MaskClass });
+        cat.Dynamic.Add(new EditorItem { Name = EditorText.T("ItemFlameJet", "Jet de flammes"), Kind = EditorItemKind.FlameJet, ClassPath = FlameJetClass.ClassPath(FlameJetClass.DefaultLength) });
         cat.Dynamic.Add(new EditorItem { Name = EditorText.T("ItemCamera", "Caméra de départ"), Kind = EditorItemKind.Camera, Entity = EntityKind.Waypoint, ClassPath = "design\\waypoint\\cam_startpos" });
         cat.Dynamic.Add(new EditorItem { Name = EditorText.T("ItemWaypoint", "Point de passage"), Kind = EditorItemKind.Waypoint, Entity = EntityKind.Waypoint, ClassPath = "design\\waypoint\\base_waypoint" });
         int markers = cat.Dynamic.Count;

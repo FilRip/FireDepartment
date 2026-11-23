@@ -16,6 +16,8 @@ public enum EditorItemKind
     Zone,
     /// <summary>Carré noir : masque de toit.</summary>
     RoofMask,
+    /// <summary>Jet de flammes (gerbe de feu en ligne droite qui ferme le passage tant qu'il est visible).</summary>
+    FlameJet,
     /// <summary>Position de la caméra au début de la mission (repère cam_startpos).</summary>
     Camera,
     /// <summary>Point de passage (arrivée des équipes, caméra des cinématiques…).</summary>

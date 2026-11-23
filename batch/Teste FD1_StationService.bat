@@ -1,5 +1,5 @@
 @echo off
-dotnet build src\OpenFD.ConvFD1
+dotnet build ..\src\OpenFD.ConvFD1
 rmdir ..\..\Data\Gfx\Mission\FD1_StationService /s /q
 rmdir ..\..\Data\Gfx\Textures\FD1_StationService /s /q
 rmdir ..\..\Data\Design\Mission\FD1_StationService /s /q
@@ -10,5 +10,5 @@ del ..\..\Data\Localize\Lang_FRA\FD1_StationService.loc
 del ..\..\Data\Localize\Lang_GER\FD1_StationService.loc
 del ..\..\Data\Localize\Lang_ITA\FD1_StationService.loc
 del ..\..\Data\Localize\Lang_SPA\FD1_StationService.loc
-..\dotnet src\OpenFD.ConvFD1\bin\Debug\net8.0\OpenFD.ConvFD1.dll "E:\Gamez\Fire Department Trilogy.Packed\Fire Department" "E:\Gamez\Fire Department Trilogy.Packed\Fire Department 3\Data" station_service
+dotnet ..\src\OpenFD.ConvFD1\bin\Debug\net8.0\OpenFD.ConvFD1.dll "E:\Gamez\Fire Department Trilogy.Packed\Fire Department" "E:\Gamez\Fire Department Trilogy.Packed\Fire Department 3\Data" station_service
 "..\src\OpenFD.MG\bin\Release\net8.0\OpenFD.exe" "E:\Gamez\Fire Department Trilogy.Packed\Fire Department 3" -test=FD1_StationService -windowed
