@@ -53,13 +53,21 @@ public sealed partial class OpenFDGame
         if (ObjImport.Exists(_files.DataDir, name))
             EdAsk(Tr("ImportExistsTitle", "« {0} » existe déjà", name),
                 new[] { Tr("ImportExists", "Un objet importé porte déjà ce nom. Le remplacer par ce fichier ? (les objets déjà posés dans les missions prendront le nouveau modèle)") },
-                (Tr("Replace", "Remplacer"), () => EdDoImport(name, usable)),
+                (Tr("Replace", "Remplacer"), () => EdImportMasks(name, usable)),
                 (Tr("Cancel", "Annuler"), () => { }));
         else
-            EdDoImport(name, usable);
+            EdImportMasks(name, usable);
     }
 
-    private void EdDoImport(string name, bool usable)
+    // couvercles noirs des pièces : fabriqués par l'éditeur, ou seulement ceux du fichier (« …_MASK » faits dans Blender)
+    private void EdImportMasks(string name, bool usable) =>
+        EdAsk(Tr("ImportMasksTitle", "Couvercles noirs"),
+            new[] { Tr("ImportMasksText", "Fabriquer automatiquement les couvercles noirs des pièces ? (un par objet « …_ROOM1 », « …_ROOM2 »… du fichier qui n'a pas déjà son « …_MASK » ; sans pièce nommée, un seul sur tout l'objet). Ils cachent l'intérieur tant qu'un pompier n'y est pas entré.") },
+            (Tr("ImportMasksYes", "Oui, les fabriquer"), () => EdDoImport(name, usable, true)),
+            (Tr("ImportMasksNo", "Non, seulement l'objet"), () => EdDoImport(name, usable, false)),
+            (Tr("Cancel", "Annuler"), () => { }));
+
+    private void EdDoImport(string name, bool usable, bool masks)
     {
         if (_edImportPath is not { } path)
             return;
@@ -71,18 +79,20 @@ public sealed partial class OpenFDGame
         }
         try
         {
-            ObjImport imp = new ObjImport();
+            ObjImport imp = new ObjImport { AutoMasks = masks };
             imp.Read(path);
             imp.Write(_files.DataDir, name, usable, template);
             foreach (string w in imp.Warnings)
                 Console.WriteLine($"Import OBJ {Path.GetFileName(path)} : {w}");
-            Console.WriteLine($"Import OBJ : {path} → {ObjImport.ClassPath(name, usable)} ({imp.PartCount} pièces, {imp.TriangleCount} triangles, {imp.TextureCount} textures)");
+            Console.WriteLine($"Import OBJ : {path} → {ObjImport.ClassPath(name, usable)} ({imp.PartCount} pièces, {imp.TriangleCount} triangles, {imp.TextureCount} textures, {imp.MaskCount} couvercles fabriqués)");
             EdForgetImported(name);
             // le nouvel objet dans la liste de droite : son onglet, filtré sur son nom
             _edTab = usable ? 1 : 0;
             _edListFilter = name;
             _edBars[_edTab].Value = 0;
             string done = Tr("ImportDone", "Importé : « {0} » ({1} pièces, {2} triangles, {3} textures)", name, imp.PartCount, imp.TriangleCount, imp.TextureCount);
+            if (masks)
+                done += " — " + Tr("ImportMasksDone", "{0} couvercles noirs fabriqués", imp.MaskCount);
             if (imp.Warnings.Count > 0)
                 EdMessage(done + " — " + Tr("ImportWarnings", "attention : {0}", string.Join(" ; ", imp.Warnings)), true);
             else

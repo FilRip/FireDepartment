@@ -93,6 +93,10 @@ public sealed partial class OpenFDGame
         _edMission = mission;
         _edName = mission;
         _map = false;
+        if (_edGridView)
+            EdToggleGridView();
+        _edGridOriginal.Clear();
+        _edGridAuto.Clear();
         _paused = true;
         try
         {
@@ -301,6 +305,9 @@ public sealed partial class OpenFDGame
         e.Radius = MathF.Max(30, (b.max - b.min).Length() / 2);
         if (e.Kind == EditorItemKind.Tree)
             _edTreesDirty = true;
+        // objet importé posé dans cette séance : ses croix de la grille suivent (OpenFDGame.EditorGrid.cs)
+        if (_edGridAuto.ContainsKey(e.Source.Id))
+            EdGridMark(e);
     }
 
     private bool EdShown(EditorObject e) => e.Kind != EditorItemKind.Fire || e.Lit || _edAllFires;
@@ -475,6 +482,14 @@ public sealed partial class OpenFDGame
         gd.BlendState = BlendState.Opaque;
         gd.DepthStencilState = DepthStencilState.Default;
         EdFlushLines();
+        // vue grille : croix et portes par-dessus tout (vue de dessus)
+        if (_edGridView)
+        {
+            EdGridOverlay();
+            gd.DepthStencilState = DepthStencilState.None;
+            EdFlushLines();
+            gd.DepthStencilState = DepthStencilState.Default;
+        }
         // objet choisi : sa boîte, toujours visible (même derrière un mur)
         if (_edSel is { } s)
         {
@@ -760,13 +775,7 @@ public sealed partial class OpenFDGame
             _edPressL = false;
             EditorObject? hit = EdPick(m.X, m.Y);
             EdSelect(hit);
-            // clic sur le sol, sans objet : la case de la grille (ses propriétés à droite)
-            if (hit == null && Ground(m.X, m.Y) is { } cg && _session.Grid is { } grid)
-            {
-                (int cx, int cy) = grid.CellOf(new SN.Vector3(cg, 0));
-                if (grid.Inside(cx, cy))
-                    _edCell = (cx, cy);
-            }
+            // (les cases de la grille se choisissent dans la vue « Voir grille » : OpenFDGame.EditorGrid.cs)
             if (hit != null && Ground(m.X, m.Y) is { } g)
             {
                 _edMoveArmed = true;
@@ -951,6 +960,9 @@ public sealed partial class OpenFDGame
             EdCameraFromView(e);
         }
         EdPlace(e);
+        // objet importé : ses murs deviennent des croix rouges de la grille, ses trous des portes
+        if (IsImported(e))
+            EdGridMark(e);
         _edObjects.Add(e);
         EdSelect(e);
         _edDragEuler = SN.Vector3.Zero;
@@ -960,6 +972,7 @@ public sealed partial class OpenFDGame
 
     private void EdDelete(EditorObject e)
     {
+        EdGridUnmark(e);
         _edObjects.Remove(e);
         uint id = e.Source.Id;
         _edLevel.Objects.RemoveAll(o => o.Id == id);

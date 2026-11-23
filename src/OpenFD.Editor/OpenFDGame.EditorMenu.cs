@@ -46,6 +46,10 @@ public sealed partial class OpenFDGame
         // un objet 3D (OBJ, Blender) à ajouter à la liste des objets : OpenFDGame.EditorImport.cs
         if (EdButton(x, pad, bw, h - 2 * pad, Tr("Import", "Importer")))
             EdImport();
+        x += bw + pad;
+        // la grille de marche (murs, portes) vue de dessus, ou retour à la scène : OpenFDGame.EditorGrid.cs
+        if (EdButton(x, pad, bw, h - 2 * pad, _edGridView ? Tr("ViewScene", "Voir scène") : Tr("ViewGrid", "Voir grille"), _edGridView, _edLoaded))
+            EdToggleGridView();
         x += bw + 3 * pad;
         // message du moment (en rouge : une erreur), il pâlit au bout de quelques secondes
         float age = (float)(_edClock - _edStatusAt);

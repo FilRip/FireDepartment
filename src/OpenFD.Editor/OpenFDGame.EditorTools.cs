@@ -103,6 +103,27 @@ public sealed partial class OpenFDGame
     {
         if (_edSel is not { } e)
             return;
+        // Ctrl + flèches : l'objet tourne (gauche / droite : sur lui-même ; haut / bas : il bascule), 15° par appui, 90° avec Maj
+        if (EdCtrl)
+        {
+            float a = (EdShift ? 90 : 15) * MathF.PI / 180;
+            SN.Vector3 r = SN.Vector3.Zero;
+            if (EdKeyRepeat(Keys.Left))
+                r.Z += a;
+            if (EdKeyRepeat(Keys.Right))
+                r.Z -= a;
+            if (EdKeyRepeat(Keys.Up))
+                r.X += a;
+            if (EdKeyRepeat(Keys.Down))
+                r.X -= a;
+            if (r != SN.Vector3.Zero)
+            {
+                e.Euler = EdWrap(e.Euler + r);
+                EdPlace(e);
+                EdMessage(Tr("RotateObject", "{0} : orientation {1:0}°, bascule {2:0}°", e.Name, e.Euler.Z * 180 / MathF.PI, e.Euler.X * 180 / MathF.PI));
+                return;
+            }
+        }
         float step = EdShift ? 100 : 10;
         SN.Vector2 fwd, right;
         if (_map)
@@ -224,6 +245,14 @@ public sealed partial class OpenFDGame
             return;
         int i = g.Index(cx, cy);
         string id = $"case.{cx}.{cy}.";
+        // type de sol : comme un clic dans la vue grille (marcher, mur = croix rouge, porte = trait)
+        string[] kinds = { Tr("GridFloor", "sol"), Tr("GridWall", "mur"), Tr("GridDoor", "porte") };
+        int kind = (int)CellState(g, i);
+        EdPropChoice(Tr("GridCellType", "Type de sol"), kinds[kind], () => (kinds.ToList(), kind), k =>
+        {
+            SetCell(g, i, (GridCell)k);
+            EdGridCellMessage(g, i);
+        });
         EdPropNumber(id + "a", Tr("CellZoneA", "Zone A"), g.ZoneA[i], v =>
         {
             g.ZoneA[i] = (ushort)Math.Clamp(MathF.Round(v), 0, ushort.MaxValue);
@@ -239,23 +268,11 @@ public sealed partial class OpenFDGame
         EdPropNote(Tr("CellNote", "Zone A = 0 : case fermée, les unités n'y passent pas (croix rouge). Les cases fermées autour sont marquées d'une croix rouge."));
     }
 
-    /// <summary>Case choisie : cadre jaune ; autour d'elle, une croix rouge sur chaque case fermée (zone A = 0).</summary>
+    /// <summary>Case choisie dans la vue grille : cadre jaune (les croix des murs : EdGridOverlay).</summary>
     private void EdCellMarks()
     {
-        if (_edCell is not { } c || _session.Grid is not { } g)
+        if (!_edGridView || _edCell is not { } c || _session.Grid is not { } g || !g.Inside(c.x, c.y))
             return;
-        const int R = 15;
-        Color red = new Color(235, 40, 30);
-        for (int y = Math.Max(0, c.y - R); y <= Math.Min(g.Height - 1, c.y + R); y++)
-            for (int x = Math.Max(0, c.x - R); x <= Math.Min(g.Width - 1, c.x + R); x++)
-            {
-                int i = g.Index(x, y);
-                if (g.ZoneA[i] != 0)
-                    continue;
-                float x0 = x * Grid.CellSize + 15, y0 = y * Grid.CellSize + 15, z = g.GroundHeight[i] + 6;
-                EdLine3(new(x0, y0, z), new(x0 + 70, y0 + 70, z), red);
-                EdLine3(new(x0 + 70, y0, z), new(x0, y0 + 70, z), red);
-            }
         float cx0 = c.x * Grid.CellSize, cy0 = c.y * Grid.CellSize, cz = g.GroundHeight[g.Index(c.x, c.y)] + 5;
         Color yellow = new Color(255, 210, 40);
         EdLine3(new(cx0, cy0, cz), new(cx0 + Grid.CellSize, cy0, cz), yellow);

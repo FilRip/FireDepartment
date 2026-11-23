@@ -24,6 +24,31 @@ public sealed class ScriptEditorGame : Microsoft.Xna.Framework.Game
     private readonly List<ScriptDoc> _docs = new();
     private int _cur;
     private double _clock;
+    private double _lastClickAt = -1;
+    private (int line, int col) _lastClickPos = (-1, -1);
+
+    private static bool WordChar(char ch) => char.IsLetterOrDigit(ch) || ch is '_' or '@' or '$' or '#';
+
+    /// <summary>Choisit le mot de la ligne qui contient la colonne (ou qui la touche) ; faux s'il n'y a pas de mot là.</summary>
+    private static bool SelectWord(ScriptDoc d, int line, int col)
+    {
+        if (line < 0 || line >= d.Lines.Count)
+            return false;
+        string t = d.Lines[line];
+        int c = Math.Clamp(col, 0, t.Length);
+        if (!(c < t.Length && WordChar(t[c])) && c > 0 && WordChar(t[c - 1]))
+            c--;
+        if (c >= t.Length || !WordChar(t[c]))
+            return false;
+        int a = c, b = c;
+        while (a > 0 && WordChar(t[a - 1]))
+            a--;
+        while (b < t.Length && WordChar(t[b]))
+            b++;
+        d.MoveTo(line, a, false);
+        d.MoveTo(line, b, true);
+        return true;
+    }
     private KeyboardState _k, _kPrev;
     private MouseState _m, _mPrev;
     private float _mx, _my;
@@ -940,8 +965,19 @@ public sealed class ScriptEditorGame : Microsoft.Xna.Framework.Game
         {
             _press = false;
             (int l, int c) = CharAt(d, first, yOff);
-            d.MoveTo(l, c, Shift);
-            _selecting = true;
+            // double clic : le mot entier (il s'arrête aux espaces, parenthèses, points, virgules, opérateurs…)
+            if (!Shift && _clock - _lastClickAt < 0.4 && _lastClickPos == (l, c) && SelectWord(d, l, c))
+            {
+                _lastClickAt = -1;
+                _selecting = false;
+            }
+            else
+            {
+                _lastClickAt = _clock;
+                _lastClickPos = (l, c);
+                d.MoveTo(l, c, Shift);
+                _selecting = true;
+            }
         }
         else if (_selecting && _m.LeftButton == ButtonState.Pressed)
         {

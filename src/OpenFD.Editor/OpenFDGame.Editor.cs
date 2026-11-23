@@ -171,6 +171,11 @@ public sealed partial class OpenFDGame
                 case "gauche":
                     _edLeftOpen = true;
                     break;
+                case "grille":
+                    EdToggleGridView();
+                    if (arg.Length > 0)
+                        _dist = float.Parse(arg, System.Globalization.CultureInfo.InvariantCulture);
+                    break;
                 case "onglet":
                     _edTab = int.Parse(arg);
                     break;
@@ -422,7 +427,7 @@ public sealed partial class OpenFDGame
         }
         if (EdCtrl && EdKey(Keys.Y))
             EdRedo();
-        if (EdKey(Keys.Tab))
+        if (EdKey(Keys.Tab) && !_edGridView)
             _map = !_map;
         if (EdKey(Keys.Space))
             _edLeftOpen = !_edLeftOpen;
@@ -1043,7 +1048,7 @@ public sealed partial class OpenFDGame
                     MiniLook(mw2);
             }
             // bouton du milieu : tourner ; bouton droit : faire glisser la vue (comme le jeu)
-            if (inView && m.MiddleButton == ButtonState.Pressed && _edMousePrev.MiddleButton == ButtonState.Released)
+            if (inView && !_edGridView && m.MiddleButton == ButtonState.Pressed && _edMousePrev.MiddleButton == ButtonState.Released)
             {
                 _dragM = true;
                 _mx = m.X;
@@ -1067,7 +1072,14 @@ public sealed partial class OpenFDGame
                 _dragM = false;
             if (_dragR && m.RightButton == ButtonState.Released)
                 _dragR = false;
-            EdObjectMouse(m, inView);
+            // vue grille : dessus, sans tourner ; un clic change la case (OpenFDGame.EditorGrid.cs)
+            if (_edGridView)
+            {
+                _pitch = 1.5f;
+                EdGridMouse(m, inView);
+            }
+            else
+                EdObjectMouse(m, inView);
         }
         finally
         {

@@ -37,6 +37,13 @@ internal sealed class ObjImport
     public int PartCount { get; private set; }
     public int TextureCount { get; private set; }
     public int TriangleCount { get; private set; }
+    public int MaskCount { get; private set; }
+
+    /// <summary>
+    /// Couvercles noirs fabriqués par l'import (Write) : un par pièce « …_ROOM1 », « …_ROOM2 »… du fichier qui n'a pas déjà
+    /// le sien (« …_ROOM1_MASK », fait dans Blender) ; sans pièce nommée, un seul qui couvre tout l'objet.
+    /// </summary>
+    public bool AutoMasks { get; set; }
 
     /// <summary>Nom de fichier sûr pour le jeu (lettres, chiffres, _ et -).</summary>
     public static string Safe(string s)
@@ -267,8 +274,106 @@ internal sealed class ObjImport
         }
         if (nodes.Count == 0)
             throw new InvalidDataException("aucun triangle dans le fichier");
+        if (AutoMasks)
+            WriteMasks(name, gfx, texDir, template, nodes, used);
         File.WriteAllBytes(Path.Combine(gfx, name + ".sg"), Fd3Writer.Scene(nodes));
         return WriteClass(dataDir, name, usable);
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex RoomRx = new(@"_ROOM\d+$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    // point du fichier (mètres, Y vers le haut) → repère du jeu (centimètres, Z vers le haut)
+    private Vector3 Game(int v)
+    {
+        Vector3 p = v >= 0 && v < _v.Count ? _v[v] : Vector3.Zero;
+        return new Vector3(p.X * Scale, -p.Z * Scale, p.Y * Scale);
+    }
+
+    /// <summary>
+    /// Couvercles noirs (« &lt;pièce&gt;_MASK ») : le moteur les pose sur les pièces que l'on n'a pas encore ouvertes, comme
+    /// ceux des bâtiments du jeu, et les retire quand un pompier y arrive. Couvercle d'une pièce : son sol (les faces
+    /// tournées vers le haut, en bas de la pièce) remonté à la hauteur du haut de la pièce ; sans sol reconnu, le rectangle
+    /// qu'elle occupe. Sans pièce nommée : un rectangle sur tout l'objet (hors toit), à sa hauteur.
+    /// </summary>
+    private void WriteMasks(string name, string gfx, string texDir, byte[] template, List<(string node, Matrix4x4 world)> nodes, HashSet<string> used)
+    {
+        HashSet<string> own = new HashSet<string>(_parts.Where(p => p.name.Contains("_MASK", StringComparison.OrdinalIgnoreCase))
+            .Select(p => p.name[..p.name.LastIndexOf("_MASK", StringComparison.OrdinalIgnoreCase)]), StringComparer.OrdinalIgnoreCase);
+        List<(string room, List<Vector3> tris)> rooms = new();
+        foreach ((string partName, List<(string mat, List<(int v, int t, int n)> corners)> groups) in _parts)
+            if (RoomRx.IsMatch(partName) && !own.Contains(partName))
+                rooms.Add((partName, groups.SelectMany(g => g.corners).Select(c => Game(c.v)).ToList()));
+        if (rooms.Count == 0)
+        {
+            if (own.Count > 0)
+                return;   // couvercles faits dans Blender, et pas d'autre pièce
+            List<Vector3> all = _parts.Where(p => !p.name.Contains("ROOF", StringComparison.OrdinalIgnoreCase) && !p.name.Contains("_MASK", StringComparison.OrdinalIgnoreCase))
+                .SelectMany(p => p.groups).SelectMany(g => g.corners).Select(c => Game(c.v)).ToList();
+            if (all.Count == 0)
+                return;
+            rooms.Add(("ROOM1", all));
+        }
+        _materials["\u0001couvercle"] = new Material { Color = Vector3.Zero };
+        string black = WriteMaterial("\u0001couvercle", name, gfx, texDir, template);
+        foreach ((string room, List<Vector3> pts) in rooms)
+        {
+            if (pts.Count < 3)
+                continue;
+            float zMin = pts.Min(p => p.Z), zMax = pts.Max(p => p.Z);
+            // le couvercle est posé en haut de la pièce (au moins 2,5 m au-dessus de son sol : une pièce faite d'un seul sol)
+            float top = MathF.Max(zMax, zMin + 250);
+            List<Vector3> floor = new List<Vector3>();
+            for (int i = 0; i + 2 < pts.Count; i += 3)
+            {
+                Vector3 a = pts[i], b = pts[i + 1], c = pts[i + 2];
+                Vector3 n = Vector3.Cross(b - a, c - a);
+                if (n.LengthSquared() < 1e-6f)
+                    continue;
+                n = Vector3.Normalize(n);
+                if (MathF.Abs(n.Z) > 0.7f && MathF.Max(a.Z, MathF.Max(b.Z, c.Z)) < zMin + 40)
+                {
+                    floor.Add(a);
+                    // vu de dessus dans le sens trigonométrique (face visible d'en haut)
+                    if (n.Z > 0)
+                    {
+                        floor.Add(b);
+                        floor.Add(c);
+                    }
+                    else
+                    {
+                        floor.Add(c);
+                        floor.Add(b);
+                    }
+                }
+            }
+            if (floor.Count == 0 || floor.Count > MaxVertices)
+            {
+                float x0 = pts.Min(p => p.X), x1 = pts.Max(p => p.X), y0 = pts.Min(p => p.Y), y1 = pts.Max(p => p.Y);
+                floor = new List<Vector3> { new(x0, y0, 0), new(x1, y0, 0), new(x1, y1, 0), new(x0, y0, 0), new(x1, y1, 0), new(x0, y1, 0) };
+            }
+            string baseNode = name + "_" + Safe(room) + "_MASK";
+            string node = baseNode;
+            for (int k = 2; !used.Add(node); k++)
+                node = baseNode + "_" + k;
+            Fd3Mesh mesh = new Fd3Mesh { Name = node };
+            foreach (Vector3 p in floor)
+            {
+                mesh.Positions.Add(p.X);
+                mesh.Positions.Add(p.Y);
+                mesh.Positions.Add(top);
+                mesh.Normals.Add(0);
+                mesh.Normals.Add(0);
+                mesh.Normals.Add(1);
+                mesh.Uv.Add(0);
+                mesh.Uv.Add(0);
+                mesh.Indices.Add((ushort)(mesh.VertexCount - 1));
+            }
+            mesh.Groups.Add((black, 0, mesh.Indices.Count));
+            File.WriteAllBytes(Path.Combine(gfx, node + ".mesh"), Fd3Writer.MeshFile(mesh));
+            File.WriteAllBytes(Path.Combine(gfx, node + ".meshdata"), Fd3Writer.MeshData(mesh));
+            nodes.Add((node, Matrix4x4.Identity));
+            MaskCount++;
+        }
     }
 
     private ushort Vertex(Fd3Mesh mesh, Dictionary<(int, int, int), ushort> map, (int v, int t, int n) c, Vector3 faceN)
