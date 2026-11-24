@@ -993,22 +993,18 @@ void Station_Init()
 	SCR_SetVarS32("Obj_Acte1", LEV_AddObjectiveBoolean("&FD1_StationService_STATION_DES_S1O0"));
 }
 
-// l'ingénieur prend le camion-citerne (il le « répare ») : le camion du décor laisse la place au véhicule à conduire ;
+// un pompier prend le camion-citerne (Ctrl + clic droit) : il devient un véhicule à conduire (moteur : CivilianCars.cs) ;
 // le feu du camion part avec lui
-void Use_Citerne(EntityID User, EntityID Bouton, mcString State)
+void Use_Citerne(EntityID User, EntityID Camion, mcString State)
 {
-	if(SCR_GetVarS32("Conduite") == 1)
-		return;
 	SCR_SetVarS32("Conduite", 1);
 	SCR_SetVarS32("Arrosage", 1);
 	Eteint(SCR_GetVarS32("G_0"));
-	ENT_SetVisibility(ENT_FindByName("Citerne"), 0);
-	ENT_SetVisibility(ENT_FindByName("CiterneGPL"), 1);
 }
 // le camion-citerne entre dans l'unité d'arrosage à mousse (FD1 : Trigger_truckrescue) : 5 s d'arrosage
 void TriggerTruck(EntityID Unit, EntityID Zone)
 {
-	if(Unit != ENT_FindByName("CiterneGPL") || SCR_GetVarS32("Arrose") != 0)
+	if(Unit != ENT_FindByName("Citerne") || SCR_GetVarS32("Arrose") != 0)
 		return;
 	SCR_SetVarS32("Arrose", 1);
 	if(SCR_GetVarS32("G_21") != 0)
@@ -1033,6 +1029,7 @@ void ValveEssence()
 	SCR_SetVarS32("ValveDone", 1);
 	Eteint(SCR_GetVarS32("G_1"));
 	Eteint(SCR_GetVarS32("G_20"));
+	ENT_SetVisibility(ENT_FindByName("jet_propane"), 0);   // la gerbe s'éteint, le passage se rouvre (FD1 : ValveCoupe)
 	Cine_VALVE();
 }
 // la fuite de propane se rallume toutes les 10 s tant que la vanne est ouverte (FD1 : JetFlamme)
@@ -1053,6 +1050,7 @@ void Station_Acte2()
 	Montre("Patron");
 	Montre("Client");
 	Allume(SCR_GetVarS32("G_2"), SCR_GetVarS32("A_2"));
+	ENT_SetVisibility(ENT_FindByName("jet_propane"), 1);   // la gerbe de feu coupe le magasin en deux
 	JetFlamme();
 	Cine_SUPERETTE();
 	LEV_RoofVisibility("fd1_sta_station_service_toit_0_385_ROOF", 0);
@@ -1293,7 +1291,7 @@ void Station_Main()
 		SCR_RunDelayed("Station_Defaite", 5.0);
 		return;
 	}
-	if(SCR_GetVarS32("Conduite") == 1 && SCR_GetVarS32("CamionSauve") == 0 && ENT_GetUnitState(ENT_FindByName("CiterneGPL")) == 4)
+	if(SCR_GetVarS32("Conduite") == 1 && SCR_GetVarS32("CamionSauve") == 0 && ENT_GetUnitState(ENT_FindByName("Citerne")) == 4)
 	{
 		SCR_SetVarS32("Fin", 2);
 		LEV_SetDebriefText("&FD1_StationService_DEFEAT1");

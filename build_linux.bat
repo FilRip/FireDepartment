@@ -11,9 +11,11 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-dotnet publish src\OpenFD.MG -c Release -r linux-x64 --self-contained false -o publish\linux-x64
+dotnet publish src\OpenFD.ConvFD1 -c Release -r linux-x64 --self-contained false -o publish\linux-x64
 if errorlevel 1 goto erreur
 dotnet publish src\OpenFD.Editor -c Release -r linux-x64 --self-contained false -o publish\linux-x64
+if errorlevel 1 goto erreur
+dotnet publish src\OpenFD.MG -c Release -r linux-x64 --self-contained false -o publish\linux-x64
 if errorlevel 1 goto erreur
 echo Version Linux prete dans publish\linux-x64
 pause

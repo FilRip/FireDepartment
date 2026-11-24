@@ -1,20 +1,20 @@
-[#INCLUDE]
-FILE0 = "Veh_P_ambulance_us.class"
-
-[DISPLAY]
-MODEL = ..\..\Placeable\FD1_StationService\fd1_stationservice_sta_truk_citerne
-SHADOW =
-
-[CAPACITIES_ACTIONS]
-CANHEAL = 0
-ACTION5 = ""
-ACTION6 = ""
-
-[CAPACITIES_PROPS]
-EMBARKCAPACITY = 0
-
-[UNIT]
-PUBLICNAME = Citerne GPL
-
-[ANIM_PLAYER]
-ANIM01_FILENAME =
+[#INCLUDE]
+FILE0 = "Veh_P_ambulance_us.class"
+
+[DISPLAY]
+MODEL = ..\..\Placeable\FD1_StationService\fd1_stationservice_sta_truk_citerne
+SHADOW =
+
+[CAPACITIES_ACTIONS]
+CANHEAL = 0
+ACTION5 = ""
+ACTION6 = ""
+
+[CAPACITIES_PROPS]
+EMBARKCAPACITY = 0
+
+[UNIT]
+PUBLICNAME = Citerne GPL
+
+[ANIM_PLAYER]
+ANIM01_FILENAME =

@@ -1,0 +1,13 @@
+[#INCLUDE]
+FILE0 = "base_levels.class"
+
+[DISPLAY]
+MODEL = noitem
+
+[OCCUPATION]
+ACTIVATED = 0
+
+[FLAMEJET]
+LENGTH = 1430
+WIDTH = 120
+HEIGHT = 150

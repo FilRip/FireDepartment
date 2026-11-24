@@ -1,9 +1,9 @@
-[#INCLUDE]
-FILE0 = "base_door.class"
-
-[DISPLAY]
-MODEL = FD1_StationService\fd1_stationservice_sta_porte_02_etat01
-
-[CAPACITIES_ACTIONS]
-COULDBEBREAK = 1
-COULDBEUSE = 0
+[#INCLUDE]
+FILE0 = "base_door.class"
+
+[DISPLAY]
+MODEL = FD1_StationService\fd1_stationservice_sta_porte_02_etat01
+
+[CAPACITIES_ACTIONS]
+COULDBEBREAK = 1
+COULDBEUSE = 0

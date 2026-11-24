@@ -270,7 +270,6 @@ public sealed partial class MissionConverter
             il.Add(h);
         }
         Report.Add($"script : groupes de foyers {string.Join(", ", all.OrderBy(g => g.Key).Select(g => $"{g.Key} ({g.Value.Count}, {(ignite.TryGetValue(g.Key, out List<string>? il) ? il.Count : 0)} allumés par le script)"))}");
-        string Saved(IEnumerable<string> names) => string.Join(" + ", names.Select(n => $"SCR_GetVarS32(\"Sauve_{n}\")"));
         string HallFire() => string.Join(" + ", new[] { CenHall, CenTurbine1, CenTurbine2, CenTurbine3, CenLeak2, CenLeak3 }.Select(g => $"Feu({G(g)})"));
         string SectionsFire() => string.Join(" + ", Enumerable.Range(CenSection1, 4).Select(g => $"Feu({G(g)})"));
 
