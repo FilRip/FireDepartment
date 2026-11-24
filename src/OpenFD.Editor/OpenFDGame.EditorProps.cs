@@ -356,6 +356,10 @@ public sealed partial class OpenFDGame
     private static float Rad(float d) => d * MathF.PI / 180;
 
     // ---- l'objet choisi ----
+    /// <summary>Véhicule civil à conduire : un véhicule du jeu (Design\Placeable\Vehicles) ou une classe [OPENFD] Drivable = 1.</summary>
+    private bool EdDrivable(string classPath) =>
+        classPath.StartsWith("design\\placeable\\vehicles\\", StringComparison.OrdinalIgnoreCase) || EdClass(classPath)?.GetBool("OPENFD", "Drivable") == true;
+
     private void EdObjectProps(EditorObject e)
     {
         string id = "o" + e.Source.Id + ".";
@@ -393,6 +397,9 @@ public sealed partial class OpenFDGame
             EdPropNumber(id + "vie", Tr("Life", "Vie"), life.life, v => EdUpdate(e, LevelEdit.WithLife(e.Source, Math.Clamp(v, 0, MathF.Max(life.max, v)))), "0");
             EdPropText(Tr("LifeMax", "Vie maximale"), life.max.ToString("0", CultureInfo.InvariantCulture));
         }
+        // véhicule civil à conduire (moteur : CivilianCars.cs) : un pompier le prend
+        if (e.Kind is EditorItemKind.Object or EditorItemKind.Dynamic && EdDrivable(e.Source.ClassPath))
+            EdPropNote(Tr("DrivableNote", "Véhicule civil : un pompier le prend avec Ctrl + clic droit, puis on le conduit ; on fait descendre le pompier pour le laisser. Le script peut l'interdire ou le permettre : ENT_SetCapacityTarget(objet, \"Drivable\", 0 ou 1)."));
         switch (e.Kind)
         {
             case EditorItemKind.Fire:

@@ -729,7 +729,7 @@ public sealed partial class UnitManager
         Paths.PathingBreak = u.CanBreak;
         Paths.PathingUse = u.CanUse;
         u.PassingWindow = false;
-        Paths.Clearance = u.IsVehicle && drive ? 1 : 0;
+        Paths.Clearance = u.IsVehicle && drive ? u.DriveClearance : 0;
         Paths.SelfId = u.IsVehicle ? u.Id : 0;
         bool partial = false;
         // sur l'échelle : il finit d'abord de monter ou de descendre ; le chemin part de là où il arrivera
@@ -926,7 +926,8 @@ public sealed partial class UnitManager
         Vector2 me = new Vector2(u.Position.X, u.Position.Y);
         Vector2 v = new Vector2(vehicle.Position.X, vehicle.Position.Y);
         Vector2 dir = Vector2.Distance(me, v) > 1 ? Vector2.Normalize(me - v) : Vector2.UnitX;
-        if (!Order(u, v + dir * (VehicleReach * 0.6f)))
+        // long véhicule (ReachExtra) : ce point tombe dans sa carrosserie ; il va au plus près, la montée vérifie la distance
+        if (!Order(u, v + dir * (VehicleReach * 0.6f), refuseUnreachable: vehicle.ReachExtra <= 0))
             return;
         u.GoToVehicle = vehicle;
         u.GoToVehicleAim = VehicleAim(vehicle);
@@ -962,7 +963,7 @@ public sealed partial class UnitManager
         string status = u.Status;
         Vector2 me = new Vector2(u.Position.X, u.Position.Y);
         Vector2 dir = Vector2.Distance(me, aim) > 1 ? Vector2.Normalize(me - aim) : Vector2.UnitX;
-        if (!Order(u, aim + dir * (VehicleReach * 0.6f)))
+        if (!Order(u, aim + dir * (VehicleReach * 0.6f), refuseUnreachable: v.ReachExtra <= 0))
         {
             u.Boarding = false;
             return;
@@ -981,7 +982,7 @@ public sealed partial class UnitManager
         {
             if (v.Moving)
                 return;   // arrivé avant le véhicule : il l'attend à sa destination
-            if (Vector3.Distance(u.Position, v.Position) > VehicleReach * 1.5f)
+            if (Vector3.Distance(u.Position, v.Position) > VehicleReach * 1.5f + v.ReachExtra)
             {
                 u.GoToVehicle = null;
                 u.Status = "véhicule hors d'atteinte";

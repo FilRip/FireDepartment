@@ -213,6 +213,8 @@ public sealed partial class MissionConverter
         L("{");
         L("\ts32 g;");
         L("\tSCR_SetVarS32(\"Acte\", 1);");
+        // le bulldozer du chantier (véhicule civil) : on ne le prend qu'une fois prêté par l'ouvrier (PresBuldo)
+        L("\tENT_SetCapacityTarget(ENT_FindByName(\"buldo\"), \"Drivable\", 0);");
         foreach ((int g, List<string> fires) in all.OrderBy(x => x.Key))
         {
             L($"\tg = ENT_GroupCreate(\"groupe_{g}\");");
@@ -308,10 +310,10 @@ public sealed partial class MissionConverter
                 Show("\t", victim);
             L("}");
         }
-        L("// l'ouvrier prête son bulldozer (FD1 : presBuldo)");
+        L("// l'ouvrier prête son bulldozer (FD1 : presBuldo) : un pompier peut le prendre (Ctrl + clic droit)");
         L("void PresBuldo()");
         L("{");
-        L("\tENT_SetVisibility(ENT_FindByName(\"buldo\"), 1);");
+        L("\tENT_SetCapacityTarget(ENT_FindByName(\"buldo\"), \"Drivable\", 1);");
         Cin("\t", "CUT_BULDO");
         L("}");
         L("// une fenêtre de l'étage cassée : la fumée de la pièce s'en va (FD1 : doorOnBreak, safeRoom) ; la victime paraît");

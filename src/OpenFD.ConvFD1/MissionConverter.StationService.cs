@@ -20,8 +20,8 @@ namespace OpenFD.ConvFD1;
 /// </summary>
 public sealed partial class MissionConverter
 {
-    /// <summary>Nom du camion-citerne à conduire (l'unité ; « Citerne » est l'objet du décor qu'il remplace).</summary>
-    private const string StationTruckUnit = "CiterneGPL";
+    /// <summary>Nom du camion-citerne à conduire (véhicule civil : un pompier le prend, MissionConverter.Objects.cs).</summary>
+    private const string StationTruckUnit = "Citerne";
 
     /// <summary>Groupes de foyers sans numéro FD1 : la fuite de propane de la supérette, les sprinklers de l'unité d'arrosage.</summary>
     private const int StationLeak = 20;
@@ -284,17 +284,13 @@ public sealed partial class MissionConverter
         L("}");
         L("");
         // ---- acte 1 : le camion-citerne ----
-        L("// l'ingénieur prend le camion-citerne (il le « répare ») : le camion du décor laisse la place au véhicule à conduire ;");
+        L("// un pompier prend le camion-citerne (Ctrl + clic droit) : il devient un véhicule à conduire (moteur : CivilianCars.cs) ;");
         L("// le feu du camion part avec lui");
-        L("void Use_Citerne(EntityID User, EntityID Bouton, mcString State)");
+        L("void Use_Citerne(EntityID User, EntityID Camion, mcString State)");
         L("{");
-        L("\tif(SCR_GetVarS32(\"Conduite\") == 1)");
-        L("\t\treturn;");
         L("\tSCR_SetVarS32(\"Conduite\", 1);");
         L("\tSCR_SetVarS32(\"Arrosage\", 1);");
         L("\tEteint(SCR_GetVarS32(\"G_0\"));");
-        L("\tENT_SetVisibility(ENT_FindByName(\"Citerne\"), 0);");
-        L($"\tENT_SetVisibility(ENT_FindByName(\"{StationTruckUnit}\"), 1);");
         L("}");
         L("// le camion-citerne entre dans l'unité d'arrosage à mousse (FD1 : Trigger_truckrescue) : 5 s d'arrosage");
         L("void TriggerTruck(EntityID Unit, EntityID Zone)");

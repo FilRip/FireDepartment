@@ -55,7 +55,9 @@ public sealed class ExplosionSystem
             // objet dont la carte nomme une fonction du script à appeler à sa destruction (Stadium : les armoires électriques)
             // (pas les repères : icônes de hache, de scie… n'ont pas à brûler)
             string? onDestroy = o.GetComponent(0xA024) is { } sc && !o.ClassPath.EndsWith("_symbol", StringComparison.OrdinalIgnoreCase) ? ScriptNameIn(o.ComponentBytes(sc).ToArray()) : null;
-            if (!can && !watchedOnly && onDestroy == null)
+            // véhicule civil à conduire ([OPENFD] Drivable : CivilianCars.cs) : suivi pour qu'on puisse le prendre
+            bool drivable = c.GetBool("OPENFD", "Drivable");
+            if (!can && !watchedOnly && onDestroy == null && !drivable)
                 continue;
             ExplosiveItem it = new ExplosiveItem
             {
@@ -106,7 +108,7 @@ public sealed class ExplosionSystem
                 it.DestroyRun = true;
             }
             // le feu ne l'abîme pas (Stadium : les éboulis et les tuyaux à découper, FireDamageCoef 0) : rien à suivre
-            if (!can && !watchedOnly && it.FireDamageCoef <= 0)
+            if (!can && !watchedOnly && !drivable && it.FireDamageCoef <= 0)
                 continue;
             foreach (HotPoint h in fire.HotPoints)
                 if (Vector3.Distance(h.Position, it.Position) < ItemRadius + h.Class.HeatRangeMax + 100)

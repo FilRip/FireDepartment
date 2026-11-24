@@ -153,20 +153,18 @@ public sealed partial class MissionConverter
 
     /// <summary>
     /// Classe d'une unité posée à part faite d'un objet FD1 : « @pompe », la pompe de la piscine (une autopompe qui ne roule
-    /// pas : sa lance éteint les foyers à sa portée, l'eau de la piscine ne manque jamais) ; « @excalibur », la voiture de
-    /// collection, et « @citerne », le camion-citerne de GPL de la station-service (des véhicules sans équipage ni soins, que
-    /// le joueur conduit). Rend son chemin (null : modèle absent).
+    /// pas : sa lance éteint les foyers à sa portée, l'eau de la piscine ne manque jamais). Rend son chemin (null : modèle
+    /// absent ou autre sorte).
     /// </summary>
     private string? WriteObjectUnitClass(string instance, string kind)
     {
-        if (!_unitModels.TryGetValue(instance, out (string model, List<Fd3Mesh> meshes) m) || m.meshes.Count == 0)
+        if (kind != "@pompe" || !_unitModels.TryGetValue(instance, out (string model, List<Fd3Mesh> meshes) m) || m.meshes.Count == 0)
             return null;
         (string safe, List<(string node, Matrix4x4 world)> _, float _) = WritePlaceableModel(m.model, m.meshes);
         string dir = Path.Combine(Data, "Design", "Unit", "Firevehicle");
         Directory.CreateDirectory(dir);
         string name = Name + "_" + kind.TrimStart('@');
-        string cls = kind == "@pompe"
-            ? $"""
+        string cls = $"""
               [#INCLUDE]
               FILE0 = "Veh_P_pumper_us.class"
 
@@ -189,29 +187,6 @@ public sealed partial class MissionConverter
 
               [DAMAGE]
               FIREDAMAGECOEF = 0
-
-              [ANIM_PLAYER]
-              ANIM01_FILENAME =
-
-              """
-            : $"""
-              [#INCLUDE]
-              FILE0 = "Veh_P_ambulance_us.class"
-
-              [DISPLAY]
-              MODEL = ..\..\Placeable\{Name}\{safe}
-              SHADOW =
-
-              [CAPACITIES_ACTIONS]
-              CANHEAL = 0
-              ACTION5 = ""
-              ACTION6 = ""
-
-              [CAPACITIES_PROPS]
-              EMBARKCAPACITY = 0
-
-              [UNIT]
-              PUBLICNAME = {(kind == "@citerne" ? "Citerne GPL" : "Excalibur")}
 
               [ANIM_PLAYER]
               ANIM01_FILENAME =
@@ -334,7 +309,7 @@ public sealed partial class MissionConverter
         L("// T10 : la route devant la propriété ; l'Excalibur y est en sécurité (FD1 : CheckT10)");
         L("void T10(EntityID Unit, EntityID Zone)");
         L("{");
-        L("\tif(Unit != ENT_FindByName(\"Excalibur\") || SCR_GetVarS32(\"ExcaliburSauve\") == 1)");
+        L("\tif(Unit != ENT_FindByName(\"VoitureDeLuxe1\") || SCR_GetVarS32(\"ExcaliburSauve\") == 1)");
         L("\t\treturn;");
         L("\tSCR_SetVarS32(\"ExcaliburSauve\", 1);");
         Msg("\t", "EVENT_VIL_EXCALIBUR");
@@ -346,14 +321,10 @@ public sealed partial class MissionConverter
         L("}");
         L("");
         // ---- objets ----
-        L("// l'Excalibur : un ingénieur la prend (il la « répare ») ; la voiture du décor laisse la place au véhicule à conduire");
-        L("void Use_Excalibur(EntityID User, EntityID Bouton, mcString State)");
+        L("// l'Excalibur : un pompier la prend (Ctrl + clic droit) ; elle devient un véhicule à conduire (moteur : CivilianCars.cs)");
+        L("void Use_Excalibur(EntityID User, EntityID Voiture, mcString State)");
         L("{");
-        L("\tif(SCR_GetVarS32(\"Conduite\") == 1)");
-        L("\t\treturn;");
         L("\tSCR_SetVarS32(\"Conduite\", 1);");
-        L("\tENT_SetVisibility(ENT_FindByName(\"VoitureDeLuxe1\"), 0);");
-        L("\tENT_SetVisibility(ENT_FindByName(\"Excalibur\"), 1);");
         L("}");
         L("// une voiture de collection détruite par le feu (l'Excalibur avant d'être sortie : la mission est perdue)");
         L("void VoitureDetruite(EntityID Voiture)");
@@ -602,7 +573,7 @@ public sealed partial class MissionConverter
         L("\tif(ENT_GetDamage(ENT_FindByName(\"PopStar\")) <= 0.0)");
         L("\t\tVilla_Perdu(\"DEFEAT_LOVE\");");
         // (le véhicule détruit : état 4)
-        L("\tif(SCR_GetVarS32(\"Conduite\") == 1 && SCR_GetVarS32(\"ExcaliburSauve\") == 0 && ENT_GetUnitState(ENT_FindByName(\"Excalibur\")) == 4)");
+        L("\tif(SCR_GetVarS32(\"Conduite\") == 1 && SCR_GetVarS32(\"ExcaliburSauve\") == 0 && ENT_GetUnitState(ENT_FindByName(\"VoitureDeLuxe1\")) == 4)");
         L("\t\tVilla_Perdu(\"DEFEAT_VOITURE\");");
         L("\tVilla_Feux();");
         L("\tif(SCR_GetVarS32(\"Fin\") != 0)");

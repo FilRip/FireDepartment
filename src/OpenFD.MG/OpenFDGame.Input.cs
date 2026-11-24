@@ -984,6 +984,14 @@ public sealed partial class OpenFDGame
             }
         if (best != null)
             return best;
+        // sinon une case qu'il couvre sous la souris, au sol, à mi-hauteur ou sur le toit (un long camion-citerne : n'importe
+        // où sur sa carrosserie)
+        if (_session.Grid is { } grid)
+            foreach (float z in new[] { 300f, 150f, 0f })
+                foreach (OpenFD.Game.ExplosiveItem it in cars)
+                    if (RayAtZ(x, y, it.Position.Z + z) is { } gz && grid.CellOf(new SN.Vector3(gz, 0)) is var (gx, gy) && grid.Inside(gx, gy)
+                        && _session.Units.Paths.ObjectCells.TryGetValue(it.Id, out List<int>? cells) && cells.Contains(grid.Index(gx, gy)))
+                        return it.Id;
         // sinon le sol (ou le toit de la voiture) sous la souris, à moins de 2,5 m de son milieu
         float bd = 250;
         foreach (OpenFD.Game.ExplosiveItem it in cars)
@@ -1370,6 +1378,8 @@ public sealed partial class OpenFDGame
             want = Cur.Heal;   // pompier ou médecin inconscient : le ranimer
         else if (CivilianAt(x, y) is { } civ)
             want = civ.State == CivilianState.Unconscious && walkers.Any(u => u.CanHeal) ? Cur.Heal : Cur.Rescue;   // inconscient : le médecin le soigne, un pompier le porte
+        else if ((Keyboard.GetState().IsKeyDown(Keys.LeftControl) || Keyboard.GetState().IsKeyDown(Keys.RightControl)) && walkers.Any(u => !u.OnBoard && !u.IsCarrying) && CivilianCarAt(x, y) != null)
+            want = Cur.Enter;   // Ctrl : véhicule civil pas encore pris (CivilianCars.cs) : un pompier y monte
         else if (VehicleAt(x, y) is { } v)
             want = (ms.X >= 0 && (Keyboard.GetState().IsKeyDown(Keys.LeftControl) || Keyboard.GetState().IsKeyDown(Keys.RightControl))) ? (v.Seats > 0 ? Cur.Enter : Cur.Forbidden)
                 : v.IsAmbulance ? Cur.Heal   // ambulance : soins (Ctrl : y monter)

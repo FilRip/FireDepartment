@@ -47,6 +47,16 @@ public sealed class Unit
     /// </summary>
     public bool IsCivilianCar;
     /// <summary>
+    /// Véhicule conduit par le joueur : cases libres qu'il lui faut de chaque côté de son chemin (1 : un gabarit de 3 × 3
+    /// cases ; 0 : un petit engin qui passe partout où l'on marche, le chariot élévateur : [OPENFD] Clearance).
+    /// </summary>
+    public int DriveClearance = 1;
+    /// <summary>
+    /// Véhicule plus long qu'une voiture (le camion-citerne de 19 m de la Station-service) : distance en plus (cm) à
+    /// laquelle on peut y monter, son milieu étant loin de ses bords (CivilianCars.cs).
+    /// </summary>
+    public float ReachExtra;
+    /// <summary>
     /// Hélicoptère du niveau ([UNIT] Type = HELICO) qui arrive (animation d'atterrissage du jeu) ou repart (décollage) :
     /// jusqu'à cet instant, il ne sert pas d'ambulance ; reparti, il est caché (Helicopters.cs).
     /// </summary>

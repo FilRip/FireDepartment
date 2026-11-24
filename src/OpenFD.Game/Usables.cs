@@ -287,6 +287,12 @@ public sealed partial class UnitManager
     public void SetCapacity(uint id, string capacity, bool on)
     {
         string cap = capacity.ToUpperInvariant();
+        // véhicule civil à conduire (CivilianCars.cs) : le script permet ou interdit de le prendre
+        if (cap == "DRIVABLE")
+        {
+            SetDrivable(id, on);
+            return;
+        }
         // à dégager au bulldozer (ou au camion bélier) : porte, débris, ou tout objet du décor (Ch_Plant : le camion en panne)
         if (cap == "COULDBEDEMOLISH")
         {
@@ -325,6 +331,8 @@ public sealed partial class UnitManager
     public bool GetCapacity(uint id, string capacity)
     {
         string cap = capacity.ToUpperInvariant();
+        if (cap == "DRIVABLE")
+            return GetDrivable(id);
         if (Openings.FirstOrDefault(d => d.Id == id) is { } d)
             return cap == "COULDBEBREAK" ? d.Breakable : cap == "COULDBEUSE" && d.Usable;
         if (Usables.FirstOrDefault(x => x.Id == id) is { } o)

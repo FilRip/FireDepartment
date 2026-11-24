@@ -78,19 +78,18 @@ public sealed partial class MissionConverter
             }
         },
         {
-            // Villa (MissionConverter.Villa.cs) : le renfort à pied de l'acte 2, la pompe de la piscine, l'Excalibur
+            // Villa (MissionConverter.Villa.cs) : le renfort à pied de l'acte 2, la pompe de la piscine (l'Excalibur est un
+            // véhicule civil à conduire : MissionConverter.Objects.cs)
             "Villa", new[]
             {
                 ("Renfort_Pompier", "fireman\\fireman_sp_us"),
                 ("Renfort_Ingenieur", "fireman\\fireman_ing"),
                 ("Pompe_Arrosage", "@pompe"),
-                ("VoitureDeLuxe1", "@excalibur"),
             }
         },
-        // Station-service (MissionConverter.StationService.cs) : le camion-citerne de GPL, que l'ingénieur conduit
-        { "station_service", new[] { ("Citerne", "@citerne") } },
-        // Ecole (MissionConverter.Ecole.cs) : le bulldozer du chantier, que l'ouvrier prête (acte 2), le sapeur de l'acte 3
-        { "ecole", new[] { ("buldo", "firevehicle\\Veh_P_bulldozer"), ("pompier5", "fireman\\fireman_des") } },
+        // Ecole (MissionConverter.Ecole.cs) : le sapeur de l'acte 3 (le bulldozer du chantier est un véhicule civil à
+        // conduire : MissionConverter.Objects.cs)
+        { "ecole", new[] { ("pompier5", "fireman\\fireman_des") } },
         // Foret (MissionConverter.Foret.cs) : les deux hélicoptères de secours, qui se posent quand leur héliport est dégagé
         { "foret", new[] { ("MM_Helicoptere1", "@helico"), ("MM_helicoptere2", "@helico") } },
     };
@@ -142,7 +141,7 @@ public sealed partial class MissionConverter
             Fd1Object? o = fd1.Objects.FirstOrDefault(x => instance.Equals(InstanceName(x), StringComparison.OrdinalIgnoreCase));
             if (o == null)
                 continue;
-            // unité faite d'un objet FD1 (la pompe, l'Excalibur : MissionConverter.Villa.cs)
+            // unité faite d'un objet FD1 (la pompe de la piscine : MissionConverter.Villa.cs)
             bool fd1Model = cls.StartsWith('@') && cls != "@helico";
             string? path = cls == "@helico" ? WriteHelicoClass() : fd1Model ? WriteObjectUnitClass(instance, cls) : "design\\unit\\" + cls;
             if (path == null)
@@ -150,8 +149,6 @@ public sealed partial class MissionConverter
             string name = cls switch
             {
                 "@helico" when Mission.Equals("banque", StringComparison.OrdinalIgnoreCase) => "Helicoptere",
-                "@excalibur" => "Excalibur",
-                "@citerne" => StationTruckUnit,
                 _ => instance,
             };
             Vector3 at = new Vector3(o.World.M41, o.World.M42, o.World.M43) * WorldToCm;

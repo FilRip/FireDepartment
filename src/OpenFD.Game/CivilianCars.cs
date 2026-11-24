@@ -1,11 +1,23 @@
 using System.Numerics;
 using OpenFD.Formats;
+using OpenFD.Script;
 
 namespace OpenFD.Game;
 
-// voitures civiles du décor que l'on peut conduire : un pompier (ou toute unité à pied) y monte d'un clic droit
+// voitures civiles du décor que l'on peut conduire : un pompier (ou toute unité à pied) y monte d'un clic droit (Ctrl)
+// réglages de la classe de l'objet, section [OPENFD] :
+//   Drivable    = 1 : on peut le prendre (les véhicules du jeu, Design\Placeable\Vehicles, le sont toujours)
+//   Speed       = vitesse en avant (15 par défaut, comme une voiture), BackSpeed = en arrière (le tiers par défaut)
+//   Seats       = places (1 par défaut)
+//   CanDemolish = 1 : il dégage les débris comme le bulldozer des pompiers
+//   Clearance   = cases libres qu'il lui faut de chaque côté (1 par défaut ; 0 : un petit engin, le chariot élévateur)
+// L'action de l'objet (sa fonction du script, comme pour un objet utilisable) est appelée quand on le prend la première
+// fois : User, l'objet, « use ». Le script l'interdit ou le permet avec ENT_SetCapacityTarget(objet, "Drivable", 0 / 1).
 public sealed partial class UnitManager
 {
+    /// <summary>Voitures que le script interdit de prendre (ENT_SetCapacityTarget(…, "Drivable", 0)).</summary>
+    private readonly HashSet<uint> _drivableOff = new();
+
     /// <summary>Places dans une voiture civile.</summary>
     private const int CivilianCarSeats = 1;
     /// <summary>Vie d'une voiture civile devenue véhicule (comme un véhicule de pompiers), au prorata de celle de l'objet.</summary>
@@ -17,7 +29,7 @@ public sealed partial class UnitManager
     /// </summary>
     public bool IsDrivableCar(uint id)
     {
-        if (!_s.Explosions.ById.TryGetValue(id, out ExplosiveItem? it) || it.Exploded || it.Life <= 0)
+        if (_drivableOff.Contains(id) || !_s.Explosions.ById.TryGetValue(id, out ExplosiveItem? it) || it.Exploded || it.Life <= 0)
             return false;
         if (_s.Level.Objects.FirstOrDefault(o => o.Id == id) is not { Kind: EntityKind.Placeable } o)
             return false;
@@ -47,7 +59,7 @@ public sealed partial class UnitManager
                 u.Status = "on ne peut pas prendre ce véhicule";
                 return false;
             }
-            car = MakeCivilianCar(carId);
+            car = MakeCivilianCar(carId, u);
             if (car == null)
                 return false;
         }
@@ -57,7 +69,18 @@ public sealed partial class UnitManager
         return u.Boarding;
     }
 
-    private Unit? MakeCivilianCar(uint id)
+    /// <summary>Script : ENT_SetCapacityTarget(objet, "Drivable", 0 / 1) ; ENT_GetCapacityTarget le lit.</summary>
+    public void SetDrivable(uint id, bool on)
+    {
+        if (on)
+            _drivableOff.Remove(id);
+        else
+            _drivableOff.Add(id);
+    }
+
+    public bool GetDrivable(uint id) => IsDrivableCar(id);
+
+    private Unit? MakeCivilianCar(uint id, Unit user)
     {
         LevelObject o = _s.Level.Objects.First(x => x.Id == id);
         ExplosiveItem it = _s.Explosions.ById[id];
@@ -65,16 +88,25 @@ public sealed partial class UnitManager
         string? m = c?.Get("DISPLAY", "Model")?.Trim('"', ' ');
         if (string.IsNullOrEmpty(m))
             return null;
+        float speed = c!.GetFloat("OPENFD", "Speed", 15);
         Unit car = new Unit
         {
             Id = (int)id, Name = o.Name, ClassPath = o.ClassPath, Model = SceneAssets.GfxPath("Placeable", m), IsVehicle = true,
-            Position = o.Position, Speed = 15 * VehicleSpeedFactor,
+            Position = o.Position, Speed = speed * VehicleSpeedFactor,
         };
         car.Heading = o.Rotation.Z - VehicleModelYaw;
         car.IsCivilianCar = true;
         car.FromLevel = true;   // modèle à états (…_e1, …_e2) : dessiné comme les véhicules posés dans le niveau
-        car.Seats = CivilianCarSeats;
-        car.BackSpeed = 5 * VehicleSpeedFactor;
+        car.Seats = Math.Max(1, c.GetInt("OPENFD", "Seats", CivilianCarSeats));
+        car.BackSpeed = c.GetFloat("OPENFD", "BackSpeed", speed / 3) * VehicleSpeedFactor;
+        car.CanDemolish = c.GetBool("OPENFD", "CanDemolish");
+        car.DriveClearance = Math.Clamp(c.GetInt("OPENFD", "Clearance", 1), 0, 1);
+        // long véhicule : on y monte par n'importe quel côté, même loin de son milieu (le bout de ses cases + 1 m)
+        if (_s.Grid is { } g && Paths.ObjectCells.TryGetValue(id, out List<int>? cells) && cells.Count > 0)
+        {
+            float far = cells.Max(i => Vector2.Distance(new Vector2(o.Position.X, o.Position.Y), new Vector2((i % g.Width + 0.5f) * Grid.CellSize, (i / g.Width + 0.5f) * Grid.CellSize)));
+            car.ReachExtra = MathF.Max(0, far + 100 - VehicleReach * 1.5f);
+        }
         car.Accel = 8 * VehicleAccelFactor;
         car.Decel = 6 * VehicleAccelFactor;
         car.TurnRadius = TurnRadiusRef;
@@ -88,6 +120,9 @@ public sealed partial class UnitManager
         it.NearFires.Clear();
         Units.Add(car);
         Log.Add($"{_s.Time,6:0} s : voiture civile {o.Name} prise ({m})");
+        // l'action de l'objet : le script sait qu'on l'a pris (Villa : l'Excalibur ; Station-service : le camion-citerne)
+        if (ActionsOf(o).FirstOrDefault() is { script.Length: > 0 } a)
+            _s.Scripts?.TryRun(a.script, Value.I(user.Id), Value.I((int)id), Value.T(a.action));
         return car;
     }
 }

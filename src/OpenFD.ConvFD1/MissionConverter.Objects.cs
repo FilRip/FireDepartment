@@ -13,8 +13,9 @@ namespace OpenFD.ConvFD1;
 ///  • machines (« Mach01 »… « Mach16 ») : détruites, le script les compte (défaite si toutes brûlent) ;
 ///  • objets qui explosent quand le feu les détruit (« Truckabc », le camion du parking ; Villa : les vieux bidons, les
 ///    jerricanes de la remise) ;
-///  • voiture à conduire (Villa : l'Excalibur) : un ingénieur la prend (il la « répare »), le script la remplace par un
-///    véhicule ; détruite par le feu avant, elle appelle le script comme un objet suivi.
+///  • véhicules civils à conduire (Villa : l'Excalibur ; Station-service : le camion-citerne ; Ecole : le bulldozer du
+///    chantier ; Entrepot : le Fenwick) : n'importe quel pompier y monte (Ctrl + clic droit), le moteur en fait un véhicule
+///    (CivilianCars.cs) et appelle son action ; détruit par le feu avant, il appelle le script comme un objet suivi.
 /// </summary>
 public sealed partial class MissionConverter
 {
@@ -139,13 +140,26 @@ public sealed partial class MissionConverter
         },
     };
 
-    /// <summary>Voitures à conduire, par mission : nom FD1, fonction du script appelée quand un ingénieur la prend.</summary>
-    private static readonly Dictionary<string, (string name, string script)[]> DrivableObjects = new(StringComparer.OrdinalIgnoreCase)
+    /// <summary>
+    /// Véhicules civils à conduire, par mission : nom FD1, fonction du script appelée quand un pompier le prend (vide :
+    /// aucune), vitesse ([OPENFD] Speed : 15 pour une voiture), bulldozer (dégage les débris), interdit au départ (le script
+    /// le permet : ENT_SetCapacityTarget(…, "Drivable", 1)), petit engin qui passe partout où l'on marche ([OPENFD] Clearance 0).
+    /// </summary>
+    private static readonly Dictionary<string, (string name, string script, float speed, bool demolish, bool locked, bool narrow)[]> DrivableObjects = new(StringComparer.OrdinalIgnoreCase)
     {
-        { "Villa", new[] { ("VoitureDeLuxe1", "Use_Excalibur") } },
+        { "Villa", new[] { ("VoitureDeLuxe1", "Use_Excalibur", 15f, false, false, false) } },
         // Station-service : le camion-citerne de GPL, à conduire jusqu'à l'unité d'arrosage à mousse
-        { "station_service", new[] { ("Citerne", "Use_Citerne") } },
+        { "station_service", new[] { ("Citerne", "Use_Citerne", 10f, false, false, false) } },
+        // Ecole : le bulldozer du chantier, que l'ouvrier prête à l'acte 2 (FD1 : presBuldo)
+        { "ecole", new[] { ("buldo", "", 6f, true, true, false) } },
+        // Entrepot : le chariot élévateur du hall (petit : il passe entre les étagères)
+        { "Entrepot", new[] { ("Fen", "", 5f, false, false, true) } },
     };
+
+    /// <summary>Réglages du véhicule à conduire de ce nom dans la mission (null : ce n'en est pas un).</summary>
+    private (string name, string script, float speed, bool demolish, bool locked, bool narrow)? DrivableOf(string name) =>
+        DrivableObjects.TryGetValue(Mission, out (string name, string script, float speed, bool demolish, bool locked, bool narrow)[]? drivable)
+        && drivable.FirstOrDefault(d => d.name.Equals(name, StringComparison.OrdinalIgnoreCase)) is { name: not null } d ? d : null;
 
     /// <summary>Objets du script trouvés dans le niveau FD1 (objet, maillages, nom, rôle, fonction à la destruction).</summary>
     private readonly List<(Fd1Object o, List<Fd3Mesh> meshes, string name, ObjectRole role, string script)> _scriptObjects = new();
@@ -165,7 +179,7 @@ public sealed partial class MissionConverter
             }
         if (HiddenObjects.TryGetValue(Mission, out string[]? hidden) && hidden.Contains(name, StringComparer.OrdinalIgnoreCase))
             return (ObjectRole.Hidden, "FD1_Rien");
-        if (DrivableObjects.TryGetValue(Mission, out (string name, string script)[]? drivable) && drivable.Any(d => d.name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+        if (DrivableOf(name) != null)
             return (ObjectRole.Drivable, WatchedScript(name) ?? "FD1_Rien");
         if (WatchedObjects.TryGetValue(Mission, out (string prefix, string script)[]? watched))
             foreach ((string prefix, string script) in watched)
@@ -190,10 +204,11 @@ public sealed partial class MissionConverter
     }
 
     /// <summary>
-    /// Classe d'une voiture à conduire : Design\placeable\functional\useable\&lt;nom&gt;_&lt;modèle&gt;_conduite.class : elle
-    /// s'abîme au feu (100 points de vie), seul un ingénieur s'en sert (« réparer »).
+    /// Classe d'un véhicule civil à conduire : Design\placeable\functional\useable\&lt;nom&gt;_&lt;modèle&gt;_conduite.class :
+    /// il s'abîme au feu (100 points de vie) ; [OPENFD] : un pompier le prend (CivilianCars.cs), sa vitesse, bulldozer, petit
+    /// engin.
     /// </summary>
-    private string WriteDrivableClass(string model, List<Fd3Mesh> meshes)
+    private string WriteDrivableClass(string model, List<Fd3Mesh> meshes, float speed, bool demolish, bool narrow)
     {
         (string safe, List<(string node, Matrix4x4 world)> _, float _) = WritePlaceableModel(model, meshes);
         string classDir = Path.Combine(Data, "Design", "placeable", "functional", "useable");
@@ -215,7 +230,7 @@ public sealed partial class MissionConverter
 
             [CAPACITIES_ACTIONS]
             COULDBEUSE = 0
-            COULDBEREPAIR = 1
+            COULDBEREPAIR = 0
 
             [EXPLOSION]
             CANEXPLODE = 0
@@ -223,6 +238,12 @@ public sealed partial class MissionConverter
             [LOGICAL_STATE]
             S01_USER_ANIM = ItemChar\ic_pick_up_down
             S01__NAME = use
+
+            [OPENFD]
+            DRIVABLE = 1
+            SPEED = {speed.ToString(System.Globalization.CultureInfo.InvariantCulture)}
+            CANDEMOLISH = {(demolish ? 1 : 0)}
+            CLEARANCE = {(narrow ? 0 : 1)}
 
             """;
         File.WriteAllBytes(Path.Combine(classDir, name + ".class"), Encoding.Latin1.GetBytes(cls.Replace("\n", "\r\n")));
@@ -390,16 +411,14 @@ public sealed partial class MissionConverter
     }
 
     /// <summary>
-    /// Voiture à conduire dans le niveau du moteur : un objet réparable (modèle : la bombe de Sawmill, qui a une action et
-    /// une fonction à sa destruction) ; son action appelle la fonction de DrivableObjects, sa destruction celle des objets
-    /// suivis.
+    /// Véhicule civil à conduire dans le niveau du moteur : un objet du décor (modèle : la bombe de Sawmill, qui a une action
+    /// et une fonction à sa destruction) ; son action (appelée quand un pompier le prend) est la fonction de DrivableObjects,
+    /// sa destruction celle des objets suivis.
     /// </summary>
     private void AddDrivable(Level level, Fd1Object o, List<Fd3Mesh> meshes, string name, string destroyed)
     {
         LevelObject? template = ActionTemplate();
-        string? use = DrivableObjects.TryGetValue(Mission, out (string name, string script)[]? drivable)
-            ? drivable.FirstOrDefault(d => d.name.Equals(name, StringComparison.OrdinalIgnoreCase)).script : null;
-        if (template == null || use == null)
+        if (template == null || DrivableOf(name) is not { } d)
         {
             Report.Add($"voiture à conduire {name} : objet utilisable modèle introuvable dans les missions du jeu");
             return;
@@ -408,17 +427,17 @@ public sealed partial class MissionConverter
         w.M41 *= WorldToCm;
         w.M42 *= WorldToCm;
         w.M43 *= WorldToCm;
-        LevelObject x = LevelEdit.Clone(template, LevelEdit.NewId(level), name, WriteDrivableClass(o.Model, meshes));
+        LevelObject x = LevelEdit.Clone(template, LevelEdit.NewId(level), name, WriteDrivableClass(o.Model, meshes, d.speed, d.demolish, d.narrow));
         x = LevelEdit.WithTransform(x, new Vector3(w.M41, w.M42, w.M43), EulerOf(w));
         x = LevelEdit.WithStartVisible(x, true);
-        x = WithActionScript(x, use);
+        x = WithActionScript(x, d.script.Length > 0 ? d.script : "FD1_Rien");
         x = WithComponentScript(x, 0xA024, destroyed);
         float coef = 1f;
         if (ObjectFireCoefs.TryGetValue(Mission, out (string name, float coef)[]? coefs) && coefs.FirstOrDefault(c => c.name.Equals(name, StringComparison.OrdinalIgnoreCase)) is { name: not null } fc)
             coef = fc.coef;
         x = WithExplosive(x, false, coef);
         level.Objects.Add(x);
-        Report.Add($"voiture à conduire : {name} ({use})");
+        Report.Add($"véhicule civil à conduire : {name}{(d.script.Length > 0 ? " (" + d.script + ")" : "")}{(d.locked ? ", interdit au départ" : "")}");
     }
 
     /// <summary>Copie d'un maillage tourné (sommets et normales).</summary>
