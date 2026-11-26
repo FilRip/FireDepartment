@@ -18,7 +18,7 @@ public sealed class SceneEffect
 {
     public const int ModePlain = 0, ModeGround = 1, ModeBuilding = 2;
     public Effect Fx { get; }
-    private readonly EffectParameter _wvp, _world, _eye, _fog, _shadowVp, _params, _fogColor, _shadow, _sun, _tint, _diff, _dirt, _light, _shadowMap, _roofMask, _roofMaskTex, _refl, _reflTex, _normal;
+    private readonly EffectParameter _wvp, _world, _eye, _fog, _shadowVp, _params, _fogColor, _shadow, _sun, _tint, _diff, _dirt, _light, _shadowMap, _roofMask, _roofMaskTex, _refl, _reflTex, _normal, _shadowObj;
 
     private const string Vs = @"
 uniform vec4 vs_uniforms_vec4[14];
@@ -60,6 +60,7 @@ uniform sampler2D ps_s3;
 uniform sampler2D ps_s4;
 uniform samplerCube ps_s5;
 uniform sampler2D ps_s6;
+uniform sampler2D ps_s7;
 varying vec4 vTex0;
 varying vec4 vTex1;
 varying vec4 vShadow;
@@ -106,11 +107,13 @@ void main()
         vec2 uv = vec2(s.x * 0.5 + 0.5, 0.5 - s.y * 0.5);
         if (uv.x > 0.0 && uv.x < 1.0 && uv.y > 0.0 && uv.y < 1.0 && s.z < 1.0)
         {
+            // deux cartes : le décor (ps_s3), les objets et les unités (ps_s7) ; la plus proche du soleil fait l'ombre
             float t = sh.z;
-            shade += (s.z - sh.x > texture2D(ps_s3, uv + vec2(-t, -t)).r) ? 0.25 : 0.0;
-            shade += (s.z - sh.x > texture2D(ps_s3, uv + vec2( t, -t)).r) ? 0.25 : 0.0;
-            shade += (s.z - sh.x > texture2D(ps_s3, uv + vec2(-t,  t)).r) ? 0.25 : 0.0;
-            shade += (s.z - sh.x > texture2D(ps_s3, uv + vec2( t,  t)).r) ? 0.25 : 0.0;
+            float z = s.z - sh.x;
+            shade += (z > min(texture2D(ps_s3, uv + vec2(-t, -t)).r, texture2D(ps_s7, uv + vec2(-t, -t)).r)) ? 0.25 : 0.0;
+            shade += (z > min(texture2D(ps_s3, uv + vec2( t, -t)).r, texture2D(ps_s7, uv + vec2( t, -t)).r)) ? 0.25 : 0.0;
+            shade += (z > min(texture2D(ps_s3, uv + vec2(-t,  t)).r, texture2D(ps_s7, uv + vec2(-t,  t)).r)) ? 0.25 : 0.0;
+            shade += (z > min(texture2D(ps_s3, uv + vec2( t,  t)).r, texture2D(ps_s7, uv + vec2( t,  t)).r)) ? 0.25 : 0.0;
         }
     }
     // comme le shader d'ombre du jeu (FD2Ground.fx) : dans l'ombre, 1 - éclairage précalculé, couleur par couleur
@@ -134,7 +137,7 @@ void main()
                 new GlslEffect.Param("Params", 1, false), new GlslEffect.Param("FogColor", 1, false), new GlslEffect.Param("Shadow", 1, false), new GlslEffect.Param("SunDir", 1, false), new GlslEffect.Param("Tint", 1, false),
                 new GlslEffect.Param("RoofMask", 1, false), new GlslEffect.Param("Refl", 1, false),
             },
-            new[] { "DiffTex", "DirtTex", "LightTex", "ShadowMap", "RoofMaskTex", "ReflCube", "NormalTex" },
+            new[] { "DiffTex", "DirtTex", "LightTex", "ShadowMap", "RoofMaskTex", "ReflCube", "NormalTex", "ShadowMapObj" },
             new[] { ("vs_v0", VertexElementUsage.Position, 0), ("vs_v1", VertexElementUsage.TextureCoordinate, 0), ("vs_v2", VertexElementUsage.TextureCoordinate, 1), ("vs_v3", VertexElementUsage.TextureCoordinate, 2), ("vs_v4", VertexElementUsage.Normal, 0) });
         EffectParameterCollection p = Fx.Parameters;
         _wvp = p["WorldViewProj"];
@@ -156,6 +159,8 @@ void main()
         _refl = p["Refl"];
         _reflTex = p["ReflCube"];
         _normal = p["NormalTex"];
+        _shadowObj = p["ShadowMapObj"];
+        _shadowObj.SetValue(Tex.White);
         _roofMaskTex.SetValue(Tex.White);
         _normal.SetValue(Tex.White);
     }
@@ -186,10 +191,12 @@ void main()
     /// Carte d'ombres du soleil (null : pas d'ombres). opacity : part de lumière retirée dans l'ombre, sur les surfaces
     /// sans éclairage précalculé (sur les autres, l'ombre dépend de cet éclairage, comme dans le jeu).
     /// </summary>
-    public void SetShadow(Texture2D? map, Matrix lightViewProj, float opacity, float bias, Vector3 sunDir)
+    /// <param name="objects">carte d'ombres des objets et des unités (null : tout est dans map)</param>
+    public void SetShadow(Texture2D? map, Texture2D? objects, Matrix lightViewProj, float opacity, float bias, Vector3 sunDir)
     {
         _sun.SetValue(new Vector4(sunDir, 1));
         _shadowMap.SetValue(map ?? Tex.White);
+        _shadowObj.SetValue(objects ?? Tex.White);
         _shadowVp.SetValue(lightViewProj);
         _shadow.SetValue(map != null ? new Vector4(bias, opacity, 0.7f / map.Width, 1) : Vector4.Zero);
     }

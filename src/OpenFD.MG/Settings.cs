@@ -24,6 +24,7 @@ public sealed class Settings
     /// <summary>Réglages du jeu sans place dans le menu : modifiables à la main dans ce fichier.</summary>
     public GameplaySettings Gameplay { get; set; } = new();
     public string Textures { get; set; } = "high";  // high, med, low
+    public bool Shadows { get; set; } = true;       // ombres du soleil (au sol, et sur les objets et unités dans l'ombre du décor)
     public string Language { get; set; } = "";      // vide : celle des voix installées ; sinon FRA, ENG…
     public string Nationality { get; set; } = "";   // vide : celle de la mission ; sinon us, fr, gb, gr, ua
     public string PlayerName { get; set; } = "";    // pseudo en multijoueur

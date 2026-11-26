@@ -129,6 +129,10 @@ public sealed partial class OpenFDGame
             f.FogStart = r * 1000;
             f.FogEnd = r * 2000;
         }
+        // effet des objets (NormalMapEffect) : même éclairage de jour, sans ombre ; ses réglages de l'image remis après
+        NormalMapEffect.State saved = _nmFx.Save();
+        _nmFx.SetFrame((view * proj).X(), eye.X(), r * 1000, r * 2000, Vector3.Zero, new Vector3(0.62f), new Vector3(0.55f), new Vector3(0.55f), saved.SunDir.LengthSquared() > 0 ? NormalMapEffect.Xyz(saved.SunDir) : new Vector3(0.4f, 0.3f, -0.85f));
+        _nmFx.SetShadow(null, Matrix.Identity, 0, 0);
         gd.DepthStencilState = DepthStencilState.Default;
         gd.BlendState = BlendState.Opaque;
         gd.RasterizerState = RasterizerState.CullNone;
@@ -137,6 +141,7 @@ public sealed partial class OpenFDGame
             EdDrawTree(it.TreeModel, it.TreeSeed, it.TreeHeight, SN.Matrix4x4.Identity);
         else if (it.Model != null)
             EdDrawModel(it.Model, SN.Matrix4x4.Identity, it.Kind == EditorItemKind.Fireman && it.ClassPath != null ? EdHiddenTools(it.ClassPath, it.Model) : null);
+        _nmFx.Restore(saved);
     }
 
     private void EdDrawPanel()

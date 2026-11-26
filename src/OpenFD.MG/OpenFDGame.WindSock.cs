@@ -109,6 +109,10 @@ public sealed partial class OpenFDGame
             e.View = view;
             e.Projection = proj;
         }
+        // effet des objets (NormalMapEffect) : la caméra de la manche, sans ombre ni brouillard
+        NormalMapEffect.State saved = _nmFx.Save();
+        _nmFx.SetFrame(view * proj, eye.X(), 1e6f, 2e6f, Vector3.Zero, NormalMapEffect.Xyz(saved.Ambient), NormalMapEffect.Xyz(saved.Sun0), NormalMapEffect.Xyz(saved.Sun1), NormalMapEffect.Xyz(saved.SunDir));
+        _nmFx.SetShadow(null, Matrix.Identity, 0, 0);
         SN.Matrix4x4 place = SN.Matrix4x4.CreateRotationZ(angle);
         foreach (CharacterRig.Part part in r.Parts)
         {
@@ -138,6 +142,7 @@ public sealed partial class OpenFDGame
             }
         }
         gd.Viewport = full;
+        _nmFx.Restore(saved);
         foreach (IEffectMatrices e in new IEffectMatrices[] { _lit, _plain, _alphaFx })
         {
             e.View = _view.X();

@@ -1818,6 +1818,12 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     private SN.Vector3 _sunColor = SN.Vector3.One;
     private bool _shadowPass, _shadowsOn = true;
     private RenderTarget2D? _shadowMap;
+    /// <summary>
+    /// Ombres des objets et des unités, à part de celles du décor (_shadowMap : bâtiments, sol, arbres) : le sol prend les
+    /// deux ; les objets et les unités ne lisent que celle du décor (assombris dans l'ombre d'un bâtiment, pas dans la leur).
+    /// </summary>
+    private RenderTarget2D? _shadowMapObj;
+    private bool _shadowObjReady;
     private Matrix _lightVp = Matrix.Identity;
     private DepthEffect _depth = null!;
     private const int ShadowSize = 2048;
@@ -1943,15 +1949,20 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         if (!_shadowsOn || _shadowOpacity <= 0)
             return;
         GraphicsDevice gd = GraphicsDevice;
-        if (_shadowMap == null)
+        if (_shadowMap == null || _shadowMapObj == null)
         {
-            try { _shadowMap = new RenderTarget2D(gd, ShadowSize, ShadowSize, false, SurfaceFormat.Single, DepthFormat.Depth24); }
+            try
+            {
+                _shadowMap ??= new RenderTarget2D(gd, ShadowSize, ShadowSize, false, SurfaceFormat.Single, DepthFormat.Depth24);
+                _shadowMapObj ??= new RenderTarget2D(gd, ShadowSize, ShadowSize, false, SurfaceFormat.Single, DepthFormat.Depth24);
+            }
             catch
             {
                 _shadowsOn = false;
                 return;
             }
         }
+        _shadowObjReady = false;
         SN.Vector3 center = new SN.Vector3(_target.X, _target.Y, GroundAt(_target.X, _target.Y));
         float size = Math.Clamp(_dist * 2.2f, 3000, 40000);
         SN.Vector3 up = MathF.Abs(_sunDir.Z) > 0.99f ? SN.Vector3.UnitY : SN.Vector3.UnitZ;
@@ -1980,18 +1991,25 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                     gd.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, d.count / 3);
                 }
             }
-            // objets du décor (voitures garées, tonneaux, lampadaires…) et arbres : leur ombre n'est pas dans l'éclairage
-            // précalculé du sol (Mriya : le parking) ; le jeu d'origine la calcule en temps réel
-            foreach ((MeshGpu? mesh, bool roof, int layer) in _draw)
-                if ((layer == 0 || _objects) && !(roof && !_roofs))
-                    DrawMesh(mesh, Matrix.Identity);
+            // arbres : leur ombre n'est pas dans l'éclairage précalculé du sol ; le jeu d'origine la calcule en temps réel
             if (_objects)
                 DrawTrees(new BoundingFrustum(_lightVp));
             if (EditorMode)
             {
+                // éditeur : une seule carte (les objets n'y lisent pas d'ombre)
+                foreach ((MeshGpu? mesh, bool roof, int layer) in _draw)
+                    if ((layer == 0 || _objects) && !(roof && !_roofs))
+                        DrawMesh(mesh, Matrix.Identity);
                 EditorShadows();
                 return;
             }
+            // objets du décor (voitures garées, tonneaux, lampadaires…) et unités : sur la seconde carte (voir _shadowMapObj)
+            gd.SetRenderTarget(_shadowMapObj);
+            gd.Clear(ClearOptions.Target | ClearOptions.DepthBuffer, Color.White, 1, 0);
+            _shadowObjReady = true;
+            foreach ((MeshGpu? mesh, bool roof, int layer) in _draw)
+                if ((layer == 0 || _objects) && !(roof && !_roofs))
+                    DrawMesh(mesh, Matrix.Identity);
             RenderExplosives();   // voitures garées, tonneaux… (objets qui peuvent exploser)
             RenderUnits();
         }
@@ -2059,7 +2077,10 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         // décor : effet « sol / bâtiment » d'après les shaders du jeu
         _scene.SetFrame((_viewProj).X(), _eye.X(), 30000, 90000, Sky.X(), _sceneTint.X());
         _refl.SetFrame(_view.X(), _viewProj.X(), _eye.X());
-        _scene.SetShadow(_shadowsOn && _shadowOpacity > 0 ? _shadowMap : null, _lightVp, _shadowOpacity, 0.0008f, _sunDir.X());
+        bool shadows = _shadowsOn && _shadowOpacity > 0 && _shadowMap != null;
+        _scene.SetShadow(shadows ? _shadowMap : null, shadows && _shadowObjReady ? _shadowMapObj : null, _lightVp, _shadowOpacity, 0.0008f, _sunDir.X());
+        // objets et unités : assombris dans l'ombre du décor (en jeu ; pas dans l'éditeur)
+        _nmFx.SetShadow(shadows && _shadowObjReady ? _shadowMap : null, _lightVp, _shadowOpacity, 0.0008f);
         // cinématique : comme le moteur d'origine, les faces vues de dos ne sont pas dessinées ; une caméra placée
         // dans un bâtiment (London : plan sur les boutiques depuis le cinéma) voit ainsi au travers du mur
         gd.RasterizerState = _cineOn ? SceneCull : RasterizerState.CullNone;
@@ -2164,26 +2185,16 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 continue;
             else if (alpha && tex != null)
             {
-                _alphaFx.Texture = tex;
-                _alphaFx.World = world;
-                fx = _alphaFx;
-            }
-            else if (tex != null && _texNormal.TryGetValue(tex, out Texture2D? nmap))
-            {
-                // carte de normales (« <texture>_normal ») : relief éclairé par le soleil
-                _nmFx.Set(world, tex, nmap);
+                // détouré (grillage, feuillage) : sans éclairage, comme AlphaTestEffect ; assombri dans l'ombre du décor
+                _nmFx.Set(world, tex, null, 0.4f, false, (0.95f * _bright * _tint).X());
                 fx = _nmFx.Fx;
-            }
-            else if (tex != null)
-            {
-                _lit.Texture = tex;
-                _lit.World = world;
-                fx = _lit;
             }
             else
             {
-                _plain.World = world;
-                fx = _plain;
+                // objets, véhicules, personnages : éclairage du jeu, ombre du décor, carte de normales (« <texture>_normal »)
+                Texture2D? nmap = tex != null ? _texNormal.GetValueOrDefault(tex) : null;
+                _nmFx.Set(world, tex ?? Tex.White, nmap, -1, true, tex != null ? Vector3.One : new Vector3(0.55f, 0.55f, 0.58f));
+                fx = _nmFx.Fx;
             }
             // véhicule détruit : carcasse calcinée, presque noire (comme un objet entièrement consumé) ; effet sans éclairage,
             // la teinte sombre s'applique telle quelle
@@ -2198,7 +2209,10 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             {
                 pass.Apply();
                 if (fx == _nmFx.Fx)
+                {
                     gd.SamplerStates[1] = gd.SamplerStates[0];   // carte de normales : répétée comme la couleur
+                    gd.SamplerStates[2] = SamplerState.PointClamp;   // carte d'ombres
+                }
                 gd.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, start, count / 3);
             }
             if (!_charred)
@@ -3232,7 +3246,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         {
             lines.Add(("", txt));
             lines.Add(("Espace : pause · 1 2 3 4 : vitesse ×1 ×4 ×16 ×64", muted));
-            lines.Add(("Tab : carte / 3D · M : mini-carte · V : manche à air · I : objectifs · B : ombres · Ctrl + D : débogage", muted));
+            lines.Add(("Tab : carte / 3D · M : mini-carte · V : manche à air · I : objectifs · Ctrl + D : débogage", muted));
             lines.Add(("S : couper / remettre le son", muted));
             lines.Add(("Ctrl + A : choisir tous les pompiers · D : mode défense · A : comportement normal", muted));
             lines.Add(("F5 : sauvegarder · F9 : charger la dernière sauvegarde", muted));

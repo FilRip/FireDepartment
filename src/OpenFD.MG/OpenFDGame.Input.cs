@@ -308,10 +308,6 @@ public sealed partial class OpenFDGame
             case 'v':
                 _windSockHidden = !_windSockHidden;   // montrer / cacher la manche à air
                 break;
-            case 'b':
-                _shadowsOn = !_shadowsOn;
-                Log(_shadowsOn ? "Ombres : oui" : "Ombres : non");
-                break;
             case 'h':
                 _help = !_help;
                 break;

@@ -11,7 +11,7 @@ namespace OpenFD.MG;
 public sealed partial class OpenFDGame
 {
     /// <summary>Numéro de la livraison (openfdN) : mention du menu principal et titre de l'éditeur.</summary>
-    internal const string BuildNumber = "275";
+    internal const string BuildNumber = "277";
 
     private Settings _settings = new();
     private int _screen;          // 0 menu principal, 1 choix de la mission, 2 options, 3 pause, 4 sauvegardes, 9 choix du jeu
@@ -147,6 +147,7 @@ public sealed partial class OpenFDGame
             UseGameFont(_settings.Language);
         }
         _files.TextureQuality = _settings.Textures;
+        _shadowsOn = _settings.Shadows;
         _reflections = _settings.Reflections && Environment.GetEnvironmentVariable("FD3_SANS_REFLETS") == null;   // essai : comparer sans reflets
         if (Localization.Forced != _settings.Language)
         {
@@ -272,7 +273,7 @@ public sealed partial class OpenFDGame
         ["InvertY"] = "Rotation : inverser l'axe vertical",
         ["EdgeScroll"] = "Déplacer la caméra par la souris aux limites de l'écran",
         ["Brightness"] = "Luminosité", ["Resolution"] = "Résolution de l'écran", ["Fullscreen"] = "Plein écran", ["Windowed"] = "Fenêtre",
-        ["Textures"] = "Qualité des textures", ["Language"] = "Langue",
+        ["Textures"] = "Qualité des textures", ["Shadows"] = "Ombres", ["Language"] = "Langue",
         ["Nationality"] = "Nationalité des unités",
         ["Yes"] = "Oui", ["No"] = "Non", ["High"] = "Haute", ["Medium"] = "Moyenne", ["Low"] = "Basse",
         ["Auto"] = "Automatique (langue installée)", ["MissionNat"] = "Celle de la mission",
@@ -595,6 +596,11 @@ public sealed partial class OpenFDGame
             new(O("Textures"), texNames[Math.Max(0, Array.IndexOf(TexQ, _settings.Textures))], true, d =>
             {
                 _settings.Textures = Cycle(TexQ, _settings.Textures, d);
+                Changed();
+            }),
+            new(O("Shadows"), YN(_settings.Shadows), true, _ =>
+            {
+                _settings.Shadows = !_settings.Shadows;
                 Changed();
             }),
             new(O("Language"), LangName(_settings.Language), true, d =>
