@@ -161,6 +161,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _alphaFx = new AlphaTestEffect(gd) { AlphaFunction = CompareFunction.Greater, ReferenceAlpha = 102, FogEnabled = true, DiffuseColor = new Vector3(0.95f) };
         _part = new BasicEffect(gd) { TextureEnabled = true, VertexColorEnabled = true, LightingEnabled = false, Texture = Tex.Soft };
         _scene = new SceneEffect(gd);
+        _nmFx = new NormalMapEffect(gd);
         _refl = new ReflectionEffect(gd);
         _depth = new DepthEffect(gd);
         try
@@ -854,6 +855,19 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     private static readonly RasterizerState[] ReflRaster = new[] { CullMode.None, CullMode.CullClockwiseFace, CullMode.CullCounterClockwiseFace }
         .Select(c => new RasterizerState { CullMode = c, DepthBias = -1e-6f, SlopeScaleDepthBias = -1f }).ToArray();
     private readonly Dictionary<Texture2D, (Texture2D? env, TextureCube? cube)> _texRefl = new();
+    /// <summary>Carte de normales d'une texture de couleur : le fichier « &lt;nom&gt;_normal » (NormalMapEffect).</summary>
+    private readonly Dictionary<Texture2D, Texture2D> _texNormal = new();
+    private NormalMapEffect _nmFx = null!;
+
+    /// <summary>Note la carte de normales de cette texture (« &lt;nom&gt;_normal »), si elle existe.</summary>
+    private void FindNormalMap(string? name, Texture2D? tex)
+    {
+        if (tex == null || string.IsNullOrEmpty(name) || _texNormal.ContainsKey(tex) || name.EndsWith("_normal", StringComparison.OrdinalIgnoreCase))
+            return;
+        string nm = Path.GetFileNameWithoutExtension(name.Replace('\\', '/')) + "_normal";
+        if (_assets.ResolveTex(_mission, nm) != null && TexOf(nm) is { } n)
+            _texNormal[tex] = n;
+    }
     private readonly Dictionary<string, TextureCube?> _cubeCache = new(StringComparer.OrdinalIgnoreCase);
 
     private TextureCube? CubeOf(string? path)
@@ -877,6 +891,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
     private Texture2D? GroupTex(SceneAssets.Group gr)
     {
         Texture2D? tex = TexOf(gr.Diffuse);
+        FindNormalMap(gr.Diffuse, tex);
         if (tex == null || (gr.Env == null && gr.Cube == null) || _texRefl.ContainsKey(tex))
             return tex;
         TextureCube? cube = CubeOf(gr.Cube);
@@ -1279,6 +1294,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         _fireRoom.Clear();
         _texCache.Clear();
         _texRefl.Clear();
+        _texNormal.Clear();
         foreach (TextureCube? c in _cubeCache.Values)
             c?.Dispose();
         _cubeCache.Clear();
@@ -2032,6 +2048,7 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         }
         _dual.DiffuseColor = (_bright * _sceneTint).X();   // à deux textures : l'éclairage précalculé porte déjà la nuit
         _alphaFx.DiffuseColor = (0.95f * _bright * _tint).X();
+        _nmFx.SetFrame(_viewProj.X(), _eye.X(), 30000, 90000, Sky.X(), (0.62f * _bright * _tint).X(), (0.55f * _bright * _tint * _sunColor).X(), (0.55f * _bright * _tint).X(), _sunDir.X());
         foreach (IEffectFog f in new IEffectFog[] { _lit, _plain, _dual, _alphaFx })
         {
             f.FogColor = Sky.X();
@@ -2050,12 +2067,13 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
         {
             if (d.roof && !RoofShown(d.bld))
                 continue;
-            _scene.Set(Matrix.Identity, d.tex, d.dirt, d.lm, d.mode, d.alpha, _bright, _lmScale, SceneCube(d.tex), _refl.Empty);
+            _scene.Set(Matrix.Identity, d.tex, d.dirt, d.lm, d.mode, d.alpha, _bright, _lmScale, SceneCube(d.tex), _refl.Empty, d.tex != null ? _texNormal.GetValueOrDefault(d.tex) : null);
             gd.SetVertexBuffer(d.vb);
             gd.Indices = d.ib;
             foreach (EffectPass pass in _scene.Fx.CurrentTechnique.Passes)
             {
                 pass.Apply();
+                gd.SamplerStates[6] = gd.SamplerStates[0];   // carte de normales : répétée comme la couleur
                 gd.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, d.count / 3);
             }
         }
@@ -2150,6 +2168,12 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
                 _alphaFx.World = world;
                 fx = _alphaFx;
             }
+            else if (tex != null && _texNormal.TryGetValue(tex, out Texture2D? nmap))
+            {
+                // carte de normales (« <texture>_normal ») : relief éclairé par le soleil
+                _nmFx.Set(world, tex, nmap);
+                fx = _nmFx.Fx;
+            }
             else if (tex != null)
             {
                 _lit.Texture = tex;
@@ -2173,6 +2197,8 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             foreach (EffectPass pass in fx.CurrentTechnique.Passes)
             {
                 pass.Apply();
+                if (fx == _nmFx.Fx)
+                    gd.SamplerStates[1] = gd.SamplerStates[0];   // carte de normales : répétée comme la couleur
                 gd.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, start, count / 3);
             }
             if (!_charred)

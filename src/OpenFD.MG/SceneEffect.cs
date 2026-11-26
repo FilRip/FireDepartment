@@ -9,7 +9,8 @@ namespace OpenFD.MG;
 /// Effet du décor, à la manière des shaders du jeu d'origine (Data\Shader\FD2Ground.fx et FD2Building.fx) :
 ///  • sol      : couleur mélangée à moitié avec la texture de saleté, × 2 × éclairage précalculé ;
 ///  • bâtiment : couleur × saleté × 2 × éclairage précalculé (alpha de la couleur).
-/// (Les traces de brûlure et les reflets viendront ensuite.)
+/// Carte de normales (« &lt;texture&gt;_normal », NormalMapEffect) : le relief ombre l'éclairage précalculé, dans le
+/// rapport de l'éclairage du soleil sur la normale de la carte à celui sur la normale de la face.
 /// L'effet est écrit directement en GLSL et assemblé au format MGFX de MonoGame (version OpenGL) au lancement :
 /// aucun outil de compilation de shaders n'est nécessaire.
 /// </summary>
@@ -17,7 +18,7 @@ public sealed class SceneEffect
 {
     public const int ModePlain = 0, ModeGround = 1, ModeBuilding = 2;
     public Effect Fx { get; }
-    private readonly EffectParameter _wvp, _world, _eye, _fog, _shadowVp, _params, _fogColor, _shadow, _sun, _tint, _diff, _dirt, _light, _shadowMap, _roofMask, _roofMaskTex, _refl, _reflTex;
+    private readonly EffectParameter _wvp, _world, _eye, _fog, _shadowVp, _params, _fogColor, _shadow, _sun, _tint, _diff, _dirt, _light, _shadowMap, _roofMask, _roofMaskTex, _refl, _reflTex, _normal;
 
     private const string Vs = @"
 uniform vec4 vs_uniforms_vec4[14];
@@ -58,12 +59,14 @@ uniform sampler2D ps_s2;
 uniform sampler2D ps_s3;
 uniform sampler2D ps_s4;
 uniform samplerCube ps_s5;
+uniform sampler2D ps_s6;
 varying vec4 vTex0;
 varying vec4 vTex1;
 varying vec4 vShadow;
 varying vec4 vNormal;
 varying vec4 vWorld;
 varying vec4 vRefl;
+" + NormalMapEffect.Perturb + @"
 void main()
 {
     // toit par pièce : la carte des pièces découvertes (une case de grille par texel) efface le toit au-dessus
@@ -83,6 +86,14 @@ void main()
     if (ps_uniforms_vec4[6].x > 0.5) c += textureCube(ps_s5, vRefl.xyz).rgb * diff.a * ps_uniforms_vec4[6].y;
     vec3 light = vec3(1.0);
     if (ps_uniforms_vec4[0].w > 0.0) light = texture2D(ps_s2, vTex1.xy).rgb * ps_uniforms_vec4[0].w;
+    // carte de normales : relief (éclairage du jeu 0,62 + 0,55 × |n · soleil|, sur la normale de la carte / sur celle de la face)
+    if (ps_uniforms_vec4[6].z > 0.5)
+    {
+        vec3 n0 = normalize(vNormal.xyz + vec3(0.0, 0.0, 1e-5));
+        vec3 n1 = PerturbNormal(n0, vWorld.xyz, vTex0.xy, texture2D(ps_s6, vTex0.xy).xyz);
+        vec3 sd = ps_uniforms_vec4[3].xyz;
+        light *= (0.62 + 0.55 * abs(dot(n1, sd))) / (0.62 + 0.55 * abs(dot(n0, sd)));
+    }
     // ombres portées (carte de profondeur vue du soleil) : 4 échantillons pour adoucir le bord.
     // Les faces tournées vers l'ombre sont déjà sombres dans l'éclairage précalculé : on ne les assombrit pas une seconde fois.
     float shade = 0.0;
@@ -123,7 +134,7 @@ void main()
                 new GlslEffect.Param("Params", 1, false), new GlslEffect.Param("FogColor", 1, false), new GlslEffect.Param("Shadow", 1, false), new GlslEffect.Param("SunDir", 1, false), new GlslEffect.Param("Tint", 1, false),
                 new GlslEffect.Param("RoofMask", 1, false), new GlslEffect.Param("Refl", 1, false),
             },
-            new[] { "DiffTex", "DirtTex", "LightTex", "ShadowMap", "RoofMaskTex", "ReflCube" },
+            new[] { "DiffTex", "DirtTex", "LightTex", "ShadowMap", "RoofMaskTex", "ReflCube", "NormalTex" },
             new[] { ("vs_v0", VertexElementUsage.Position, 0), ("vs_v1", VertexElementUsage.TextureCoordinate, 0), ("vs_v2", VertexElementUsage.TextureCoordinate, 1), ("vs_v3", VertexElementUsage.TextureCoordinate, 2), ("vs_v4", VertexElementUsage.Normal, 0) });
         EffectParameterCollection p = Fx.Parameters;
         _wvp = p["WorldViewProj"];
@@ -144,7 +155,9 @@ void main()
         _roofMaskTex = p["RoofMaskTex"];
         _refl = p["Refl"];
         _reflTex = p["ReflCube"];
+        _normal = p["NormalTex"];
         _roofMaskTex.SetValue(Tex.White);
+        _normal.SetValue(Tex.White);
     }
 
     /// <summary>
@@ -183,10 +196,12 @@ void main()
 
     /// <param name="lightScale">multiplicateur de l'éclairage précalculé (FD2_LIGHT du soleil : 2 le jour à London, 1,1 la nuit à Fireworks)</param>
     /// <param name="cube">décor de reflet (vitres) ; null : pas de reflet. empty : décor noir à lier sinon (OpenGL)</param>
-    public void Set(Matrix world, Texture2D? diff, Texture2D? dirt, Texture2D? light, int mode, bool alpha, float bright, float lightScale, TextureCube? cube, TextureCube empty)
+    /// <param name="normal">carte de normales de la couleur (« &lt;texture&gt;_normal ») ; null : aucune</param>
+    public void Set(Matrix world, Texture2D? diff, Texture2D? dirt, Texture2D? light, int mode, bool alpha, float bright, float lightScale, TextureCube? cube, TextureCube empty, Texture2D? normal = null)
     {
         _reflTex.SetValue(cube ?? empty);
-        _refl.SetValue(new Vector4(cube != null ? 1 : 0, 1, 0, 0));
+        _normal.SetValue(normal ?? Tex.White);
+        _refl.SetValue(new Vector4(cube != null ? 1 : 0, 1, normal != null ? 1 : 0, 0));
         _wvp.SetValue(world * _vp);
         _world.SetValue(world);
         _diff.SetValue(diff ?? Tex.White);
