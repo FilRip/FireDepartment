@@ -235,6 +235,84 @@ public sealed partial class MissionConverter
 
     private string Data => Fd3.DataDir;
 
+    /// <summary>
+    /// Toits FD1 qui descendent jusqu'au sol et qu'aucun script n'enlève, par mission (SplitRoofFeet) : Forest, la toiture
+    /// de la colonie (4 pièces et un couloir), qui ne partait jamais quand un pompier entrait.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> RoofFeetModels = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "foret", new[] { "FOR_TOITURE_COLONIE" } },
+    };
+
+    /// <summary>
+    /// Toit FD1 qui descend jusqu'au sol (Forest : « FOR_TOITURE_COLONIE », avec les poteaux et les murs de pignon de la
+    /// colonie) : les triangles qui touchent son point le plus bas (à 50 cm près) en sont retirés et rendus à part (roof :
+    /// le toit lui-même ; feet : le reste), si le reste commence au moins 2 m plus haut ; sinon (toit en pente continue
+    /// jusqu'aux gouttières) rien ne change. Nœud sans « _ROOF » : coupé à hauteur d'étage comme les murs du bâtiment.
+    /// Les maillages du modèle (partagés par ses objets) ne sont pas modifiés.
+    /// </summary>
+    private static (List<Fd3Mesh> roof, List<Fd3Mesh> feet) SplitRoofFeet(List<Fd3Mesh> meshes, Matrix4x4 w)
+    {
+        List<Fd3Mesh> feet = new List<Fd3Mesh>();
+        List<Fd3Mesh> roof = new List<Fd3Mesh>();
+        float WorldZ(Fd3Mesh m, int v) => Vector3.Transform(new Vector3(m.Positions[3 * v], m.Positions[3 * v + 1], m.Positions[3 * v + 2]), w).Z;
+        List<float> all = meshes.SelectMany(m => Enumerable.Range(0, m.VertexCount).Select(v => WorldZ(m, v))).ToList();
+        if (all.Count == 0)
+            return (meshes, feet);
+        float bottom = all.Min();
+        bool Low(Fd3Mesh m, int k) => Enumerable.Range(0, 3).Any(j => WorldZ(m, m.Indices[k + j]) <= bottom + 50);
+        // ce qui reste du toit : il doit commencer nettement plus haut
+        float rest = float.MaxValue;
+        foreach (Fd3Mesh m in meshes)
+            for (int k = 0; k + 2 < m.Indices.Count; k += 3)
+                if (!Low(m, k))
+                    rest = MathF.Min(rest, Enumerable.Range(0, 3).Min(j => WorldZ(m, m.Indices[k + j])));
+        if (rest == float.MaxValue || rest < bottom + 200)
+            return (meshes, feet);
+        foreach (Fd3Mesh m in meshes)
+        {
+            Fd3Mesh top = new Fd3Mesh { Name = m.Name, Positions = m.Positions, Normals = m.Normals, Uv = m.Uv };
+            Fd3Mesh low = new Fd3Mesh { Name = m.Name + "_pieds", Positions = m.Positions, Normals = m.Normals, Uv = m.Uv };
+            foreach ((string mat, int start, int count) in m.Groups)
+            {
+                int t0 = top.Indices.Count, l0 = low.Indices.Count;
+                for (int k = start; k + 2 < start + count; k += 3)
+                    (Low(m, k) ? low : top).Indices.AddRange(m.Indices.GetRange(k, 3));
+                if (top.Indices.Count > t0)
+                    top.Groups.Add((mat, t0, top.Indices.Count - t0));
+                if (low.Indices.Count > l0)
+                    low.Groups.Add((mat, l0, low.Indices.Count - l0));
+            }
+            if (top.Indices.Count > 0)
+                roof.Add(Compact(top));
+            if (low.Indices.Count > 0)
+                feet.Add(Compact(low));
+        }
+        return (roof, feet);
+    }
+
+    /// <summary>
+    /// Maillage réduit aux sommets que ses triangles utilisent (le moteur mesure la hauteur d'un toit sur tous ses sommets :
+    /// ceux du sol, restés dans la liste, l'empêcheraient de partir).
+    /// </summary>
+    private static Fd3Mesh Compact(Fd3Mesh m)
+    {
+        Fd3Mesh c = new Fd3Mesh { Name = m.Name, Groups = m.Groups };
+        Dictionary<int, int> map = new Dictionary<int, int>();
+        foreach (ushort i in m.Indices)
+        {
+            if (!map.TryGetValue(i, out int j))
+            {
+                map[i] = j = map.Count;
+                c.Positions.AddRange(m.Positions.GetRange(3 * i, 3));
+                c.Normals.AddRange(m.Normals.GetRange(3 * i, 3));
+                c.Uv.AddRange(m.Uv.GetRange(2 * i, 2));
+            }
+            c.Indices.Add((ushort)j);
+        }
+        return c;
+    }
+
     /// <summary>Hauteur maximale des murs d'une pièce (cm) : au-dessus, ce n'est plus la pièce (façade, toit du hall).</summary>
     private const float RoomMaxHeight = 450;
 
@@ -654,18 +732,23 @@ public sealed partial class MissionConverter
             Vector3 rlo = new Vector3(float.MaxValue);
             Vector3 rhi = new Vector3(float.MinValue);
             List<float> heights = new List<float>();
-            foreach (Fd3Mesh m in meshes)
+            // toit qui descend jusqu'au sol (Forest : la toiture de la colonie et ses poteaux, murs de pignon) : le moteur ne
+            // l'enlève que quand un pompier est dessous, plus bas que lui ; ce qui touche le sol devient une pièce à part
+            bool split = roof && !lids && RoofFeetModels.TryGetValue(Mission, out string[]? feetModels) && feetModels.Contains(o.Model, StringComparer.OrdinalIgnoreCase);
+            (List<Fd3Mesh> parts, List<Fd3Mesh> standing) = split ? SplitRoofFeet(meshes, w) : (meshes, new List<Fd3Mesh>());
+            foreach (Fd3Mesh m in parts.Concat(standing))
             {
-                string node = $"{m.Name}_{count}" + (mask ? "_ROOM_MASK" : roof ? "_ROOF" : "");
+                bool feet = standing.Contains(m);
+                string node = $"{m.Name}_{count}" + (mask ? "_ROOM_MASK" : roof && !feet ? "_ROOF" : "");
                 Fd3Mesh copy = new Fd3Mesh { Name = node, Positions = m.Positions, Normals = m.Normals, Uv = m.Uv, Indices = m.Indices, Groups = m.Groups };
                 File.WriteAllBytes(Path.Combine(gfx, node + ".mesh"), Fd3Writer.MeshFile(copy));
                 File.WriteAllBytes(Path.Combine(gfx, node + ".meshdata"), Fd3Writer.MeshData(copy));
                 nodes.Add((node, w));
                 // toit FD1 : une cinématique qui regarde dessous l'enlève (MissionConverter.Cinematics.cs)
-                if (roof && !lids)
+                if (roof && !lids && !feet)
                     _covers.Add((node, MeshBox(m, w)));
                 // toit que le script enlève (Villa : « Toit_Garage »…)
-                if (roof && !lids && instance != null)
+                if (roof && !lids && !feet && instance != null)
                 {
                     if (!_roofNodes.TryGetValue(instance, out List<string>? roofNodes))
                         _roofNodes[instance] = roofNodes = new List<string>();

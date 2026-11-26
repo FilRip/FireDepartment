@@ -127,7 +127,7 @@ public sealed partial class OpenFDGame
 
     private void MenuInput(KeyboardState k, MouseState m)
     {
-        if (Pressed(k, Keys.Escape))
+        if (MenuBack(k, m))
         {
             _screen = 0;
             return;

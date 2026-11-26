@@ -668,7 +668,7 @@ public sealed partial class OpenFDGame
             (float x, float y, float w, float h) field = (dx + 20 * _scale, dy + 60 * _scale, dw - 40 * _scale, BtnH);
             (float x, float y, float w, float h) ok = (dx + dw - 20 * _scale - 180 * _scale, dy + dh - 20 * _scale - BtnH, 180 * _scale, BtnH);
             (float x, float y, float w, float h) cancel = (dx + 20 * _scale, dy + dh - 20 * _scale - BtnH, 180 * _scale, BtnH);
-            if (Pressed(k, Keys.Escape) || Clicked(m, cancel))
+            if (MenuBack(k, m) || Clicked(m, cancel))
             {
                 _ipDialog = false;
                 _textFocus = 0;
@@ -682,7 +682,7 @@ public sealed partial class OpenFDGame
                 JoinServer(_ipText);
             return;
         }
-        if (Pressed(k, Keys.Escape))
+        if (MenuBack(k, m))
         {
             _textFocus = 0;
             _screen = 0;
@@ -797,7 +797,7 @@ public sealed partial class OpenFDGame
             _screen = 6;
             return;
         }
-        if (Pressed(k, Keys.Escape) || Clicked(m, BottomLeft(bw)))
+        if (MenuBack(k, m) || Clicked(m, BottomLeft(bw)))
         {
             LeaveNetwork();
             _screen = 6;
@@ -952,7 +952,7 @@ public sealed partial class OpenFDGame
             _screen = 6;
             return;
         }
-        if (Pressed(k, Keys.Escape) || Clicked(m, BottomLeft(bw)))
+        if (MenuBack(k, m) || Clicked(m, BottomLeft(bw)))
         {
             LeaveNetwork();
             _screen = 6;

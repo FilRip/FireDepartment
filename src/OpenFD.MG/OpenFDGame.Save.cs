@@ -444,7 +444,7 @@ public sealed partial class OpenFDGame
     private void LoadScreenInput(KeyboardState k, MouseState m)
     {
         List<(string path, SavedGame game)> list = Saves();
-        if (Pressed(k, Keys.Escape))
+        if (MenuBack(k, m, _loadFrom != 3))   // ouvert depuis la pause : Échap seulement
         {
             _screen = _loadFrom;
             return;

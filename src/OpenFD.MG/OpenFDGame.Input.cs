@@ -18,6 +18,13 @@ public sealed partial class OpenFDGame
 
     private bool Pressed(KeyboardState k, Keys key) => k.IsKeyDown(key) && !_kPrev.IsKeyDown(key);
 
+    /// <summary>
+    /// Menus : revenir à l'écran précédent, avec Échap ou un clic droit (right : false là où le clic droit ne doit rien
+    /// faire, l'écran principal, la pause et ce qui s'ouvre depuis elle).
+    /// </summary>
+    private bool MenuBack(KeyboardState k, MouseState m, bool right = true) =>
+        Pressed(k, Keys.Escape) || (right && m.RightButton == ButtonState.Pressed && _mPrev.RightButton == ButtonState.Released);
+
     private void HandleInput(float dt)
     {
         KeyboardState k = Keyboard.GetState();

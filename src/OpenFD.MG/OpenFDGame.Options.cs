@@ -11,7 +11,7 @@ namespace OpenFD.MG;
 public sealed partial class OpenFDGame
 {
     /// <summary>Numéro de la livraison (openfdN) : mention du menu principal et titre de l'éditeur.</summary>
-    internal const string BuildNumber = "273";
+    internal const string BuildNumber = "275";
 
     private Settings _settings = new();
     private int _screen;          // 0 menu principal, 1 choix de la mission, 2 options, 3 pause, 4 sauvegardes, 9 choix du jeu
@@ -396,7 +396,8 @@ public sealed partial class OpenFDGame
         }
         List<Row> rows = Rows();
         ref int idx = ref (_screen == 0 ? ref _mainIndex : ref _screen == 3 ? ref _pauseIndex : ref _optIndex);
-        if (Pressed(k, Keys.Escape) || (_screen == 3 && Pressed(k, Keys.Space)))
+        // clic droit : pas sur l'écran principal (il quitterait le jeu) ni dans la pause ou ses options
+        if (MenuBack(k, m, _screen != 0 && _screen != 3 && _optionsFrom != 3) || (_screen == 3 && Pressed(k, Keys.Space)))
         {
             if (_screen == 0)
                 Exit();

@@ -192,7 +192,7 @@ public sealed partial class OpenFDGame
                 ChooseGame(other);
             return;
         }
-        if (Pressed(k, Keys.Escape))
+        if (MenuBack(k, m))
         {
             _screen = 0;
             return;
