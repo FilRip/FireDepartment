@@ -11,11 +11,18 @@ namespace OpenFD.MG;
 public sealed partial class OpenFDGame
 {
     /// <summary>Numéro de la livraison (openfdN) : mention du menu principal et titre de l'éditeur.</summary>
-    internal const string BuildNumber = "277";
+    internal const string BuildNumber = "278";
 
     private Settings _settings = new();
     private int _screen;          // 0 menu principal, 1 choix de la mission, 2 options, 3 pause, 4 sauvegardes, 9 choix du jeu
     private int _mainIndex, _optIndex;
+    /// <summary>Onglet des options : 0 sons, 1 graphiques, 2 jeu.</summary>
+    private int _optTab;
+    /// <summary>Anticrénelage en service (0 : sans ; FD3_SANS_MSAA, carte qui le refuse).</summary>
+    private readonly int _msaaStart;
+    /// <summary>Anticrénelage enregistré au démarrage du jeu (Settings.Antialiasing) : un autre choix attend le prochain lancement.</summary>
+    private readonly int _aaAtStart;
+    private static readonly int[] AaValues = { 0, 2, 4, 8 };
     private static readonly string[] TexQ = { "high", "med", "low" };
     private static readonly string[] Nats = { "", "us", "fr", "gb", "gr", "ua" };
     private static readonly string[] NatKeys = { "MissionNat", "USA", "France", "England", "Germany", "Ukraine" };
@@ -274,13 +281,15 @@ public sealed partial class OpenFDGame
         ["EdgeScroll"] = "Déplacer la caméra par la souris aux limites de l'écran",
         ["Brightness"] = "Luminosité", ["Resolution"] = "Résolution de l'écran", ["Fullscreen"] = "Plein écran", ["Windowed"] = "Fenêtre",
         ["Textures"] = "Qualité des textures", ["Shadows"] = "Ombres", ["Language"] = "Langue",
+        ["Antialiasing"] = "Anticrénelage", ["RestartNote"] = "Relancez le jeu pour appliquer les changements",
+        ["TabSound"] = "Sons", ["TabGraphics"] = "Graphiques", ["TabGame"] = "Jeu",
         ["Nationality"] = "Nationalité des unités",
         ["Yes"] = "Oui", ["No"] = "Non", ["High"] = "Haute", ["Medium"] = "Moyenne", ["Low"] = "Basse",
         ["Auto"] = "Automatique (langue installée)", ["MissionNat"] = "Celle de la mission",
         ["USA"] = "États-Unis", ["France"] = "France", ["England"] = "Angleterre", ["Germany"] = "Allemagne", ["Ukraine"] = "Ukraine",
         ["NoSave"] = "Aucune sauvegarde", ["HelpLoad"] = "Haut / Bas · Entrée : charger · Suppr : effacer · Échap : retour",
         ["HelpMain"] = "Haut / Bas · Entrée · Échap", ["HelpPause"] = "Haut / Bas · Entrée · Échap / Espace : reprendre",
-        ["HelpOptions"] = "Haut / Bas · < > · Échap : retour",
+        ["HelpOptions"] = "Tab : onglet · Haut / Bas · < > · Échap : retour",
         ["HelpEnd"] = "Entrée : rejouer · Échap : menu des missions",
         ["OtherMissions"] = "Autres missions",
         ["Credits"] = "Générique",
@@ -411,15 +420,36 @@ public sealed partial class OpenFDGame
             }
             return;
         }
+        (float mx, float my) = Fb(m.X, m.Y);
+        bool click = m.LeftButton == ButtonState.Pressed && _mPrev.LeftButton == ButtonState.Released;
+        if (_screen == 2)
+        {
+            // onglets : Tab (Maj + Tab : en arrière), Page préc. / suiv., ou un clic sur l'onglet
+            int tab = _optTab;
+            bool shift = k.IsKeyDown(Keys.LeftShift) || k.IsKeyDown(Keys.RightShift);
+            if (Pressed(k, Keys.Tab))
+                tab += shift ? -1 : 1;
+            if (Pressed(k, Keys.PageDown))
+                tab++;
+            if (Pressed(k, Keys.PageUp))
+                tab--;
+            if (click && OptionTabAt(mx, my) is int t)
+                tab = t;
+            tab = (tab % OptionTabCount + OptionTabCount) % OptionTabCount;
+            if (tab != _optTab)
+            {
+                _optTab = tab;
+                _optIndex = 0;
+                return;
+            }
+        }
         if (Pressed(k, Keys.Down))
             idx = Math.Min(rows.Count - 1, idx + 1);
         if (Pressed(k, Keys.Up))
             idx = Math.Max(0, idx - 1);
         int dir = Pressed(k, Keys.Right) ? 1 : Pressed(k, Keys.Left) ? -1 : 0;
         bool go = Pressed(k, Keys.Enter);
-        (float lx, float ly, float lw, float lh) = ScreenLayout(rows.Count);
-        (float mx, float my) = Fb(m.X, m.Y);
-        bool click = m.LeftButton == ButtonState.Pressed && _mPrev.LeftButton == ButtonState.Released;
+        (float lx, float ly, float lw, float lh) = ScreenLayout(LayoutRows(rows.Count));
         for (int i = 0; i < rows.Count; i++)
         {
             float y = ly + i * lh;
@@ -518,7 +548,20 @@ public sealed partial class OpenFDGame
         }),
     };
 
-    private List<Row> OptionRows()
+    private const int OptionTabCount = 3;
+
+    /// <summary>Noms des onglets des options, dans l'ordre de _optTab.</summary>
+    private string[] OptionTabNames() => new[] { O("TabSound"), O("TabGraphics"), O("TabGame") };
+
+    /// <summary>
+    /// Lignes pour placer la liste : les options gardent la place de leur onglet le plus long (titre et onglets ne bougent
+    /// pas d'un onglet à l'autre).
+    /// </summary>
+    private int LayoutRows(int n) => _screen == 2 ? Enumerable.Range(0, OptionTabCount).Max(t => OptionRows(t).Count) : n;
+
+    private List<Row> OptionRows() => OptionRows(_optTab);
+
+    private List<Row> OptionRows(int tab)
     {
         List<string> langs = new List<string> { "" };
         langs.AddRange(Localization.Available(_files.DataDir));
@@ -537,88 +580,106 @@ public sealed partial class OpenFDGame
         }
         string YN(bool b) => b ? O("Yes") : O("No");
         string[] texNames = new[] { O("High"), O("Medium"), O("Low") };
-        return new()
+        string AaName(int n) => n <= 0 ? O("No") : $"{n}×";
+        Row back = new(L("&Back", "Retour"), null, true, _ =>
         {
-            new(O("InvertX"), YN(_settings.InvertX), true, _ =>
+            _screen = _optionsFrom;
+            _settings.Save();
+        });
+        List<Row> rows = tab switch
+        {
+            0 => new()
             {
-                _settings.InvertX = !_settings.InvertX;
-                Changed();
-            }),
-            new(O("InvertY"), YN(_settings.InvertY), true, _ =>
+                new(L("&VolumeMaster", "Volume général"), $"{_settings.Volume} %", true, d =>
+                {
+                    _settings.Volume = Math.Clamp(_settings.Volume + 10 * d, 0, 100);
+                    Changed();
+                    _audio?.Play("VOCAL_SELECTION1");
+                }),
+                new(L("&VolumeInterface", "Volume interface et voix"), $"{_settings.VolumeVoice} %", true, d =>
+                {
+                    _settings.VolumeVoice = Math.Clamp(_settings.VolumeVoice + 10 * d, 0, 100);
+                    Changed();
+                    _audio?.Play("VOCAL_SELECTION1");
+                }),
+                new(L("&VolumeEffects", "Volume des effets"), $"{_settings.VolumeEffects} %", true, d =>
+                {
+                    _settings.VolumeEffects = Math.Clamp(_settings.VolumeEffects + 10 * d, 0, 100);
+                    Changed();
+                    _audio?.PlayAny(new[] { "EXPLOSION_GAS_TANK_01_01", "SC_USE_GENERIC" });
+                }),
+                new(L("&VolumeAmbiance", "Volume d'ambiance"), $"{_settings.VolumeMusic} %", true, d =>
+                {
+                    _settings.VolumeMusic = Math.Clamp(_settings.VolumeMusic + 10 * d, 0, 100);
+                    Changed();
+                }),
+            },
+            1 => new()
             {
-                _settings.InvertY = !_settings.InvertY;
-                Changed();
-            }),
-            new(O("EdgeScroll"), YN(_settings.EdgeScroll), true, _ =>
+                new(O("Resolution"), _settings.Resolution == "" ? O("Auto").Split('(')[0].Trim() : _settings.Resolution.Replace("x", " × "), true, d =>
+                {
+                    List<string> rs = Resolutions();
+                    _settings.Resolution = rs[((rs.IndexOf(_settings.Resolution) + d) % rs.Count + rs.Count) % rs.Count];
+                    Changed();
+                }),
+                new(O("Fullscreen"), YN(FullscreenNow), true, _ =>
+                {
+                    ToggleFullscreen();
+                    Changed();
+                }),
+                new(O("Brightness"), $"{_settings.Brightness} %", true, d =>
+                {
+                    _settings.Brightness = Math.Clamp(_settings.Brightness + 10 * d, 40, 200);
+                    Changed();
+                }),
+                new(O("Textures"), texNames[Math.Max(0, Array.IndexOf(TexQ, _settings.Textures))], true, d =>
+                {
+                    _settings.Textures = Cycle(TexQ, _settings.Textures, d);
+                    Changed();
+                }),
+                new(O("Shadows"), YN(_settings.Shadows), true, _ =>
+                {
+                    _settings.Shadows = !_settings.Shadows;
+                    Changed();
+                }),
+                // au prochain lancement du jeu (RestartNote)
+                new(O("Antialiasing"), AaName(_settings.Antialiasing), true, d =>
+                {
+                    _settings.Antialiasing = Cycle(AaValues, _settings.Antialiasing, d);
+                    _settings.Save();
+                }),
+            },
+            _ => new()
             {
-                _settings.EdgeScroll = !_settings.EdgeScroll;
-                Changed();
-            }),
-            new(L("&VolumeMaster", "Volume général"), $"{_settings.Volume} %", true, d =>
-            {
-                _settings.Volume = Math.Clamp(_settings.Volume + 10 * d, 0, 100);
-                Changed();
-                _audio?.Play("VOCAL_SELECTION1");
-            }),
-            new(L("&VolumeInterface", "Volume interface et voix"), $"{_settings.VolumeVoice} %", true, d =>
-            {
-                _settings.VolumeVoice = Math.Clamp(_settings.VolumeVoice + 10 * d, 0, 100);
-                Changed();
-                _audio?.Play("VOCAL_SELECTION1");
-            }),
-            new(L("&VolumeEffects", "Volume des effets"), $"{_settings.VolumeEffects} %", true, d =>
-            {
-                _settings.VolumeEffects = Math.Clamp(_settings.VolumeEffects + 10 * d, 0, 100);
-                Changed();
-                _audio?.PlayAny(new[] { "EXPLOSION_GAS_TANK_01_01", "SC_USE_GENERIC" });
-            }),
-            new(L("&VolumeAmbiance", "Volume d'ambiance"), $"{_settings.VolumeMusic} %", true, d =>
-            {
-                _settings.VolumeMusic = Math.Clamp(_settings.VolumeMusic + 10 * d, 0, 100);
-                Changed();
-            }),
-            new(O("Brightness"), $"{_settings.Brightness} %", true, d =>
-            {
-                _settings.Brightness = Math.Clamp(_settings.Brightness + 10 * d, 40, 200);
-                Changed();
-            }),
-            new(O("Resolution"), _settings.Resolution == "" ? O("Auto").Split('(')[0].Trim() : _settings.Resolution.Replace("x", " × "), true, d =>
-            {
-                List<string> rs = Resolutions();
-                _settings.Resolution = rs[((rs.IndexOf(_settings.Resolution) + d) % rs.Count + rs.Count) % rs.Count];
-                Changed();
-            }),
-            new(O("Fullscreen"), YN(FullscreenNow), true, _ =>
-            {
-                ToggleFullscreen();
-                Changed();
-            }),
-            new(O("Textures"), texNames[Math.Max(0, Array.IndexOf(TexQ, _settings.Textures))], true, d =>
-            {
-                _settings.Textures = Cycle(TexQ, _settings.Textures, d);
-                Changed();
-            }),
-            new(O("Shadows"), YN(_settings.Shadows), true, _ =>
-            {
-                _settings.Shadows = !_settings.Shadows;
-                Changed();
-            }),
-            new(O("Language"), LangName(_settings.Language), true, d =>
-            {
-                _settings.Language = Cycle(langs.ToArray(), _settings.Language, d);
-                Changed();
-            }),
-            new(O("Nationality"), O(NatKeys[Math.Max(0, Array.IndexOf(Nats, _settings.Nationality))]), true, d =>
-            {
-                _settings.Nationality = Cycle(Nats, _settings.Nationality, d);
-                Changed();
-            }),
-            new(L("&Back", "Retour"), null, true, _ =>
-            {
-                _screen = _optionsFrom;
-                _settings.Save();
-            }),
+                new(O("InvertX"), YN(_settings.InvertX), true, _ =>
+                {
+                    _settings.InvertX = !_settings.InvertX;
+                    Changed();
+                }),
+                new(O("InvertY"), YN(_settings.InvertY), true, _ =>
+                {
+                    _settings.InvertY = !_settings.InvertY;
+                    Changed();
+                }),
+                new(O("EdgeScroll"), YN(_settings.EdgeScroll), true, _ =>
+                {
+                    _settings.EdgeScroll = !_settings.EdgeScroll;
+                    Changed();
+                }),
+                new(O("Language"), LangName(_settings.Language), true, d =>
+                {
+                    _settings.Language = Cycle(langs.ToArray(), _settings.Language, d);
+                    Changed();
+                }),
+                new(O("Nationality"), O(NatKeys[Math.Max(0, Array.IndexOf(Nats, _settings.Nationality))]), true, d =>
+                {
+                    _settings.Nationality = Cycle(Nats, _settings.Nationality, d);
+                    Changed();
+                }),
+            },
         };
+        rows.Add(back);
+        return rows;
     }
 
     private (float x, float y, float w, float lh) ScreenLayout(int n)
@@ -629,11 +690,11 @@ public sealed partial class OpenFDGame
         {
             // options : titre près du haut, liste juste dessous, aide en bas ; tout tient dans l'écran (1080p compris) —
             // les lignes se resserrent si besoin (deux lignes de texte au moins par réglage)
-            float avail = _fbH - OptionsTop - TitleBlock - TitleGap - OptionsHelpBlock - OptionsTop;
+            float avail = _fbH - OptionsTop - TitleBlock - TitleGap - TabsBlock - OptionsHelpBlock - OptionsTop;
             lh = MathF.Max(_ui.LineHeight * 2.05f, MathF.Min(lh, avail / Math.Max(1, n)));
-            float total = TitleBlock + TitleGap + n * lh + OptionsHelpBlock;
+            float total = TitleBlock + TitleGap + TabsBlock + n * lh + OptionsHelpBlock;
             float top = MathF.Max(OptionsTop, (_fbH - total) / 2);
-            return ((_fbW - w) / 2, top + TitleBlock + TitleGap, w, lh);
+            return ((_fbW - w) / 2, top + TitleBlock + TitleGap + TabsBlock, w, lh);
         }
         return ((_fbW - w) / 2, MathF.Max(_fbH * 0.3f, (_fbH - n * lh) / 2), w, lh);
     }
@@ -642,7 +703,29 @@ public sealed partial class OpenFDGame
     private float OptionsTop => 10 * _scale;
     private float TitleBlock => _font.LineHeight * _scale * 2f + 16 * _scale;
     private float TitleGap => 14 * _scale;
-    private float OptionsHelpBlock => 16 * _scale + _ui.LineHeight * 3f;
+    private float OptionsHelpBlock => 16 * _scale + _ui.LineHeight * 4.2f;
+    /// <summary>Barre des onglets des options (Sons, Graphiques, Jeu), entre le titre et la liste.</summary>
+    private float TabsBlock => _ui.LineHeight * 1.7f + 14 * _scale;
+
+    /// <summary>Case de l'onglet i, au-dessus de la liste placée en (lx, ly) de largeur lw.</summary>
+    private (float x, float y, float w, float h) OptionTabRect(int i, float lx, float ly, float lw)
+    {
+        float s = _scale, total = lw + 24 * s, w = total / OptionTabCount;
+        return (lx - 12 * s + i * w + 2 * s, ly - TabsBlock, w - 4 * s, TabsBlock - 10 * s);
+    }
+
+    /// <summary>Onglet des options sous la souris ; null : aucun.</summary>
+    private int? OptionTabAt(float mx, float my)
+    {
+        (float lx, float ly, float lw, _) = ScreenLayout(LayoutRows(0));
+        for (int i = 0; i < OptionTabCount; i++)
+        {
+            (float x, float y, float w, float h) = OptionTabRect(i, lx, ly, lw);
+            if (mx >= x && mx <= x + w && my >= y && my <= y + h)
+                return i;
+        }
+        return null;
+    }
 
     private void RenderScreen()
     {
@@ -691,7 +774,7 @@ public sealed partial class OpenFDGame
             _ui.Rect(0, 0, _fbW, _fbH, new SN.Vector4(0, 0, 0, 0.22f));   // la partie figée reste visible derrière
         else
             DrawMenuBack();
-        (float lx, float ly, float lw, float lh) = ScreenLayout(rows.Count);
+        (float lx, float ly, float lw, float lh) = ScreenLayout(LayoutRows(rows.Count));
         SN.Vector4 accent = new SN.Vector4(1f, 0.48f, 0.18f, 1);
         SN.Vector4 txt = new SN.Vector4(0.93f, 0.92f, 0.9f, 1);
         SN.Vector4 muted = new SN.Vector4(0.5f, 0.5f, 0.5f, 1);
@@ -713,9 +796,22 @@ public sealed partial class OpenFDGame
         }
         if (_screen != 0)   // le titre du jeu est déjà sur l'image de fond
         {
-            float tyTop = _screen == 2 ? ly - TitleGap - TitleBlock : ly - lh * 2.4f;   // options : juste au-dessus de la liste
+            float tyTop = _screen == 2 ? ly - TabsBlock - TitleGap - TitleBlock : ly - lh * 2.4f;   // options : au-dessus des onglets
             _ui.Rect(0, tyTop, _fbW, _font.LineHeight * ts + 16 * _scale, new SN.Vector4(0, 0, 0, 0.55f));
             _ui.Text((_fbW - _font.Measure(title) * ts) / 2, tyTop + 8 * _scale, title, accent, ts);
+        }
+        if (_screen == 2)
+        {
+            // onglets : celui ouvert en orange, collé à la liste
+            string[] tabs = OptionTabNames();
+            (float mx, float my) = Fb(_mPrev.X, _mPrev.Y);
+            for (int i = 0; i < tabs.Length; i++)
+            {
+                (float x, float y, float w, float h) = OptionTabRect(i, lx, ly, lw);
+                bool on = i == _optTab, hover = !on && mx >= x && mx <= x + w && my >= y && my <= y + h;
+                _ui.Rect(x, y, w, h, on ? new SN.Vector4(0.85f, 0.35f, 0.1f, 0.9f) : hover ? new SN.Vector4(0.2f, 0.2f, 0.24f, 0.9f) : new SN.Vector4(0.07f, 0.07f, 0.09f, 0.78f));
+                _ui.Text(x + (w - _ui.Measure(tabs[i])) / 2, y + (h - _ui.LineHeight) / 2, tabs[i], on ? new SN.Vector4(1, 1, 1, 1) : txt);
+            }
         }
         _ui.Rect(lx - 12 * _scale, ly - 8 * _scale, lw + 24 * _scale, rows.Count * lh + 16 * _scale, new SN.Vector4(0.07f, 0.07f, 0.09f, 0.78f));
         for (int i = 0; i < rows.Count; i++)
@@ -737,7 +833,10 @@ public sealed partial class OpenFDGame
         }
         string help = _screen == 0 ? O("HelpMain") : _screen == 3 ? O("HelpPause") : O("HelpOptions");
         float hw = MathF.Max(lw + 24 * _scale, MathF.Max(_ui.Measure(help), _screen == 2 ? _ui.Measure(O("OptionsNote")) : 0) + 32 * _scale);
-        _ui.Rect((_fbW - hw) / 2, ly + rows.Count * lh + 16 * _scale, hw, _ui.LineHeight * (_screen == 2 ? 3f : 1.6f), new SN.Vector4(0, 0, 0, 0.7f));
+        bool restart = _screen == 2 && _settings.Antialiasing != _aaAtStart;
+        if (restart)
+            hw = MathF.Max(hw, _ui.Measure(O("RestartNote")) + 32 * _scale);
+        _ui.Rect((_fbW - hw) / 2, ly + rows.Count * lh + 16 * _scale, hw, _ui.LineHeight * (_screen == 2 ? (restart ? 4.2f : 3f) : 1.6f), new SN.Vector4(0, 0, 0, 0.7f));
         _ui.Text((_fbW - _ui.Measure(help)) / 2, ly + rows.Count * lh + 24 * _scale, help, new SN.Vector4(0.65f, 0.65f, 0.65f, 1));
         if (_screen == 0)
         {
@@ -752,6 +851,12 @@ public sealed partial class OpenFDGame
         {
             string note = O("OptionsNote");
             _ui.Text((_fbW - _ui.Measure(note)) / 2, ly + rows.Count * lh + 24 * _scale + _ui.LineHeight * 1.5f, note, new SN.Vector4(0.62f, 0.62f, 0.62f, 1));
+            // anticrénelage changé : il ne s'applique qu'au prochain lancement du jeu
+            if (restart)
+            {
+                string again = O("RestartNote");
+                _ui.Text((_fbW - _ui.Measure(again)) / 2, ly + rows.Count * lh + 24 * _scale + _ui.LineHeight * 2.7f, again, new SN.Vector4(1f, 0.6f, 0.25f, 1));
+            }
         }
         _ui.End();
     }

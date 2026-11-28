@@ -25,6 +25,7 @@ public sealed class Settings
     public GameplaySettings Gameplay { get; set; } = new();
     public string Textures { get; set; } = "high";  // high, med, low
     public bool Shadows { get; set; } = true;       // ombres du soleil (au sol, et sur les objets et unités dans l'ombre du décor)
+    public int Antialiasing { get; set; } = 8;      // anticrénelage : 0 (non), 2, 4, 8 échantillons (limité par la carte) ; au démarrage du jeu
     public string Language { get; set; } = "";      // vide : celle des voix installées ; sinon FRA, ENG…
     public string Nationality { get; set; } = "";   // vide : celle de la mission ; sinon us, fr, gb, gr, ua
     public string PlayerName { get; set; } = "";    // pseudo en multijoueur

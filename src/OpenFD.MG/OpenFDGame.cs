@@ -93,9 +93,12 @@ public sealed partial class OpenFDGame : Microsoft.Xna.Framework.Game
             GraphicsProfile = GraphicsProfile.HiDef, PreferMultiSampling = true, SynchronizeWithVerticalRetrace = true,
             PreferredBackBufferWidth = 1400, PreferredBackBufferHeight = 860, PreferredDepthStencilFormat = DepthFormat.Depth24,
         };
-        // FD3_SANS_MSAA : sans anticrénelage (cartes ou pilotes qui le refusent)
-        if (Environment.GetEnvironmentVariable("FD3_SANS_MSAA") != null)
-            _gdm.PreferMultiSampling = false;
+        // anticrénelage (option « Anticrénelage » : 0, 2, 4, 8 échantillons), fixé au démarrage du jeu ;
+        // FD3_SANS_MSAA : sans (cartes ou pilotes qui le refusent : Program.cs relance alors le jeu ainsi)
+        _aaAtStart = Settings.Load(files.DataDir).Antialiasing;
+        _msaaStart = Environment.GetEnvironmentVariable("FD3_SANS_MSAA") != null ? 0 : _aaAtStart;
+        _gdm.PreferMultiSampling = _msaaStart > 0;
+        _gdm.PreparingDeviceSettings += (_, e) => e.GraphicsDeviceInformation.PresentationParameters.MultiSampleCount = _msaaStart;
         IsMouseVisible = true;
         IsFixedTimeStep = false;
         Window.AllowUserResizing = true;
