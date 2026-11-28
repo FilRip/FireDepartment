@@ -144,6 +144,8 @@ vec3 PerturbNormal(vec3 n, vec3 p, vec2 uv, vec3 texel)
     }
 
     private Matrix _vp;
+    /// <summary>Carte d'ombres donnée à SetShadow (MonoGame ne sait pas relire une texture dans un paramètre).</summary>
+    private Texture2D? _shadowTex;
 
     /// <summary>Comme l'effet éclairé des objets (_lit) : lumière ambiante, soleil (dir) et sa lumière opposée.</summary>
     public void SetFrame(Matrix viewProj, Vector3 eye, float fogStart, float fogEnd, Vector3 fogColor, Vector3 ambient, Vector3 sun0, Vector3 sun1, Vector3 sunDir)
@@ -164,6 +166,7 @@ vec3 PerturbNormal(vec3 n, vec3 p, vec2 uv, vec3 texel)
     /// </summary>
     public void SetShadow(Texture2D? map, Matrix lightViewProj, float opacity, float bias)
     {
+        _shadowTex = map;
         _shadowMap.SetValue(map ?? Tex.White);
         _shadowVp.SetValue(lightViewProj);
         _shadow.SetValue(map != null ? new Vector4(bias, opacity, 0.7f / map.Width, 1) : Vector4.Zero);
@@ -178,7 +181,7 @@ vec3 PerturbNormal(vec3 n, vec3 p, vec2 uv, vec3 texel)
 
     public State Save() => new(_vp, _eye.GetValueVector4(), _fog.GetValueVector4(), _fogColor.GetValueVector4(), _ambient.GetValueVector4(),
         _sun0.GetValueVector4(), _sun1.GetValueVector4(), _sunDir.GetValueVector4(), _shadow.GetValueVector4(), _shadowVp.GetValueMatrix(),
-        _shadowMap.GetValueTexture2D());
+        _shadowTex);
 
     public void Restore(State st)
     {
@@ -192,6 +195,7 @@ vec3 PerturbNormal(vec3 n, vec3 p, vec2 uv, vec3 texel)
         _sunDir.SetValue(st.SunDir);
         _shadow.SetValue(st.Shadow);
         _shadowVp.SetValue(st.ShadowVp);
+        _shadowTex = st.ShadowMap;
         _shadowMap.SetValue(st.ShadowMap ?? Tex.White);
     }
 
