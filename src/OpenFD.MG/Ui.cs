@@ -22,6 +22,10 @@ public sealed class Ui
     public void Image(Texture2D t, float x, float y, float w, float h, SN.Vector4 c) => _sb.Draw(t, new Rectangle((int)x, (int)y, (int)w, (int)h), c.C());
     public void Image(Texture2D t, float x, float y, float w, float h, Rectangle src, SN.Vector4 c) => _sb.Draw(t, new Rectangle((int)MathF.Round(x), (int)MathF.Round(y), (int)MathF.Round(w), (int)MathF.Round(h)), src, c.C());
 
+    /// <summary>Partie src de l'image, centrée en (cx, cy), de taille w × h, tournée de rot (radians).</summary>
+    public void ImageRotated(Texture2D t, float cx, float cy, float w, float h, Rectangle src, SN.Vector4 c, float rot) =>
+        _sb.Draw(t, new Vector2(cx, cy), src, c.C(), rot, new Vector2(src.Width / 2f, src.Height / 2f), new Vector2(w / src.Width, h / src.Height), SpriteEffects.None, 0);
+
     /// <summary>Comme Begin, mais rien n'est dessiné hors du rectangle <paramref name="clip"/> (pixels).</summary>
     public void BeginClipped(Rectangle clip, SamplerState? sampler = null)
     {

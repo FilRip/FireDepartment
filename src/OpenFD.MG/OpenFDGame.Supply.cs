@@ -299,9 +299,28 @@ public sealed partial class OpenFDGame
         _ui.DiscOnPlane(p.X, p.Y, ax * world, ay * world, new SN.Vector4(0.95f, 0.1f, 0.08f, 0.9f));
     }
 
+    private Texture2D? _electricTex;
+    private bool _electricTried;
+
     /// <summary>
-    /// Feux électriques sous tension : des arcs bleu-gris apparaissent au hasard autour du foyer, chacun une demi-seconde,
-    /// sans arrêt jusqu'à ce que le courant soit coupé.
+    /// Éclairs du jeu d'origine (« electric10 » : quatre éclairs bleus sur une image de 2 × 2, celle de son effet
+    /// Gfx\Effect\electric1) ; null s'il manque (les arcs dessinés en traits servent alors).
+    /// </summary>
+    private Texture2D? ElectricTex()
+    {
+        if (_electricTried)
+            return _electricTex;
+        _electricTried = true;
+        _electricTex = TexOf("electric10");
+        if (_electricTex == null && _files.TryRead("Gfx\\Effect\\Shaders\\electric10.dds") is { } b)
+            _electricTex = Tex.Dds(GraphicsDevice, b);
+        return _electricTex;
+    }
+
+    /// <summary>
+    /// Feux électriques sous tension : des éclairs apparaissent au hasard autour du foyer, chacun une demi-seconde, sans arrêt
+    /// jusqu'à ce que le courant soit coupé : les images de l'effet du jeu (ElectricTex), qui crépitent (une autre des quatre
+    /// toutes les 0,08 s) ; sans elles, des arcs bleu-gris dessinés en traits.
     /// </summary>
     private void RenderElectricArcs()
     {
@@ -309,6 +328,11 @@ public sealed partial class OpenFDGame
             return;
         float px = MathF.Max(1, _scale);
         double time = _session.Time + (_paused ? 0 : Math.Clamp(_owed, 0, 1) * Session.Dt);
+        if (ElectricTex() is { } tex)
+        {
+            RenderElectricSprites(tex, time);
+            return;
+        }
         foreach (HotPoint h in _session.Fire.HotPoints.Where(h => h.Electrified))
         {
             for (int k = 0; k < 4; k++)
@@ -341,6 +365,45 @@ public sealed partial class OpenFDGame
                     }
                     prev = cur;
                 }
+            }
+        }
+    }
+
+    /// <summary>Éclairs en images (electric10) autour des foyers sous tension, à la place des arcs en traits.</summary>
+    private void RenderElectricSprites(Texture2D tex, double time)
+    {
+        int hw = tex.Width / 2, hh = tex.Height / 2;
+        foreach (HotPoint h in _session!.Fire.HotPoints.Where(h => h.Electrified))
+        {
+            for (int k = 0; k < 4; k++)
+            {
+                // chaque emplacement tire un nouvel éclair toutes les 0,5 s, décalé des autres (comme les arcs en traits)
+                double phase = time / 0.5 + k * 0.37 + (h.Id % 7) * 0.13;
+                long slot = (long)Math.Floor(phase);
+                float life = (float)(phase - slot);
+                System.Random rnd = new System.Random(unchecked((int)(h.Id * 7919 + k * 104729 + slot * 31)));
+                if (rnd.NextDouble() < 0.35)
+                    continue;   // pas d'éclair cette fois-ci : apparitions irrégulières
+                float a = (float)(rnd.NextDouble() * MathF.Tau), r = 30 + (float)rnd.NextDouble() * 150;
+                SN.Vector3 at = h.Position + new SN.Vector3(MathF.Cos(a) * r, MathF.Sin(a) * r, 40 + (float)rnd.NextDouble() * 170);
+                float size = 140 + (float)rnd.NextDouble() * 120;   // cm
+                float rot = (float)(rnd.NextDouble() - 0.5) * 1.2f;
+                int first = rnd.Next(4);
+                if (Project(at) is not { } p)
+                    continue;
+                // taille à l'écran : 1 m autour du point, projeté (le plus grand des trois axes)
+                float perM = 0;
+                foreach (SN.Vector3 d in new[] { SN.Vector3.UnitX, SN.Vector3.UnitY, SN.Vector3.UnitZ })
+                    if (Project(at + d * 100) is { } q)
+                        perM = MathF.Max(perM, SN.Vector2.Distance(p, q));
+                if (perM < 0.5f)
+                    continue;
+                // crépitement : une autre des quatre images toutes les 0,08 s ; apparition et disparition rapides
+                int frame = (first + (int)(life * 0.5 / 0.08)) % 4;
+                Rectangle src = new Rectangle(frame % 2 * hw, frame / 2 * hh, hw, hh);
+                float alpha = MathF.Min(1, MathF.Min(life, 1 - life) * 8);
+                float w = size / 100 * perM;
+                _ui.ImageRotated(tex, p.X, p.Y, w, w, src, new SN.Vector4(1, 1, 1, alpha), rot);
             }
         }
     }
