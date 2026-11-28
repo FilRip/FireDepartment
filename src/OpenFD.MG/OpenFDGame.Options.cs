@@ -11,7 +11,7 @@ namespace OpenFD.MG;
 public sealed partial class OpenFDGame
 {
     /// <summary>Numéro de la livraison (openfdN) : mention du menu principal et titre de l'éditeur.</summary>
-    internal const string BuildNumber = "280";
+    internal const string BuildNumber = "281";
 
     private Settings _settings = new();
     private int _screen;          // 0 menu principal, 1 choix de la mission, 2 options, 3 pause, 4 sauvegardes, 9 choix du jeu

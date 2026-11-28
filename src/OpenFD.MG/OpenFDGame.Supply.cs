@@ -389,13 +389,13 @@ public sealed partial class OpenFDGame
                 float size = 140 + (float)rnd.NextDouble() * 120;   // cm
                 float rot = (float)(rnd.NextDouble() - 0.5) * 1.2f;
                 int first = rnd.Next(4);
-                if (Project(at) is not { } p)
-                    continue;
-                // taille à l'écran : 1 m autour du point, projeté (le plus grand des trois axes)
-                float perM = 0;
-                foreach (SN.Vector3 d in new[] { SN.Vector3.UnitX, SN.Vector3.UnitY, SN.Vector3.UnitZ })
-                    if (Project(at + d * 100) is { } q)
-                        perM = MathF.Max(perM, SN.Vector2.Distance(p, q));
+                // taille à l'écran d'après la distance à la caméra (profondeur w) : un point voisin projeté tout contre la
+                // caméra donnait un éclair immense, qui couvrait la vue d'un flash bleu
+                SN.Vector4 c = SN.Vector4.Transform(new SN.Vector4(at, 1), _viewProj);
+                if (_map || c.W < 300)
+                    continue;   // derrière la caméra ou presque contre elle
+                SN.Vector2 p = new((c.X / c.W * 0.5f + 0.5f) * _fbW, (1 - (c.Y / c.W * 0.5f + 0.5f)) * _fbH);
+                float perM = 100 * _proj.M22 * 0.5f * _fbH / c.W;   // pixels pour 1 m à cette distance
                 if (perM < 0.5f)
                     continue;
                 // crépitement : une autre des quatre images toutes les 0,08 s ; apparition et disparition rapides
@@ -403,6 +403,9 @@ public sealed partial class OpenFDGame
                 Rectangle src = new Rectangle(frame % 2 * hw, frame / 2 * hh, hw, hh);
                 float alpha = MathF.Min(1, MathF.Min(life, 1 - life) * 8);
                 float w = size / 100 * perM;
+                // jamais plus grand qu'un tiers de l'écran ; hors de l'écran : rien
+                if (w > _fbH / 3f || p.X < -w || p.X > _fbW + w || p.Y < -w || p.Y > _fbH + w)
+                    continue;
                 _ui.ImageRotated(tex, p.X, p.Y, w, w, src, new SN.Vector4(1, 1, 1, alpha), rot);
             }
         }
